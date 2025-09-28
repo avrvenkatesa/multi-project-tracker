@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Multi-Project Tracker</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    </head>
+    <body class="bg-gray-50">
+        <div id="app">
+            <!-- Header -->
+            <header class="bg-blue-600 text-white shadow-lg">
+                <div class="max-w-7xl mx-auto px-4 py-6">
+                    <h1 class="text-3xl font-bold">Multi-Project Tracker</h1>
+                    <p class="text-blue-100 mt-2">
+                        AI-powered issue and action item tracking
+                    </p>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="max-w-7xl mx-auto px-4 py-8">
+                <!-- Project Selection -->
+                <div class="mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold text-gray-800">
+                            Projects
+                        </h2>
+                        <button
+                            onclick="showCreateProject()"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                        >
+                            + New Project
+                        </button>
+                    </div>
+                    <div
+                        id="projects-list"
+                        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                    >
+                        <!-- Projects will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Current Project View -->
+                <div id="project-view" class="hidden">
+                    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3
+                                id="current-project-name"
+                                class="text-xl font-semibold"
+                            ></h3>
+                            <div class="space-x-2">
+                                <button
+                                    onclick="showCreateIssue()"
+                                    class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                                >
+                                    + Issue
+                                </button>
+                                <button
+                                    onclick="showCreateActionItem()"
+                                    class="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
+                                >
+                                    + Action Item
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Kanban Board -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div class="bg-gray-100 rounded-lg p-4">
+                                <h4 class="font-semibold mb-3 text-gray-700">
+                                    To Do
+                                </h4>
+                                <div id="todo-column" class="space-y-2">
+                                    <!-- Items will be loaded here -->
+                                </div>
+                            </div>
+                            <div class="bg-blue-50 rounded-lg p-4">
+                                <h4 class="font-semibold mb-3 text-blue-700">
+                                    In Progress
+                                </h4>
+                                <div id="inprogress-column" class="space-y-2">
+                                    <!-- Items will be loaded here -->
+                                </div>
+                            </div>
+                            <div class="bg-yellow-50 rounded-lg p-4">
+                                <h4 class="font-semibold mb-3 text-yellow-700">
+                                    Blocked
+                                </h4>
+                                <div id="blocked-column" class="space-y-2">
+                                    <!-- Items will be loaded here -->
+                                </div>
+                            </div>
+                            <div class="bg-green-50 rounded-lg p-4">
+                                <h4 class="font-semibold mb-3 text-green-700">
+                                    Done
+                                </h4>
+                                <div id="done-column" class="space-y-2">
+                                    <!-- Items will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Display -->
+                <div class="mt-8 text-center">
+                    <div
+                        class="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-full"
+                    >
+                        <div
+                            class="w-2 h-2 bg-green-500 rounded-full mr-2"
+                        ></div>
+                        System Status: Running
+                    </div>
+                </div>
+            </main>
+
+            <!-- Modals will go here -->
+            <div
+                id="modal-overlay"
+                class="hidden fixed inset-0 bg-black bg-opacity-50 z-50"
+            >
+                <div class="flex items-center justify-center min-h-screen">
+                    <div
+                        id="modal-content"
+                        class="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+                    >
+                        <!-- Modal content will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="app.js"></script>
+    </body>
+</html>

@@ -1,5 +1,15 @@
+modules = ["nodejs-20"]
 [nix]
 channel = "stable-25_05"
 
 [agent]
 expertMode = true
+
+# Add just these lines:
+language = "nodejs"
+run = "npm start"
+entrypoint = "server.js"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
