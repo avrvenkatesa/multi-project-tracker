@@ -392,8 +392,19 @@ app.patch('/api/action-items/:id/progress', async (req, res) => {
 });
 
 // Users API
-app.get("/api/users", (req, res) => {
-  res.json(users);
+app.get("/api/users", async (req, res) => {
+  try {
+    // Return demo users for now - will be replaced with database when user management is implemented
+    res.json([{
+      id: 1,
+      name: "Demo User",
+      email: "demo@example.com",
+      role: "Project Manager"
+    }]);
+  } catch (error) {
+    console.error('Error getting users:', error);
+    res.status(500).json({ error: 'Failed to get users' });
+  }
 });
 
 // Helper functions for default project configurations
