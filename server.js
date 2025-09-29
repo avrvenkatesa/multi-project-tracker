@@ -61,6 +61,7 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         scriptSrc: ["'self'", "https://unpkg.com", "https://cdn.tailwindcss.com"],
+        scriptSrcAttr: ["'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https:"],
       },
     },
