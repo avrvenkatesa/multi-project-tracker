@@ -518,7 +518,7 @@ function showCreateActionItem() {
 function showLogin() {
     const content = `
         <h3 class="text-lg font-semibold mb-4">Login</h3>
-        <form id="login-form" onsubmit="handleLogin(event)">
+        <form id="login-form">
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">Email</label>
                 <input type="email" id="login-email" required
@@ -540,6 +540,12 @@ function showLogin() {
         </form>
     `;
     showModal(content);
+    
+    // Add event listener after modal is shown
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    }
 }
 
 // Handle login
@@ -559,7 +565,7 @@ async function handleLogin(event) {
 function showRegister() {
     const content = `
         <h3 class="text-lg font-semibold mb-4">Register</h3>
-        <form id="register-form" onsubmit="handleRegister(event)">
+        <form id="register-form">
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">Name</label>
                 <input type="text" id="register-name" required
@@ -586,6 +592,12 @@ function showRegister() {
         </form>
     `;
     showModal(content);
+    
+    // Add event listener after modal is shown
+    const registerForm = document.getElementById('register-form');
+    if (registerForm) {
+        registerForm.addEventListener('submit', handleRegister);
+    }
 }
 
 // Handle register
