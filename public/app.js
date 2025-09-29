@@ -160,35 +160,18 @@ function renderKanbanBoard() {
 
     columns.forEach((status) => {
         const columnItems = allItems.filter((item) => item.status === status);
-        const columnId = status.toLowerCase().replace(" ", "");
+        const columnId = status.toLowerCase().replace(/ /g, ""); // FIX: Replace ALL spaces
         const container = document.getElementById(`${columnId}-column`);
 
         if (container) {
-            // Set up drop zone
-            container.ondragover = handleDragOver;
-            container.ondrop = (e) => handleDrop(e, status);
-            
-            // Set up visual feedback for drop zones
-            container.addEventListener('dragenter', function(e) {
-                e.preventDefault();
-                this.classList.add('bg-blue-50');
-            });
-            
-            container.addEventListener('dragleave', function(e) {
-                // Only remove highlight if leaving the actual column, not a child element
-                if (!this.contains(e.relatedTarget)) {
-                    this.classList.remove('bg-blue-50');
-                }
-            });
-            
+            // STEP 1: Render HTML content first
             container.innerHTML = columnItems
                 .map(
                     (item) => `
                 <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move hover:shadow-md transition-shadow"
                      draggable="true"
                      data-item-id="${item.id}"
-                     data-item-type="${item.type || 'issue'}"
-                     ondragstart="handleDragStart(event)">
+                     data-item-type="${item.type || 'issue'}">
                     <div class="flex justify-between items-start mb-2">
                         <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
                         <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
@@ -210,6 +193,37 @@ function renderKanbanBoard() {
             `,
                 )
                 .join("");
+            
+            // STEP 2: Remove old event listeners to prevent duplicates
+            container.removeEventListener('dragover', handleDragOver);
+            container.removeEventListener('drop', container._dropHandler);
+            container.removeEventListener('dragenter', container._dragEnterHandler);
+            container.removeEventListener('dragleave', container._dragLeaveHandler);
+            
+            // STEP 3: Create and store bound handlers
+            container._dropHandler = (e) => handleDrop(e, status);
+            container._dragEnterHandler = function(e) {
+                e.preventDefault();
+                this.classList.add('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+            };
+            container._dragLeaveHandler = function(e) {
+                // Only remove highlight if leaving the column, not a child element
+                if (!this.contains(e.relatedTarget)) {
+                    this.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+                }
+            };
+            
+            // STEP 4: Attach event listeners to column (drop zone)
+            container.addEventListener('dragover', handleDragOver);
+            container.addEventListener('drop', container._dropHandler);
+            container.addEventListener('dragenter', container._dragEnterHandler);
+            container.addEventListener('dragleave', container._dragLeaveHandler);
+            
+            // STEP 5: Attach dragstart/dragend listeners to each card
+            container.querySelectorAll('.kanban-card').forEach(card => {
+                card.addEventListener('dragstart', handleDragStart);
+                card.addEventListener('dragend', handleDragEnd);
+            });
         }
     });
 }
@@ -238,6 +252,16 @@ function handleDragStart(event) {
         type: event.target.dataset.itemType
     };
     event.target.style.opacity = '0.5';
+    event.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(event) {
+    event.target.style.opacity = '1';
+    
+    // Remove highlight from all columns
+    document.querySelectorAll('[id$="-column"]').forEach(col => {
+        col.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+    });
 }
 
 function handleDragOver(event) {
@@ -247,13 +271,14 @@ function handleDragOver(event) {
 
 async function handleDrop(event, newStatus) {
     event.preventDefault();
+    event.stopPropagation(); // Prevent event bubbling
     
     if (!draggedItem) return;
     
     try {
-        // Find the column that's being dropped on
+        // Remove highlight from drop zone
         const dropZone = event.currentTarget;
-        dropZone.classList.remove('bg-blue-50');
+        dropZone.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
         
         // Update item status
         const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
@@ -294,15 +319,9 @@ async function handleDrop(event, newStatus) {
     } finally {
         // Reset drag state
         draggedItem = null;
-        
-        // Reset opacity of all cards
-        document.querySelectorAll('.kanban-card').forEach(card => {
-            card.style.opacity = '1';
-        });
     }
 }
 
-// Visual feedback is now set up in renderKanbanBoard function
 
 // Modal functions
 function showCreateProject() {

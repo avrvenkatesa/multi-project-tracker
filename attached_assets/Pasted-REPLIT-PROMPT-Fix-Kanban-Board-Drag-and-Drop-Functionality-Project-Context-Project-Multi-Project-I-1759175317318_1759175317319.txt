@@ -1,0 +1,308 @@
+REPLIT PROMPT: Fix Kanban Board Drag-and-Drop Functionality
+Project Context
+Project: Multi-Project Issue and Action Item Tracking System
+Current Tech Stack: Node.js + Express.js + Vanilla JavaScript + Tailwind CSS + PostgreSQL
+Issue: Drag-and-drop functionality on Kanban board is not working
+File to Fix: public/app.js
+Related File: public/index.html (verify column IDs)
+Problem Analysis
+Root Causes Identified:
+
+Event Listener Loss: Event handlers (ondragover, ondrop) are being set on container elements, then immediately wiped out when container.innerHTML is set, removing all event listeners
+Incomplete Space Replacement: Column ID generation uses replace(" ", "") which only replaces the FIRST space, causing "In Progress" to become "in progress" instead of "inprogress", breaking the ID match
+Missing Event Cleanup: No cleanup of old event listeners before adding new ones, causing duplicate handlers on re-renders
+Inline Event Handlers: Using ondragstart="handleDragStart(event)" in innerHTML is fragile and doesn't work reliably with dynamic content
+No Visual Feedback Cleanup: Drag operation doesn't properly clean up visual states (opacity, borders, backgrounds) when cards are dropped or drag is cancelled
+
+Requirements
+ARCHITECTURE
+Files to Modify:
+public/
+├── app.js              (PRIMARY FIX - drag-and-drop functions)
+└── index.html          (VERIFY - column ID structure)
+Drag-and-Drop Flow:
+
+User drags card → dragstart event → store dragged item data
+User drags over column → dragover event → prevent default, show visual feedback
+User enters column → dragenter event → highlight drop zone
+User leaves column → dragleave event → remove highlight
+User drops card → drop event → API call to update status → re-render board
+Drag ends → dragend event → clean up visual states
+
+CORE FIXES REQUIRED
+Fix 1: Correct Column ID Generation
+Current Code (BROKEN):
+javascriptconst columnId = status.toLowerCase().replace(" ", "");
+// "In Progress" → "in progress" (WRONG - space remains)
+Fixed Code:
+javascriptconst columnId = status.toLowerCase().replace(/ /g, "");
+// "In Progress" → "inprogress" (CORRECT - all spaces removed)
+Fix 2: Proper Event Listener Management
+Current Code (BROKEN):
+javascriptcontainer.ondragover = handleDragOver;
+container.ondrop = (e) => handleDrop(e, status);
+container.innerHTML = '...'; // WIPES OUT EVENT LISTENERS
+Fixed Code:
+javascript// 1. Set innerHTML FIRST
+container.innerHTML = '...';
+
+// 2. THEN attach event listeners (after DOM is ready)
+container.removeEventListener('dragover', handleDragOver); // Remove old
+container.addEventListener('dragover', handleDragOver);    // Add new
+
+const dropHandler = (e) => handleDrop(e, status);
+container.removeEventListener('drop', container._dropHandler); // Remove old
+container._dropHandler = dropHandler; // Store reference
+container.addEventListener('drop', container._dropHandler);    // Add new
+Fix 3: Attach Dragstart to Each Card
+Current Code (BROKEN):
+javascript// Inline handler in innerHTML - unreliable
+ondragstart="handleDragStart(event)"
+Fixed Code:
+javascript// After setting innerHTML, query all cards and attach listeners
+container.querySelectorAll('.kanban-card').forEach(card => {
+    card.addEventListener('dragstart', handleDragStart);
+    card.addEventListener('dragend', handleDragEnd);
+});
+Fix 4: Visual Feedback Management
+Add New Function:
+javascriptfunction handleDragEnd(event) {
+    event.target.style.opacity = '1';
+    
+    // Remove highlight from all columns
+    document.querySelectorAll('[id$="-column"]').forEach(col => {
+        col.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+    });
+}
+Update handleDragStart:
+javascriptfunction handleDragStart(event) {
+    draggedItem = {
+        id: event.target.dataset.itemId,
+        type: event.target.dataset.itemType
+    };
+    event.target.style.opacity = '0.5';
+    event.dataTransfer.effectAllowed = 'move';
+    // Note: No setData needed with our approach
+}
+Add Visual Feedback Handlers:
+javascript// Highlight on drag enter
+container._dragEnterHandler = function(e) {
+    e.preventDefault();
+    this.classList.add('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+};
+
+// Remove highlight on drag leave (only if leaving container, not child)
+container._dragLeaveHandler = function(e) {
+    if (!this.contains(e.relatedTarget)) {
+        this.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+    }
+};
+
+container.addEventListener('dragenter', container._dragEnterHandler);
+container.addEventListener('dragleave', container._dragLeaveHandler);
+Fix 5: Clean Up handleDrop
+Update handleDrop:
+javascriptasync function handleDrop(event, newStatus) {
+    event.preventDefault();
+    event.stopPropagation(); // Prevent event bubbling
+    
+    if (!draggedItem) return;
+    
+    // Remove highlight from drop zone
+    const dropZone = event.currentTarget;
+    dropZone.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+    
+    try {
+        // Update item status via API
+        const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
+        const response = await fetch(`${endpoint}/${draggedItem.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                if (window.AuthManager) {
+                    AuthManager.showNotification('Please login to move items', 'warning');
+                    AuthManager.showAuthModal('login');
+                }
+                return;
+            }
+            throw new Error(`Failed to update ${draggedItem.type} status`);
+        }
+        
+        // Update local data
+        const itemsArray = draggedItem.type === 'issue' ? issues : actionItems;
+        const itemIndex = itemsArray.findIndex(item => item.id == draggedItem.id);
+        if (itemIndex !== -1) {
+            itemsArray[itemIndex].status = newStatus;
+        }
+        
+        // Re-render the board
+        renderKanbanBoard();
+        
+        // Show success message
+        showSuccessMessage(`${draggedItem.type} moved to ${newStatus}`);
+        
+    } catch (error) {
+        console.error('Error updating item status:', error);
+        showErrorMessage(`Failed to move ${draggedItem.type}. Please try again.`);
+    } finally {
+        // Reset drag state
+        draggedItem = null;
+    }
+}
+COMPLETE UPDATED renderKanbanBoard FUNCTION
+Replace entire function in public/app.js:
+javascriptfunction renderKanbanBoard() {
+    // Ensure action items have the correct type field
+    const processedActionItems = actionItems.map(item => ({
+        ...item,
+        type: 'action-item'
+    }));
+    
+    // Ensure issues have the correct type field
+    const processedIssues = issues.map(item => ({
+        ...item,
+        type: 'issue'
+    }));
+    
+    const allItems = [...processedIssues, ...processedActionItems];
+    const columns = ["To Do", "In Progress", "Blocked", "Done"];
+
+    columns.forEach((status) => {
+        const columnItems = allItems.filter((item) => item.status === status);
+        const columnId = status.toLowerCase().replace(/ /g, ""); // FIX: Replace ALL spaces
+        const container = document.getElementById(`${columnId}-column`);
+
+        if (container) {
+            // STEP 1: Render HTML content first
+            container.innerHTML = columnItems
+                .map(
+                    (item) => `
+                <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move hover:shadow-md transition-shadow"
+                     draggable="true"
+                     data-item-id="${item.id}"
+                     data-item-type="${item.type || 'issue'}">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
+                        <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
+                    </div>
+                    <h5 class="font-medium text-sm mb-1">${item.title}</h5>
+                    <p class="text-xs text-gray-600 mb-2">${(item.description || "").substring(0, 80)}...</p>
+                    ${
+                        item.progress !== undefined
+                            ? `<div class="w-full bg-gray-200 rounded-full h-1 mb-2">
+                            <div class="bg-blue-600 h-1 rounded-full" style="width: ${item.progress}%"></div>
+                        </div>`
+                            : ""
+                    }
+                    <div class="flex justify-between items-center text-xs text-gray-500">
+                        <span>${item.assignee || "Unassigned"}</span>
+                        <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
+                    </div>
+                </div>
+            `,
+                )
+                .join("");
+            
+            // STEP 2: Remove old event listeners to prevent duplicates
+            container.removeEventListener('dragover', handleDragOver);
+            container.removeEventListener('drop', container._dropHandler);
+            container.removeEventListener('dragenter', container._dragEnterHandler);
+            container.removeEventListener('dragleave', container._dragLeaveHandler);
+            
+            // STEP 3: Create and store bound handlers
+            container._dropHandler = (e) => handleDrop(e, status);
+            container._dragEnterHandler = function(e) {
+                e.preventDefault();
+                this.classList.add('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+            };
+            container._dragLeaveHandler = function(e) {
+                // Only remove highlight if leaving the column, not a child element
+                if (!this.contains(e.relatedTarget)) {
+                    this.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+                }
+            };
+            
+            // STEP 4: Attach event listeners to column (drop zone)
+            container.addEventListener('dragover', handleDragOver);
+            container.addEventListener('drop', container._dropHandler);
+            container.addEventListener('dragenter', container._dragEnterHandler);
+            container.addEventListener('dragleave', container._dragLeaveHandler);
+            
+            // STEP 5: Attach dragstart/dragend listeners to each card
+            container.querySelectorAll('.kanban-card').forEach(card => {
+                card.addEventListener('dragstart', handleDragStart);
+                card.addEventListener('dragend', handleDragEnd);
+            });
+        }
+    });
+}
+HTML VERIFICATION REQUIRED
+Verify public/index.html has correct column IDs:
+html<!-- Should match these exact IDs -->
+<div id="todo-column" class="...">
+    <!-- To Do items -->
+</div>
+
+<div id="inprogress-column" class="...">
+    <!-- In Progress items -->
+</div>
+
+<div id="blocked-column" class="...">
+    <!-- Blocked items -->
+</div>
+
+<div id="done-column" class="...">
+    <!-- Done items -->
+</div>
+CRITICAL: The IDs must be:
+
+All lowercase
+No spaces
+Match the JavaScript column ID generation: status.toLowerCase().replace(/ /g, "")
+
+TESTING REQUIREMENTS
+Manual Testing Checklist:
+
+Open Replit preview
+Select a project with issues/action items
+Verify cards are visible in columns
+Drag a card - should see opacity change to 0.5
+Drag over a column - should see blue dashed border appear
+Drag out of column - should see blue border disappear
+Drop card in new column - should see card move
+Check browser console - should see no errors
+Verify API call succeeds (Network tab - PATCH request with 200 status)
+Refresh page - verify status persists (saved to database)
+Try dragging without login - should prompt for login
+Test with both issues and action items
+Test all four columns (To Do, In Progress, Blocked, Done)
+
+Edge Cases to Test:
+
+Drag and release outside any column - card should return to original position
+Drag multiple cards in succession - all should work
+Re-render board (create new item) - drag should still work
+Login/logout - protected drag operations should require auth
+
+ACCEPTANCE CRITERIA
+Fix is complete when:
+
+Cards can be dragged (cursor changes, opacity changes)
+Columns highlight when dragging over them (blue dashed border)
+Cards can be dropped in any column (status updates)
+API call succeeds (check Network tab - 200 OK)
+Visual feedback clears after drop (no stuck highlights)
+Board re-renders showing card in new column
+Success message appears after successful drop
+Database persists the status change (refresh page test)
+Authentication check works (drag without login prompts for login)
+No console errors during any drag operation
+Works for both issues and action items
+Works in all four columns
