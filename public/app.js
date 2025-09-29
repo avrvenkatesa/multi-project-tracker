@@ -152,10 +152,18 @@ function renderKanbanBoard() {
         const container = document.getElementById(`${columnId}-column`);
 
         if (container) {
+            // Set up drop zone
+            container.ondragover = handleDragOver;
+            container.ondrop = (e) => handleDrop(e, status);
+            
             container.innerHTML = columnItems
                 .map(
                     (item) => `
-                <div class="bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")}">
+                <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move hover:shadow-md transition-shadow"
+                     draggable="true"
+                     data-item-id="${item.id}"
+                     data-item-type="${item.type || 'issue'}"
+                     ondragstart="handleDragStart(event)">
                     <div class="flex justify-between items-start mb-2">
                         <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
                         <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
@@ -195,6 +203,97 @@ function getBorderColor(priority) {
 function getTextColor(type) {
     return type === "issue" ? "text-red-600" : "text-purple-600";
 }
+
+// Drag and Drop functionality
+let draggedItem = null;
+
+function handleDragStart(event) {
+    draggedItem = {
+        id: event.target.dataset.itemId,
+        type: event.target.dataset.itemType
+    };
+    event.target.style.opacity = '0.5';
+}
+
+function handleDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+}
+
+async function handleDrop(event, newStatus) {
+    event.preventDefault();
+    
+    if (!draggedItem) return;
+    
+    try {
+        // Find the column that's being dropped on
+        const dropZone = event.currentTarget;
+        dropZone.classList.remove('bg-blue-50');
+        
+        // Update item status
+        const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
+        const response = await fetch(`${endpoint}/${draggedItem.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                AuthManager.showNotification('Please login to move items', 'warning');
+                AuthManager.showAuthModal('login');
+                return;
+            }
+            throw new Error(`Failed to update ${draggedItem.type} status`);
+        }
+        
+        // Update local data
+        const itemsArray = draggedItem.type === 'issue' ? issues : actionItems;
+        const itemIndex = itemsArray.findIndex(item => item.id == draggedItem.id);
+        if (itemIndex !== -1) {
+            itemsArray[itemIndex].status = newStatus;
+        }
+        
+        // Re-render the board
+        renderKanbanBoard();
+        
+        // Show success message
+        showSuccessMessage(`${draggedItem.type} moved to ${newStatus}`);
+        
+    } catch (error) {
+        console.error('Error updating item status:', error);
+        showErrorMessage(`Failed to move ${draggedItem.type}. Please try again.`);
+    } finally {
+        // Reset drag state
+        draggedItem = null;
+        
+        // Reset opacity of all cards
+        document.querySelectorAll('.kanban-card').forEach(card => {
+            card.style.opacity = '1';
+        });
+    }
+}
+
+// Add visual feedback for drop zones
+document.addEventListener('DOMContentLoaded', function() {
+    // Add drag enter/leave effects for columns
+    document.querySelectorAll('[id$="-column"]').forEach(column => {
+        column.addEventListener('dragenter', function(e) {
+            e.preventDefault();
+            this.classList.add('bg-blue-50');
+        });
+        
+        column.addEventListener('dragleave', function(e) {
+            // Only remove highlight if leaving the actual column, not a child element
+            if (!this.contains(e.relatedTarget)) {
+                this.classList.remove('bg-blue-50');
+            }
+        });
+    });
+});
 
 // Modal functions
 function showCreateProject() {

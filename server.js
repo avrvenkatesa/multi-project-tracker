@@ -385,6 +385,34 @@ app.post('/api/issues', authenticateToken, async (req, res) => {
   }
 });
 
+// Update issue status (for drag and drop)
+app.patch('/api/issues/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+    
+    const [updatedIssue] = await sql`
+      UPDATE issues 
+      SET status = ${status}, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ${id} 
+      RETURNING *
+    `;
+    
+    if (!updatedIssue) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    res.json(updatedIssue);
+  } catch (error) {
+    console.error('Error updating issue:', error);
+    res.status(500).json({ error: 'Failed to update issue' });
+  }
+});
+
 // Action Items API
 app.get("/api/action-items", optionalAuth, async (req, res) => {
   try {
@@ -431,6 +459,34 @@ app.post("/api/action-items", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error creating action item:', error);
     res.status(500).json({ error: 'Failed to create action item' });
+  }
+});
+
+// Update action item status (for drag and drop)
+app.patch('/api/action-items/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+    
+    const [updatedItem] = await sql`
+      UPDATE action_items 
+      SET status = ${status}, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ${id} 
+      RETURNING *
+    `;
+    
+    if (!updatedItem) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    res.json(updatedItem);
+  } catch (error) {
+    console.error('Error updating action item:', error);
+    res.status(500).json({ error: 'Failed to update action item' });
   }
 });
 
