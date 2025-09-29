@@ -86,7 +86,7 @@ async function drop(ev) {
     // Update on server
     try {
         const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
-        console.log(`[DRAG] Updating ${draggedItem.type} ${draggedItem.id} to status: ${newStatus}`);
+        console.log(`Updating ${draggedItem.type} ${draggedItem.id} to status: ${newStatus}`);
         const response = await fetch(`${endpoint}/${draggedItem.id}`, {
             method: 'PATCH',
             headers: {
@@ -95,48 +95,35 @@ async function drop(ev) {
             body: JSON.stringify({ status: newStatus })
         });
         
-        console.log(`[DRAG] Response received:`, response.status, response.statusText);
-        
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const updatedItem = await response.json();
-        console.log(`[DRAG] Parsed response:`, updatedItem);
         
         // Update local data with server response (ensure ID type consistency)
         const itemId = parseInt(draggedItem.id);
-        console.log(`[DRAG] Looking for item with ID:`, itemId, `in ${draggedItem.type}s`);
         
         if (draggedItem.type === 'issue') {
             const index = issues.findIndex(i => i.id === itemId);
-            console.log(`[DRAG] Found issue at index:`, index);
             if (index !== -1) {
                 issues[index] = updatedItem;
-                console.log(`[DRAG] Updated issues array`);
             }
         } else {
             const index = actionItems.findIndex(i => i.id === itemId);
-            console.log(`[DRAG] Found action item at index:`, index);
             if (index !== -1) {
                 actionItems[index] = updatedItem;
-                console.log(`[DRAG] Updated actionItems array`);
             }
         }
         
-        console.log(`[DRAG] About to re-render Kanban board`);
         // Re-render to reflect server-side changes (like auto-updated progress)
         renderKanbanBoard();
-        console.log(`[DRAG] Kanban board re-rendered`);
         
         // Show success notification
-        console.log(`[DRAG] Showing success message`);
         showSuccessMessage(`${item.title} moved to ${newStatus}`);
-        console.log(`[DRAG] Success! Operation completed`);
         
     } catch (error) {
-        console.error('[DRAG] Error in drag-and-drop operation:', error);
-        console.error('[DRAG] Error stack:', error.stack);
+        console.error('Error updating item status:', error);
         
         // Revert on error
         item.status = oldStatus;
