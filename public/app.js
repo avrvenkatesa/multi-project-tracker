@@ -5,8 +5,9 @@ let issues = [];
 let actionItems = [];
 
 // Initialize app
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
     console.log("Multi-Project Tracker initialized");
+    await AuthManager.init();
     loadProjects();
     setupEventListeners();
 });
@@ -496,3 +497,181 @@ function showSuccessMessage(message) {
 function showCreateActionItem() {
     alert("Action item creation modal coming soon!");
 }
+
+// ============= AUTHENTICATION FUNCTIONS =============
+
+// Show login modal
+function showLogin() {
+    const content = `
+        <h3 class="text-lg font-semibold mb-4">Login</h3>
+        <form id="login-form" onsubmit="handleLogin(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Email</label>
+                <input type="email" id="login-email" required
+                    class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Password</label>
+                <input type="password" id="login-password" required
+                    class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="flex space-x-2">
+                <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                    Login
+                </button>
+                <button type="button" onclick="hideModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    `;
+    showModal(content);
+}
+
+// Handle login
+async function handleLogin(event) {
+    event.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    
+    const success = await AuthManager.login(email, password);
+    if (success) {
+        hideModal();
+        await loadProjects();
+    }
+}
+
+// Show register modal
+function showRegister() {
+    const content = `
+        <h3 class="text-lg font-semibold mb-4">Register</h3>
+        <form id="register-form" onsubmit="handleRegister(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Name</label>
+                <input type="text" id="register-name" required
+                    class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Email</label>
+                <input type="email" id="register-email" required
+                    class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Password</label>
+                <input type="password" id="register-password" required
+                    class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="flex space-x-2">
+                <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                    Register
+                </button>
+                <button type="button" onclick="hideModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    `;
+    showModal(content);
+}
+
+// Handle register
+async function handleRegister(event) {
+    event.preventDefault();
+    const username = document.getElementById('register-name').value;
+    const email = document.getElementById('register-email').value;
+    const password = document.getElementById('register-password').value;
+    
+    const success = await AuthManager.register(username, email, password);
+    if (success) {
+        hideModal();
+        await loadProjects();
+    }
+}
+
+// Show user management modal (admin only)
+async function showUserManagement() {
+    if (!AuthManager.canManageUsers()) {
+        AuthManager.showNotification('Admin access required', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users', {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch users');
+        
+        const users = await response.json();
+        
+        const content = `
+            <h3 class="text-lg font-semibold mb-4">User Management</h3>
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+                ${users.map(user => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded">
+                        <div class="flex-1">
+                            <p class="font-medium">${user.username}</p>
+                            <p class="text-sm text-gray-600">${user.email}</p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <select 
+                                id="role-${user.id}" 
+                                class="border rounded px-2 py-1 text-sm"
+                                ${user.id === AuthManager.currentUser.id ? 'disabled' : ''}
+                            >
+                                ${Object.keys(AuthManager.roleHierarchy).map(role => `
+                                    <option value="${role}" ${user.role === role ? 'selected' : ''}>
+                                        ${role}
+                                    </option>
+                                `).join('')}
+                            </select>
+                            <button 
+                                onclick="updateUserRole(${user.id})"
+                                class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                                ${user.id === AuthManager.currentUser.id ? 'disabled' : ''}
+                            >
+                                Update
+                            </button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button onclick="hideModal()" class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">
+                    Close
+                </button>
+            </div>
+        `;
+        
+        showModal(content);
+    } catch (error) {
+        console.error('Error loading users:', error);
+        AuthManager.showNotification('Failed to load users', 'error');
+    }
+}
+
+// Update user role
+async function updateUserRole(userId) {
+    const roleSelect = document.getElementById(`role-${userId}`);
+    const newRole = roleSelect.value;
+    
+    try {
+        const response = await fetch(`/api/users/${userId}/role`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ role: newRole })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to update role');
+        }
+        
+        AuthManager.showNotification('User role updated successfully', 'success');
+    } catch (error) {
+        console.error('Error updating role:', error);
+        AuthManager.showNotification(error.message, 'error');
+    }
+}
+
