@@ -67,7 +67,15 @@ app.get("/api/health", (req, res) => {
 app.get("/api/projects", async (req, res) => {
   try {
     const allProjects = await storage.getProjects();
-    res.json(allProjects);
+    // Add derived fields for each project (categories, phases, components)
+    const projectsWithMetadata = allProjects.map(project => ({
+      ...project,
+      status: "active",
+      categories: getDefaultCategories(project.template || 'generic'),
+      phases: getDefaultPhases(project.template || 'generic'),
+      components: getDefaultComponents(project.template || 'generic')
+    }));
+    res.json(projectsWithMetadata);
   } catch (error) {
     console.error('Error getting projects:', error);
     res.status(500).json({ error: 'Failed to get projects' });
