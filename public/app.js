@@ -258,11 +258,23 @@ function handleDragStart(event) {
     console.log('📦 Dragged item:', draggedItem);
     event.target.style.opacity = '0.5';
     event.dataTransfer.effectAllowed = 'move';
+    
+    // Make all other cards not block drop events
+    document.querySelectorAll('.kanban-card').forEach(card => {
+        if (card !== event.target) {
+            card.style.pointerEvents = 'none';
+        }
+    });
 }
 
 function handleDragEnd(event) {
     console.log('🏁 DRAG END');
     event.target.style.opacity = '1';
+    
+    // Re-enable pointer events on all cards
+    document.querySelectorAll('.kanban-card').forEach(card => {
+        card.style.pointerEvents = 'auto';
+    });
     
     // Remove highlight from all columns
     document.querySelectorAll('[id$="-column"]').forEach(col => {
