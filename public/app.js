@@ -194,31 +194,20 @@ function renderKanbanBoard() {
                 )
                 .join("");
             
-            // STEP 2: Remove old event listeners to prevent duplicates
-            container.removeEventListener('dragover', handleDragOver);
-            container.removeEventListener('drop', container._dropHandler);
-            container.removeEventListener('dragenter', container._dragEnterHandler);
-            container.removeEventListener('dragleave', container._dragLeaveHandler);
-            
-            // STEP 3: Create and store bound handlers
-            container._dropHandler = (e) => handleDrop(e, status);
-            container._dragEnterHandler = function(e) {
+            // STEP 2: Attach event handlers directly to column (drop zone)
+            container.ondragover = handleDragOver;
+            container.ondrop = (e) => handleDrop(e, status);
+            container.ondragenter = function(e) {
                 console.log('⬇️ DRAG ENTER:', status);
                 e.preventDefault();
                 this.classList.add('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
             };
-            container._dragLeaveHandler = function(e) {
+            container.ondragleave = function(e) {
                 // Only remove highlight if leaving the column, not a child element
                 if (!this.contains(e.relatedTarget)) {
                     this.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
                 }
             };
-            
-            // STEP 4: Attach event listeners to column (drop zone)
-            container.addEventListener('dragover', handleDragOver);
-            container.addEventListener('drop', container._dropHandler);
-            container.addEventListener('dragenter', container._dragEnterHandler);
-            container.addEventListener('dragleave', container._dragLeaveHandler);
             
             // STEP 5: Attach dragstart/dragend listeners to each card
             const cards = container.querySelectorAll('.kanban-card');
