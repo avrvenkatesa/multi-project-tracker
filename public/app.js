@@ -87,6 +87,7 @@ async function drop(ev) {
     try {
         const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
         console.log(`Updating ${draggedItem.type} ${draggedItem.id} to status: ${newStatus}`);
+        
         const response = await fetch(`${endpoint}/${draggedItem.id}`, {
             method: 'PATCH',
             headers: {
@@ -95,11 +96,16 @@ async function drop(ev) {
             body: JSON.stringify({ status: newStatus })
         });
         
+        console.log('Response received:', response.status, response.statusText);
+        
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorData = await response.text();
+            console.error('Server error response:', errorData);
+            throw new Error(`HTTP error! status: ${response.status} - ${errorData}`);
         }
         
         const updatedItem = await response.json();
+        console.log('Updated item received:', updatedItem);
         
         // Update local data with server response (ensure ID type consistency)
         const itemId = parseInt(draggedItem.id);
@@ -108,11 +114,13 @@ async function drop(ev) {
             const index = issues.findIndex(i => i.id === itemId);
             if (index !== -1) {
                 issues[index] = updatedItem;
+                console.log('Updated local issue data');
             }
         } else {
             const index = actionItems.findIndex(i => i.id === itemId);
             if (index !== -1) {
                 actionItems[index] = updatedItem;
+                console.log('Updated local action item data');
             }
         }
         
@@ -121,9 +129,11 @@ async function drop(ev) {
         
         // Show success notification
         showSuccessMessage(`${item.title} moved to ${newStatus}`);
+        console.log('Drag and drop completed successfully');
         
     } catch (error) {
-        console.error('Error updating item status:', error);
+        console.error('Error updating item status:', error.message || error);
+        console.error('Full error object:', error);
         
         // Revert on error
         item.status = oldStatus;
