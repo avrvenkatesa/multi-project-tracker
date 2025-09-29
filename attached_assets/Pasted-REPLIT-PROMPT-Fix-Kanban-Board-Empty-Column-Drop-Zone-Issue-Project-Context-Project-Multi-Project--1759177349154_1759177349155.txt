@@ -1,0 +1,95 @@
+REPLIT PROMPT: Fix Kanban Board Empty Column Drop Zone Issue
+Project Context
+Project: Multi-Project Issue and Action Item Tracking System
+Current Issue: Drag-and-drop fails on empty Kanban columns
+Root Cause: Empty columns have zero height, providing no drop zone
+Files to Fix: public/index.html
+Estimated Time: 2 minutes
+Problem Analysis
+Current Behavior
+
+Drag events fire correctly (DRAG START, DRAG OVER, DRAG ENTER)
+DROP event never fires when dragging to empty columns
+Works when dropping on columns with cards
+Fails when dropping on columns without cards (e.g., "In Progress")
+
+Root Cause
+The column container divs have class="space-y-2" but no minimum height:
+html<!-- CURRENT (BROKEN) -->
+<div id="inprogress-column" class="space-y-2">
+    <!-- When empty, this div has 0px height -->
+</div>
+When a column contains no cards:
+
+The div collapses to 0 pixels in height
+There's no physical space to drop onto
+The browser never fires the DROP event
+Drag operation ends without processing
+
+Why This Wasn't Caught Earlier
+
+Columns with cards work fine (cards give the column height)
+Testing focused on populated columns
+Empty columns appear visually correct (parent padding masks the issue)
+
+Requirements
+ARCHITECTURE
+File to Modify:
+public/
+└── index.html          (Add min-height to column divs)
+No JavaScript changes needed - the drag-and-drop event handlers are already correct.
+CORE FIX
+Add min-h-[200px] to each column div:
+html<!-- BEFORE (BROKEN) -->
+<div id="todo-column" class="space-y-2">
+
+<!-- AFTER (FIXED) -->
+<div id="todo-column" class="space-y-2 min-h-[200px]">
+This ensures each column always has at least 200 pixels of height, even when empty.
+COMPLETE UPDATED HTML SECTION
+Locate this section in public/index.html (around line 95):
+html<!-- Kanban Board -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+Replace the entire Kanban Board section with:
+html<!-- Kanban Board -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- To Do Column -->
+    <div class="bg-gray-100 rounded-lg p-4">
+        <h4 class="font-semibold mb-3 text-gray-700">
+            To Do
+        </h4>
+        <div id="todo-column" class="space-y-2 min-h-[200px]">
+            <!-- Items will be loaded here -->
+        </div>
+    </div>
+    
+    <!-- In Progress Column -->
+    <div class="bg-blue-50 rounded-lg p-4">
+        <h4 class="font-semibold mb-3 text-blue-700">
+            In Progress
+        </h4>
+        <div id="inprogress-column" class="space-y-2 min-h-[200px]">
+            <!-- Items will be loaded here -->
+        </div>
+    </div>
+    
+    <!-- Blocked Column -->
+    <div class="bg-yellow-50 rounded-lg p-4">
+        <h4 class="font-semibold mb-3 text-yellow-700">
+            Blocked
+        </h4>
+        <div id="blocked-column" class="space-y-2 min-h-[200px]">
+            <!-- Items will be loaded here -->
+        </div>
+    </div>
+    
+    <!-- Done Column -->
+    <div class="bg-green-50 rounded-lg p-4">
+        <h4 class="font-semibold mb-3 text-green-700">
+            Done
+        </h4>
+        <div id="done-column" class="space-y-2 min-h-[200px]">
+            <!-- Items will be loaded here -->
+        </div>
+    </div>
+</div>
