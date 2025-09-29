@@ -24,10 +24,10 @@
                         <div class="flex items-center space-x-4">
                             <!-- Logged Out State -->
                             <div id="loggedOutState" class="hidden flex space-x-2">
-                                <button onclick="showLogin()" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50">
+                                <button id="login-btn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50">
                                     Login
                                 </button>
-                                <button onclick="showRegister()" class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
+                                <button id="register-btn" class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
                                     Register
                                 </button>
                             </div>
@@ -41,10 +41,10 @@
                                     </div>
                                     <div id="userEmail" class="text-xs text-blue-100"></div>
                                 </div>
-                                <button onclick="AuthManager.logout()" class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
+                                <button id="logout-btn" class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
                                     Logout
                                 </button>
-                                <button id="user-management-link" onclick="showUserManagement()" class="hidden bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
+                                <button id="user-management-link" class="hidden bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
                                     Manage Users
                                 </button>
                             </div>
@@ -62,7 +62,7 @@
                             Projects
                         </h2>
                         <button
-                            onclick="showCreateProject()"
+                            id="create-project-btn"
                             data-create-project
                             class="hidden bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                         >
@@ -87,14 +87,14 @@
                             ></h3>
                             <div class="space-x-2">
                                 <button
-                                    onclick="showCreateIssue()"
+                                    id="create-issue-btn"
                                     data-requires-write
                                     class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
                                 >
                                     + Issue
                                 </button>
                                 <button
-                                    onclick="showCreateActionItem()"
+                                    id="create-action-item-btn"
                                     data-requires-write
                                     class="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
                                 >

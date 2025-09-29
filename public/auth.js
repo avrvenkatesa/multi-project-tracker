@@ -177,6 +177,14 @@ const AuthManager = {
     }
     
     this.updateRoleBasedUI();
+    this.reattachEventListeners();
+  },
+  
+  reattachEventListeners() {
+    document.getElementById('login-btn')?.addEventListener('click', () => window.showLogin());
+    document.getElementById('register-btn')?.addEventListener('click', () => window.showRegister());
+    document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
+    document.getElementById('user-management-link')?.addEventListener('click', () => window.showUserManagement());
   },
 
   getRoleBadgeClass(role) {

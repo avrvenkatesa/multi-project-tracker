@@ -14,26 +14,35 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 // Setup event listeners (replaces inline onclick handlers)
 function setupEventListeners() {
+    // Auth button listeners
+    document.getElementById('login-btn')?.addEventListener('click', showLogin);
+    document.getElementById('register-btn')?.addEventListener('click', showRegister);
+    document.getElementById('logout-btn')?.addEventListener('click', () => AuthManager.logout());
+    document.getElementById('user-management-link')?.addEventListener('click', showUserManagement);
+    
+    // Project and item creation buttons
+    document.getElementById('create-project-btn')?.addEventListener('click', showCreateProject);
+    document.getElementById('create-issue-btn')?.addEventListener('click', showCreateIssue);
+    document.getElementById('create-action-item-btn')?.addEventListener('click', showCreateActionItem);
+    
     // Add event listeners after DOM is loaded
     document.addEventListener("click", function (e) {
-        // Handle New Project button
-        if (e.target.textContent.includes("+ New Project")) {
-            showCreateProject();
-        }
-
-        // Handle Issue button
-        if (e.target.textContent.includes("+ Issue")) {
-            showCreateIssue();
-        }
-
-        // Handle Action Item button
-        if (e.target.textContent.includes("+ Action Item")) {
-            showCreateActionItem();
-        }
-
         // Handle modal overlay clicks (to close modal)
         if (e.target.id === "modal-overlay") {
             hideModal();
+        }
+        
+        // Handle modal cancel buttons
+        if (e.target.classList.contains('modal-cancel-btn')) {
+            hideModal();
+        }
+        
+        // Handle update role buttons
+        if (e.target.classList.contains('update-role-btn')) {
+            const userId = e.target.getAttribute('data-user-id');
+            if (userId) {
+                updateUserRole(parseInt(userId));
+            }
         }
     });
 
@@ -524,7 +533,7 @@ function showLogin() {
                 <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
                     Login
                 </button>
-                <button type="button" onclick="hideModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">
+                <button type="button" class="modal-cancel-btn flex-1 bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">
                     Cancel
                 </button>
             </div>
@@ -570,7 +579,7 @@ function showRegister() {
                 <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
                     Register
                 </button>
-                <button type="button" onclick="hideModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">
+                <button type="button" class="modal-cancel-btn flex-1 bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">
                     Cancel
                 </button>
             </div>
@@ -631,8 +640,8 @@ async function showUserManagement() {
                                 `).join('')}
                             </select>
                             <button 
-                                onclick="updateUserRole(${user.id})"
-                                class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                                data-user-id="${user.id}"
+                                class="update-role-btn bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
                                 ${user.id === AuthManager.currentUser.id ? 'disabled' : ''}
                             >
                                 Update
@@ -642,7 +651,7 @@ async function showUserManagement() {
                 `).join('')}
             </div>
             <div class="mt-4 flex justify-end">
-                <button onclick="hideModal()" class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">
+                <button class="modal-cancel-btn bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">
                     Close
                 </button>
             </div>
