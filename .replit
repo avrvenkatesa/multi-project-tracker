@@ -10,6 +10,7 @@ expertMode = true
 language = "nodejs"
 run = "npm start"
 entrypoint = "server.js"
+integrations = ["javascript_database:1.0.0"]
 
 [[ports]]
 localPort = 5000
