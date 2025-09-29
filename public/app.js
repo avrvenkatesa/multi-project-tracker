@@ -618,7 +618,7 @@ function showCreateIssue() {
     
     // Add event listeners
     document.getElementById('cancel-issue-btn').addEventListener('click', hideModal);
-    document.getElementById('create-issue-form').addEventListener('submit', createIssue);
+    // Note: Form submission is already handled by the global form listener in setupEventListeners()
 }
 
 // Helper functions for dynamic dropdowns
@@ -820,7 +820,7 @@ function showCreateActionItem() {
     
     // Add event listeners
     document.getElementById('cancel-action-btn').addEventListener('click', hideModal);
-    document.getElementById('create-action-item-form').addEventListener('submit', createActionItem);
+    // Note: Form submission is already handled by the global form listener in setupEventListeners()
     
     // Add real-time progress indicator
     const progressInput = document.getElementById('action-progress');
