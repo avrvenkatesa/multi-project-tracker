@@ -1,0 +1,431 @@
+STEP 2: Implement Drag-and-Drop Functionality
+User Story: [STORY 1.4.1] Drag-and-Drop Kanban Board
+As a Team Member
+I want to drag and drop items between Kanban columns
+So that I can easily update the status of work items
+
+Replit Development Prompt
+1. Update HTML with Drag-and-Drop Attributes
+File: public/index.html - Update the Kanban columns section:
+html<!-- Replace the Kanban Board section in index.html -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- To Do Column -->
+    <div class="bg-gray-100 rounded-lg p-4 min-h-[300px]" 
+         ondrop="drop(event)" 
+         ondragover="allowDrop(event)"
+         data-status="To Do">
+        <h4 class="font-semibold mb-3 text-gray-700 flex justify-between items-center">
+            To Do
+            <span id="todo-count" class="text-xs bg-gray-300 px-2 py-1 rounded-full">0</span>
+        </h4>
+        <div id="todo-column" class="space-y-2 min-h-[200px]">
+            <!-- Items will be loaded here -->
+        </div>
+    </div>
+    
+    <!-- In Progress Column -->
+    <div class="bg-blue-50 rounded-lg p-4 min-h-[300px]" 
+         ondrop="drop(event)" 
+         ondragover="allowDrop(event)"
+         data-status="In Progress">
+        <h4 class="font-semibold mb-3 text-blue-700 flex justify-between items-center">
+            In Progress
+            <span id="inprogress-count" class="text-xs bg-blue-200 px-2 py-1 rounded-full">0</span>
+        </h4>
+        <div id="inprogress-column" class="space-y-2 min-h-[200px]">
+            <!-- Items will be loaded here -->
+        </div>
+    </div>
+    
+    <!-- Blocked Column -->
+    <div class="bg-yellow-50 rounded-lg p-4 min-h-[300px]" 
+         ondrop="drop(event)" 
+         ondragover="allowDrop(event)"
+         data-status="Blocked">
+        <h4 class="font-semibold mb-3 text-yellow-700 flex justify-between items-center">
+            Blocked
+            <span id="blocked-count" class="text-xs bg-yellow-200 px-2 py-1 rounded-full">0</span>
+        </h4>
+        <div id="blocked-column" class="space-y-2 min-h-[200px]">
+            <!-- Items will be loaded here -->
+        </div>
+    </div>
+    
+    <!-- Done Column -->
+    <div class="bg-green-50 rounded-lg p-4 min-h-[300px]" 
+         ondrop="drop(event)" 
+         ondragover="allowDrop(event)"
+         data-status="Done">
+        <h4 class="font-semibold mb-3 text-green-700 flex justify-between items-center">
+            Done
+            <span id="done-count" class="text-xs bg-green-200 px-2 py-1 rounded-full">0</span>
+        </h4>
+        <div id="done-column" class="space-y-2 min-h-[200px]">
+            <!-- Items will be loaded here -->
+        </div>
+    </div>
+</div>
+2. Implement Drag-and-Drop JavaScript
+File: public/app.js - Add these functions:
+javascript// Global variable to track dragged item
+let draggedItem = null;
+
+// Drag and Drop Functions
+function allowDrop(ev) {
+    ev.preventDefault();
+    // Add visual feedback
+    const column = ev.currentTarget;
+    if (!column.classList.contains('drag-over')) {
+        column.classList.add('drag-over', 'ring-2', 'ring-blue-400', 'ring-opacity-50');
+    }
+}
+
+function drag(ev, itemId, itemType) {
+    draggedItem = { id: itemId, type: itemType };
+    ev.dataTransfer.effectAllowed = 'move';
+    
+    // Add dragging class for visual feedback
+    ev.target.classList.add('opacity-50', 'scale-95');
+}
+
+function dragEnd(ev) {
+    ev.target.classList.remove('opacity-50', 'scale-95');
+    
+    // Remove drag-over styling from all columns
+    document.querySelectorAll('[data-status]').forEach(col => {
+        col.classList.remove('drag-over', 'ring-2', 'ring-blue-400', 'ring-opacity-50');
+    });
+}
+
+function dragLeave(ev) {
+    const column = ev.currentTarget;
+    column.classList.remove('drag-over', 'ring-2', 'ring-blue-400', 'ring-opacity-50');
+}
+
+async function drop(ev) {
+    ev.preventDefault();
+    
+    // Remove visual feedback
+    const column = ev.currentTarget.closest('[data-status]');
+    column.classList.remove('drag-over', 'ring-2', 'ring-blue-400', 'ring-opacity-50');
+    
+    if (!draggedItem) return;
+    
+    const newStatus = column.dataset.status;
+    
+    // Find the item in the appropriate array
+    let item;
+    if (draggedItem.type === 'issue') {
+        item = issues.find(i => i.id === draggedItem.id);
+    } else {
+        item = actionItems.find(i => i.id === draggedItem.id);
+    }
+    
+    if (!item) {
+        console.error('Item not found');
+        return;
+    }
+    
+    const oldStatus = item.status;
+    
+    // Don't update if dropping in same column
+    if (oldStatus === newStatus) {
+        draggedItem = null;
+        return;
+    }
+    
+    // Optimistically update UI
+    item.status = newStatus;
+    renderKanbanBoard();
+    
+    // Update on server
+    try {
+        const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
+        const response = await fetch(`${endpoint}/${draggedItem.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const updatedItem = await response.json();
+        
+        // Update local data with server response
+        if (draggedItem.type === 'issue') {
+            const index = issues.findIndex(i => i.id === draggedItem.id);
+            if (index !== -1) issues[index] = updatedItem;
+        } else {
+            const index = actionItems.findIndex(i => i.id === draggedItem.id);
+            if (index !== -1) actionItems[index] = updatedItem;
+        }
+        
+        // Show success notification
+        showSuccessMessage(`${item.title} moved to ${newStatus}`);
+        
+    } catch (error) {
+        console.error('Error updating item status:', error);
+        
+        // Revert on error
+        item.status = oldStatus;
+        renderKanbanBoard();
+        
+        alert('Error updating status. Please try again.');
+    }
+    
+    draggedItem = null;
+}
+
+// Update renderKanbanBoard to add drag attributes
+function renderKanbanBoard() {
+    const allItems = [...issues, ...actionItems];
+    const columns = [
+        { status: 'To Do', id: 'todo' },
+        { status: 'In Progress', id: 'inprogress' },
+        { status: 'Blocked', id: 'blocked' },
+        { status: 'Done', id: 'done' }
+    ];
+    
+    columns.forEach(({ status, id }) => {
+        const columnItems = allItems.filter(item => item.status === status);
+        const container = document.getElementById(`${id}-column`);
+        const countElement = document.getElementById(`${id}-count`);
+        
+        // Update count badge
+        if (countElement) {
+            countElement.textContent = columnItems.length;
+        }
+        
+        if (container) {
+            if (columnItems.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">Drop items here</p>';
+                return;
+            }
+            
+            container.innerHTML = columnItems.map(item => `
+                <div class="bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || 'medium')} 
+                     hover:shadow-md transition-all cursor-move" 
+                     draggable="true"
+                     ondragstart="drag(event, ${item.id}, '${item.type}')"
+                     ondragend="dragEnd(event)"
+                     onclick="viewItem(${item.id}, '${item.type}')">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-medium px-2 py-1 rounded ${getTypeColor(item.type || 'issue')}">
+                            ${item.type === 'action-item' ? '⚡ Action' : '🐛 Issue'}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded ${getPriorityBadgeColor(item.priority || 'medium')}">
+                            ${(item.priority || 'medium').toUpperCase()}
+                        </span>
+                    </div>
+                    
+                    <h5 class="font-medium text-sm mb-2">${item.title}</h5>
+                    <p class="text-xs text-gray-600 mb-2">${(item.description || '').substring(0, 80)}${(item.description || '').length > 80 ? '...' : ''}</p>
+                    
+                    ${item.type === 'action-item' && item.progress !== undefined ? 
+                        `<div class="mb-2">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-500">Progress</span>
+                                <span class="font-medium text-purple-600">${item.progress}%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-purple-600 h-2 rounded-full transition-all" 
+                                     style="width: ${item.progress}%"></div>
+                            </div>
+                        </div>` : ''
+                    }
+                    
+                    ${item.isDeliverable ? 
+                        '<span class="inline-block text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded mb-2">📦 Deliverable</span>' 
+                        : ''
+                    }
+                    
+                    <div class="flex justify-between items-center text-xs text-gray-500 mt-2 pt-2 border-t">
+                        <span class="flex items-center">
+                            <span class="inline-block w-6 h-6 rounded-full bg-blue-500 text-white text-center leading-6 mr-1">
+                                ${(item.assignee || 'U')[0].toUpperCase()}
+                            </span>
+                            <span class="truncate max-w-[100px]">${item.assignee || 'Unassigned'}</span>
+                        </span>
+                        ${item.dueDate ? 
+                            `<span class="flex items-center ${isOverdue(item.dueDate) ? 'text-red-600 font-medium' : ''}">
+                                📅 ${formatDate(item.dueDate)}
+                            </span>` 
+                            : ''
+                        }
+                    </div>
+                    
+                    ${item.milestone ? 
+                        `<div class="text-xs text-gray-500 mt-2">
+                            🎯 ${item.milestone}
+                        </div>` 
+                        : ''
+                    }
+                </div>
+            `).join('');
+        }
+    });
+}
+
+// Add drag-over effect removal when leaving column
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Multi-Project Tracker initialized');
+    loadProjects();
+    setupEventListeners();
+    
+    // Add drag leave handlers to columns
+    document.querySelectorAll('[data-status]').forEach(column => {
+        column.addEventListener('dragleave', dragLeave);
+    });
+});
+3. Add Backend PATCH Endpoints
+File: server.js - Add status update endpoints:
+javascript// Update issue status
+app.patch('/api/issues/:id', (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  
+  const issue = issues.find(item => item.id == id);
+  
+  if (!issue) {
+    return res.status(404).json({ error: 'Issue not found' });
+  }
+  
+  // Validate status
+  const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
+  if (status && !validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+  
+  // Update status
+  if (status) {
+    issue.status = status;
+    issue.updatedAt = new Date().toISOString();
+  }
+  
+  res.json(issue);
+});
+
+// Update action item status
+app.patch('/api/action-items/:id', (req, res) => {
+  const { id } = req.params;
+  const { status, progress } = req.body;
+  
+  const actionItem = actionItems.find(item => item.id == id);
+  
+  if (!actionItem) {
+    return res.status(404).json({ error: 'Action item not found' });
+  }
+  
+  // Validate and update status
+  const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
+  if (status && !validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+  
+  if (status) {
+    actionItem.status = status;
+    
+    // Auto-update progress based on status
+    if (status === 'Done' && actionItem.progress < 100) {
+      actionItem.progress = 100;
+    } else if (status === 'To Do' && actionItem.progress > 0) {
+      actionItem.progress = 0;
+    }
+  }
+  
+  // Update progress if provided
+  if (progress !== undefined) {
+    const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+    actionItem.progress = validProgress;
+    
+    // Auto-update status based on progress
+    if (validProgress === 100 && actionItem.status !== 'Done') {
+      actionItem.status = 'Done';
+    } else if (validProgress > 0 && validProgress < 100 && actionItem.status !== 'In Progress') {
+      actionItem.status = 'In Progress';
+    } else if (validProgress === 0 && actionItem.status !== 'To Do') {
+      actionItem.status = 'To Do';
+    }
+  }
+  
+  actionItem.updatedAt = new Date().toISOString();
+  
+  res.json(actionItem);
+});
+4. Add CSS for Drag Effects
+Add this to your public/index.html in the <head> section:
+html<style>
+    /* Drag and drop visual effects */
+    .drag-over {
+        background-color: rgba(59, 130, 246, 0.1) !important;
+    }
+    
+    [draggable="true"] {
+        transition: all 0.2s ease;
+    }
+    
+    [draggable="true"]:active {
+        cursor: grabbing !important;
+    }
+    
+    /* Smooth animations */
+    .space-y-2 > * {
+        animation: slideIn 0.2s ease;
+    }
+    
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+📋 STEP 3: Test Your Implementation
+Testing Checklist:
+
+Drag Issue Between Columns:
+
+Create an issue in "To Do"
+Drag it to "In Progress"
+Verify it moves and updates
+Check success notification appears
+
+
+Drag Action Item:
+
+Create an action item in "To Do"
+Drag to "In Progress"
+Verify progress stays the same
+
+
+Drag to Done:
+
+Drag action item to "Done"
+Verify progress auto-updates to 100%
+
+
+Visual Feedback:
+
+Column highlights when dragging over it
+Card shows opacity change while dragging
+Smooth animations
+
+
+Error Handling:
+
+Try dragging when server is stopped (simulated error)
+Verify item reverts to original position
+
+
+Count Badges:
+
+Verify column counts update after drag
