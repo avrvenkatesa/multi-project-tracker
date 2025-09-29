@@ -261,6 +261,80 @@ app.post('/api/action-items', (req, res) => {
 });
 
 // Update action item progress
+// Update issue status
+app.patch('/api/issues/:id', (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  
+  const issue = issues.find(item => item.id == id);
+  
+  if (!issue) {
+    return res.status(404).json({ error: 'Issue not found' });
+  }
+  
+  // Validate status
+  const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
+  if (status && !validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+  
+  // Update status
+  if (status) {
+    issue.status = status;
+    issue.updatedAt = new Date().toISOString();
+  }
+  
+  res.json(issue);
+});
+
+// Update action item status
+app.patch('/api/action-items/:id', (req, res) => {
+  const { id } = req.params;
+  const { status, progress } = req.body;
+  
+  const actionItem = actionItems.find(item => item.id == id);
+  
+  if (!actionItem) {
+    return res.status(404).json({ error: 'Action item not found' });
+  }
+  
+  // Validate and update status
+  const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
+  if (status && !validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+  
+  if (status) {
+    actionItem.status = status;
+    
+    // Auto-update progress based on status
+    if (status === 'Done' && actionItem.progress < 100) {
+      actionItem.progress = 100;
+    } else if (status === 'To Do' && actionItem.progress > 0) {
+      actionItem.progress = 0;
+    }
+  }
+  
+  // Update progress if provided
+  if (progress !== undefined) {
+    const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+    actionItem.progress = validProgress;
+    
+    // Auto-update status based on progress
+    if (validProgress === 100) {
+      actionItem.status = 'Done';
+    } else if (validProgress > 0) {
+      actionItem.status = 'In Progress';
+    } else {
+      actionItem.status = 'To Do';
+    }
+  }
+  
+  actionItem.updatedAt = new Date().toISOString();
+  
+  res.json(actionItem);
+});
+
 app.patch('/api/action-items/:id/progress', (req, res) => {
   const { id } = req.params;
   const { progress } = req.body;

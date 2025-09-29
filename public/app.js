@@ -4,11 +4,129 @@ let projects = [];
 let issues = [];
 let actionItems = [];
 
+// Global variable to track dragged item
+let draggedItem = null;
+
+// Drag and Drop Functions
+function allowDrop(ev) {
+    ev.preventDefault();
+    // Add visual feedback
+    const column = ev.currentTarget;
+    if (!column.classList.contains('drag-over')) {
+        column.classList.add('drag-over', 'ring-2', 'ring-blue-400', 'ring-opacity-50');
+    }
+}
+
+function drag(ev, itemId, itemType) {
+    draggedItem = { id: itemId, type: itemType };
+    ev.dataTransfer.effectAllowed = 'move';
+    
+    // Add dragging class for visual feedback
+    ev.target.classList.add('opacity-50', 'scale-95');
+}
+
+function dragEnd(ev) {
+    ev.target.classList.remove('opacity-50', 'scale-95');
+    
+    // Remove drag-over styling from all columns
+    document.querySelectorAll('[data-status]').forEach(col => {
+        col.classList.remove('drag-over', 'ring-2', 'ring-blue-400', 'ring-opacity-50');
+    });
+}
+
+function dragLeave(ev) {
+    const column = ev.currentTarget;
+    column.classList.remove('drag-over', 'ring-2', 'ring-blue-400', 'ring-opacity-50');
+}
+
+async function drop(ev) {
+    ev.preventDefault();
+    
+    // Remove visual feedback
+    const column = ev.currentTarget.closest('[data-status]');
+    column.classList.remove('drag-over', 'ring-2', 'ring-blue-400', 'ring-opacity-50');
+    
+    if (!draggedItem) return;
+    
+    const newStatus = column.dataset.status;
+    
+    // Find the item in the appropriate array
+    let item;
+    if (draggedItem.type === 'issue') {
+        item = issues.find(i => i.id === draggedItem.id);
+    } else {
+        item = actionItems.find(i => i.id === draggedItem.id);
+    }
+    
+    if (!item) {
+        console.error('Item not found');
+        return;
+    }
+    
+    const oldStatus = item.status;
+    
+    // Don't update if dropping in same column
+    if (oldStatus === newStatus) {
+        draggedItem = null;
+        return;
+    }
+    
+    // Optimistically update UI
+    item.status = newStatus;
+    renderKanbanBoard();
+    
+    // Update on server
+    try {
+        const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
+        const response = await fetch(`${endpoint}/${draggedItem.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const updatedItem = await response.json();
+        
+        // Update local data with server response
+        if (draggedItem.type === 'issue') {
+            const index = issues.findIndex(i => i.id === draggedItem.id);
+            if (index !== -1) issues[index] = updatedItem;
+        } else {
+            const index = actionItems.findIndex(i => i.id === draggedItem.id);
+            if (index !== -1) actionItems[index] = updatedItem;
+        }
+        
+        // Show success notification
+        showSuccessMessage(`${item.title} moved to ${newStatus}`);
+        
+    } catch (error) {
+        console.error('Error updating item status:', error);
+        
+        // Revert on error
+        item.status = oldStatus;
+        renderKanbanBoard();
+        
+        alert('Error updating status. Please try again.');
+    }
+    
+    draggedItem = null;
+}
+
 // Initialize app
 document.addEventListener("DOMContentLoaded", function () {
     console.log("Multi-Project Tracker initialized");
     loadProjects();
     setupEventListeners();
+    
+    // Add drag leave handlers to columns
+    document.querySelectorAll('[data-status]').forEach(column => {
+        column.addEventListener('dragleave', dragLeave);
+    });
 });
 
 // Setup event listeners (replaces inline onclick handlers)
@@ -139,22 +257,35 @@ async function loadProjectData(projectId) {
 // Render Kanban board
 function renderKanbanBoard() {
     const allItems = [...issues, ...actionItems];
-    const columns = ['To Do', 'In Progress', 'Blocked', 'Done'];
+    const columns = [
+        { status: 'To Do', id: 'todo' },
+        { status: 'In Progress', id: 'inprogress' },
+        { status: 'Blocked', id: 'blocked' },
+        { status: 'Done', id: 'done' }
+    ];
     
-    columns.forEach(status => {
+    columns.forEach(({ status, id }) => {
         const columnItems = allItems.filter(item => item.status === status);
-        const columnId = status.toLowerCase().replace(' ', '');
-        const container = document.getElementById(`${columnId}-column`);
+        const container = document.getElementById(`${id}-column`);
+        const countElement = document.getElementById(`${id}-count`);
+        
+        // Update count badge
+        if (countElement) {
+            countElement.textContent = columnItems.length;
+        }
         
         if (container) {
             if (columnItems.length === 0) {
-                container.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No items</p>';
+                container.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">Drop items here</p>';
                 return;
             }
             
             container.innerHTML = columnItems.map(item => `
                 <div class="bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || 'medium')} 
-                     hover:shadow-md transition-shadow cursor-pointer" 
+                     hover:shadow-md transition-all cursor-move" 
+                     draggable="true"
+                     ondragstart="drag(event, ${item.id}, '${item.type}')"
+                     ondragend="dragEnd(event)"
                      onclick="viewItem(${item.id}, '${item.type}')">
                     <div class="flex justify-between items-start mb-2">
                         <span class="text-xs font-medium px-2 py-1 rounded ${getTypeColor(item.type || 'issue')}">
@@ -181,7 +312,7 @@ function renderKanbanBoard() {
                     }
                     
                     ${item.isDeliverable ? 
-                        '<span class="inline-block text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded mb-2">📦 Key Deliverable</span>' 
+                        '<span class="inline-block text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded mb-2">📦 Deliverable</span>' 
                         : ''
                     }
                     
@@ -190,7 +321,7 @@ function renderKanbanBoard() {
                             <span class="inline-block w-6 h-6 rounded-full bg-blue-500 text-white text-center leading-6 mr-1">
                                 ${(item.assignee || 'U')[0].toUpperCase()}
                             </span>
-                            ${item.assignee || 'Unassigned'}
+                            <span class="truncate max-w-[100px]">${item.assignee || 'Unassigned'}</span>
                         </span>
                         ${item.dueDate ? 
                             `<span class="flex items-center ${isOverdue(item.dueDate) ? 'text-red-600 font-medium' : ''}">
