@@ -444,9 +444,7 @@ function showCreateProject() {
 
     // Add event listeners for the modal
     document.getElementById("cancel-btn").addEventListener("click", hideModal);
-    document
-        .getElementById("create-project-form")
-        .addEventListener("submit", createProject);
+    // Note: Form submission is already handled by the global form listener in setupEventListeners()
 }
 
 async function createProject(event) {
