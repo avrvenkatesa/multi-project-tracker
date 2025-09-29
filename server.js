@@ -7,6 +7,9 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy setting for Replit environment (more secure configuration)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(
   helmet({
@@ -173,25 +176,116 @@ app.post('/api/issues', (req, res) => {
 });
 
 // Action Items API
-app.get("/api/action-items", (req, res) => {
-  const { projectId } = req.query;
-  const filteredItems = projectId
-    ? actionItems.filter((item) => item.projectId == projectId)
-    : actionItems;
-  res.json(filteredItems);
+app.get('/api/action-items', (req, res) => {
+  const { projectId, status, assignee, isDeliverable } = req.query;
+  
+  let filtered = [...actionItems];
+  
+  if (projectId) {
+    filtered = filtered.filter(item => item.projectId == projectId);
+  }
+  
+  if (status) {
+    filtered = filtered.filter(item => item.status === status);
+  }
+  
+  if (assignee) {
+    filtered = filtered.filter(item => item.assignee === assignee);
+  }
+  
+  if (isDeliverable === 'true') {
+    filtered = filtered.filter(item => item.isDeliverable === true);
+  }
+  
+  res.json(filtered);
 });
 
-app.post("/api/action-items", (req, res) => {
-  const newItem = {
+app.post('/api/action-items', (req, res) => {
+  const { 
+    title, 
+    description, 
+    priority, 
+    category, 
+    phase, 
+    component, 
+    assignee, 
+    dueDate, 
+    progress = 0,
+    milestone,
+    isDeliverable = false,
+    projectId
+  } = req.body;
+  
+  // Validation
+  if (!title || !projectId) {
+    return res.status(400).json({ 
+      error: 'Title and Project ID are required' 
+    });
+  }
+  
+  // Verify project exists
+  const project = projects.find(p => p.id == projectId);
+  if (!project) {
+    return res.status(404).json({ 
+      error: 'Project not found' 
+    });
+  }
+  
+  // Validate progress
+  const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+  
+  const newActionItem = {
     id: Date.now(),
-    ...req.body,
+    title: title.trim(),
+    description: description?.trim() || '',
+    priority: priority || 'medium',
+    category: category || 'General',
+    phase: phase || project.phases[0],
+    component: component || project.components[0],
+    assignee: assignee || '',
+    dueDate: dueDate || null,
+    progress: validProgress,
+    milestone: milestone?.trim() || '',
+    isDeliverable: Boolean(isDeliverable),
+    projectId: parseInt(projectId),
+    type: 'action-item',
+    status: validProgress === 100 ? 'Done' : (validProgress > 0 ? 'In Progress' : 'To Do'),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    status: "To Do",
-    progress: 0,
+    createdBy: 'Demo User'
   };
-  actionItems.push(newItem);
-  res.status(201).json(newItem);
+  
+  actionItems.push(newActionItem);
+  
+  res.status(201).json(newActionItem);
+});
+
+// Update action item progress
+app.patch('/api/action-items/:id/progress', (req, res) => {
+  const { id } = req.params;
+  const { progress } = req.body;
+  
+  const actionItem = actionItems.find(item => item.id == id);
+  
+  if (!actionItem) {
+    return res.status(404).json({ error: 'Action item not found' });
+  }
+  
+  // Validate and update progress
+  const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+  actionItem.progress = validProgress;
+  actionItem.updatedAt = new Date().toISOString();
+  
+  // Auto-update status based on progress
+  if (validProgress === 100) {
+    actionItem.status = 'Done';
+  } else if (validProgress > 0) {
+    actionItem.status = 'In Progress';
+  } else {
+    actionItem.status = 'To Do';
+  }
+  
+  res.json(actionItem);
 });
 
 // Users API

@@ -1,0 +1,414 @@
+User Story: [STORY 1.3.2] Action Item Creation and Progress Tracking
+As a Team Member
+I want to create action items with progress tracking
+So that I can track specific tasks and deliverables with completion status
+What to Build in Replit:
+1. Frontend: Action Item Creation Modal
+File: public/app.js - Update the showCreateActionItem() function:
+javascriptfunction showCreateActionItem() {
+    if (!currentProject) {
+        alert('Please select a project first');
+        return;
+    }
+    
+    const modalContent = `
+        <h3 class="text-lg font-semibold mb-4">Create New Action Item</h3>
+        <form id="create-action-item-form">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Action Item Title *</label>
+                <input type="text" id="action-title" required 
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                       placeholder="What needs to be done?">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Description</label>
+                <textarea id="action-description" rows="3"
+                          class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                          placeholder="Detailed steps or context for this action"></textarea>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Priority</label>
+                    <select id="action-priority" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Category</label>
+                    <select id="action-category" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        ${generateCategoryOptions()}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Phase</label>
+                    <select id="action-phase" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        ${generatePhaseOptions()}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Component</label>
+                    <select id="action-component" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        ${generateComponentOptions()}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Assigned To</label>
+                <select id="action-assignee" 
+                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                    <option value="">Unassigned</option>
+                    <option value="Demo User">Demo User</option>
+                    <option value="Gajalakshmi Vaasan">Gajalakshmi Vaasan (PM)</option>
+                    <option value="Srihari S">Srihari S (Solution Architect)</option>
+                    <option value="Magesh Kumar Selvaraj">Magesh Kumar Selvaraj (Cloud Engineer)</option>
+                    <option value="Sujay V">Sujay V (DBA)</option>
+                </select>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Due Date</label>
+                    <input type="date" id="action-due-date"
+                           class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Progress (%)</label>
+                    <input type="number" id="action-progress" min="0" max="100" value="0"
+                           class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Link to Milestone (Optional)</label>
+                <input type="text" id="action-milestone" 
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                       placeholder="e.g., Phase 1 Completion, Pathfinder Migration">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">
+                    <input type="checkbox" id="action-deliverable" class="mr-2">
+                    This is a key deliverable
+                </label>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="cancel-action-btn" 
+                        class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+                    Create Action Item
+                </button>
+            </div>
+        </form>
+    `;
+    
+    showModal(modalContent);
+    
+    // Add event listeners
+    document.getElementById('cancel-action-btn').addEventListener('click', hideModal);
+    document.getElementById('create-action-item-form').addEventListener('submit', createActionItem);
+    
+    // Add real-time progress indicator
+    const progressInput = document.getElementById('action-progress');
+    progressInput.addEventListener('input', function() {
+        this.style.background = `linear-gradient(to right, #9333EA ${this.value}%, #e5e7eb ${this.value}%)`;
+    });
+}
+
+// Create action item function
+async function createActionItem(event) {
+    event.preventDefault();
+    
+    const actionItemData = {
+        title: document.getElementById('action-title').value,
+        description: document.getElementById('action-description').value,
+        priority: document.getElementById('action-priority').value,
+        category: document.getElementById('action-category').value,
+        phase: document.getElementById('action-phase').value,
+        component: document.getElementById('action-component').value,
+        assignee: document.getElementById('action-assignee').value,
+        dueDate: document.getElementById('action-due-date').value,
+        progress: parseInt(document.getElementById('action-progress').value),
+        milestone: document.getElementById('action-milestone').value,
+        isDeliverable: document.getElementById('action-deliverable').checked,
+        projectId: currentProject.id,
+        type: 'action-item',
+        status: 'To Do'
+    };
+    
+    try {
+        const response = await fetch('/api/action-items', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(actionItemData)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const newActionItem = await response.json();
+        actionItems.push(newActionItem);
+        renderKanbanBoard();
+        hideModal();
+        
+        showSuccessMessage(`Action item "${newActionItem.title}" created successfully!`);
+        
+    } catch (error) {
+        console.error('Error creating action item:', error);
+        alert('Error creating action item. Please try again.');
+    }
+}
+2. Enhanced Kanban Board Display
+File: public/app.js - Update the renderKanbanBoard() function to better display action items:
+javascriptfunction renderKanbanBoard() {
+    const allItems = [...issues, ...actionItems];
+    const columns = ['To Do', 'In Progress', 'Blocked', 'Done'];
+    
+    columns.forEach(status => {
+        const columnItems = allItems.filter(item => item.status === status);
+        const columnId = status.toLowerCase().replace(' ', '');
+        const container = document.getElementById(`${columnId}-column`);
+        
+        if (container) {
+            if (columnItems.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No items</p>';
+                return;
+            }
+            
+            container.innerHTML = columnItems.map(item => `
+                <div class="bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || 'medium')} 
+                     hover:shadow-md transition-shadow cursor-pointer" 
+                     onclick="viewItem(${item.id}, '${item.type}')">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-medium px-2 py-1 rounded ${getTypeColor(item.type || 'issue')}">
+                            ${item.type === 'action-item' ? '⚡ Action' : '🐛 Issue'}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded ${getPriorityBadgeColor(item.priority || 'medium')}">
+                            ${(item.priority || 'medium').toUpperCase()}
+                        </span>
+                    </div>
+                    <h5 class="font-medium text-sm mb-2">${item.title}</h5>
+                    <p class="text-xs text-gray-600 mb-2">${(item.description || '').substring(0, 80)}${(item.description || '').length > 80 ? '...' : ''}</p>
+                    
+                    ${item.type === 'action-item' && item.progress !== undefined ? 
+                        `<div class="mb-2">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-500">Progress</span>
+                                <span class="font-medium text-purple-600">${item.progress}%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-purple-600 h-2 rounded-full transition-all" 
+                                     style="width: ${item.progress}%"></div>
+                            </div>
+                        </div>` : ''
+                    }
+                    
+                    ${item.isDeliverable ? 
+                        '<span class="inline-block text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded mb-2">📦 Key Deliverable</span>' 
+                        : ''
+                    }
+                    
+                    <div class="flex justify-between items-center text-xs text-gray-500 mt-2 pt-2 border-t">
+                        <span class="flex items-center">
+                            <span class="inline-block w-6 h-6 rounded-full bg-blue-500 text-white text-center leading-6 mr-1">
+                                ${(item.assignee || 'U')[0].toUpperCase()}
+                            </span>
+                            ${item.assignee || 'Unassigned'}
+                        </span>
+                        ${item.dueDate ? 
+                            `<span class="flex items-center ${isOverdue(item.dueDate) ? 'text-red-600 font-medium' : ''}">
+                                📅 ${formatDate(item.dueDate)}
+                            </span>` 
+                            : ''
+                        }
+                    </div>
+                    
+                    ${item.milestone ? 
+                        `<div class="text-xs text-gray-500 mt-2">
+                            🎯 ${item.milestone}
+                        </div>` 
+                        : ''
+                    }
+                </div>
+            `).join('');
+        }
+    });
+}
+
+// Helper functions
+function getTypeColor(type) {
+    return type === 'action-item' 
+        ? 'bg-purple-100 text-purple-800' 
+        : 'bg-red-100 text-red-800';
+}
+
+function getPriorityBadgeColor(priority) {
+    const colors = {
+        'critical': 'bg-red-100 text-red-800',
+        'high': 'bg-orange-100 text-orange-800',
+        'medium': 'bg-yellow-100 text-yellow-800',
+        'low': 'bg-green-100 text-green-800'
+    };
+    return colors[priority.toLowerCase()] || colors['medium'];
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    const today = new Date();
+    const diffTime = date - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`;
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Tomorrow';
+    if (diffDays < 7) return `${diffDays}d`;
+    
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function isOverdue(dateString) {
+    const date = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+}
+
+// Placeholder for viewing item details
+function viewItem(itemId, itemType) {
+    console.log(`View ${itemType} with ID: ${itemId}`);
+    alert(`Item details view coming soon!\nItem ID: ${itemId}\nType: ${itemType}`);
+}
+3. Backend: Enhanced Action Items API
+File: server.js - Update action items endpoint:
+javascript// Enhanced Action Items API
+app.post('/api/action-items', (req, res) => {
+  const { 
+    title, 
+    description, 
+    priority, 
+    category, 
+    phase, 
+    component, 
+    assignee, 
+    dueDate, 
+    progress = 0,
+    milestone,
+    isDeliverable = false,
+    projectId
+  } = req.body;
+  
+  // Validation
+  if (!title || !projectId) {
+    return res.status(400).json({ 
+      error: 'Title and Project ID are required' 
+    });
+  }
+  
+  // Verify project exists
+  const project = projects.find(p => p.id == projectId);
+  if (!project) {
+    return res.status(404).json({ 
+      error: 'Project not found' 
+    });
+  }
+  
+  // Validate progress
+  const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+  
+  const newActionItem = {
+    id: Date.now(),
+    title: title.trim(),
+    description: description?.trim() || '',
+    priority: priority || 'medium',
+    category: category || 'General',
+    phase: phase || project.phases[0],
+    component: component || project.components[0],
+    assignee: assignee || '',
+    dueDate: dueDate || null,
+    progress: validProgress,
+    milestone: milestone?.trim() || '',
+    isDeliverable: Boolean(isDeliverable),
+    projectId: parseInt(projectId),
+    type: 'action-item',
+    status: validProgress === 100 ? 'Done' : (validProgress > 0 ? 'In Progress' : 'To Do'),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    createdBy: 'Demo User'
+  };
+  
+  actionItems.push(newActionItem);
+  
+  res.status(201).json(newActionItem);
+});
+
+// Update action item progress
+app.patch('/api/action-items/:id/progress', (req, res) => {
+  const { id } = req.params;
+  const { progress } = req.body;
+  
+  const actionItem = actionItems.find(item => item.id == id);
+  
+  if (!actionItem) {
+    return res.status(404).json({ error: 'Action item not found' });
+  }
+  
+  // Validate and update progress
+  const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+  actionItem.progress = validProgress;
+  actionItem.updatedAt = new Date().toISOString();
+  
+  // Auto-update status based on progress
+  if (validProgress === 100) {
+    actionItem.status = 'Done';
+  } else if (validProgress > 0) {
+    actionItem.status = 'In Progress';
+  } else {
+    actionItem.status = 'To Do';
+  }
+  
+  res.json(actionItem);
+});
+
+// Get action items with filtering
+app.get('/api/action-items', (req, res) => {
+  const { projectId, status, assignee, isDeliverable } = req.query;
+  
+  let filtered = [...actionItems];
+  
+  if (projectId) {
+    filtered = filtered.filter(item => item.projectId == projectId);
+  }
+  
+  if (status) {
+    filtered = filtered.filter(item => item.status === status);
+  }
+  
+  if (assignee) {
+    filtered = filtered.filter(item => item.assignee === assignee);
+  }
+  
+  if (isDeliverable === 'true') {
+    filtered = filtered.filter(item => item.isDeliverable === true);
+  }
+  
+  res.json(filtered);
+});
