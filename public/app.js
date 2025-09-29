@@ -194,6 +194,11 @@ function getTextColor(type) {
 
 // Modal functions
 function showCreateProject() {
+    if (!AuthManager.canCreateProject()) {
+        AuthManager.showNotification('Insufficient permissions - Project Manager role required', 'error');
+        return;
+    }
+    
     const modalContent = `
         <h3 class="text-lg font-semibold mb-4">Create New Project</h3>
         <form id="create-project-form">

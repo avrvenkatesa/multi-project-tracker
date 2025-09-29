@@ -166,13 +166,13 @@ const AuthManager = {
         userRoleEl.textContent = this.currentUser.role;
         userRoleEl.className = this.getRoleBadgeClass(this.currentUser.role);
       }
-
-      this.updateRoleBasedUI();
     } else {
       loggedInState?.classList.add('hidden');
       loggedOutState?.classList.remove('hidden');
       loggedOutState?.classList.add('flex');
     }
+    
+    this.updateRoleBasedUI();
   },
 
   getRoleBadgeClass(role) {
