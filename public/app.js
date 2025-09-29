@@ -220,7 +220,9 @@ function renderKanbanBoard() {
             container.addEventListener('dragleave', container._dragLeaveHandler);
             
             // STEP 5: Attach dragstart/dragend listeners to each card
-            container.querySelectorAll('.kanban-card').forEach(card => {
+            const cards = container.querySelectorAll('.kanban-card');
+            console.log(`✅ Attaching listeners to ${cards.length} cards in ${status}`);
+            cards.forEach(card => {
                 card.addEventListener('dragstart', handleDragStart);
                 card.addEventListener('dragend', handleDragEnd);
             });
@@ -247,15 +249,18 @@ function getTextColor(type) {
 let draggedItem = null;
 
 function handleDragStart(event) {
+    console.log('🎯 DRAG START:', event.target.dataset);
     draggedItem = {
         id: event.target.dataset.itemId,
         type: event.target.dataset.itemType
     };
+    console.log('📦 Dragged item:', draggedItem);
     event.target.style.opacity = '0.5';
     event.dataTransfer.effectAllowed = 'move';
 }
 
 function handleDragEnd(event) {
+    console.log('🏁 DRAG END');
     event.target.style.opacity = '1';
     
     // Remove highlight from all columns
@@ -270,10 +275,14 @@ function handleDragOver(event) {
 }
 
 async function handleDrop(event, newStatus) {
+    console.log('💧 DROP on:', newStatus, 'draggedItem:', draggedItem);
     event.preventDefault();
     event.stopPropagation(); // Prevent event bubbling
     
-    if (!draggedItem) return;
+    if (!draggedItem) {
+        console.log('❌ No dragged item!');
+        return;
+    }
     
     try {
         // Remove highlight from drop zone
