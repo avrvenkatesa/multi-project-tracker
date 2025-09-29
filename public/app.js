@@ -21,6 +21,9 @@ function drag(ev, itemId, itemType) {
     draggedItem = { id: itemId, type: itemType };
     ev.dataTransfer.effectAllowed = 'move';
     
+    // Set data for cross-browser compatibility (required for Firefox)
+    ev.dataTransfer.setData('text/plain', JSON.stringify({id: itemId, type: itemType}));
+    
     // Add dragging class for visual feedback
     ev.target.classList.add('opacity-50', 'scale-95');
 }
@@ -32,6 +35,9 @@ function dragEnd(ev) {
     document.querySelectorAll('[data-status]').forEach(col => {
         col.classList.remove('drag-over', 'ring-2', 'ring-blue-400', 'ring-opacity-50');
     });
+    
+    // Clear dragged item to prevent stuck state
+    draggedItem = null;
 }
 
 function dragLeave(ev) {
@@ -184,13 +190,17 @@ function setupEventListeners() {
         }
     });
 
-    // Handle form submissions
+    // Handle form submissions by form ID
     document.addEventListener("submit", function (e) {
-        if (e.target.onsubmit) {
-            e.preventDefault();
-            if (e.target.querySelector("#project-name")) {
-                createProject(e);
-            }
+        e.preventDefault();
+        
+        // Handle different form types by ID
+        if (e.target.id === "create-project-form") {
+            createProject(e);
+        } else if (e.target.id === "create-issue-form") {
+            createIssue(e);
+        } else if (e.target.id === "create-action-item-form") {
+            createActionItem(e);
         }
     });
 }
