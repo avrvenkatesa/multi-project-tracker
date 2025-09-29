@@ -552,6 +552,10 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
   console.log(`📋 API Endpoints:`);
+  console.log(`   POST /api/auth/register`);
+  console.log(`   POST /api/auth/login`);
+  console.log(`   POST /api/auth/logout`);
+  console.log(`   GET  /api/auth/me`);
   console.log(`   GET  /api/projects`);
   console.log(`   POST /api/projects`);
   console.log(`   GET  /api/issues`);
