@@ -55,12 +55,18 @@ async function drop(ev) {
     
     if (!draggedItem) return;
     
+    // Store drag data locally to avoid issues with global variable being cleared
+    const dragData = {
+        id: draggedItem.id,
+        type: draggedItem.type
+    };
+    
     const newStatus = column.dataset.status;
     
     // Find the item in the appropriate array (ensure ID type consistency)
     let item;
-    const itemId = parseInt(draggedItem.id); // Convert to number for consistent comparison
-    if (draggedItem.type === 'issue') {
+    const itemId = parseInt(dragData.id); // Convert to number for consistent comparison
+    if (dragData.type === 'issue') {
         item = issues.find(i => i.id === itemId);
     } else {
         item = actionItems.find(i => i.id === itemId);
@@ -68,6 +74,7 @@ async function drop(ev) {
     
     if (!item) {
         console.error('Item not found');
+        draggedItem = null;
         return;
     }
     
@@ -85,10 +92,10 @@ async function drop(ev) {
     
     // Update on server
     try {
-        const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
-        console.log(`Updating ${draggedItem.type} ${draggedItem.id} to status: ${newStatus}`);
+        const endpoint = dragData.type === 'issue' ? '/api/issues' : '/api/action-items';
+        console.log(`Updating ${dragData.type} ${dragData.id} to status: ${newStatus}`);
         
-        const response = await fetch(`${endpoint}/${draggedItem.id}`, {
+        const response = await fetch(`${endpoint}/${dragData.id}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
@@ -108,16 +115,16 @@ async function drop(ev) {
         console.log('Updated item received:', updatedItem);
         
         // Update local data with server response (ensure ID type consistency)
-        const itemId = parseInt(draggedItem.id);
+        const responseItemId = parseInt(dragData.id);
         
-        if (draggedItem.type === 'issue') {
-            const index = issues.findIndex(i => i.id === itemId);
+        if (dragData.type === 'issue') {
+            const index = issues.findIndex(i => i.id === responseItemId);
             if (index !== -1) {
                 issues[index] = updatedItem;
                 console.log('Updated local issue data');
             }
         } else {
-            const index = actionItems.findIndex(i => i.id === itemId);
+            const index = actionItems.findIndex(i => i.id === responseItemId);
             if (index !== -1) {
                 actionItems[index] = updatedItem;
                 console.log('Updated local action item data');
