@@ -78,6 +78,7 @@ async function drop(ev) {
     // Update on server
     try {
         const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
+        console.log(`Updating ${draggedItem.type} ${draggedItem.id} to status: ${newStatus}`);
         const response = await fetch(`${endpoint}/${draggedItem.id}`, {
             method: 'PATCH',
             headers: {
@@ -101,6 +102,9 @@ async function drop(ev) {
             if (index !== -1) actionItems[index] = updatedItem;
         }
         
+        // Re-render to reflect server-side changes (like auto-updated progress)
+        renderKanbanBoard();
+        
         // Show success notification
         showSuccessMessage(`${item.title} moved to ${newStatus}`);
         
@@ -122,29 +126,55 @@ document.addEventListener("DOMContentLoaded", function () {
     console.log("Multi-Project Tracker initialized");
     loadProjects();
     setupEventListeners();
-    
-    // Add drag leave handlers to columns
+    setupDragDropEventListeners();
+});
+
+// Setup drag and drop event listeners for columns
+function setupDragDropEventListeners() {
     document.querySelectorAll('[data-status]').forEach(column => {
+        column.addEventListener('dragover', allowDrop);
+        column.addEventListener('drop', drop);
         column.addEventListener('dragleave', dragLeave);
     });
-});
+}
+
+// Setup event listeners for cards (called after each render)
+function setupCardEventListeners(container) {
+    const cards = container.querySelectorAll('[data-item-id]');
+    cards.forEach(card => {
+        const itemId = parseInt(card.dataset.itemId);
+        const itemType = card.dataset.itemType;
+        
+        // Add drag event listeners
+        card.addEventListener('dragstart', (e) => drag(e, itemId, itemType));
+        card.addEventListener('dragend', dragEnd);
+        
+        // Add click event listener for viewing items
+        card.addEventListener('click', (e) => {
+            // Prevent click during drag
+            if (!draggedItem) {
+                viewItem(itemId, itemType);
+            }
+        });
+    });
+}
 
 // Setup event listeners (replaces inline onclick handlers)
 function setupEventListeners() {
-    // Add event listeners after DOM is loaded
+    // Handle button clicks by ID
     document.addEventListener("click", function (e) {
         // Handle New Project button
-        if (e.target.textContent.includes("+ New Project")) {
+        if (e.target.id === "new-project-btn" || e.target.textContent.includes("+ New Project")) {
             showCreateProject();
         }
 
         // Handle Issue button
-        if (e.target.textContent.includes("+ Issue")) {
+        if (e.target.id === "new-issue-btn" || e.target.textContent.includes("+ Issue")) {
             showCreateIssue();
         }
 
         // Handle Action Item button
-        if (e.target.textContent.includes("+ Action Item")) {
+        if (e.target.id === "new-action-item-btn" || e.target.textContent.includes("+ Action Item")) {
             showCreateActionItem();
         }
 
@@ -284,9 +314,8 @@ function renderKanbanBoard() {
                 <div class="bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || 'medium')} 
                      hover:shadow-md transition-all cursor-move" 
                      draggable="true"
-                     ondragstart="drag(event, ${item.id}, '${item.type}')"
-                     ondragend="dragEnd(event)"
-                     onclick="viewItem(${item.id}, '${item.type}')">
+                     data-item-id="${item.id}"
+                     data-item-type="${item.type}">
                     <div class="flex justify-between items-start mb-2">
                         <span class="text-xs font-medium px-2 py-1 rounded ${getTypeColor(item.type || 'issue')}">
                             ${item.type === 'action-item' ? '⚡ Action' : '🐛 Issue'}
@@ -339,6 +368,9 @@ function renderKanbanBoard() {
                     }
                 </div>
             `).join('');
+            
+            // Add event listeners to all cards after rendering
+            setupCardEventListeners(container);
         }
     });
 }
