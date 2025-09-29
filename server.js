@@ -315,27 +315,9 @@ app.get('/api/issues', optionalAuth, async (req, res) => {
   try {
     const { projectId, status, priority, assignee, category } = req.query;
     
-    let query = sql`SELECT * FROM issues WHERE 1=1`;
-    const conditions = [];
-    
+    let query;
     if (projectId) {
-      conditions.push(sql`project_id = ${projectId}`);
-    }
-    if (status) {
-      conditions.push(sql`status = ${status}`);
-    }
-    if (priority) {
-      conditions.push(sql`priority = ${priority}`);
-    }
-    if (assignee) {
-      conditions.push(sql`assignee = ${assignee}`);
-    }
-    if (category) {
-      conditions.push(sql`category = ${category}`);
-    }
-    
-    if (conditions.length > 0) {
-      query = sql`SELECT * FROM issues WHERE ${sql.join(conditions, sql` AND `)}`;
+      query = sql`SELECT * FROM issues WHERE project_id = ${projectId}`;
     } else {
       query = sql`SELECT * FROM issues`;
     }
@@ -348,7 +330,7 @@ app.get('/api/issues', optionalAuth, async (req, res) => {
   }
 });
 
-app.post('/api/issues', (req, res) => {
+app.post('/api/issues', authenticateToken, async (req, res) => {
   const { 
     title, 
     description, 
@@ -369,57 +351,87 @@ app.post('/api/issues', (req, res) => {
     });
   }
   
-  // Verify project exists
-  const project = projects.find(p => p.id == projectId);
-  if (!project) {
-    return res.status(404).json({ 
-      error: 'Project not found' 
-    });
+  try {
+    // Verify project exists
+    const [project] = await sql`SELECT * FROM projects WHERE id = ${projectId}`;
+    if (!project) {
+      return res.status(404).json({ 
+        error: 'Project not found' 
+      });
+    }
+    
+    // Create issue in database
+    const [newIssue] = await sql`
+      INSERT INTO issues (
+        title, description, priority, category, assignee, 
+        due_date, project_id, status, created_by
+      ) VALUES (
+        ${title.trim()}, 
+        ${description?.trim() || ''}, 
+        ${priority || 'medium'}, 
+        ${category || 'General'}, 
+        ${assignee || ''}, 
+        ${dueDate || null}, 
+        ${parseInt(projectId)}, 
+        'To Do',
+        ${req.user.id}
+      ) RETURNING *
+    `;
+    
+    res.status(201).json(newIssue);
+  } catch (error) {
+    console.error('Error creating issue:', error);
+    res.status(500).json({ error: 'Failed to create issue' });
   }
-  
-  const newIssue = {
-    id: Date.now(),
-    title: title.trim(),
-    description: description?.trim() || '',
-    priority: priority || 'medium',
-    category: category || 'General',
-    phase: phase || project.phases[0],
-    component: component || project.components[0],
-    assignee: assignee || '',
-    dueDate: dueDate || null,
-    projectId: parseInt(projectId),
-    type,
-    status: 'To Do',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    createdBy: 'Demo User' // Will be replaced with actual user when auth is implemented
-  };
-  
-  issues.push(newIssue);
-  
-  res.status(201).json(newIssue);
 });
 
 // Action Items API
-app.get("/api/action-items", (req, res) => {
-  const { projectId } = req.query;
-  const filteredItems = projectId
-    ? actionItems.filter((item) => item.projectId == projectId)
-    : actionItems;
-  res.json(filteredItems);
+app.get("/api/action-items", optionalAuth, async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    let query;
+    if (projectId) {
+      query = sql`SELECT * FROM action_items WHERE project_id = ${projectId}`;
+    } else {
+      query = sql`SELECT * FROM action_items`;
+    }
+    const actionItems = await query;
+    res.json(actionItems);
+  } catch (error) {
+    console.error('Error getting action items:', error);
+    res.status(500).json({ error: 'Failed to get action items' });
+  }
 });
 
-app.post("/api/action-items", (req, res) => {
-  const newItem = {
-    id: Date.now(),
-    ...req.body,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    status: "To Do",
-    progress: 0,
-  };
-  actionItems.push(newItem);
-  res.status(201).json(newItem);
+app.post("/api/action-items", authenticateToken, async (req, res) => {
+  try {
+    const { title, description, projectId, priority, assignee, dueDate } = req.body;
+    
+    if (!title || !projectId) {
+      return res.status(400).json({ error: 'Title and Project ID are required' });
+    }
+    
+    const [newItem] = await sql`
+      INSERT INTO action_items (
+        title, description, project_id, priority, assignee, 
+        due_date, status, created_by
+      ) VALUES (
+        ${title.trim()}, 
+        ${description?.trim() || ''}, 
+        ${parseInt(projectId)}, 
+        ${priority || 'medium'}, 
+        ${assignee || ''}, 
+        ${dueDate || null}, 
+        'To Do',
+        ${req.user.id}
+      ) RETURNING *
+    `;
+    
+    res.status(201).json(newItem);
+  } catch (error) {
+    console.error('Error creating action item:', error);
+    res.status(500).json({ error: 'Failed to create action item' });
+  }
 });
 
 // Users API
