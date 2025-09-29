@@ -143,7 +143,19 @@ async function loadProjectData(projectId) {
 
 // Render Kanban board
 function renderKanbanBoard() {
-    const allItems = [...issues, ...actionItems];
+    // Ensure action items have the correct type field
+    const processedActionItems = actionItems.map(item => ({
+        ...item,
+        type: 'action-item'
+    }));
+    
+    // Ensure issues have the correct type field
+    const processedIssues = issues.map(item => ({
+        ...item,
+        type: 'issue'
+    }));
+    
+    const allItems = [...processedIssues, ...processedActionItems];
     const columns = ["To Do", "In Progress", "Blocked", "Done"];
 
     columns.forEach((status) => {
@@ -606,5 +618,120 @@ function showSuccessMessage(message) {
 }
 
 function showCreateActionItem() {
-    alert("Action item creation modal coming soon!");
+    if (!currentProject) {
+        alert('Please select a project first');
+        return;
+    }
+
+    const modalContent = `
+        <h3 class="text-lg font-semibold mb-4">Create New Action Item</h3>
+        <form id="create-action-item-form">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Title *</label>
+                <input type="text" id="action-item-title" required 
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Description</label>
+                <textarea id="action-item-description" rows="3"
+                          class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500"></textarea>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Priority</label>
+                    <select id="action-item-priority" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Assigned To</label>
+                    <select id="action-item-assignee" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500">
+                        <option value="">Unassigned</option>
+                        <option value="Demo User">Demo User</option>
+                        <option value="Project Manager">Project Manager</option>
+                        <option value="Technical Lead">Technical Lead</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Due Date</label>
+                <input type="date" id="action-item-due-date"
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500">
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="cancel-action-item-btn" 
+                        class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+                    Create Action Item
+                </button>
+            </div>
+        </form>
+    `;
+    
+    showModal(modalContent);
+    
+    // Add event listeners
+    document.getElementById('cancel-action-item-btn').addEventListener('click', hideModal);
+    document.getElementById('create-action-item-form').addEventListener('submit', createActionItem);
+}
+
+// Create action item function
+async function createActionItem(event) {
+    event.preventDefault();
+    
+    const actionItemData = {
+        title: document.getElementById('action-item-title').value,
+        description: document.getElementById('action-item-description').value,
+        priority: document.getElementById('action-item-priority').value,
+        assignee: document.getElementById('action-item-assignee').value,
+        dueDate: document.getElementById('action-item-due-date').value,
+        projectId: currentProject.id,
+        type: 'action-item',
+        status: 'To Do'
+    };
+    
+    try {
+        const response = await fetch('/api/action-items', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(actionItemData)
+        });
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                AuthManager.showNotification('Please login to perform this action', 'warning');
+                AuthManager.showAuthModal('login');
+                return;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const newActionItem = await response.json();
+        newActionItem.type = 'action-item'; // Ensure type is set
+        actionItems.push(newActionItem);
+        renderKanbanBoard();
+        hideModal();
+        
+        // Show success message
+        showSuccessMessage(`Action item "${newActionItem.title}" created successfully!`);
+        
+    } catch (error) {
+        console.error('Error creating action item:', error);
+        alert('Error creating action item. Please try again.');
+    }
 }
