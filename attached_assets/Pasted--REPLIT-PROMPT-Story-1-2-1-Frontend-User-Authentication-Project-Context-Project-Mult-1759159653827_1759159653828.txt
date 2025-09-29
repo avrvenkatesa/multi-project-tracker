@@ -1,0 +1,394 @@
+# REPLIT PROMPT: Story 1.2.1 - Frontend User Authentication
+
+## Project Context
+**Project**: Multi-Project Issue and Action Item Tracking System  
+**Current Tech Stack**: Node.js + Express.js + Vanilla JavaScript + Tailwind CSS  
+**Current State**: Backend JWT authentication COMPLETE (see backend details below)  
+**Story**: [STORY 1.2.1] User Authentication - Frontend Implementation  
+**GitHub Issue**: #6  
+**Branch**: feature/6-user-authentication  
+
+## Backend Authentication (Already Implemented)
+The backend has JWT-based authentication with httpOnly cookies already working:
+
+**Endpoints Available:**
+- POST `/api/auth/register` - Register new user (name, email, password)
+- POST `/api/auth/login` - Login user (email, password) → sets httpOnly cookie
+- POST `/api/auth/logout` - Logout user → clears cookie
+- GET `/api/auth/me` - Get current authenticated user
+
+**Demo Users (Pre-configured):**
+- `demo@multiproject.com` / `demo123` (Admin)
+- `gajalakshmi@1cloudhub.com` / `demo123` (Project Manager)
+- `srihari@1cloudhub.com` / `demo123` (Architect)
+
+**Authentication Middleware:**
+- `authenticateToken()` - Protects modification endpoints (POST, PATCH, DELETE)
+- `optionalAuth()` - Used on GET endpoints (work without login)
+
+**Modified Endpoints (Already Protected):**
+- POST `/api/projects` - Requires authentication
+- POST `/api/issues` - Requires authentication  
+- PATCH `/api/issues/:id` - Requires authentication
+- POST `/api/action-items` - Requires authentication
+- PATCH `/api/action-items/:id` - Requires authentication
+
+**Cookie Configuration:**
+- httpOnly: true (security - no JavaScript access)
+- secure: false (for Replit development)
+- sameSite: 'lax'
+- maxAge: 24 hours
+
+## Requirements
+
+### ARCHITECTURE
+**Frontend Structure:**
+```
+public/
+├── index.html          (UPDATE: Add auth modal + header updates)
+├── app.js              (UPDATE: Add credentials, auth checks)
+├── auth.js             (NEW: Authentication state manager)
+└── styles.css          (existing Tailwind)
+```
+
+**Key Design Patterns:**
+- Single-page application (no page reloads)
+- Modal-based authentication UI
+- Client-side state management in `AuthManager` singleton
+- Optimistic UI updates (show user immediately after login)
+- Graceful degradation (public features work without login)
+
+### CORE FEATURES
+
+#### 1. Authentication Modal UI
+Create a modal with:
+- **Login Form**: Email + Password fields, validation, submit button
+- **Register Form**: Name + Email + Password fields, validation, submit button
+- **Toggle Mechanism**: Switch between login/register with single button
+- **Error Display**: Show API errors inline (red banner above form)
+- **Demo Credentials**: Display hint text for demo account
+- **Close Button**: X button to close modal
+- **Backdrop Click**: Close modal when clicking outside
+- **Styling**: Tailwind CSS matching existing design (blue theme)
+
+#### 2. Header Authentication Section
+Update existing header to include:
+- **Logged Out State**: 
+  - "Login" button (prominent, white bg, blue text)
+- **Logged In State**:
+  - User avatar circle with initials (2-letter, colored background)
+  - User name and email (stacked, right-aligned)
+  - "Logout" button (smaller, secondary style)
+- **Responsive Design**: Works on mobile and desktop
+
+#### 3. AuthManager JavaScript Module
+Create a singleton state manager with methods:
+
+**State Management:**
+```javascript
+AuthManager.currentUser = null | { id, name, email, role }
+AuthManager.isAuthenticated = boolean
+```
+
+**Core Methods:**
+```javascript
+init()                    // Initialize on page load, check auth status
+checkAuthStatus()         // GET /api/auth/me, set current user
+showAuthModal(mode)       // Show modal in 'login' or 'register' mode
+hideAuthModal()           // Hide modal, reset forms
+handleLogin(formData)     // POST /api/auth/login with credentials
+handleRegister(formData)  // POST /api/auth/register with credentials
+logout()                  // POST /api/auth/logout, clear state
+updateUI()                // Show/hide UI elements based on auth state
+requireAuth(callback)     // Execute callback only if authenticated
+getUser()                 // Return current user object
+isLoggedIn()              // Return boolean auth status
+```
+
+**Event Handling:**
+- Login button click → show modal
+- Register button click → show modal  
+- Form submissions → API calls
+- Logout button → logout flow
+- Modal close events
+
+#### 4. Protected Action Handling
+Update existing UI interactions:
+
+**Buttons Requiring Auth:**
+- "Create Project" button
+- "Create Issue" button
+- "Create Action Item" button
+- Drag-and-drop on Kanban board
+- Edit/Delete buttons (if present)
+
+**Pattern:**
+```javascript
+// Add data-requires-auth attribute to buttons
+<button data-requires-auth onclick="AuthManager.requireAuth(() => createProject())">
+
+// Or wrap existing handlers
+AuthManager.requireAuth(() => {
+  // Protected action code here
+});
+```
+
+**Behavior:**
+- If logged in → execute action normally
+- If logged out → show notification "Please login to perform this action"
+- If logged out → show auth modal automatically
+
+#### 5. API Integration Updates
+Update ALL fetch calls in `app.js`:
+
+**Add to EVERY fetch call:**
+```javascript
+credentials: 'include'  // Critical for cookie-based auth
+```
+
+**Handle 401 Responses:**
+```javascript
+if (response.status === 401) {
+  showNotification('Please login to perform this action', 'warning');
+  AuthManager.showAuthModal('login');
+  return;
+}
+```
+
+**Affected Functions:**
+- `createProject()`
+- `createIssue()`
+- `updateIssueStatus()`
+- `createActionItem()`
+- `updateActionItem()`
+- `loadProjects()` (add credentials for optional auth)
+- `loadIssues()` (add credentials for optional auth)
+
+#### 6. UI State Management
+
+**Show/Hide Based on Auth:**
+- Hide all `[data-requires-auth]` buttons when logged out
+- Show all `[data-requires-auth]` buttons when logged in
+- Display user info in header when logged in
+- Display login button when logged out
+
+**Visual Indicators:**
+- User initials in colored circle avatar
+- User name and email in header
+- "Your Issue/Action Item" badges for user-created content (optional enhancement)
+
+### VALIDATION & ERROR HANDLING
+
+**Form Validation:**
+- Email format validation (HTML5 + JavaScript)
+- Password minimum length: 6 characters
+- Required field checking
+- Real-time validation feedback
+
+**API Error Handling:**
+- Network errors → show user-friendly message
+- 400 Bad Request → display validation errors from backend
+- 401 Unauthorized → clear auth state, show login modal
+- 409 Conflict (duplicate email) → show "Email already registered"
+- 500 Server Error → show "Something went wrong, please try again"
+
+**Edge Cases:**
+- Session expiration → detect 401, prompt re-login
+- Concurrent logout → handle gracefully
+- Network offline → show offline message
+- Malformed API responses → log error, show generic message
+
+### TESTING REQUIREMENTS
+
+**Manual Testing Checklist:**
+1. ✅ Login with demo credentials → success
+2. ✅ Login with wrong password → error message
+3. ✅ Register new user → auto-login
+4. ✅ Register with duplicate email → error
+5. ✅ Logout → return to logged out state
+6. ✅ Click create project while logged out → login prompt
+7. ✅ Click create project while logged in → modal opens
+8. ✅ Refresh page while logged in → stays logged in (cookie persists)
+9. ✅ Drag-and-drop while logged out → login prompt
+10. ✅ Modal close on backdrop click → works
+11. ✅ Modal close on X button → works
+12. ✅ Toggle login/register → switches forms
+13. ✅ User info displays correctly in header
+14. ✅ Initials generate correctly (2 letters)
+
+**Browser Testing:**
+- Chrome (primary)
+- Firefox
+- Safari (if available in Replit)
+
+**Responsive Testing:**
+- Desktop (1920x1080)
+- Tablet (768px)
+- Mobile (375px)
+
+### EXISTING CODE TO PRESERVE
+
+**Do NOT modify these:**
+- Project creation logic
+- Issue creation logic
+- Action item logic
+- Kanban board drag-and-drop (just add auth check)
+- Existing styling (Tailwind classes)
+- Backend server.js (already complete)
+
+**Only ENHANCE these:**
+- Add modal HTML to index.html
+- Update header HTML in index.html
+- Create new auth.js file
+- Add credentials to fetch calls in app.js
+- Wrap protected actions with auth checks in app.js
+
+### ACCEPTANCE CRITERIA
+
+**Story is COMPLETE when:**
+1. ✅ Authentication modal appears and functions correctly
+2. ✅ Users can login with demo credentials
+3. ✅ Users can register new accounts
+4. ✅ Users can logout successfully
+5. ✅ Header displays user info when logged in
+6. ✅ Header displays login button when logged out
+7. ✅ Protected actions require login (with prompt)
+8. ✅ Protected actions work normally after login
+9. ✅ Auth state persists across page refreshes
+10. ✅ All existing features still work
+11. ✅ No console errors
+12. ✅ All manual tests pass
+13. ✅ Code follows existing patterns and style
+
+### DELIVERABLES
+
+**Updated Files:**
+1. `public/index.html` - Add auth modal HTML, update header
+2. `public/auth.js` - NEW file with AuthManager
+3. `public/app.js` - Add credentials to fetch, wrap protected actions
+
+**Git Commit Message:**
+```
+feat(auth): implement frontend authentication UI
+
+- Add login/register modal with toggle
+- Implement AuthManager for state management
+- Protect create/edit actions with auth checks
+- Update header with user info and logout
+- Add credentials to all API calls
+- Handle 401 responses with login prompts
+
+Completes frontend portion of Story 1.2.1
+Related to #6
+```
+
+### STYLING GUIDELINES
+
+**Colors (Existing Theme):**
+- Primary: blue-600 (#2563eb)
+- Secondary: blue-700 (#1d4ed8)
+- Success: green-600
+- Error: red-600
+- Text: gray-800
+- Border: gray-300
+
+**Modal Styling:**
+- White background
+- Rounded corners (rounded-lg)
+- Shadow (shadow-xl)
+- Max width: 28rem (max-w-md)
+- Backdrop: gray-600 with 50% opacity
+
+**Button Styling:**
+- Login: bg-blue-600, hover:bg-blue-700, white text
+- Register: bg-green-600, hover:bg-green-700, white text
+- Logout: bg-blue-500, hover:bg-blue-400, white text
+
+### IMPLEMENTATION NOTES
+
+**Code Organization:**
+- Keep AuthManager self-contained in auth.js
+- Use event listeners (not inline handlers) where possible
+- Follow existing naming conventions (camelCase)
+- Add comments for complex logic
+- Use async/await (not promises) for consistency
+
+**Browser Compatibility:**
+- ES6+ syntax is OK (Replit supports modern browsers)
+- Use Fetch API (no need for XMLHttpRequest)
+- Use template literals for readability
+
+**Performance:**
+- Minimize DOM queries (cache elements)
+- Use event delegation where appropriate
+- Avoid unnecessary re-renders
+
+---
+
+## REPLIT SPECIFIC INSTRUCTIONS
+
+**How to Implement:**
+1. Start Replit and open the multi-project-tracker project
+2. Switch to branch `feature/6-user-authentication` (backend already merged)
+3. Create new file `public/auth.js` with AuthManager code
+4. Update `public/index.html` with modal HTML and header changes
+5. Update `public/app.js` with credentials and auth checks
+6. Test in Replit's web preview
+7. Verify all manual testing checklist items
+8. Commit with provided commit message format
+
+**Replit Advantages:**
+- Live preview for instant UI feedback
+- Real-time error detection
+- Hot reload on file changes
+- Integrated browser dev tools
+- Easy testing with demo credentials
+
+---
+
+## EXAMPLE CODE STRUCTURE
+
+### auth.js Structure:
+```javascript
+const AuthManager = {
+  currentUser: null,
+  isAuthenticated: false,
+  
+  async init() { /* ... */ },
+  async checkAuthStatus() { /* ... */ },
+  async handleLogin(e) { /* ... */ },
+  async handleRegister(e) { /* ... */ },
+  async logout() { /* ... */ },
+  showAuthModal(mode) { /* ... */ },
+  hideAuthModal() { /* ... */ },
+  updateUI() { /* ... */ },
+  requireAuth(callback) { /* ... */ },
+  // ... other methods
+};
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => AuthManager.init());
+```
+
+### API Call Pattern:
+```javascript
+const response = await fetch('/api/endpoint', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  credentials: 'include', // CRITICAL
+  body: JSON.stringify(data)
+});
+
+if (response.ok) {
+  // Success handling
+} else if (response.status === 401) {
+  // Auth required
+  AuthManager.showAuthModal('login');
+} else {
+  // Error handling
+}
+```
+
+---
+
+**IMPLEMENT THIS COMPLETE AUTHENTICATION FRONTEND IN REPLIT NOW.**

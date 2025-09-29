@@ -7,30 +7,33 @@ let actionItems = [];
 // Initialize app
 document.addEventListener("DOMContentLoaded", function () {
     console.log("Multi-Project Tracker initialized");
+    
+    // Set default credentials for axios
+    axios.defaults.withCredentials = true;
+    
+    // Add 401 response interceptor
+    axios.interceptors.response.use(
+        (response) => response,
+        (error) => {
+            if (error.response && error.response.status === 401) {
+                if (window.AuthManager) {
+                    AuthManager.showNotification('Please login to perform this action', 'warning');
+                    AuthManager.showAuthModal('login');
+                }
+            }
+            return Promise.reject(error);
+        }
+    );
+    
     loadProjects();
     setupEventListeners();
 });
 
 // Setup event listeners (replaces inline onclick handlers)
 function setupEventListeners() {
-    // Add event listeners after DOM is loaded
+    // Add event listeners after DOM is loaded  
     document.addEventListener("click", function (e) {
-        // Handle New Project button
-        if (e.target.textContent.includes("+ New Project")) {
-            showCreateProject();
-        }
-
-        // Handle Issue button
-        if (e.target.textContent.includes("+ Issue")) {
-            showCreateIssue();
-        }
-
-        // Handle Action Item button
-        if (e.target.textContent.includes("+ Action Item")) {
-            showCreateActionItem();
-        }
-
-        // Handle modal overlay clicks (to close modal)
+        // Only handle modal overlay clicks (to close modal)
         if (e.target.id === "modal-overlay") {
             hideModal();
         }
@@ -53,7 +56,9 @@ function setupEventListeners() {
 // Load projects
 async function loadProjects() {
     try {
-        const response = await axios.get("/api/projects");
+        const response = await axios.get("/api/projects", {
+            withCredentials: true
+        });
         projects = response.data;
         renderProjects();
 
@@ -123,8 +128,8 @@ async function selectProject(projectId) {
 async function loadProjectData(projectId) {
     try {
         const [issuesResponse, actionItemsResponse] = await Promise.all([
-            axios.get(`/api/issues?projectId=${projectId}`),
-            axios.get(`/api/action-items?projectId=${projectId}`),
+            axios.get(`/api/issues?projectId=${projectId}`, { withCredentials: true }),
+            axios.get(`/api/action-items?projectId=${projectId}`, { withCredentials: true }),
         ]);
 
         issues = issuesResponse.data;
@@ -247,7 +252,9 @@ async function createProject(event) {
     };
 
     try {
-        const response = await axios.post("/api/projects", projectData);
+        const response = await axios.post("/api/projects", projectData, {
+            withCredentials: true
+        });
         projects.push(response.data);
         renderProjects();
         hideModal();
@@ -460,10 +467,16 @@ async function createIssue(event) {
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: JSON.stringify(issueData)
         });
         
         if (!response.ok) {
+            if (response.status === 401) {
+                AuthManager.showNotification('Please login to perform this action', 'warning');
+                AuthManager.showAuthModal('login');
+                return;
+            }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         

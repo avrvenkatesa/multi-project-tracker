@@ -48,7 +48,8 @@
                             Projects
                         </h2>
                         <button
-                            onclick="showCreateProject()"
+                            onclick="AuthManager.requireAuth(() => showCreateProject())"
+                            data-requires-auth
                             class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                         >
                             + New Project
@@ -72,13 +73,15 @@
                             ></h3>
                             <div class="space-x-2">
                                 <button
-                                    onclick="showCreateIssue()"
+                                    onclick="AuthManager.requireAuth(() => showCreateIssue())"
+                                    data-requires-auth
                                     class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
                                 >
                                     + Issue
                                 </button>
                                 <button
-                                    onclick="showCreateActionItem()"
+                                    onclick="AuthManager.requireAuth(() => showCreateActionItem())"
+                                    data-requires-auth
                                     class="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
                                 >
                                     + Action Item
@@ -137,10 +140,98 @@
                 </div>
             </main>
 
-            <!-- Modals will go here -->
+            <!-- Authentication Modal -->
+            <div id="auth-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50">
+                <div class="flex items-center justify-center min-h-screen p-4">
+                    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                        <!-- Modal Header -->
+                        <div class="flex justify-between items-center p-6 border-b">
+                            <h3 id="auth-modal-title" class="text-xl font-semibold text-gray-800">Login</h3>
+                            <button id="auth-modal-close" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+                        </div>
+                        
+                        <!-- Error Message -->
+                        <div id="auth-error" class="hidden mx-6 mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                            <span id="auth-error-text"></span>
+                        </div>
+                        
+                        <!-- Login Form -->
+                        <form id="login-form" class="p-6">
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="login-email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                    <input type="email" id="login-email" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                           placeholder="Enter your email">
+                                </div>
+                                <div>
+                                    <label for="login-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                    <input type="password" id="login-password" required minlength="6"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                           placeholder="Enter your password">
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    <strong>Demo Account:</strong> demo@multiproject.com / demo123
+                                </div>
+                                <button type="submit" 
+                                        class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    Login
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <!-- Register Form -->
+                        <form id="register-form" class="p-6 hidden">
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="register-name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                    <input type="text" id="register-name" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                           placeholder="Enter your full name">
+                                </div>
+                                <div>
+                                    <label for="register-email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                    <input type="email" id="register-email" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                           placeholder="Enter your email">
+                                </div>
+                                <div>
+                                    <label for="register-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                    <input type="password" id="register-password" required minlength="6"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                           placeholder="Enter your password (min 6 characters)">
+                                </div>
+                                <div>
+                                    <label for="register-role" class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                                    <select id="register-role" 
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                        <option value="Team Member">Team Member</option>
+                                        <option value="Project Manager">Project Manager</option>
+                                        <option value="Solution Architect">Solution Architect</option>
+                                    </select>
+                                </div>
+                                <button type="submit" 
+                                        class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+                                    Register
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <!-- Toggle Button -->
+                        <div class="px-6 pb-6 text-center border-t pt-4">
+                            <p class="text-sm text-gray-600">
+                                <span id="auth-toggle-text">Don't have an account?</span>
+                                <button id="auth-toggle-btn" class="text-blue-600 hover:text-blue-800 font-medium ml-1">Sign up</button>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- General Purpose Modal -->
             <div
                 id="modal-overlay"
-                class="hidden fixed inset-0 bg-black bg-opacity-50 z-50"
+                class="hidden fixed inset-0 bg-black bg-opacity-50 z-40"
             >
                 <div class="flex items-center justify-center min-h-screen">
                     <div
@@ -153,6 +244,7 @@
             </div>
         </div>
 
+        <script src="auth.js"></script>
         <script src="app.js"></script>
     </body>
 </html>
