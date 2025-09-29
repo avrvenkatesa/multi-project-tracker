@@ -203,6 +203,7 @@ function renderKanbanBoard() {
             // STEP 3: Create and store bound handlers
             container._dropHandler = (e) => handleDrop(e, status);
             container._dragEnterHandler = function(e) {
+                console.log('⬇️ DRAG ENTER:', status);
                 e.preventDefault();
                 this.classList.add('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
             };
@@ -270,6 +271,7 @@ function handleDragEnd(event) {
 }
 
 function handleDragOver(event) {
+    console.log('🔄 DRAG OVER');
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
 }
