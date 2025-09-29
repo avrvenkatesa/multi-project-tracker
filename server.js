@@ -3,6 +3,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
+const { storage } = require("./server/storage");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -42,18 +43,8 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files
 app.use(express.static(path.join(__dirname, "public")));
 
-// In-memory data store (will replace with database later)
-let projects = [];
-let issues = [];
-let actionItems = [];
-let users = [
-  {
-    id: 1,
-    name: "Demo User",
-    email: "demo@example.com",
-    role: "Project Manager",
-  },
-];
+// Database storage replaces in-memory arrays
+// Using storage layer for persistent data
 
 // API Routes
 app.get("/api/health", (req, res) => {
@@ -73,311 +64,331 @@ app.get("/api/health", (req, res) => {
 });
 
 // Projects API
-app.get("/api/projects", (req, res) => {
-  res.json(projects);
+app.get("/api/projects", async (req, res) => {
+  try {
+    const allProjects = await storage.getProjects();
+    res.json(allProjects);
+  } catch (error) {
+    console.error('Error getting projects:', error);
+    res.status(500).json({ error: 'Failed to get projects' });
+  }
 });
 
-app.post("/api/projects", (req, res) => {
-  const { name, description, template } = req.body;
-  const newProject = {
-    id: Date.now(),
-    name,
-    description,
-    template: template || "generic",
-    createdAt: new Date().toISOString(),
-    status: "active",
-    categories: getDefaultCategories(template),
-    phases: getDefaultPhases(template),
-    components: getDefaultComponents(template),
-  };
-  projects.push(newProject);
-  res.status(201).json(newProject);
+app.post("/api/projects", async (req, res) => {
+  try {
+    const { name, description, template } = req.body;
+    const newProject = await storage.createProject({
+      name,
+      description,
+      template: template || "generic",
+      createdBy: "Demo User"
+    });
+    
+    // Add derived fields for compatibility
+    newProject.status = "active";
+    newProject.categories = getDefaultCategories(template);
+    newProject.phases = getDefaultPhases(template);
+    newProject.components = getDefaultComponents(template);
+    
+    res.status(201).json(newProject);
+  } catch (error) {
+    console.error('Error creating project:', error);
+    res.status(500).json({ error: 'Failed to create project' });
+  }
 });
 
 // Issues API
-app.get('/api/issues', (req, res) => {
-  const { projectId, status, priority, assignee, category } = req.query;
-  
-  let filteredIssues = [...issues];
-  
-  if (projectId) {
-    filteredIssues = filteredIssues.filter(issue => issue.projectId == projectId);
+app.get('/api/issues', async (req, res) => {
+  try {
+    const { projectId, status, priority, assignee, category } = req.query;
+    
+    // Get issues from database (filtered by projectId if provided)
+    let filteredIssues = await storage.getIssues(projectId ? parseInt(projectId) : undefined);
+    
+    // Apply additional filters
+    if (status) {
+      filteredIssues = filteredIssues.filter(issue => issue.status === status);
+    }
+    
+    if (priority) {
+      filteredIssues = filteredIssues.filter(issue => issue.priority === priority);
+    }
+    
+    if (assignee) {
+      filteredIssues = filteredIssues.filter(issue => issue.assignee === assignee);
+    }
+    
+    if (category) {
+      filteredIssues = filteredIssues.filter(issue => issue.category === category);
+    }
+    
+    res.json(filteredIssues);
+  } catch (error) {
+    console.error('Error getting issues:', error);
+    res.status(500).json({ error: 'Failed to get issues' });
   }
-  
-  if (status) {
-    filteredIssues = filteredIssues.filter(issue => issue.status === status);
-  }
-  
-  if (priority) {
-    filteredIssues = filteredIssues.filter(issue => issue.priority === priority);
-  }
-  
-  if (assignee) {
-    filteredIssues = filteredIssues.filter(issue => issue.assignee === assignee);
-  }
-  
-  if (category) {
-    filteredIssues = filteredIssues.filter(issue => issue.category === category);
-  }
-  
-  res.json(filteredIssues);
 });
 
-app.post('/api/issues', (req, res) => {
-  const { 
-    title, 
-    description, 
-    priority, 
-    category, 
-    phase, 
-    component, 
-    assignee, 
-    dueDate, 
-    projectId,
-    type = 'issue'
-  } = req.body;
-  
-  // Validation
-  if (!title || !projectId) {
-    return res.status(400).json({ 
-      error: 'Title and Project ID are required' 
+app.post('/api/issues', async (req, res) => {
+  try {
+    const { 
+      title, 
+      description, 
+      priority, 
+      category, 
+      phase, 
+      component, 
+      assignee, 
+      dueDate, 
+      projectId,
+      type = 'issue'
+    } = req.body;
+    
+    // Validation
+    if (!title || !projectId) {
+      return res.status(400).json({ 
+        error: 'Title and Project ID are required' 
+      });
+    }
+    
+    const newIssue = await storage.createIssue({
+      title: title.trim(),
+      description: description?.trim() || '',
+      priority: priority || 'medium',
+      category: category || 'Technical',
+      phase: phase || 'Assessment',
+      component: component || 'Application',
+      assignee: assignee || '',
+      dueDate: dueDate ? new Date(dueDate) : null,
+      projectId: parseInt(projectId),
+      type,
+      status: 'To Do',
+      createdBy: 'Demo User'
     });
+    
+    res.status(201).json(newIssue);
+  } catch (error) {
+    console.error('Error creating issue:', error);
+    res.status(500).json({ error: 'Failed to create issue' });
   }
-  
-  // Verify project exists
-  const project = projects.find(p => p.id == projectId);
-  if (!project) {
-    return res.status(404).json({ 
-      error: 'Project not found' 
-    });
-  }
-  
-  const newIssue = {
-    id: Date.now(),
-    title: title.trim(),
-    description: description?.trim() || '',
-    priority: priority || 'medium',
-    category: category || 'General',
-    phase: phase || project.phases[0],
-    component: component || project.components[0],
-    assignee: assignee || '',
-    dueDate: dueDate || null,
-    projectId: parseInt(projectId),
-    type,
-    status: 'To Do',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    createdBy: 'Demo User' // Will be replaced with actual user when auth is implemented
-  };
-  
-  issues.push(newIssue);
-  
-  res.status(201).json(newIssue);
 });
 
 // Action Items API
-app.get('/api/action-items', (req, res) => {
-  const { projectId, status, assignee, isDeliverable } = req.query;
-  
-  let filtered = [...actionItems];
-  
-  if (projectId) {
-    filtered = filtered.filter(item => item.projectId == projectId);
+app.get('/api/action-items', async (req, res) => {
+  try {
+    const { projectId, status, assignee, isDeliverable } = req.query;
+    
+    // Get action items from database (filtered by projectId if provided)
+    let filtered = await storage.getActionItems(projectId ? parseInt(projectId) : undefined);
+    
+    // Apply additional filters
+    if (status) {
+      filtered = filtered.filter(item => item.status === status);
+    }
+    
+    if (assignee) {
+      filtered = filtered.filter(item => item.assignee === assignee);
+    }
+    
+    if (isDeliverable === 'true') {
+      filtered = filtered.filter(item => item.isDeliverable === true);
+    }
+    
+    res.json(filtered);
+  } catch (error) {
+    console.error('Error getting action items:', error);
+    res.status(500).json({ error: 'Failed to get action items' });
   }
-  
-  if (status) {
-    filtered = filtered.filter(item => item.status === status);
-  }
-  
-  if (assignee) {
-    filtered = filtered.filter(item => item.assignee === assignee);
-  }
-  
-  if (isDeliverable === 'true') {
-    filtered = filtered.filter(item => item.isDeliverable === true);
-  }
-  
-  res.json(filtered);
 });
 
-app.post('/api/action-items', (req, res) => {
-  const { 
-    title, 
-    description, 
-    priority, 
-    category, 
-    phase, 
-    component, 
-    assignee, 
-    dueDate, 
-    progress = 0,
-    milestone,
-    isDeliverable = false,
-    projectId
-  } = req.body;
-  
-  // Validation
-  if (!title || !projectId) {
-    return res.status(400).json({ 
-      error: 'Title and Project ID are required' 
+app.post('/api/action-items', async (req, res) => {
+  try {
+    const { 
+      title, 
+      description, 
+      priority, 
+      category, 
+      phase, 
+      component, 
+      assignee, 
+      dueDate, 
+      progress = 0,
+      milestone,
+      isDeliverable = false,
+      projectId
+    } = req.body;
+    
+    // Validation
+    if (!title || !projectId) {
+      return res.status(400).json({ 
+        error: 'Title and Project ID are required' 
+      });
+    }
+    
+    // Validate progress
+    const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+    
+    const newActionItem = await storage.createActionItem({
+      title: title.trim(),
+      description: description?.trim() || '',
+      priority: priority || 'medium',
+      assignee: assignee || '',
+      dueDate: dueDate ? new Date(dueDate) : null,
+      progress: validProgress,
+      milestone: milestone?.trim() || '',
+      isDeliverable: Boolean(isDeliverable),
+      projectId: parseInt(projectId),
+      type: 'action-item',
+      status: validProgress === 100 ? 'Done' : (validProgress > 0 ? 'In Progress' : 'To Do'),
+      createdBy: 'Demo User'
     });
+    
+    res.status(201).json(newActionItem);
+  } catch (error) {
+    console.error('Error creating action item:', error);
+    res.status(500).json({ error: 'Failed to create action item' });
   }
-  
-  // Verify project exists
-  const project = projects.find(p => p.id == projectId);
-  if (!project) {
-    return res.status(404).json({ 
-      error: 'Project not found' 
-    });
-  }
-  
-  // Validate progress
-  const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
-  
-  const newActionItem = {
-    id: Date.now(),
-    title: title.trim(),
-    description: description?.trim() || '',
-    priority: priority || 'medium',
-    category: category || 'General',
-    phase: phase || project.phases[0],
-    component: component || project.components[0],
-    assignee: assignee || '',
-    dueDate: dueDate || null,
-    progress: validProgress,
-    milestone: milestone?.trim() || '',
-    isDeliverable: Boolean(isDeliverable),
-    projectId: parseInt(projectId),
-    type: 'action-item',
-    status: validProgress === 100 ? 'Done' : (validProgress > 0 ? 'In Progress' : 'To Do'),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    createdBy: 'Demo User'
-  };
-  
-  actionItems.push(newActionItem);
-  
-  res.status(201).json(newActionItem);
 });
 
 // Update action item progress
 // Update issue status
-app.patch('/api/issues/:id', (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
-  
-  console.log(`[PATCH /api/issues/${id}] Request received:`, { id, status, body: req.body });
-  
-  const issue = issues.find(item => item.id == id);
-  
-  if (!issue) {
-    console.log(`[PATCH /api/issues/${id}] Issue not found`);
-    return res.status(404).json({ error: 'Issue not found' });
+app.patch('/api/issues/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    console.log(`[PATCH /api/issues/${id}] Request received:`, { id, status, body: req.body });
+    
+    const issue = await storage.getIssue(parseInt(id));
+    
+    if (!issue) {
+      console.log(`[PATCH /api/issues/${id}] Issue not found`);
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    console.log(`[PATCH /api/issues/${id}] Found issue:`, { title: issue.title, currentStatus: issue.status });
+    
+    // Validate status
+    const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
+    if (status && !validStatuses.includes(status)) {
+      console.log(`[PATCH /api/issues/${id}] Invalid status:`, status);
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    
+    // Update status
+    if (status) {
+      const updatedIssue = await storage.updateIssue(parseInt(id), { status });
+      console.log(`[PATCH /api/issues/${id}] Updated issue status to:`, status);
+      res.json(updatedIssue);
+    } else {
+      res.json(issue);
+    }
+  } catch (error) {
+    console.error(`[PATCH /api/issues/${req.params.id}] Error:`, error);
+    res.status(500).json({ error: 'Failed to update issue' });
   }
-  
-  console.log(`[PATCH /api/issues/${id}] Found issue:`, { title: issue.title, currentStatus: issue.status });
-  
-  // Validate status
-  const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
-  if (status && !validStatuses.includes(status)) {
-    console.log(`[PATCH /api/issues/${id}] Invalid status:`, status);
-    return res.status(400).json({ error: 'Invalid status' });
-  }
-  
-  // Update status
-  if (status) {
-    issue.status = status;
-    issue.updatedAt = new Date().toISOString();
-    console.log(`[PATCH /api/issues/${id}] Updated issue status to:`, status);
-  }
-  
-  res.json(issue);
 });
 
 // Update action item status
-app.patch('/api/action-items/:id', (req, res) => {
-  const { id } = req.params;
-  const { status, progress } = req.body;
-  
-  console.log(`[PATCH /api/action-items/${id}] Request received:`, { id, status, progress, body: req.body });
-  
-  const actionItem = actionItems.find(item => item.id == id);
-  
-  if (!actionItem) {
-    console.log(`[PATCH /api/action-items/${id}] Action item not found`);
-    return res.status(404).json({ error: 'Action item not found' });
-  }
-  
-  console.log(`[PATCH /api/action-items/${id}] Found action item:`, { title: actionItem.title, currentStatus: actionItem.status, currentProgress: actionItem.progress });
-  
-  // Validate and update status
-  const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
-  if (status && !validStatuses.includes(status)) {
-    console.log(`[PATCH /api/action-items/${id}] Invalid status:`, status);
-    return res.status(400).json({ error: 'Invalid status' });
-  }
-  
-  if (status) {
-    actionItem.status = status;
-    console.log(`[PATCH /api/action-items/${id}] Updated status to:`, status);
+app.patch('/api/action-items/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, progress } = req.body;
     
-    // Auto-update progress based on status
-    if (status === 'Done' && actionItem.progress < 100) {
-      actionItem.progress = 100;
-      console.log(`[PATCH /api/action-items/${id}] Auto-updated progress to 100% (Done status)`);
-    } else if (status === 'To Do' && actionItem.progress > 0) {
-      actionItem.progress = 0;
-      console.log(`[PATCH /api/action-items/${id}] Auto-updated progress to 0% (To Do status)`);
+    console.log(`[PATCH /api/action-items/${id}] Request received:`, { id, status, progress, body: req.body });
+    
+    const actionItem = await storage.getActionItem(parseInt(id));
+    
+    if (!actionItem) {
+      console.log(`[PATCH /api/action-items/${id}] Action item not found`);
+      return res.status(404).json({ error: 'Action item not found' });
     }
+    
+    console.log(`[PATCH /api/action-items/${id}] Found action item:`, { title: actionItem.title, currentStatus: actionItem.status, currentProgress: actionItem.progress });
+    
+    // Prepare updates
+    const updates = {};
+    
+    // Validate and update status
+    const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
+    if (status && !validStatuses.includes(status)) {
+      console.log(`[PATCH /api/action-items/${id}] Invalid status:`, status);
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    
+    if (status) {
+      updates.status = status;
+      console.log(`[PATCH /api/action-items/${id}] Updated status to:`, status);
+      
+      // Auto-update progress based on status
+      if (status === 'Done' && actionItem.progress < 100) {
+        updates.progress = 100;
+        console.log(`[PATCH /api/action-items/${id}] Auto-updated progress to 100% (Done status)`);
+      } else if (status === 'To Do' && actionItem.progress > 0) {
+        updates.progress = 0;
+        console.log(`[PATCH /api/action-items/${id}] Auto-updated progress to 0% (To Do status)`);
+      }
+    }
+    
+    // Update progress if provided
+    if (progress !== undefined) {
+      const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+      updates.progress = validProgress;
+      console.log(`[PATCH /api/action-items/${id}] Updated progress to:`, validProgress);
+      
+      // Auto-update status based on progress
+      if (validProgress === 100) {
+        updates.status = 'Done';
+      } else if (validProgress > 0) {
+        updates.status = 'In Progress';
+      } else {
+        updates.status = 'To Do';
+      }
+    }
+    
+    // Save to database
+    const updatedActionItem = await storage.updateActionItem(parseInt(id), updates);
+    console.log(`[PATCH /api/action-items/${id}] Final result:`, { status: updatedActionItem.status, progress: updatedActionItem.progress });
+    
+    res.json(updatedActionItem);
+  } catch (error) {
+    console.error(`[PATCH /api/action-items/${req.params.id}] Error:`, error);
+    res.status(500).json({ error: 'Failed to update action item' });
   }
-  
-  // Update progress if provided
-  if (progress !== undefined) {
+});
+
+app.patch('/api/action-items/:id/progress', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { progress } = req.body;
+    
+    const actionItem = await storage.getActionItem(parseInt(id));
+    
+    if (!actionItem) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    // Validate and update progress
     const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
-    actionItem.progress = validProgress;
-    console.log(`[PATCH /api/action-items/${id}] Updated progress to:`, validProgress);
+    
+    // Prepare updates
+    const updates = { progress: validProgress };
     
     // Auto-update status based on progress
     if (validProgress === 100) {
-      actionItem.status = 'Done';
+      updates.status = 'Done';
     } else if (validProgress > 0) {
-      actionItem.status = 'In Progress';
+      updates.status = 'In Progress';
     } else {
-      actionItem.status = 'To Do';
+      updates.status = 'To Do';
     }
+    
+    const updatedActionItem = await storage.updateActionItem(parseInt(id), updates);
+    res.json(updatedActionItem);
+  } catch (error) {
+    console.error(`[PATCH /api/action-items/${req.params.id}/progress] Error:`, error);
+    res.status(500).json({ error: 'Failed to update action item progress' });
   }
-  
-  actionItem.updatedAt = new Date().toISOString();
-  console.log(`[PATCH /api/action-items/${id}] Final result:`, { status: actionItem.status, progress: actionItem.progress });
-  
-  res.json(actionItem);
-});
-
-app.patch('/api/action-items/:id/progress', (req, res) => {
-  const { id } = req.params;
-  const { progress } = req.body;
-  
-  const actionItem = actionItems.find(item => item.id == id);
-  
-  if (!actionItem) {
-    return res.status(404).json({ error: 'Action item not found' });
-  }
-  
-  // Validate and update progress
-  const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
-  actionItem.progress = validProgress;
-  actionItem.updatedAt = new Date().toISOString();
-  
-  // Auto-update status based on progress
-  if (validProgress === 100) {
-    actionItem.status = 'Done';
-  } else if (validProgress > 0) {
-    actionItem.status = 'In Progress';
-  } else {
-    actionItem.status = 'To Do';
-  }
-  
-  res.json(actionItem);
 });
 
 // Users API
