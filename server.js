@@ -377,7 +377,7 @@ app.post('/api/issues', authenticateToken, async (req, res) => {
         ${dueDate || null}, 
         ${parseInt(projectId)}, 
         'To Do',
-        ${req.user.id}
+        ${req.user.id.toString()}
       ) RETURNING *
     `;
     
@@ -454,7 +454,7 @@ app.post("/api/action-items", authenticateToken, async (req, res) => {
         ${assignee || ''}, 
         ${dueDate || null}, 
         'To Do',
-        ${req.user.id}
+        ${req.user.id.toString()}
       ) RETURNING *
     `;
     
