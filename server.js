@@ -266,15 +266,21 @@ app.patch('/api/issues/:id', (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   
+  console.log(`[PATCH /api/issues/${id}] Request received:`, { id, status, body: req.body });
+  
   const issue = issues.find(item => item.id == id);
   
   if (!issue) {
+    console.log(`[PATCH /api/issues/${id}] Issue not found`);
     return res.status(404).json({ error: 'Issue not found' });
   }
+  
+  console.log(`[PATCH /api/issues/${id}] Found issue:`, { title: issue.title, currentStatus: issue.status });
   
   // Validate status
   const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
   if (status && !validStatuses.includes(status)) {
+    console.log(`[PATCH /api/issues/${id}] Invalid status:`, status);
     return res.status(400).json({ error: 'Invalid status' });
   }
   
@@ -282,6 +288,7 @@ app.patch('/api/issues/:id', (req, res) => {
   if (status) {
     issue.status = status;
     issue.updatedAt = new Date().toISOString();
+    console.log(`[PATCH /api/issues/${id}] Updated issue status to:`, status);
   }
   
   res.json(issue);
@@ -292,26 +299,35 @@ app.patch('/api/action-items/:id', (req, res) => {
   const { id } = req.params;
   const { status, progress } = req.body;
   
+  console.log(`[PATCH /api/action-items/${id}] Request received:`, { id, status, progress, body: req.body });
+  
   const actionItem = actionItems.find(item => item.id == id);
   
   if (!actionItem) {
+    console.log(`[PATCH /api/action-items/${id}] Action item not found`);
     return res.status(404).json({ error: 'Action item not found' });
   }
+  
+  console.log(`[PATCH /api/action-items/${id}] Found action item:`, { title: actionItem.title, currentStatus: actionItem.status, currentProgress: actionItem.progress });
   
   // Validate and update status
   const validStatuses = ['To Do', 'In Progress', 'Blocked', 'Done'];
   if (status && !validStatuses.includes(status)) {
+    console.log(`[PATCH /api/action-items/${id}] Invalid status:`, status);
     return res.status(400).json({ error: 'Invalid status' });
   }
   
   if (status) {
     actionItem.status = status;
+    console.log(`[PATCH /api/action-items/${id}] Updated status to:`, status);
     
     // Auto-update progress based on status
     if (status === 'Done' && actionItem.progress < 100) {
       actionItem.progress = 100;
+      console.log(`[PATCH /api/action-items/${id}] Auto-updated progress to 100% (Done status)`);
     } else if (status === 'To Do' && actionItem.progress > 0) {
       actionItem.progress = 0;
+      console.log(`[PATCH /api/action-items/${id}] Auto-updated progress to 0% (To Do status)`);
     }
   }
   
@@ -319,6 +335,7 @@ app.patch('/api/action-items/:id', (req, res) => {
   if (progress !== undefined) {
     const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
     actionItem.progress = validProgress;
+    console.log(`[PATCH /api/action-items/${id}] Updated progress to:`, validProgress);
     
     // Auto-update status based on progress
     if (validProgress === 100) {
@@ -331,6 +348,7 @@ app.patch('/api/action-items/:id', (req, res) => {
   }
   
   actionItem.updatedAt = new Date().toISOString();
+  console.log(`[PATCH /api/action-items/${id}] Final result:`, { status: actionItem.status, progress: actionItem.progress });
   
   res.json(actionItem);
 });
@@ -497,7 +515,10 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`   POST /api/projects`);
   console.log(`   GET  /api/issues`);
   console.log(`   POST /api/issues`);
+  console.log(`   PATCH /api/issues/:id`);
   console.log(`   GET  /api/action-items`);
   console.log(`   POST /api/action-items`);
+  console.log(`   PATCH /api/action-items/:id`);
+  console.log(`   PATCH /api/action-items/:id/progress`);
   console.log(`   GET  /api/users`);
 });

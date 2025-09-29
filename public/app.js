@@ -18,11 +18,12 @@ function allowDrop(ev) {
 }
 
 function drag(ev, itemId, itemType) {
-    draggedItem = { id: itemId, type: itemType };
+    // Ensure ID is stored as number for consistent comparisons
+    draggedItem = { id: parseInt(itemId), type: itemType };
     ev.dataTransfer.effectAllowed = 'move';
     
     // Set data for cross-browser compatibility (required for Firefox)
-    ev.dataTransfer.setData('text/plain', JSON.stringify({id: itemId, type: itemType}));
+    ev.dataTransfer.setData('text/plain', JSON.stringify({id: parseInt(itemId), type: itemType}));
     
     // Add dragging class for visual feedback
     ev.target.classList.add('opacity-50', 'scale-95');
@@ -56,12 +57,13 @@ async function drop(ev) {
     
     const newStatus = column.dataset.status;
     
-    // Find the item in the appropriate array
+    // Find the item in the appropriate array (ensure ID type consistency)
     let item;
+    const itemId = parseInt(draggedItem.id); // Convert to number for consistent comparison
     if (draggedItem.type === 'issue') {
-        item = issues.find(i => i.id === draggedItem.id);
+        item = issues.find(i => i.id === itemId);
     } else {
-        item = actionItems.find(i => i.id === draggedItem.id);
+        item = actionItems.find(i => i.id === itemId);
     }
     
     if (!item) {
@@ -99,12 +101,13 @@ async function drop(ev) {
         
         const updatedItem = await response.json();
         
-        // Update local data with server response
+        // Update local data with server response (ensure ID type consistency)
+        const itemId = parseInt(draggedItem.id);
         if (draggedItem.type === 'issue') {
-            const index = issues.findIndex(i => i.id === draggedItem.id);
+            const index = issues.findIndex(i => i.id === itemId);
             if (index !== -1) issues[index] = updatedItem;
         } else {
-            const index = actionItems.findIndex(i => i.id === draggedItem.id);
+            const index = actionItems.findIndex(i => i.id === itemId);
             if (index !== -1) actionItems[index] = updatedItem;
         }
         
