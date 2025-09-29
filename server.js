@@ -35,11 +35,18 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting
+// Trust proxy (required for Replit environment)
+app.set('trust proxy', true);
+
+// Rate limiting (configured for proxied environment)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: "Too many requests from this IP, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip validation warnings in proxied environment
+  validate: {trustProxy: false}
 });
 app.use("/api/", limiter);
 
