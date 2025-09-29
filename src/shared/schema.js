@@ -1,15 +1,14 @@
 import { pgTable, serial, varchar, text, timestamp, integer, boolean, decimal } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
-// Users table
+// Users table - matching existing database structure
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  name: varchar('name', { length: 100 }).notNull(),
-  email: varchar('email', { length: 100 }).unique().notNull(),
-  password: varchar('password', { length: 255 }).notNull(),
-  role: varchar('role', { length: 50 }).default('Team Member'),
-  createdAt: timestamp('created_at').default(sql`now()`).notNull(),
-  updatedAt: timestamp('updated_at').default(sql`now()`).notNull(),
+  username: text('username').notNull(), // existing column name
+  email: text('email'), // existing as text, nullable 
+  password: text('password').notNull(), // existing as text
+  role: varchar('role', { length: 50 }).default('Team Member'), // newly added
+  createdAt: timestamp('created_at').default(sql`now()`),
 });
 
 // Projects table
