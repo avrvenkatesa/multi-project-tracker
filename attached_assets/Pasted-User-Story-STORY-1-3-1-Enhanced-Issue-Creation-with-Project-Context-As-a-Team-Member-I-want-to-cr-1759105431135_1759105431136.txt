@@ -1,0 +1,295 @@
+User Story: [STORY 1.3.1] Enhanced Issue Creation with Project Context
+As a Team Member
+I want to create issues with project-specific categories and fields
+So that I can properly track problems within my project context
+What to Build in Replit:
+1. Frontend: Issue Creation Modal
+File: public/app.js - Update the showCreateIssue() function:
+javascriptfunction showCreateIssue() {
+    if (!currentProject) {
+        alert('Please select a project first');
+        return;
+    }
+    
+    const modalContent = `
+        <h3 class="text-lg font-semibold mb-4">Create New Issue</h3>
+        <form id="create-issue-form">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Issue Title *</label>
+                <input type="text" id="issue-title" required 
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                       placeholder="Brief description of the issue">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Description</label>
+                <textarea id="issue-description" rows="4"
+                          class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                          placeholder="Detailed description of the issue"></textarea>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Priority</label>
+                    <select id="issue-priority" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Category</label>
+                    <select id="issue-category" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        ${generateCategoryOptions()}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Phase</label>
+                    <select id="issue-phase" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        ${generatePhaseOptions()}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Component</label>
+                    <select id="issue-component" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        ${generateComponentOptions()}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Assigned To</label>
+                <select id="issue-assignee" 
+                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                    <option value="">Unassigned</option>
+                    <option value="Demo User">Demo User</option>
+                    <option value="Project Manager">Project Manager</option>
+                    <option value="Technical Lead">Technical Lead</option>
+                </select>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Due Date</label>
+                <input type="date" id="issue-due-date"
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="cancel-issue-btn" 
+                        class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                    Create Issue
+                </button>
+            </div>
+        </form>
+    `;
+    
+    showModal(modalContent);
+    
+    // Add event listeners
+    document.getElementById('cancel-issue-btn').addEventListener('click', hideModal);
+    document.getElementById('create-issue-form').addEventListener('submit', createIssue);
+}
+
+// Helper functions for dynamic dropdowns
+function generateCategoryOptions() {
+    if (!currentProject) return '<option value="General">General</option>';
+    
+    return currentProject.categories.map(category => 
+        `<option value="${category}">${category}</option>`
+    ).join('');
+}
+
+function generatePhaseOptions() {
+    if (!currentProject) return '<option value="Planning">Planning</option>';
+    
+    return currentProject.phases.map(phase => 
+        `<option value="${phase}">${phase}</option>`
+    ).join('');
+}
+
+function generateComponentOptions() {
+    if (!currentProject) return '<option value="General">General</option>';
+    
+    return currentProject.components.map(component => 
+        `<option value="${component}">${component}</option>`
+    ).join('');
+}
+
+// Create issue function
+async function createIssue(event) {
+    event.preventDefault();
+    
+    const issueData = {
+        title: document.getElementById('issue-title').value,
+        description: document.getElementById('issue-description').value,
+        priority: document.getElementById('issue-priority').value,
+        category: document.getElementById('issue-category').value,
+        phase: document.getElementById('issue-phase').value,
+        component: document.getElementById('issue-component').value,
+        assignee: document.getElementById('issue-assignee').value,
+        dueDate: document.getElementById('issue-due-date').value,
+        projectId: currentProject.id,
+        type: 'issue',
+        status: 'To Do'
+    };
+    
+    try {
+        const response = await fetch('/api/issues', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(issueData)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const newIssue = await response.json();
+        issues.push(newIssue);
+        renderKanbanBoard();
+        hideModal();
+        
+        // Show success message
+        showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
+        
+    } catch (error) {
+        console.error('Error creating issue:', error);
+        alert('Error creating issue. Please try again.');
+    }
+}
+
+// Add success message function
+function showSuccessMessage(message) {
+    const successDiv = document.createElement('div');
+    successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    successDiv.textContent = message;
+    document.body.appendChild(successDiv);
+    
+    setTimeout(() => {
+        successDiv.remove();
+    }, 3000);
+}
+2. Backend: Enhanced Issue API
+File: server.js - Update the issues POST endpoint:
+javascript// Enhanced Issues API
+app.post('/api/issues', (req, res) => {
+  const { 
+    title, 
+    description, 
+    priority, 
+    category, 
+    phase, 
+    component, 
+    assignee, 
+    dueDate, 
+    projectId,
+    type = 'issue'
+  } = req.body;
+  
+  // Validation
+  if (!title || !projectId) {
+    return res.status(400).json({ 
+      error: 'Title and Project ID are required' 
+    });
+  }
+  
+  // Verify project exists
+  const project = projects.find(p => p.id == projectId);
+  if (!project) {
+    return res.status(404).json({ 
+      error: 'Project not found' 
+    });
+  }
+  
+  const newIssue = {
+    id: Date.now(),
+    title: title.trim(),
+    description: description?.trim() || '',
+    priority: priority || 'medium',
+    category: category || 'General',
+    phase: phase || project.phases[0],
+    component: component || project.components[0],
+    assignee: assignee || '',
+    dueDate: dueDate || null,
+    projectId: parseInt(projectId),
+    type,
+    status: 'To Do',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    createdBy: 'Demo User' // Will be replaced with actual user when auth is implemented
+  };
+  
+  issues.push(newIssue);
+  
+  res.status(201).json(newIssue);
+});
+
+// Enhanced GET endpoint with filtering
+app.get('/api/issues', (req, res) => {
+  const { projectId, status, priority, assignee, category } = req.query;
+  
+  let filteredIssues = [...issues];
+  
+  if (projectId) {
+    filteredIssues = filteredIssues.filter(issue => issue.projectId == projectId);
+  }
+  
+  if (status) {
+    filteredIssues = filteredIssues.filter(issue => issue.status === status);
+  }
+  
+  if (priority) {
+    filteredIssues = filteredIssues.filter(issue => issue.priority === priority);
+  }
+  
+  if (assignee) {
+    filteredIssues = filteredIssues.filter(issue => issue.assignee === assignee);
+  }
+  
+  if (category) {
+    filteredIssues = filteredIssues.filter(issue => issue.category === category);
+  }
+  
+  res.json(filteredIssues);
+});
+3. Test Your Implementation:
+
+Restart your server: npm start
+Open your app in Replit preview
+Create or select a project (like "S4Carlisle Pathfinder Migration")
+Click "+ Issue" button
+Fill out the issue form with:
+
+Title: "Active Directory migration prep"
+Category: "Technical" (if using Cloud Migration template)
+Phase: "Assessment"
+Component: "Active Directory"
+Priority: "High"
+Assignee: "Technical Lead"
+
+
+Submit and see it appear in the Kanban board
+
+4. Acceptance Criteria to Test:
+
+✅ Issue creation modal opens when clicking "+ Issue"
+✅ Form fields populate with project-specific options
+✅ Issue appears in "To Do" column after creation
+✅ Issue shows all entered information
+✅ Success message displays after creation
+✅ Form validation works (try submitting without title)
+✅ Project-specific categories/phases/components appear in dropdowns

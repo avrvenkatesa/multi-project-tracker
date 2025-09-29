@@ -313,9 +313,184 @@ function showWelcomeMessage() {
         .addEventListener("click", showCreateProject);
 }
 
-// Placeholder functions
+// Issue creation functions
 function showCreateIssue() {
-    alert("Issue creation modal coming soon!");
+    if (!currentProject) {
+        alert('Please select a project first');
+        return;
+    }
+    
+    const modalContent = `
+        <h3 class="text-lg font-semibold mb-4">Create New Issue</h3>
+        <form id="create-issue-form">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Issue Title *</label>
+                <input type="text" id="issue-title" required 
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                       placeholder="Brief description of the issue">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Description</label>
+                <textarea id="issue-description" rows="4"
+                          class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                          placeholder="Detailed description of the issue"></textarea>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Priority</label>
+                    <select id="issue-priority" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Category</label>
+                    <select id="issue-category" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        ${generateCategoryOptions()}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Phase</label>
+                    <select id="issue-phase" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        ${generatePhaseOptions()}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Component</label>
+                    <select id="issue-component" 
+                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        ${generateComponentOptions()}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Assigned To</label>
+                <select id="issue-assignee" 
+                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                    <option value="">Unassigned</option>
+                    <option value="Demo User">Demo User</option>
+                    <option value="Project Manager">Project Manager</option>
+                    <option value="Technical Lead">Technical Lead</option>
+                </select>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Due Date</label>
+                <input type="date" id="issue-due-date"
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="cancel-issue-btn" 
+                        class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                    Create Issue
+                </button>
+            </div>
+        </form>
+    `;
+    
+    showModal(modalContent);
+    
+    // Add event listeners
+    document.getElementById('cancel-issue-btn').addEventListener('click', hideModal);
+    document.getElementById('create-issue-form').addEventListener('submit', createIssue);
+}
+
+// Helper functions for dynamic dropdowns
+function generateCategoryOptions() {
+    if (!currentProject) return '<option value="General">General</option>';
+    
+    return currentProject.categories.map(category => 
+        `<option value="${category}">${category}</option>`
+    ).join('');
+}
+
+function generatePhaseOptions() {
+    if (!currentProject) return '<option value="Planning">Planning</option>';
+    
+    return currentProject.phases.map(phase => 
+        `<option value="${phase}">${phase}</option>`
+    ).join('');
+}
+
+function generateComponentOptions() {
+    if (!currentProject) return '<option value="General">General</option>';
+    
+    return currentProject.components.map(component => 
+        `<option value="${component}">${component}</option>`
+    ).join('');
+}
+
+// Create issue function
+async function createIssue(event) {
+    event.preventDefault();
+    
+    const issueData = {
+        title: document.getElementById('issue-title').value,
+        description: document.getElementById('issue-description').value,
+        priority: document.getElementById('issue-priority').value,
+        category: document.getElementById('issue-category').value,
+        phase: document.getElementById('issue-phase').value,
+        component: document.getElementById('issue-component').value,
+        assignee: document.getElementById('issue-assignee').value,
+        dueDate: document.getElementById('issue-due-date').value,
+        projectId: currentProject.id,
+        type: 'issue',
+        status: 'To Do'
+    };
+    
+    try {
+        const response = await fetch('/api/issues', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(issueData)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const newIssue = await response.json();
+        issues.push(newIssue);
+        renderKanbanBoard();
+        hideModal();
+        
+        // Show success message
+        showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
+        
+    } catch (error) {
+        console.error('Error creating issue:', error);
+        alert('Error creating issue. Please try again.');
+    }
+}
+
+// Add success message function
+function showSuccessMessage(message) {
+    const successDiv = document.createElement('div');
+    successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    successDiv.textContent = message;
+    document.body.appendChild(successDiv);
+    
+    setTimeout(() => {
+        successDiv.remove();
+    }, 3000);
 }
 
 function showCreateActionItem() {

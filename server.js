@@ -92,23 +92,83 @@ app.post("/api/projects", (req, res) => {
 });
 
 // Issues API
-app.get("/api/issues", (req, res) => {
-  const { projectId } = req.query;
-  const filteredIssues = projectId
-    ? issues.filter((issue) => issue.projectId == projectId)
-    : issues;
+app.get('/api/issues', (req, res) => {
+  const { projectId, status, priority, assignee, category } = req.query;
+  
+  let filteredIssues = [...issues];
+  
+  if (projectId) {
+    filteredIssues = filteredIssues.filter(issue => issue.projectId == projectId);
+  }
+  
+  if (status) {
+    filteredIssues = filteredIssues.filter(issue => issue.status === status);
+  }
+  
+  if (priority) {
+    filteredIssues = filteredIssues.filter(issue => issue.priority === priority);
+  }
+  
+  if (assignee) {
+    filteredIssues = filteredIssues.filter(issue => issue.assignee === assignee);
+  }
+  
+  if (category) {
+    filteredIssues = filteredIssues.filter(issue => issue.category === category);
+  }
+  
   res.json(filteredIssues);
 });
 
-app.post("/api/issues", (req, res) => {
+app.post('/api/issues', (req, res) => {
+  const { 
+    title, 
+    description, 
+    priority, 
+    category, 
+    phase, 
+    component, 
+    assignee, 
+    dueDate, 
+    projectId,
+    type = 'issue'
+  } = req.body;
+  
+  // Validation
+  if (!title || !projectId) {
+    return res.status(400).json({ 
+      error: 'Title and Project ID are required' 
+    });
+  }
+  
+  // Verify project exists
+  const project = projects.find(p => p.id == projectId);
+  if (!project) {
+    return res.status(404).json({ 
+      error: 'Project not found' 
+    });
+  }
+  
   const newIssue = {
     id: Date.now(),
-    ...req.body,
+    title: title.trim(),
+    description: description?.trim() || '',
+    priority: priority || 'medium',
+    category: category || 'General',
+    phase: phase || project.phases[0],
+    component: component || project.components[0],
+    assignee: assignee || '',
+    dueDate: dueDate || null,
+    projectId: parseInt(projectId),
+    type,
+    status: 'To Do',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    status: "To Do",
+    createdBy: 'Demo User' // Will be replaced with actual user when auth is implemented
   };
+  
   issues.push(newIssue);
+  
   res.status(201).json(newIssue);
 });
 
