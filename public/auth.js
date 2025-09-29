@@ -109,6 +109,10 @@ const AuthManager = {
       this.isAuthenticated = false;
       this.updateUI();
       this.showNotification('Logged out successfully', 'success');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (error) {
       console.error('Logout error:', error);
     }
