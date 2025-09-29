@@ -1,0 +1,207 @@
+// REPLACE your renderKanbanBoard function with this version
+// The key fix: Allow drop on the ENTIRE column area, not just empty space
+
+function renderKanbanBoard() {
+    const processedActionItems = actionItems.map(item => ({
+        ...item,
+        type: 'action-item'
+    }));
+    
+    const processedIssues = issues.map(item => ({
+        ...item,
+        type: 'issue'
+    }));
+    
+    const allItems = [...processedIssues, ...processedActionItems];
+    const columns = ["To Do", "In Progress", "Blocked", "Done"];
+
+    columns.forEach((status) => {
+        const columnItems = allItems.filter((item) => item.status === status);
+        const columnId = status.toLowerCase().replace(/ /g, "");
+        const container = document.getElementById(`${columnId}-column`);
+
+        if (container) {
+            // Render content
+            container.innerHTML = columnItems
+                .map(
+                    (item) => `
+                <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move hover:shadow-md transition-shadow"
+                     draggable="true"
+                     data-item-id="${item.id}"
+                     data-item-type="${item.type || 'issue'}">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
+                        <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
+                    </div>
+                    <h5 class="font-medium text-sm mb-1">${item.title}</h5>
+                    <p class="text-xs text-gray-600 mb-2">${(item.description || "").substring(0, 80)}...</p>
+                    ${
+                        item.progress !== undefined
+                            ? `<div class="w-full bg-gray-200 rounded-full h-1 mb-2">
+                            <div class="bg-blue-600 h-1 rounded-full" style="width: ${item.progress}%"></div>
+                        </div>`
+                            : ""
+                    }
+                    <div class="flex justify-between items-center text-xs text-gray-500">
+                        <span>${item.assignee || "Unassigned"}</span>
+                        <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
+                    </div>
+                </div>
+            `,
+                )
+                .join("");
+            
+            // Remove old listeners
+            container.removeEventListener('dragover', container._dragOverHandler);
+            container.removeEventListener('drop', container._dropHandler);
+            container.removeEventListener('dragenter', container._dragEnterHandler);
+            container.removeEventListener('dragleave', container._dragLeaveHandler);
+            
+            // ⭐ KEY FIX: Create handlers that work with event bubbling
+            container._dragOverHandler = function(e) {
+                e.preventDefault(); // CRITICAL: Must prevent default
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
+                console.log('🔄 DRAG OVER (prevented default)');
+            };
+            
+            container._dropHandler = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('💧 DROP DETECTED on:', status);
+                handleDrop(e, status);
+            };
+            
+            container._dragEnterHandler = function(e) {
+                e.preventDefault();
+                console.log('⬇️ DRAG ENTER:', status);
+                this.classList.add('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+            };
+            
+            container._dragLeaveHandler = function(e) {
+                // Only remove highlight if truly leaving the container
+                const rect = this.getBoundingClientRect();
+                const x = e.clientX;
+                const y = e.clientY;
+                
+                if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+                    console.log('⬆️ DRAG LEAVE:', status);
+                    this.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+                }
+            };
+            
+            // Attach listeners to column
+            container.addEventListener('dragover', container._dragOverHandler);
+            container.addEventListener('drop', container._dropHandler);
+            container.addEventListener('dragenter', container._dragEnterHandler);
+            container.addEventListener('dragleave', container._dragLeaveHandler);
+            
+            // Attach dragstart/dragend to each card
+            const cards = container.querySelectorAll('.kanban-card');
+            console.log(`✅ Attaching listeners to ${cards.length} cards in ${status}`);
+            
+            cards.forEach(card => {
+                card.addEventListener('dragstart', handleDragStart);
+                card.addEventListener('dragend', handleDragEnd);
+                
+                // ⭐ IMPORTANT: Cards should NOT prevent drop events from bubbling
+                // Remove these if they exist:
+                // card.addEventListener('dragover', (e) => e.stopPropagation()); // DON'T DO THIS
+                // card.addEventListener('drop', (e) => e.stopPropagation()); // DON'T DO THIS
+            });
+        }
+    });
+}
+
+// Update handleDragStart to include more debug info
+function handleDragStart(event) {
+    console.log('🎯 DRAG START:', event.target.dataset);
+    draggedItem = {
+        id: event.target.dataset.itemId,
+        type: event.target.dataset.itemType
+    };
+    event.target.style.opacity = '0.5';
+    event.dataTransfer.effectAllowed = 'move';
+    console.log('📦 Dragged item:', draggedItem);
+}
+
+// Update handleDragEnd
+function handleDragEnd(event) {
+    console.log('🏁 DRAG END');
+    event.target.style.opacity = '1';
+    
+    // Remove highlight from all columns
+    document.querySelectorAll('[id$="-column"]').forEach(col => {
+        col.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+    });
+}
+
+// This function should NOT change - it's already correct
+async function handleDrop(event, newStatus) {
+    console.log('💧 DROP HANDLER CALLED for status:', newStatus);
+    console.log('📦 Dragged item data:', draggedItem);
+    
+    if (!draggedItem) {
+        console.error('❌ No dragged item data!');
+        return;
+    }
+    
+    // Remove highlight
+    const dropZone = event.currentTarget;
+    dropZone.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+    
+    try {
+        console.log('🌐 Sending API request...');
+        const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
+        const url = `${endpoint}/${draggedItem.id}`;
+        
+        console.log('📡 PATCH', url, { status: newStatus });
+        
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        console.log('📥 Response status:', response.status);
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                if (window.AuthManager) {
+                    AuthManager.showNotification('Please login to move items', 'warning');
+                    AuthManager.showAuthModal('login');
+                }
+                return;
+            }
+            throw new Error(`Failed to update ${draggedItem.type} status`);
+        }
+        
+        const updatedItem = await response.json();
+        console.log('✅ Item updated:', updatedItem);
+        
+        // Update local data
+        const itemsArray = draggedItem.type === 'issue' ? issues : actionItems;
+        const itemIndex = itemsArray.findIndex(item => item.id == draggedItem.id);
+        if (itemIndex !== -1) {
+            itemsArray[itemIndex].status = newStatus;
+            console.log('✅ Local data updated');
+        }
+        
+        // Re-render the board
+        renderKanbanBoard();
+        
+        // Show success message
+        showSuccessMessage(`${draggedItem.type} moved to ${newStatus}`);
+        
+    } catch (error) {
+        console.error('❌ Error updating item status:', error);
+        showErrorMessage(`Failed to move ${draggedItem.type}. Please try again.`);
+    } finally {
+        // Reset drag state
+        draggedItem = null;
+        console.log('🧹 Drag state reset');
+    }
+}

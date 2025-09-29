@@ -143,13 +143,11 @@ async function loadProjectData(projectId) {
 
 // Render Kanban board
 function renderKanbanBoard() {
-    // Ensure action items have the correct type field
     const processedActionItems = actionItems.map(item => ({
         ...item,
         type: 'action-item'
     }));
     
-    // Ensure issues have the correct type field
     const processedIssues = issues.map(item => ({
         ...item,
         type: 'issue'
@@ -160,11 +158,11 @@ function renderKanbanBoard() {
 
     columns.forEach((status) => {
         const columnItems = allItems.filter((item) => item.status === status);
-        const columnId = status.toLowerCase().replace(/ /g, ""); // FIX: Replace ALL spaces
+        const columnId = status.toLowerCase().replace(/ /g, "");
         const container = document.getElementById(`${columnId}-column`);
 
         if (container) {
-            // STEP 1: Render HTML content first
+            // Render content
             container.innerHTML = columnItems
                 .map(
                     (item) => `
@@ -194,24 +192,55 @@ function renderKanbanBoard() {
                 )
                 .join("");
             
-            // STEP 2: Attach event handlers directly to column (drop zone)
-            container.ondragover = handleDragOver;
-            container.ondrop = (e) => handleDrop(e, status);
-            container.ondragenter = function(e) {
-                console.log('⬇️ DRAG ENTER:', status);
+            // Remove old listeners
+            container.removeEventListener('dragover', container._dragOverHandler);
+            container.removeEventListener('drop', container._dropHandler);
+            container.removeEventListener('dragenter', container._dragEnterHandler);
+            container.removeEventListener('dragleave', container._dragLeaveHandler);
+            
+            // ⭐ KEY FIX: Create handlers that work with event bubbling
+            container._dragOverHandler = function(e) {
+                e.preventDefault(); // CRITICAL: Must prevent default
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
+                console.log('🔄 DRAG OVER (prevented default)');
+            };
+            
+            container._dropHandler = function(e) {
                 e.preventDefault();
+                e.stopPropagation();
+                console.log('💧 DROP DETECTED on:', status);
+                handleDrop(e, status);
+            };
+            
+            container._dragEnterHandler = function(e) {
+                e.preventDefault();
+                console.log('⬇️ DRAG ENTER:', status);
                 this.classList.add('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
             };
-            container.ondragleave = function(e) {
-                // Only remove highlight if leaving the column, not a child element
-                if (!this.contains(e.relatedTarget)) {
+            
+            container._dragLeaveHandler = function(e) {
+                // Only remove highlight if truly leaving the container
+                const rect = this.getBoundingClientRect();
+                const x = e.clientX;
+                const y = e.clientY;
+                
+                if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+                    console.log('⬆️ DRAG LEAVE:', status);
                     this.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
                 }
             };
             
-            // STEP 5: Attach dragstart/dragend listeners to each card
+            // Attach listeners to column
+            container.addEventListener('dragover', container._dragOverHandler);
+            container.addEventListener('drop', container._dropHandler);
+            container.addEventListener('dragenter', container._dragEnterHandler);
+            container.addEventListener('dragleave', container._dragLeaveHandler);
+            
+            // Attach dragstart/dragend to each card
             const cards = container.querySelectorAll('.kanban-card');
             console.log(`✅ Attaching listeners to ${cards.length} cards in ${status}`);
+            
             cards.forEach(card => {
                 card.addEventListener('dragstart', handleDragStart);
                 card.addEventListener('dragend', handleDragEnd);
@@ -244,26 +273,14 @@ function handleDragStart(event) {
         id: event.target.dataset.itemId,
         type: event.target.dataset.itemType
     };
-    console.log('📦 Dragged item:', draggedItem);
     event.target.style.opacity = '0.5';
     event.dataTransfer.effectAllowed = 'move';
-    
-    // Make all other cards not block drop events
-    document.querySelectorAll('.kanban-card').forEach(card => {
-        if (card !== event.target) {
-            card.style.pointerEvents = 'none';
-        }
-    });
+    console.log('📦 Dragged item:', draggedItem);
 }
 
 function handleDragEnd(event) {
     console.log('🏁 DRAG END');
     event.target.style.opacity = '1';
-    
-    // Re-enable pointer events on all cards
-    document.querySelectorAll('.kanban-card').forEach(card => {
-        card.style.pointerEvents = 'auto';
-    });
     
     // Remove highlight from all columns
     document.querySelectorAll('[id$="-column"]').forEach(col => {
@@ -271,30 +288,27 @@ function handleDragEnd(event) {
     });
 }
 
-function handleDragOver(event) {
-    console.log('🔄 DRAG OVER');
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-}
-
 async function handleDrop(event, newStatus) {
-    console.log('💧 DROP on:', newStatus, 'draggedItem:', draggedItem);
-    event.preventDefault();
-    event.stopPropagation(); // Prevent event bubbling
+    console.log('💧 DROP HANDLER CALLED for status:', newStatus);
+    console.log('📦 Dragged item data:', draggedItem);
     
     if (!draggedItem) {
-        console.log('❌ No dragged item!');
+        console.error('❌ No dragged item data!');
         return;
     }
     
+    // Remove highlight
+    const dropZone = event.currentTarget;
+    dropZone.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
+    
     try {
-        // Remove highlight from drop zone
-        const dropZone = event.currentTarget;
-        dropZone.classList.remove('bg-blue-50', 'border-2', 'border-blue-300', 'border-dashed');
-        
-        // Update item status
+        console.log('🌐 Sending API request...');
         const endpoint = draggedItem.type === 'issue' ? '/api/issues' : '/api/action-items';
-        const response = await fetch(`${endpoint}/${draggedItem.id}`, {
+        const url = `${endpoint}/${draggedItem.id}`;
+        
+        console.log('📡 PATCH', url, { status: newStatus });
+        
+        const response = await fetch(url, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
@@ -303,20 +317,28 @@ async function handleDrop(event, newStatus) {
             body: JSON.stringify({ status: newStatus })
         });
         
+        console.log('📥 Response status:', response.status);
+        
         if (!response.ok) {
             if (response.status === 401) {
-                AuthManager.showNotification('Please login to move items', 'warning');
-                AuthManager.showAuthModal('login');
+                if (window.AuthManager) {
+                    AuthManager.showNotification('Please login to move items', 'warning');
+                    AuthManager.showAuthModal('login');
+                }
                 return;
             }
             throw new Error(`Failed to update ${draggedItem.type} status`);
         }
+        
+        const updatedItem = await response.json();
+        console.log('✅ Item updated:', updatedItem);
         
         // Update local data
         const itemsArray = draggedItem.type === 'issue' ? issues : actionItems;
         const itemIndex = itemsArray.findIndex(item => item.id == draggedItem.id);
         if (itemIndex !== -1) {
             itemsArray[itemIndex].status = newStatus;
+            console.log('✅ Local data updated');
         }
         
         // Re-render the board
@@ -326,11 +348,12 @@ async function handleDrop(event, newStatus) {
         showSuccessMessage(`${draggedItem.type} moved to ${newStatus}`);
         
     } catch (error) {
-        console.error('Error updating item status:', error);
+        console.error('❌ Error updating item status:', error);
         showErrorMessage(`Failed to move ${draggedItem.type}. Please try again.`);
     } finally {
         // Reset drag state
         draggedItem = null;
+        console.log('🧹 Drag state reset');
     }
 }
 
