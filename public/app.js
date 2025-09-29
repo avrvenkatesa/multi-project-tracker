@@ -168,6 +168,19 @@ function renderKanbanBoard() {
             container.ondragover = handleDragOver;
             container.ondrop = (e) => handleDrop(e, status);
             
+            // Set up visual feedback for drop zones
+            container.addEventListener('dragenter', function(e) {
+                e.preventDefault();
+                this.classList.add('bg-blue-50');
+            });
+            
+            container.addEventListener('dragleave', function(e) {
+                // Only remove highlight if leaving the actual column, not a child element
+                if (!this.contains(e.relatedTarget)) {
+                    this.classList.remove('bg-blue-50');
+                }
+            });
+            
             container.innerHTML = columnItems
                 .map(
                     (item) => `
@@ -289,23 +302,7 @@ async function handleDrop(event, newStatus) {
     }
 }
 
-// Add visual feedback for drop zones
-document.addEventListener('DOMContentLoaded', function() {
-    // Add drag enter/leave effects for columns
-    document.querySelectorAll('[id$="-column"]').forEach(column => {
-        column.addEventListener('dragenter', function(e) {
-            e.preventDefault();
-            this.classList.add('bg-blue-50');
-        });
-        
-        column.addEventListener('dragleave', function(e) {
-            // Only remove highlight if leaving the actual column, not a child element
-            if (!this.contains(e.relatedTarget)) {
-                this.classList.remove('bg-blue-50');
-            }
-        });
-    });
-});
+// Visual feedback is now set up in renderKanbanBoard function
 
 // Modal functions
 function showCreateProject() {
