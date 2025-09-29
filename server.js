@@ -24,6 +24,7 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         scriptSrc: ["'self'", "https://unpkg.com", "https://cdn.tailwindcss.com"],
+        connectSrc: ["'self'", "https://unpkg.com"],
         imgSrc: ["'self'", "data:", "https:"],
       },
     },
