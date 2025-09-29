@@ -18,6 +18,40 @@ const JWT_EXPIRY = '24h';
 const postgres = require('postgres');
 const sql = postgres(process.env.DATABASE_URL);
 
+// Helper functions for project metadata
+function getDefaultCategories(template) {
+  const categories = {
+    'web-development': ['Frontend', 'Backend', 'Database', 'API', 'UI/UX', 'Testing'],
+    'mobile-app': ['iOS', 'Android', 'Cross-Platform', 'Backend', 'API', 'Testing'],
+    'data-science': ['Data Collection', 'Data Processing', 'Analysis', 'Modeling', 'Visualization', 'Deployment'],
+    'marketing': ['Campaign', 'Content', 'Social Media', 'Analytics', 'Design', 'Research'],
+    'generic': ['Technical', 'Process', 'Communication', 'Resource', 'Risk', 'Documentation']
+  };
+  return categories[template] || categories['generic'];
+}
+
+function getDefaultPhases(template) {
+  const phases = {
+    'web-development': ['Planning', 'Design', 'Development', 'Testing', 'Deployment', 'Maintenance'],
+    'mobile-app': ['Concept', 'Design', 'Development', 'Testing', 'App Store', 'Support'],
+    'data-science': ['Discovery', 'Preparation', 'Modeling', 'Evaluation', 'Deployment', 'Monitoring'],
+    'marketing': ['Research', 'Strategy', 'Creative', 'Execution', 'Analysis', 'Optimization'],
+    'generic': ['Planning', 'Execution', 'Testing', 'Deployment', 'Closure']
+  };
+  return phases[template] || phases['generic'];
+}
+
+function getDefaultComponents(template) {
+  const components = {
+    'web-development': ['Frontend App', 'Backend API', 'Database', 'Authentication', 'Integration', 'Documentation'],
+    'mobile-app': ['Mobile App', 'Backend Service', 'Database', 'Push Notifications', 'Analytics', 'Store Listing'],
+    'data-science': ['Data Pipeline', 'ML Model', 'Feature Engineering', 'Model Training', 'API Service', 'Dashboard'],
+    'marketing': ['Creative Assets', 'Landing Pages', 'Email Campaign', 'Social Content', 'Analytics', 'A/B Tests'],
+    'generic': ['Component A', 'Component B', 'Component C', 'Integration', 'Documentation']
+  };
+  return components[template] || components['generic'];
+}
+
 // Security middleware
 app.use(
   helmet({
@@ -222,55 +256,93 @@ app.get("/api/health", optionalAuth, (req, res) => {
   });
 });
 
-// Projects API
-app.get("/api/projects", (req, res) => {
-  res.json(projects);
+// Projects API - Get projects (optional auth to show user context)
+app.get("/api/projects", optionalAuth, async (req, res) => {
+  try {
+    const allProjects = await sql`SELECT * FROM projects ORDER BY created_at DESC`;
+    
+    // Add derived fields for each project (categories, phases, components)
+    const projectsWithMetadata = allProjects.map(project => ({
+      ...project,
+      status: project.status || "active",
+      categories: getDefaultCategories(project.template || 'generic'),
+      phases: getDefaultPhases(project.template || 'generic'),
+      components: getDefaultComponents(project.template || 'generic')
+    }));
+    
+    res.json(projectsWithMetadata);
+  } catch (error) {
+    console.error('Error getting projects:', error);
+    res.status(500).json({ error: 'Failed to get projects' });
+  }
 });
 
-app.post("/api/projects", (req, res) => {
-  const { name, description, template } = req.body;
-  const newProject = {
-    id: Date.now(),
-    name,
-    description,
-    template: template || "generic",
-    createdAt: new Date().toISOString(),
-    status: "active",
-    categories: getDefaultCategories(template),
-    phases: getDefaultPhases(template),
-    components: getDefaultComponents(template),
-  };
-  projects.push(newProject);
-  res.status(201).json(newProject);
+app.post("/api/projects", authenticateToken, async (req, res) => {
+  try {
+    const { name, description, template } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+    
+    const [newProject] = await sql`
+      INSERT INTO projects (name, description, template, created_by)
+      VALUES (${name}, ${description || ''}, ${template || 'generic'}, ${req.user.username})
+      RETURNING *
+    `;
+    
+    // Add derived fields for compatibility
+    const projectWithMetadata = {
+      ...newProject,
+      status: newProject.status || "active",
+      categories: getDefaultCategories(newProject.template),
+      phases: getDefaultPhases(newProject.template),
+      components: getDefaultComponents(newProject.template)
+    };
+    
+    res.status(201).json(projectWithMetadata);
+  } catch (error) {
+    console.error('Error creating project:', error);
+    res.status(500).json({ error: 'Failed to create project' });
+  }
 });
 
-// Issues API
-app.get('/api/issues', (req, res) => {
-  const { projectId, status, priority, assignee, category } = req.query;
-  
-  let filteredIssues = [...issues];
-  
-  if (projectId) {
-    filteredIssues = filteredIssues.filter(issue => issue.projectId == projectId);
+// Issues API - Get issues (optional auth)
+app.get('/api/issues', optionalAuth, async (req, res) => {
+  try {
+    const { projectId, status, priority, assignee, category } = req.query;
+    
+    let query = sql`SELECT * FROM issues WHERE 1=1`;
+    const conditions = [];
+    
+    if (projectId) {
+      conditions.push(sql`project_id = ${projectId}`);
+    }
+    if (status) {
+      conditions.push(sql`status = ${status}`);
+    }
+    if (priority) {
+      conditions.push(sql`priority = ${priority}`);
+    }
+    if (assignee) {
+      conditions.push(sql`assignee = ${assignee}`);
+    }
+    if (category) {
+      conditions.push(sql`category = ${category}`);
+    }
+    
+    if (conditions.length > 0) {
+      query = sql`SELECT * FROM issues WHERE ${sql.join(conditions, sql` AND `)}`;
+    } else {
+      query = sql`SELECT * FROM issues`;
+    }
+    
+    const issues = await query;
+    res.json(issues);
+  } catch (error) {
+    console.error('Error getting issues:', error);
+    res.status(500).json({ error: 'Failed to get issues' });
   }
-  
-  if (status) {
-    filteredIssues = filteredIssues.filter(issue => issue.status === status);
-  }
-  
-  if (priority) {
-    filteredIssues = filteredIssues.filter(issue => issue.priority === priority);
-  }
-  
-  if (assignee) {
-    filteredIssues = filteredIssues.filter(issue => issue.assignee === assignee);
-  }
-  
-  if (category) {
-    filteredIssues = filteredIssues.filter(issue => issue.category === category);
-  }
-  
-  res.json(filteredIssues);
 });
 
 app.post('/api/issues', (req, res) => {

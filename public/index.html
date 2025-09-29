@@ -11,11 +11,31 @@
         <div id="app">
             <!-- Header -->
             <header class="bg-blue-600 text-white shadow-lg">
-                <div class="max-w-7xl mx-auto px-4 py-6">
-                    <h1 class="text-3xl font-bold">Multi-Project Tracker</h1>
-                    <p class="text-blue-100 mt-2">
-                        AI-powered issue and action item tracking
-                    </p>
+                <div class="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
+                    <div>
+                        <h1 class="text-3xl font-bold">Multi-Project Tracker</h1>
+                        <p class="text-blue-100 mt-2">
+                            AI-powered issue and action item tracking
+                        </p>
+                    </div>
+                    <!-- Authentication Section -->
+                    <div id="auth-section" class="flex items-center space-x-4">
+                        <div id="user-info" class="hidden text-right">
+                            <p class="text-sm text-blue-100">Welcome</p>
+                            <p id="user-name" class="font-semibold"></p>
+                            <button id="logout-btn" class="mt-2 bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm text-white">
+                                Logout
+                            </button>
+                        </div>
+                        <div id="auth-buttons" class="space-x-2">
+                            <button id="login-btn" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded text-white">
+                                Login
+                            </button>
+                            <button id="register-btn" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded text-white">
+                                Register
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </header>
 
