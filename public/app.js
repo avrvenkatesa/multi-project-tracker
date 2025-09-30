@@ -160,7 +160,10 @@ function renderKanbanBoard() {
             container.innerHTML = columnItems
                 .map(
                     (item) => `
-                <div class="bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")}">
+                <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move"
+                     draggable="true"
+                     data-item-id="${item.id}"
+                     data-item-type="${item.type || 'issue'}">
                     <div class="flex justify-between items-start mb-2">
                         <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
                         <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
@@ -182,7 +185,83 @@ function renderKanbanBoard() {
             `,
                 )
                 .join("");
+            
+            // Add drag and drop event listeners to cards
+            container.querySelectorAll('.kanban-card').forEach(card => {
+                card.addEventListener('dragstart', handleDragStart);
+            });
+            
+            // Add drop zone listeners to column
+            container.addEventListener('dragover', handleDragOver);
+            container.addEventListener('drop', handleDrop);
         }
+    });
+}
+
+// Drag and drop handlers
+let draggedItem = null;
+
+function handleDragStart(e) {
+    draggedItem = {
+        id: e.target.dataset.itemId,
+        type: e.target.dataset.itemType
+    };
+    e.target.style.opacity = '0.5';
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+async function handleDrop(e) {
+    e.preventDefault();
+    
+    if (!draggedItem) return;
+    
+    // Get the target column's status
+    const columnElement = e.currentTarget;
+    const columnId = columnElement.id;
+    
+    const statusMap = {
+        'todocolumn': 'To Do',
+        'inprogresscolumn': 'In Progress',
+        'blockedcolumn': 'Blocked',
+        'donecolumn': 'Done'
+    };
+    
+    const newStatus = statusMap[columnId];
+    
+    if (!newStatus) return;
+    
+    try {
+        const endpoint = draggedItem.type === 'action-item' 
+            ? `/api/action-items/${draggedItem.id}`
+            : `/api/issues/${draggedItem.id}`;
+        
+        await axios.patch(endpoint, { status: newStatus });
+        
+        // Update local data
+        if (draggedItem.type === 'action-item') {
+            const item = actionItems.find(i => i.id == draggedItem.id);
+            if (item) item.status = newStatus;
+        } else {
+            const item = issues.find(i => i.id == draggedItem.id);
+            if (item) item.status = newStatus;
+        }
+        
+        renderKanbanBoard();
+        showSuccessMessage('Status updated successfully!');
+    } catch (error) {
+        console.error('Error updating status:', error);
+        showErrorMessage('Failed to update status');
+    }
+    
+    draggedItem = null;
+    
+    // Reset opacity for all cards
+    document.querySelectorAll('.kanban-card').forEach(card => {
+        card.style.opacity = '1';
     });
 }
 
