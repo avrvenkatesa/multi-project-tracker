@@ -260,6 +260,57 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Relationship Management Modal -->
+            <div id="relationship-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-center justify-between p-6 border-b">
+                        <h3 class="text-xl font-semibold text-gray-800">Manage Relationships</h3>
+                        <button id="close-relationship-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                    </div>
+                    
+                    <div class="p-6">
+                        <!-- Current Item Info -->
+                        <div id="relationship-item-info" class="bg-gray-50 rounded p-3 mb-4">
+                            <!-- Item title will be inserted here -->
+                        </div>
+                        
+                        <!-- Add New Relationship -->
+                        <div class="border-b pb-4 mb-4">
+                            <h4 class="font-semibold mb-3">Add Relationship</h4>
+                            <div class="space-y-3">
+                                <select id="relationship-type" class="w-full px-3 py-2 border rounded-md">
+                                    <option value="">Select relationship type...</option>
+                                    <option value="blocks">Blocks</option>
+                                    <option value="related_to">Related to</option>
+                                    <option value="parent_of">Parent of</option>
+                                </select>
+                                
+                                <select id="relationship-target-type" class="w-full px-3 py-2 border rounded-md">
+                                    <option value="issue">Issue</option>
+                                    <option value="action-item">Action Item</option>
+                                </select>
+                                
+                                <select id="relationship-target-id" class="w-full px-3 py-2 border rounded-md">
+                                    <option value="">Select item...</option>
+                                </select>
+                                
+                                <button id="add-relationship-btn" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                                    Add Relationship
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Existing Relationships -->
+                        <div>
+                            <h4 class="font-semibold mb-3">Existing Relationships</h4>
+                            <div id="relationships-list" class="space-y-2">
+                                <!-- Relationships will be listed here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <script src="auth.js"></script>
