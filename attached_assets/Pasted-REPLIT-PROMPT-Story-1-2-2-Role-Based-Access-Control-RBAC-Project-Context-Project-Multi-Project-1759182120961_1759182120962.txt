@@ -1,0 +1,552 @@
+REPLIT PROMPT: Story 1.2.2 - Role-Based Access Control (RBAC)
+Project Context
+Project: Multi-Project Issue and Action Item Tracking System
+Current Tech Stack: Node.js + Express.js + Vanilla JavaScript + Tailwind CSS + PostgreSQL
+Current State: User authentication complete with JWT tokens
+Story: [STORY 1.2.2] Role-Based Access Control
+GitHub Issue: #7
+Branch: feature/7-role-based-access
+Dependencies: Story 1.2.1 (User Authentication) - COMPLETE ✅
+Current Authentication System (Already Implemented)
+
+JWT-based authentication with httpOnly cookies
+User registration, login, logout working
+AuthManager frontend state management
+Demo users available:
+
+demo@multiproject.com / demo123
+gajalakshmi@1cloudhub.com / demo123
+srihari@1cloudhub.com / demo123
+
+
+
+Requirements
+ARCHITECTURE
+Database Schema Updates:
+sql-- Users table already exists, add role column
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'Team Member';
+
+-- Set default roles for existing users
+UPDATE users SET role = 'System Administrator' WHERE email = 'demo@multiproject.com';
+UPDATE users SET role = 'Project Manager' WHERE email = 'gajalakshmi@1cloudhub.com';
+UPDATE users SET role = 'Solution Architect' WHERE email = 'srihari@1cloudhub.com';
+Files to Modify:
+server.js              (Backend - add role middleware)
+public/auth.js         (Frontend - add role awareness)
+public/app.js          (Frontend - role-based UI)
+public/index.html      (Frontend - role badge display)
+Permission Matrix:
+Action                      | Admin | PM  | Lead | Member | Stakeholder | Viewer
+----------------------------|-------|-----|------|--------|-------------|--------
+Create Project              |   ✓   |  ✓  |  ✗   |   ✗    |      ✗      |   ✗
+Edit Any Project            |   ✓   |  ✓  |  ✗   |   ✗    |      ✗      |   ✗
+Delete Project              |   ✓   |  ✗  |  ✗   |   ✗    |      ✗      |   ✗
+Create Issue (any project)  |   ✓   |  ✓  |  ✓   |   ✓    |      ✗      |   ✗
+Edit Own Issue              |   ✓   |  ✓  |  ✓   |   ✓    |      ✗      |   ✗
+Edit Any Issue              |   ✓   |  ✓  |  ✓   |   ✗    |      ✗      |   ✗
+Delete Issue                |   ✓   |  ✓  |  ✓   |   ✗    |      ✗      |   ✗
+Assign Issue to Others      |   ✓   |  ✓  |  ✓   |   ✗    |      ✗      |   ✗
+Create Action Item          |   ✓   |  ✓  |  ✓   |   ✓    |      ✗      |   ✗
+Move Items on Kanban        |   ✓   |  ✓  |  ✓   |   ✓    |      ✗      |   ✗
+View Projects               |   ✓   |  ✓  |  ✓   |   ✓    |      ✓      |   ✓
+View Issues/Actions         |   ✓   |  ✓  |  ✓   |   ✓    |      ✓      |   ✓
+Manage Users                |   ✓   |  ✗  |  ✗   |   ✗    |      ✗      |   ✗
+CORE FEATURES
+Feature 1: Backend Permission Middleware
+Create role checking function in server.js:
+javascript// Role hierarchy (higher number = more permissions)
+const ROLE_HIERARCHY = {
+  'System Administrator': 5,
+  'Project Manager': 4,
+  'Team Lead': 3,
+  'Team Member': 2,
+  'Stakeholder': 1,
+  'External Viewer': 0
+};
+
+// Check if user has required role or higher
+function requireRole(minimumRole) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+    const requiredRoleLevel = ROLE_HIERARCHY[minimumRole] || 0;
+    
+    if (userRoleLevel < requiredRoleLevel) {
+      return res.status(403).json({ 
+        error: 'Insufficient permissions',
+        required: minimumRole,
+        current: req.user.role 
+      });
+    }
+    
+    next();
+  };
+}
+
+// Check if user owns the resource or has elevated role
+async function requireOwnerOrRole(minimumRole) {
+  return async (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+    const requiredRoleLevel = ROLE_HIERARCHY[minimumRole] || 0;
+    
+    // If user has elevated role, allow
+    if (userRoleLevel >= requiredRoleLevel) {
+      return next();
+    }
+    
+    // Otherwise, check ownership
+    // This will be implemented per-endpoint with resource lookup
+    next();
+  };
+}
+Apply middleware to endpoints:
+javascript// Projects - require PM or higher to create/delete
+app.post('/api/projects', authenticateToken, requireRole('Project Manager'), async (req, res) => {
+  // existing code
+});
+
+// Issues - Team Member can create, Team Lead can edit any
+app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  // existing code
+});
+
+app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  // Check ownership or role
+  const [issue] = await sql`SELECT * FROM issues WHERE id = ${req.params.id}`;
+  
+  if (!issue) {
+    return res.status(404).json({ error: 'Issue not found' });
+  }
+  
+  // Allow if user is Team Lead+ OR owns the issue
+  const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+  const isOwner = issue.created_by === req.user.id;
+  
+  if (userRoleLevel < ROLE_HIERARCHY['Team Lead'] && !isOwner) {
+    return res.status(403).json({ error: 'Can only edit your own issues' });
+  }
+  
+  // existing update code
+});
+
+// Action Items - same pattern
+app.post('/api/action-items', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  // existing code
+});
+
+app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  // Same ownership check as issues
+});
+Feature 2: User Role Management API
+Add admin-only endpoint to change user roles:
+javascript// Get all users (admin only)
+app.get('/api/users', authenticateToken, requireRole('System Administrator'), async (req, res) => {
+  try {
+    const users = await sql`
+      SELECT id, username, email, role, created_at 
+      FROM users 
+      ORDER BY created_at DESC
+    `;
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Update user role (admin only)
+app.patch('/api/users/:id/role', authenticateToken, requireRole('System Administrator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+    
+    // Validate role
+    const validRoles = Object.keys(ROLE_HIERARCHY);
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ 
+        error: 'Invalid role',
+        validRoles 
+      });
+    }
+    
+    // Prevent self-demotion
+    if (parseInt(id) === req.user.id && role !== 'System Administrator') {
+      return res.status(400).json({ 
+        error: 'Cannot change your own admin role' 
+      });
+    }
+    
+    const [updatedUser] = await sql`
+      UPDATE users 
+      SET role = ${role}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${id}
+      RETURNING id, username, email, role
+    `;
+    
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({ error: 'Failed to update user role' });
+  }
+});
+Feature 3: Frontend Role Awareness
+Update public/auth.js to include role in user state:
+javascript// In AuthManager.checkAuthStatus():
+const response = await fetch('/api/auth/me', {
+  method: 'GET',
+  credentials: 'include'
+});
+
+if (response.ok) {
+  this.currentUser = await response.json();
+  this.isAuthenticated = true;
+  console.log('User authenticated:', this.currentUser);
+  console.log('User role:', this.currentUser.role); // Log role
+} else {
+  // ...
+}
+
+// Add role checking methods:
+hasRole(minimumRole) {
+  if (!this.isAuthenticated || !this.currentUser) return false;
+  
+  const ROLE_HIERARCHY = {
+    'System Administrator': 5,
+    'Project Manager': 4,
+    'Team Lead': 3,
+    'Team Member': 2,
+    'Stakeholder': 1,
+    'External Viewer': 0
+  };
+  
+  const userLevel = ROLE_HIERARCHY[this.currentUser.role] || 0;
+  const requiredLevel = ROLE_HIERARCHY[minimumRole] || 0;
+  
+  return userLevel >= requiredLevel;
+},
+
+canCreateProject() {
+  return this.hasRole('Project Manager');
+},
+
+canEditAnyIssue() {
+  return this.hasRole('Team Lead');
+},
+
+canManageUsers() {
+  return this.hasRole('System Administrator');
+},
+
+isReadOnly() {
+  return this.currentUser && 
+         (this.currentUser.role === 'Stakeholder' || 
+          this.currentUser.role === 'External Viewer');
+}
+Update UI rendering in updateUI():
+javascriptupdateUI() {
+  const loggedInState = document.getElementById('loggedInState');
+  const loggedOutState = document.getElementById('loggedOutState');
+
+  if (this.isAuthenticated && this.currentUser) {
+    // Show logged in state
+    loggedInState.classList.remove('hidden');
+    loggedInState.classList.add('flex');
+    loggedOutState.classList.add('hidden');
+
+    // Update user info with role badge
+    document.getElementById('userName').textContent = this.currentUser.name;
+    document.getElementById('userEmail').textContent = this.currentUser.email;
+    
+    // Show role badge
+    const roleDisplay = document.getElementById('userRole');
+    if (roleDisplay) {
+      roleDisplay.textContent = this.currentUser.role;
+      roleDisplay.className = this.getRoleBadgeClass(this.currentUser.role);
+    }
+    
+    // Set initials
+    const initials = this.currentUser.name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+    document.getElementById('userInitials').textContent = initials;
+
+    // Show/hide buttons based on role
+    this.updateRoleBasedUI();
+  } else {
+    // Show logged out state
+    loggedInState.classList.add('hidden');
+    loggedOutState.classList.remove('hidden');
+    loggedOutState.classList.add('flex');
+  }
+},
+
+getRoleBadgeClass(role) {
+  const badgeClasses = {
+    'System Administrator': 'px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800',
+    'Project Manager': 'px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-800',
+    'Team Lead': 'px-2 py-1 text-xs font-semibold rounded bg-purple-100 text-purple-800',
+    'Team Member': 'px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800',
+    'Stakeholder': 'px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-800',
+    'External Viewer': 'px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-600'
+  };
+  return badgeClasses[role] || badgeClasses['Team Member'];
+},
+
+updateRoleBasedUI() {
+  // Hide create project button if not PM or higher
+  const createProjectBtn = document.querySelector('[onclick*="showCreateProject"]');
+  if (createProjectBtn) {
+    if (this.canCreateProject()) {
+      createProjectBtn.classList.remove('hidden');
+    } else {
+      createProjectBtn.classList.add('hidden');
+    }
+  }
+  
+  // Disable action buttons for read-only users
+  if (this.isReadOnly()) {
+    const createButtons = document.querySelectorAll('[data-requires-auth]');
+    createButtons.forEach(btn => {
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+      btn.title = 'Read-only access - cannot create items';
+    });
+  }
+  
+  // Show/hide user management link (admin only)
+  const userManagementLink = document.getElementById('user-management-link');
+  if (userManagementLink) {
+    if (this.canManageUsers()) {
+      userManagementLink.classList.remove('hidden');
+    } else {
+      userManagementLink.classList.add('hidden');
+    }
+  }
+}
+Feature 4: User Management UI (Admin Only)
+Add user management modal to public/app.js:
+javascript// Show user management (admin only)
+async function showUserManagement() {
+  if (!AuthManager.canManageUsers()) {
+    AuthManager.showNotification('Admin access required', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/users', {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Failed to fetch users');
+    
+    const users = await response.json();
+    
+    const modalContent = `
+      <h3 class="text-lg font-semibold mb-4">User Management</h3>
+      <div class="space-y-2 max-h-96 overflow-y-auto">
+        ${users.map(user => `
+          <div class="flex items-center justify-between p-3 bg-gray-50 rounded">
+            <div class="flex-1">
+              <p class="font-medium">${user.username}</p>
+              <p class="text-sm text-gray-600">${user.email}</p>
+            </div>
+            <div class="flex items-center space-x-2">
+              <select 
+                id="role-${user.id}" 
+                class="border rounded px-2 py-1 text-sm"
+                ${user.id === AuthManager.currentUser.id ? 'disabled' : ''}
+                onchange="updateUserRole(${user.id}, this.value)">
+                <option value="System Administrator" ${user.role === 'System Administrator' ? 'selected' : ''}>Admin</option>
+                <option value="Project Manager" ${user.role === 'Project Manager' ? 'selected' : ''}>PM</option>
+                <option value="Team Lead" ${user.role === 'Team Lead' ? 'selected' : ''}>Lead</option>
+                <option value="Team Member" ${user.role === 'Team Member' ? 'selected' : ''}>Member</option>
+                <option value="Stakeholder" ${user.role === 'Stakeholder' ? 'selected' : ''}>Stakeholder</option>
+                <option value="External Viewer" ${user.role === 'External Viewer' ? 'selected' : ''}>Viewer</option>
+              </select>
+              ${user.id === AuthManager.currentUser.id ? '<span class="text-xs text-gray-500">(You)</span>' : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="flex justify-end mt-4">
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+          Close
+        </button>
+      </div>
+    `;
+    
+    showModal(modalContent);
+  } catch (error) {
+    console.error('Error loading users:', error);
+    AuthManager.showNotification('Failed to load users', 'error');
+  }
+}
+
+// Update user role
+async function updateUserRole(userId, newRole) {
+  try {
+    const response = await fetch(`/api/users/${userId}/role`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ role: newRole })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update role');
+    }
+    
+    const updatedUser = await response.json();
+    showSuccessMessage(`Updated ${updatedUser.username} to ${newRole}`);
+    
+  } catch (error) {
+    console.error('Error updating role:', error);
+    showErrorMessage(error.message);
+    
+    // Reload modal to reset dropdown
+    hideModal();
+    setTimeout(() => showUserManagement(), 300);
+  }
+}
+Feature 5: Update HTML for Role Display
+Add role badge to header in public/index.html:
+html<!-- Update the logged-in state section -->
+<div id="loggedInState" class="hidden flex items-center space-x-4">
+  <div class="flex items-center space-x-2">
+    <div class="bg-blue-500 rounded-full w-10 h-10 flex items-center justify-center">
+      <span id="userInitials" class="text-white font-bold text-sm">??</span>
+    </div>
+    <div class="text-right">
+      <p id="userName" class="font-medium text-sm">User Name</p>
+      <div class="flex items-center space-x-2">
+        <p id="userEmail" class="text-blue-100 text-xs">user@example.com</p>
+        <span id="userRole" class="px-2 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">Role</span>
+      </div>
+    </div>
+  </div>
+  
+  <!-- User Management Link (admin only) -->
+  <button 
+    id="user-management-link" 
+    onclick="showUserManagement()" 
+    class="hidden text-sm text-blue-100 hover:text-white underline">
+    Manage Users
+  </button>
+  
+  <button id="logoutBtn" class="bg-blue-500 hover:bg-blue-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+    Logout
+  </button>
+</div>
+VALIDATION & ERROR HANDLING
+Role validation:
+
+Validate role on registration (default to 'Team Member')
+Validate role on update (must be in valid roles list)
+Prevent self-demotion (admins can't remove their own admin status)
+
+Permission errors:
+
+Return 403 Forbidden with clear error message
+Frontend shows notification explaining permission requirement
+Log permission denials for security auditing
+
+Edge cases:
+
+User deleted while logged in → handle gracefully
+Role changed while logged in → require re-login or refresh token
+Multiple admins → ensure at least one admin always exists
+
+TESTING REQUIREMENTS
+Backend Testing:
+bash# Test with curl or Postman
+
+# 1. Login as admin
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@multiproject.com","password":"demo123"}' \
+  -c cookies.txt
+
+# 2. Try to create project as Team Member (should fail)
+# Login as team member first, then:
+curl -X POST http://localhost:5000/api/projects \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"name":"Test","template":"generic"}'
+# Expected: 403 Forbidden
+
+# 3. Get users as admin (should work)
+curl -X GET http://localhost:5000/api/users \
+  -b cookies.txt
+# Expected: List of users
+
+# 4. Update role as admin (should work)
+curl -X PATCH http://localhost:5000/api/users/2/role \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"role":"Project Manager"}'
+# Expected: Updated user object
+Frontend Testing:
+
+Login as each role type, verify UI differences
+Test button visibility per role
+Try restricted actions with different roles
+Verify role badge displays correctly
+Admin: test user management modal
+Test error messages for permission denials
+
+Manual Test Matrix:
+Role                | Can Create Project | Can Edit Any Issue | Can Manage Users | Can Create Issue
+--------------------|-------------------|-------------------|------------------|------------------
+Admin               |        ✓          |        ✓          |        ✓         |        ✓
+Project Manager     |        ✓          |        ✓          |        ✗         |        ✓
+Team Lead           |        ✗          |        ✓          |        ✗         |        ✓
+Team Member         |        ✗          |    Own only       |        ✗         |        ✓
+Stakeholder         |        ✗          |        ✗          |        ✗         |        ✗
+External Viewer     |        ✗          |        ✗          |        ✗         |        ✗
+ACCEPTANCE CRITERIA
+Story is complete when:
+
+✅ Users have roles stored in database
+✅ Backend enforces role-based permissions on all endpoints
+✅ 403 Forbidden returned for unauthorized actions
+✅ Frontend shows/hides UI elements based on role
+✅ Role badge displays in header
+✅ Admin can view all users
+✅ Admin can change user roles
+✅ Admin cannot demote self
+✅ Read-only roles cannot modify data
+✅ All manual tests pass
+✅ No console errors
+✅ Existing functionality still works
+
+DELIVERABLES
+Updated Files:
+
+server.js - Role middleware, user management endpoints
+public/auth.js - Role checking methods
+public/app.js - User management UI
+public/index.html - Role badge display
+
+Database Migration:
+sql-- Run this in Replit database console
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'Team Member';
+UPDATE users SET role = 'System Administrator' WHERE email = 'demo@multiproject.com';
+UPDATE users SET role = 'Project Manager' WHERE email = 'gajalakshmi@1cloudhub.com';
+UPDATE users SET role = 'Solution Architect' WHERE email 

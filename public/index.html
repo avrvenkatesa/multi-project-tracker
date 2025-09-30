@@ -12,10 +12,44 @@
             <!-- Header -->
             <header class="bg-blue-600 text-white shadow-lg">
                 <div class="max-w-7xl mx-auto px-4 py-6">
-                    <h1 class="text-3xl font-bold">Multi-Project Tracker</h1>
-                    <p class="text-blue-100 mt-2">
-                        AI-powered issue and action item tracking
-                    </p>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h1 class="text-3xl font-bold">Multi-Project Tracker</h1>
+                            <p class="text-blue-100 mt-2">
+                                AI-powered issue and action item tracking
+                            </p>
+                        </div>
+                        
+                        <!-- Auth Section -->
+                        <div class="flex items-center space-x-4">
+                            <!-- Logged Out State -->
+                            <div id="loggedOutState" class="hidden flex space-x-2">
+                                <button id="login-btn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50">
+                                    Login
+                                </button>
+                                <button id="register-btn" class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
+                                    Register
+                                </button>
+                            </div>
+                            
+                            <!-- Logged In State -->
+                            <div id="loggedInState" class="hidden flex items-center space-x-4">
+                                <div class="text-right">
+                                    <div class="flex items-center space-x-2">
+                                        <span id="userName" class="font-semibold"></span>
+                                        <span id="userRole" class="px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-800"></span>
+                                    </div>
+                                    <div id="userEmail" class="text-xs text-blue-100"></div>
+                                </div>
+                                <button id="logout-btn" class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
+                                    Logout
+                                </button>
+                                <button id="user-management-link" class="hidden bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
+                                    Manage Users
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -28,8 +62,9 @@
                             Projects
                         </h2>
                         <button
-                            onclick="showCreateProject()"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                            id="create-project-btn"
+                            data-create-project
+                            class="hidden bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                         >
                             + New Project
                         </button>
@@ -52,13 +87,15 @@
                             ></h3>
                             <div class="space-x-2">
                                 <button
-                                    onclick="showCreateIssue()"
+                                    id="create-issue-btn"
+                                    data-requires-write
                                     class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
                                 >
                                     + Issue
                                 </button>
                                 <button
-                                    onclick="showCreateActionItem()"
+                                    id="create-action-item-btn"
+                                    data-requires-write
                                     class="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
                                 >
                                     + Action Item
@@ -133,6 +170,7 @@
             </div>
         </div>
 
+        <script src="auth.js"></script>
         <script src="app.js"></script>
     </body>
 </html>
