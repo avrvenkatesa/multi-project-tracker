@@ -651,6 +651,201 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
   }
 });
 
+// ============= RELATIONSHIP ROUTES =============
+
+// Get relationships for an item
+app.get('/api/:itemType/:id/relationships', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const type = itemType === 'issues' ? 'issue' : 'action-item';
+    
+    // Get relationships where this item is the source
+    const outgoingQuery = `
+      SELECT r.*, 
+             CASE 
+               WHEN r.target_type = 'issue' THEN i.title
+               ELSE ai.title
+             END as target_title,
+             CASE 
+               WHEN r.target_type = 'issue' THEN i.status
+               ELSE ai.status
+             END as target_status
+      FROM issue_relationships r
+      LEFT JOIN issues i ON r.target_type = 'issue' AND r.target_id = i.id
+      LEFT JOIN action_items ai ON r.target_type = 'action-item' AND r.target_id = ai.id
+      WHERE r.source_id = $1 AND r.source_type = $2
+      ORDER BY r.created_at DESC
+    `;
+    
+    // Get relationships where this item is the target
+    const incomingQuery = `
+      SELECT r.*, 
+             CASE 
+               WHEN r.source_type = 'issue' THEN i.title
+               ELSE ai.title
+             END as source_title,
+             CASE 
+               WHEN r.source_type = 'issue' THEN i.status
+               ELSE ai.status
+             END as source_status
+      FROM issue_relationships r
+      LEFT JOIN issues i ON r.source_type = 'issue' AND r.source_id = i.id
+      LEFT JOIN action_items ai ON r.source_type = 'action-item' AND r.source_id = ai.id
+      WHERE r.target_id = $1 AND r.target_type = $2
+      ORDER BY r.created_at DESC
+    `;
+    
+    const [outgoingResult, incomingResult] = await Promise.all([
+      pool.query(outgoingQuery, [parseInt(id), type]),
+      pool.query(incomingQuery, [parseInt(id), type])
+    ]);
+    
+    res.json({ outgoing: outgoingResult.rows, incoming: incomingResult.rows });
+  } catch (error) {
+    console.error('Error getting relationships:', error);
+    res.status(500).json({ error: 'Failed to get relationships' });
+  }
+});
+
+// Create a relationship
+app.post('/api/:itemType/:id/relationships', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const { targetId, targetType, relationshipType } = req.body;
+    const sourceType = itemType === 'issues' ? 'issue' : 'action-item';
+    
+    // Validate inputs
+    if (!targetId || !targetType || !relationshipType) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Check for circular dependency
+    if (parseInt(id) === parseInt(targetId) && sourceType === targetType) {
+      return res.status(400).json({ error: 'Cannot create relationship to self' });
+    }
+    
+    // Check if relationship already exists
+    const existingQuery = `
+      SELECT id FROM issue_relationships
+      WHERE source_id = $1 
+        AND source_type = $2
+        AND target_id = $3
+        AND target_type = $4
+        AND relationship_type = $5
+    `;
+    const existingResult = await pool.query(existingQuery, [
+      parseInt(id), sourceType, parseInt(targetId), targetType, relationshipType
+    ]);
+    
+    if (existingResult.rows.length > 0) {
+      return res.status(400).json({ error: 'Relationship already exists' });
+    }
+    
+    // Create relationship
+    const insertQuery = `
+      INSERT INTO issue_relationships 
+        (source_id, source_type, target_id, target_type, relationship_type, created_by)
+      VALUES 
+        ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `;
+    const result = await pool.query(insertQuery, [
+      parseInt(id), sourceType, parseInt(targetId), targetType, relationshipType, req.user.id
+    ]);
+    
+    const relationship = result.rows[0];
+    
+    // Create reciprocal relationship if needed
+    if (relationshipType === 'blocks') {
+      const reciprocalQuery = `
+        INSERT INTO issue_relationships 
+          (source_id, source_type, target_id, target_type, relationship_type, created_by)
+        VALUES 
+          ($1, $2, $3, $4, 'blocked_by', $5)
+        ON CONFLICT DO NOTHING
+      `;
+      await pool.query(reciprocalQuery, [
+        parseInt(targetId), targetType, parseInt(id), sourceType, req.user.id
+      ]);
+    }
+    
+    if (relationshipType === 'parent_of') {
+      const reciprocalQuery = `
+        INSERT INTO issue_relationships 
+          (source_id, source_type, target_id, target_type, relationship_type, created_by)
+        VALUES 
+          ($1, $2, $3, $4, 'child_of', $5)
+        ON CONFLICT DO NOTHING
+      `;
+      await pool.query(reciprocalQuery, [
+        parseInt(targetId), targetType, parseInt(id), sourceType, req.user.id
+      ]);
+    }
+    
+    res.status(201).json(relationship);
+  } catch (error) {
+    console.error('Error creating relationship:', error);
+    res.status(500).json({ error: 'Failed to create relationship' });
+  }
+});
+
+// Delete a relationship
+app.delete('/api/:itemType/:id/relationships/:relationshipId', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { relationshipId } = req.params;
+    
+    // Get the relationship to find reciprocal
+    const selectQuery = `SELECT * FROM issue_relationships WHERE id = $1`;
+    const selectResult = await pool.query(selectQuery, [parseInt(relationshipId)]);
+    
+    if (selectResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Relationship not found' });
+    }
+    
+    const relationship = selectResult.rows[0];
+    
+    // Delete the relationship
+    const deleteQuery = `DELETE FROM issue_relationships WHERE id = $1`;
+    await pool.query(deleteQuery, [parseInt(relationshipId)]);
+    
+    // Delete reciprocal relationship if exists
+    if (relationship.relationship_type === 'blocks') {
+      const deleteReciprocalQuery = `
+        DELETE FROM issue_relationships
+        WHERE source_id = $1
+          AND source_type = $2
+          AND target_id = $3
+          AND target_type = $4
+          AND relationship_type = 'blocked_by'
+      `;
+      await pool.query(deleteReciprocalQuery, [
+        relationship.target_id, relationship.target_type,
+        relationship.source_id, relationship.source_type
+      ]);
+    }
+    
+    if (relationship.relationship_type === 'parent_of') {
+      const deleteReciprocalQuery = `
+        DELETE FROM issue_relationships
+        WHERE source_id = $1
+          AND source_type = $2
+          AND target_id = $3
+          AND target_type = $4
+          AND relationship_type = 'child_of'
+      `;
+      await pool.query(deleteReciprocalQuery, [
+        relationship.target_id, relationship.target_type,
+        relationship.source_id, relationship.source_type
+      ]);
+    }
+    
+    res.json({ message: 'Relationship deleted' });
+  } catch (error) {
+    console.error('Error deleting relationship:', error);
+    res.status(500).json({ error: 'Failed to delete relationship' });
+  }
+});
+
 // Serve frontend
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));

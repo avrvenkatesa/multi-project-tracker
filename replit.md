@@ -109,12 +109,20 @@ The application uses express-rate-limit for API protection and implements proper
 - Added robust error handling for dynamic dropdown generation in issue/action item forms
 - **Board Filtering and Search (Story 1.4.2)**:
   - Backend: Added comprehensive filtering to GET /api/issues and /api/action-items endpoints using Neon Pool.query() for dynamic parameterized queries
-  - Frontend: Implemented filter UI with search input, status/priority/assignee dropdowns above Kanban board
-  - Features: Real-time search with 300ms debounce, active filter badges with remove buttons, results count display
+  - Frontend: Implemented filter UI with search input, status/priority/assignee/type dropdowns above Kanban board
+  - Features: Real-time search with 300ms debounce, active filter badges with remove buttons, results count display, type filter to show issues only or action items only
   - State Management: Filter state persists in URL parameters for shareable filtered views
   - Security: SQL injection protected via parameterized queries, CSP compliant (no inline handlers)
   - Dynamic assignee dropdown populated from actual project data
   - Bug fixes: Configured WebSocket support for Node.js v20 (ws package), removed non-existent status column from project creation
+- **Issue Relationships (Story 1.3.3)**:
+  - Database: Created issue_relationships table with support for blocks/blocked_by, parent_of/child_of, and related_to relationships
+  - Backend: Implemented GET/POST/DELETE endpoints with automatic reciprocal relationship handling (e.g., creating "blocks" auto-creates "blocked_by")
+  - Frontend: Added relationship management modal accessible via "🔗 Relationships" button on each kanban card
+  - Features: View outgoing/incoming relationships, add new relationships with type selector and target picker, delete relationships
+  - Security: Prevents self-referencing relationships, checks for duplicate relationships, Team Member+ role required
+  - UI: Relationship modal shows current relationships color-coded (blue for outgoing, yellow for incoming auto-managed)
+  - Visual Indicators: Kanban cards display relationship count badges (e.g., "2") in blue when relationships exist, auto-update on add/delete
 
 ### Demo Credentials
 - Email: demo@multiproject.com

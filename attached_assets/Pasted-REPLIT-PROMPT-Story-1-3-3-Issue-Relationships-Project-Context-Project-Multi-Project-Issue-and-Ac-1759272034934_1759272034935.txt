@@ -1,0 +1,488 @@
+REPLIT PROMPT: Story 1.3.3 - Issue Relationships
+Project Context
+Project: Multi-Project Issue and Action Item Tracking System
+Current Tech Stack: Node.js + Express.js + Vanilla JavaScript + Tailwind CSS + Neon PostgreSQL
+Story: [STORY 1.3.3] Issue and Action Item Relationships
+GitHub Issue: #11
+Branch: feature/11-issue-relationships
+Problem Statement
+Users need to track dependencies and relationships between issues and action items:
+
+Issues that block other issues
+Parent tasks with subtasks
+Related work items
+Dependencies for planning and prioritization
+
+Without relationships, users lose context about how work items connect.
+Requirements
+ARCHITECTURE
+Database Schema:
+sql-- Create relationships table
+CREATE TABLE IF NOT EXISTS issue_relationships (
+  id SERIAL PRIMARY KEY,
+  source_id INTEGER NOT NULL,
+  source_type VARCHAR(20) NOT NULL CHECK (source_type IN ('issue', 'action-item')),
+  target_id INTEGER NOT NULL,
+  target_type VARCHAR(20) NOT NULL CHECK (target_type IN ('issue', 'action-item')),
+  relationship_type VARCHAR(20) NOT NULL CHECK (relationship_type IN ('blocks', 'blocked_by', 'parent_of', 'child_of', 'related_to')),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_by INTEGER REFERENCES users(id),
+  CONSTRAINT unique_relationship UNIQUE (source_id, source_type, target_id, target_type, relationship_type)
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_relationships_source ON issue_relationships(source_id, source_type);
+CREATE INDEX IF NOT EXISTS idx_relationships_target ON issue_relationships(target_id, target_type);
+Files to Modify:
+server.js              (Backend - relationship endpoints)
+public/app.js          (Frontend - relationship UI)
+public/index.html      (Frontend - relationship modal)
+BACKEND IMPLEMENTATION
+Add relationship endpoints to server.js:
+javascript// Get relationships for an item
+app.get('/api/:itemType/:id/relationships', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const type = itemType === 'issues' ? 'issue' : 'action-item';
+    
+    // Get relationships where this item is the source
+    const outgoing = await sql`
+      SELECT r.*, 
+             CASE 
+               WHEN r.target_type = 'issue' THEN i.title
+               ELSE ai.title
+             END as target_title,
+             CASE 
+               WHEN r.target_type = 'issue' THEN i.status
+               ELSE ai.status
+             END as target_status
+      FROM issue_relationships r
+      LEFT JOIN issues i ON r.target_type = 'issue' AND r.target_id = i.id
+      LEFT JOIN action_items ai ON r.target_type = 'action-item' AND r.target_id = ai.id
+      WHERE r.source_id = ${id} AND r.source_type = ${type}
+    `;
+    
+    // Get relationships where this item is the target
+    const incoming = await sql`
+      SELECT r.*, 
+             CASE 
+               WHEN r.source_type = 'issue' THEN i.title
+               ELSE ai.title
+             END as source_title,
+             CASE 
+               WHEN r.source_type = 'issue' THEN i.status
+               ELSE ai.status
+             END as source_status
+      FROM issue_relationships r
+      LEFT JOIN issues i ON r.source_type = 'issue' AND r.source_id = i.id
+      LEFT JOIN action_items ai ON r.source_type = 'action-item' AND r.source_id = ai.id
+      WHERE r.target_id = ${id} AND r.target_type = ${type}
+    `;
+    
+    res.json({ outgoing, incoming });
+  } catch (error) {
+    console.error('Error getting relationships:', error);
+    res.status(500).json({ error: 'Failed to get relationships' });
+  }
+});
+
+// Create a relationship
+app.post('/api/:itemType/:id/relationships', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const { targetId, targetType, relationshipType } = req.body;
+    const sourceType = itemType === 'issues' ? 'issue' : 'action-item';
+    
+    // Validate inputs
+    if (!targetId || !targetType || !relationshipType) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Check for circular dependency (simplified - would need recursive check for full solution)
+    if (parseInt(id) === parseInt(targetId) && sourceType === targetType) {
+      return res.status(400).json({ error: 'Cannot create relationship to self' });
+    }
+    
+    // Check if relationship already exists
+    const existing = await sql`
+      SELECT id FROM issue_relationships
+      WHERE source_id = ${id} 
+        AND source_type = ${sourceType}
+        AND target_id = ${targetId}
+        AND target_type = ${targetType}
+        AND relationship_type = ${relationshipType}
+    `;
+    
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'Relationship already exists' });
+    }
+    
+    // Create relationship
+    const [relationship] = await sql`
+      INSERT INTO issue_relationships 
+        (source_id, source_type, target_id, target_type, relationship_type, created_by)
+      VALUES 
+        (${id}, ${sourceType}, ${targetId}, ${targetType}, ${relationshipType}, ${req.user.id})
+      RETURNING *
+    `;
+    
+    // If it's a blocks relationship, create the reciprocal blocked_by
+    if (relationshipType === 'blocks') {
+      await sql`
+        INSERT INTO issue_relationships 
+          (source_id, source_type, target_id, target_type, relationship_type, created_by)
+        VALUES 
+          (${targetId}, ${targetType}, ${id}, ${sourceType}, 'blocked_by', ${req.user.id})
+        ON CONFLICT DO NOTHING
+      `;
+    }
+    
+    // If it's a parent_of relationship, create the reciprocal child_of
+    if (relationshipType === 'parent_of') {
+      await sql`
+        INSERT INTO issue_relationships 
+          (source_id, source_type, target_id, target_type, relationship_type, created_by)
+        VALUES 
+          (${targetId}, ${targetType}, ${id}, ${sourceType}, 'child_of', ${req.user.id})
+        ON CONFLICT DO NOTHING
+      `;
+    }
+    
+    res.status(201).json(relationship);
+  } catch (error) {
+    console.error('Error creating relationship:', error);
+    res.status(500).json({ error: 'Failed to create relationship' });
+  }
+});
+
+// Delete a relationship
+app.delete('/api/:itemType/:id/relationships/:relationshipId', authenticateToken, async (req, res) => {
+  try {
+    const { relationshipId } = req.params;
+    
+    // Get the relationship to find reciprocal
+    const [relationship] = await sql`
+      SELECT * FROM issue_relationships WHERE id = ${relationshipId}
+    `;
+    
+    if (!relationship) {
+      return res.status(404).json({ error: 'Relationship not found' });
+    }
+    
+    // Delete the relationship
+    await sql`DELETE FROM issue_relationships WHERE id = ${relationshipId}`;
+    
+    // Delete reciprocal relationship if exists
+    if (relationship.relationship_type === 'blocks') {
+      await sql`
+        DELETE FROM issue_relationships
+        WHERE source_id = ${relationship.target_id}
+          AND source_type = ${relationship.target_type}
+          AND target_id = ${relationship.source_id}
+          AND target_type = ${relationship.source_type}
+          AND relationship_type = 'blocked_by'
+      `;
+    }
+    
+    if (relationship.relationship_type === 'parent_of') {
+      await sql`
+        DELETE FROM issue_relationships
+        WHERE source_id = ${relationship.target_id}
+          AND source_type = ${relationship.target_type}
+          AND target_id = ${relationship.source_id}
+          AND target_type = ${relationship.source_type}
+          AND relationship_type = 'child_of'
+      `;
+    }
+    
+    res.json({ message: 'Relationship deleted' });
+  } catch (error) {
+    console.error('Error deleting relationship:', error);
+    res.status(500).json({ error: 'Failed to delete relationship' });
+  }
+});
+FRONTEND IMPLEMENTATION
+Add relationship modal to public/index.html:
+html<!-- Relationship Management Modal - add before closing </body> -->
+<div id="relationship-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between p-6 border-b">
+      <h3 class="text-xl font-semibold text-gray-800">Manage Relationships</h3>
+      <button onclick="closeRelationshipModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+    </div>
+    
+    <div class="p-6">
+      <!-- Current Item Info -->
+      <div id="relationship-item-info" class="bg-gray-50 rounded p-3 mb-4">
+        <!-- Item title will be inserted here -->
+      </div>
+      
+      <!-- Add New Relationship -->
+      <div class="border-b pb-4 mb-4">
+        <h4 class="font-semibold mb-3">Add Relationship</h4>
+        <div class="space-y-3">
+          <select id="relationship-type" class="w-full px-3 py-2 border rounded-md">
+            <option value="">Select relationship type...</option>
+            <option value="blocks">Blocks</option>
+            <option value="related_to">Related to</option>
+            <option value="parent_of">Parent of</option>
+          </select>
+          
+          <select id="relationship-target-type" class="w-full px-3 py-2 border rounded-md">
+            <option value="issue">Issue</option>
+            <option value="action-item">Action Item</option>
+          </select>
+          
+          <select id="relationship-target-id" class="w-full px-3 py-2 border rounded-md">
+            <option value="">Select item...</option>
+          </select>
+          
+          <button onclick="addRelationship()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+            Add Relationship
+          </button>
+        </div>
+      </div>
+      
+      <!-- Existing Relationships -->
+      <div>
+        <h4 class="font-semibold mb-3">Existing Relationships</h4>
+        <div id="relationships-list" class="space-y-2">
+          <!-- Relationships will be listed here -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+Add relationship functions to public/app.js:
+javascript// Global state for relationships
+let currentRelationshipItem = null;
+
+// Show relationship modal
+async function showRelationshipModal(itemId, itemType, itemTitle) {
+  currentRelationshipItem = { id: itemId, type: itemType, title: itemTitle };
+  
+  // Show modal
+  document.getElementById('relationship-modal').classList.remove('hidden');
+  
+  // Display item info
+  document.getElementById('relationship-item-info').innerHTML = `
+    <p class="font-medium">${itemTitle}</p>
+    <p class="text-sm text-gray-600">${itemType === 'issue' ? 'Issue' : 'Action Item'} #${itemId}</p>
+  `;
+  
+  // Load relationships
+  await loadRelationships();
+  
+  // Populate target dropdown
+  await populateTargetDropdown();
+}
+
+// Close relationship modal
+function closeRelationshipModal() {
+  document.getElementById('relationship-modal').classList.add('hidden');
+  currentRelationshipItem = null;
+}
+
+// Load relationships for current item
+async function loadRelationships() {
+  if (!currentRelationshipItem) return;
+  
+  try {
+    const endpoint = currentRelationshipItem.type === 'issue' ? 'issues' : 'action-items';
+    const response = await fetch(
+      `/api/${endpoint}/${currentRelationshipItem.id}/relationships`,
+      { credentials: 'include' }
+    );
+    
+    if (!response.ok) throw new Error('Failed to load relationships');
+    
+    const { outgoing, incoming } = await response.json();
+    
+    const listContainer = document.getElementById('relationships-list');
+    
+    if (outgoing.length === 0 && incoming.length === 0) {
+      listContainer.innerHTML = '<p class="text-gray-500 text-sm">No relationships yet</p>';
+      return;
+    }
+    
+    listContainer.innerHTML = [
+      ...outgoing.map(r => `
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded">
+          <div class="flex-1">
+            <span class="text-xs font-semibold text-blue-600 uppercase">${r.relationship_type.replace('_', ' ')}</span>
+            <p class="text-sm">${r.target_title}</p>
+            <span class="text-xs text-gray-500">${r.target_type} - ${r.target_status}</span>
+          </div>
+          <button onclick="deleteRelationship(${r.id})" class="text-red-600 hover:text-red-700">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+          </button>
+        </div>
+      `),
+      ...incoming.map(r => `
+        <div class="flex items-center justify-between p-3 bg-yellow-50 rounded">
+          <div class="flex-1">
+            <span class="text-xs font-semibold text-yellow-600 uppercase">⬅ ${r.relationship_type.replace('_', ' ')}</span>
+            <p class="text-sm">${r.source_title}</p>
+            <span class="text-xs text-gray-500">${r.source_type} - ${r.source_status}</span>
+          </div>
+        </div>
+      `)
+    ].join('');
+    
+  } catch (error) {
+    console.error('Error loading relationships:', error);
+    showErrorMessage('Failed to load relationships');
+  }
+}
+
+// Populate target dropdown
+async function populateTargetDropdown() {
+  const targetTypeSelect = document.getElementById('relationship-target-type');
+  const targetIdSelect = document.getElementById('relationship-target-id');
+  
+  targetTypeSelect.addEventListener('change', async () => {
+    await updateTargetOptions();
+  });
+  
+  await updateTargetOptions();
+}
+
+async function updateTargetOptions() {
+  const targetType = document.getElementById('relationship-target-type').value;
+  const targetIdSelect = document.getElementById('relationship-target-id');
+  
+  try {
+    const endpoint = targetType === 'issue' ? '/api/issues' : '/api/action-items';
+    const response = await fetch(`${endpoint}?projectId=${currentProject.id}`, {
+      credentials: 'include'
+    });
+    
+    const items = await response.json();
+    
+    // Filter out current item
+    const filteredItems = items.filter(item => 
+      !(item.id === currentRelationshipItem.id && targetType === currentRelationshipItem.type)
+    );
+    
+    targetIdSelect.innerHTML = '<option value="">Select item...</option>' +
+      filteredItems.map(item => `
+        <option value="${item.id}">${item.title} (${item.status})</option>
+      `).join('');
+      
+  } catch (error) {
+    console.error('Error loading items:', error);
+  }
+}
+
+// Add relationship
+async function addRelationship() {
+  const relationshipType = document.getElementById('relationship-type').value;
+  const targetType = document.getElementById('relationship-target-type').value;
+  const targetId = document.getElementById('relationship-target-id').value;
+  
+  if (!relationshipType || !targetId) {
+    showErrorMessage('Please select relationship type and target item');
+    return;
+  }
+  
+  try {
+    const endpoint = currentRelationshipItem.type === 'issue' ? 'issues' : 'action-items';
+    const response = await fetch(
+      `/api/${endpoint}/${currentRelationshipItem.id}/relationships`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          targetId: parseInt(targetId),
+          targetType: targetType,
+          relationshipType: relationshipType
+        })
+      }
+    );
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create relationship');
+    }
+    
+    showSuccessMessage('Relationship added');
+    
+    // Reset form
+    document.getElementById('relationship-type').value = '';
+    document.getElementById('relationship-target-id').value = '';
+    
+    // Reload relationships
+    await loadRelationships();
+    
+    // Reload Kanban board to show updated indicators
+    await loadProjectData(currentProject.id);
+    
+  } catch (error) {
+    console.error('Error adding relationship:', error);
+    showErrorMessage(error.message);
+  }
+}
+
+// Delete relationship
+async function deleteRelationship(relationshipId) {
+  if (!confirm('Remove this relationship?')) return;
+  
+  try {
+    const endpoint = currentRelationshipItem.type === 'issue' ? 'issues' : 'action-items';
+    const response = await fetch(
+      `/api/${endpoint}/${currentRelationshipItem.id}/relationships/${relationshipId}`,
+      {
+        method: 'DELETE',
+        credentials: 'include'
+      }
+    );
+    
+    if (!response.ok) throw new Error('Failed to delete relationship');
+    
+    showSuccessMessage('Relationship removed');
+    await loadRelationships();
+    await loadProjectData(currentProject.id);
+    
+  } catch (error) {
+    console.error('Error deleting relationship:', error);
+    showErrorMessage('Failed to remove relationship');
+  }
+}
+
+// Update renderKanbanBoard to show relationship indicators
+// Add this inside the card HTML where you want the indicator:
+/*
+<div class="flex items-center space-x-1 text-xs text-gray-500 mt-2">
+  <button onclick="showRelationshipModal(${item.id}, '${item.type}', '${item.title}')" 
+          class="flex items-center hover:text-blue-600">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+    </svg>
+    <span class="ml-1" id="rel-count-${item.id}">0</span>
+  </button>
+</div>
+*/
+TESTING
+Test Scenarios:
+
+Create "blocks" relationship → verify reciprocal "blocked_by" created
+Create "parent_of" relationship → verify reciprocal "child_of" created
+Try to create relationship to self → should fail
+Delete relationship → verify reciprocal also deleted
+View relationship modal → shows outgoing and incoming relationships
+Relationship indicator on cards shows count
+
+ACCEPTANCE CRITERIA
+
+✅ Can create blocks/blocked_by relationships
+✅ Can create parent/child relationships
+✅ Can create related_to relationships
+✅ Reciprocal relationships auto-created
+✅ Visual indicators on Kanban cards
+✅ Relationship count displays
+✅ Can delete relationships
+✅ Cannot create self-relationships
+✅ Relationship modal shows all relationships

@@ -49,6 +49,13 @@ function setupEventListeners() {
     document.getElementById('create-issue-btn')?.addEventListener('click', showCreateIssue);
     document.getElementById('create-action-item-btn')?.addEventListener('click', showCreateActionItem);
     
+    // Relationship modal buttons
+    document.getElementById('close-relationship-modal-btn')?.addEventListener('click', closeRelationshipModal);
+    document.getElementById('add-relationship-btn')?.addEventListener('click', addRelationship);
+    
+    // Relationship target type change listener (bind once)
+    document.getElementById('relationship-target-type')?.addEventListener('change', populateTargetDropdown);
+    
     // Add event listeners after DOM is loaded
     document.addEventListener("click", function (e) {
         // Handle modal overlay clicks (to close modal)
@@ -173,7 +180,7 @@ async function loadProjectData(projectId) {
         issues = issuesResponse.data;
         actionItems = actionItemsResponse.data;
 
-        renderKanbanBoard();
+        await renderKanbanBoard();
         displayActiveFilters();
         displayResultsCount();
         populateAssigneeFilter();
@@ -183,7 +190,7 @@ async function loadProjectData(projectId) {
 }
 
 // Render Kanban board
-function renderKanbanBoard() {
+async function renderKanbanBoard() {
     // Filter by type if selected
     let itemsToDisplay = [];
     if (currentFilters.type === 'issue') {
@@ -195,6 +202,26 @@ function renderKanbanBoard() {
     }
     
     const allItems = itemsToDisplay;
+    
+    // Load relationship counts for ALL items first (BEFORE rendering)
+    const relationshipCounts = {};
+    await Promise.all(allItems.map(async (item) => {
+        try {
+            const endpoint = item.type === 'issue' ? 'issues' : 'action-items';
+            const response = await axios.get(
+                `/api/${endpoint}/${item.id}/relationships`,
+                { withCredentials: true }
+            );
+            
+            const { outgoing, incoming } = response.data;
+            const count = (outgoing?.length || 0) + (incoming?.length || 0);
+            relationshipCounts[`${item.type}-${item.id}`] = count;
+        } catch (error) {
+            console.error(`Error loading relationships for ${item.type} ${item.id}:`, error);
+            relationshipCounts[`${item.type}-${item.id}`] = 0;
+        }
+    }));
+    
     const columns = ["To Do", "In Progress", "Blocked", "Done"];
 
     columns.forEach((status) => {
@@ -209,9 +236,11 @@ function renderKanbanBoard() {
                 container.style.minHeight = '100px';
             } else {
                 container.innerHTML = columnItems
-                    .map(
-                        (item) => `
-                    <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move"
+                    .map((item) => {
+                        const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
+                        
+                        return `
+                    <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move hover:shadow-md transition-shadow"
                          draggable="true"
                          data-item-id="${item.id}"
                          data-item-type="${item.type || 'issue'}">
@@ -228,13 +257,25 @@ function renderKanbanBoard() {
                             </div>`
                                 : ""
                         }
-                        <div class="flex justify-between items-center text-xs text-gray-500">
+                        <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
                             <span>${item.assignee || "Unassigned"}</span>
                             <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
                         </div>
+                        <div class="mt-2 pt-2 border-t border-gray-100">
+                            <button class="manage-relationships-btn flex items-center text-xs ${relCount > 0 ? 'text-blue-600 font-medium' : 'text-gray-600'} hover:text-blue-700 transition-colors w-full" 
+                                    data-item-id="${item.id}" 
+                                    data-item-type="${item.type || 'issue'}" 
+                                    data-item-title="${item.title.replace(/"/g, '&quot;')}">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                </svg>
+                                <span>Relationships</span>
+                                ${relCount > 0 ? `<span class="ml-auto px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">${relCount}</span>` : ''}
+                            </button>
+                        </div>
                     </div>
-                `,
-                    )
+                `;
+                    })
                     .join("");
                 container.style.minHeight = 'auto';
             }
@@ -242,6 +283,17 @@ function renderKanbanBoard() {
             // Add drag and drop event listeners to cards
             container.querySelectorAll('.kanban-card').forEach(card => {
                 card.addEventListener('dragstart', handleDragStart);
+            });
+            
+            // Add relationship button listeners
+            container.querySelectorAll('.manage-relationships-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent drag start
+                    const itemId = parseInt(this.getAttribute('data-item-id'));
+                    const itemType = this.getAttribute('data-item-type');
+                    const itemTitle = this.getAttribute('data-item-title');
+                    showRelationshipModal(itemId, itemType, itemTitle);
+                });
             });
             
             // Add drop zone listeners to column (always, even if empty)
@@ -1226,5 +1278,196 @@ function loadFiltersFromURL() {
   if (statusFilter && currentFilters.status) statusFilter.value = currentFilters.status;
   if (priorityFilter && currentFilters.priority) priorityFilter.value = currentFilters.priority;
   if (assigneeFilter && currentFilters.assignee) assigneeFilter.value = currentFilters.assignee;
+}
+
+// ============= RELATIONSHIP MANAGEMENT =============
+
+// Global state for relationships
+let currentRelationshipItem = null;
+
+// Show relationship modal
+async function showRelationshipModal(itemId, itemType, itemTitle) {
+  currentRelationshipItem = { id: itemId, type: itemType, title: itemTitle };
+  
+  // Show modal
+  document.getElementById('relationship-modal').classList.remove('hidden');
+  
+  // Display item info
+  document.getElementById('relationship-item-info').innerHTML = `
+    <p class="font-medium">${itemTitle}</p>
+    <p class="text-sm text-gray-600">${itemType === 'issue' ? 'Issue' : 'Action Item'} #${itemId}</p>
+  `;
+  
+  // Load relationships
+  await loadRelationships();
+  
+  // Populate target dropdown
+  await populateTargetDropdown();
+}
+
+// Close relationship modal
+function closeRelationshipModal() {
+  document.getElementById('relationship-modal').classList.add('hidden');
+  currentRelationshipItem = null;
+}
+
+// Load relationships for current item
+async function loadRelationships() {
+  if (!currentRelationshipItem) return;
+  
+  try {
+    const endpoint = currentRelationshipItem.type === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(
+      `/api/${endpoint}/${currentRelationshipItem.id}/relationships`,
+      { withCredentials: true }
+    );
+    
+    const { outgoing, incoming } = response.data;
+    
+    const listContainer = document.getElementById('relationships-list');
+    
+    if (outgoing.length === 0 && incoming.length === 0) {
+      listContainer.innerHTML = '<p class="text-gray-500 text-sm">No relationships yet</p>';
+      return;
+    }
+    
+    listContainer.innerHTML = [
+      ...outgoing.map(r => `
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded">
+          <div class="flex-1">
+            <span class="text-xs font-semibold text-blue-600 uppercase">${r.relationship_type.replace(/_/g, ' ')}</span>
+            <p class="text-sm">${r.target_title}</p>
+            <span class="text-xs text-gray-500">${r.target_type} - ${r.target_status}</span>
+          </div>
+          <button class="delete-relationship-btn text-red-600 hover:text-red-700" data-relationship-id="${r.id}">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+          </button>
+        </div>
+      `),
+      ...incoming.map(r => `
+        <div class="flex items-center justify-between p-3 bg-yellow-50 rounded">
+          <div class="flex-1">
+            <span class="text-xs font-semibold text-yellow-600 uppercase">${r.relationship_type.replace(/_/g, ' ')} (incoming)</span>
+            <p class="text-sm">${r.source_title}</p>
+            <span class="text-xs text-gray-500">${r.source_type} - ${r.source_status}</span>
+          </div>
+          <span class="text-xs text-gray-400">Auto-managed</span>
+        </div>
+      `)
+    ].join('');
+    
+    // Add delete button listeners
+    document.querySelectorAll('.delete-relationship-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const relationshipId = this.getAttribute('data-relationship-id');
+        deleteRelationship(relationshipId);
+      });
+    });
+  } catch (error) {
+    console.error('Error loading relationships:', error);
+    document.getElementById('relationships-list').innerHTML = 
+      '<p class="text-red-500 text-sm">Error loading relationships</p>';
+  }
+}
+
+// Populate target dropdown based on selected type
+async function populateTargetDropdown() {
+  if (!currentRelationshipItem || !currentProject) return;
+  
+  const targetType = document.getElementById('relationship-target-type').value;
+  const targetSelect = document.getElementById('relationship-target-id');
+  
+  try {
+    // Get all items of the target type from current project
+    const items = targetType === 'issue' ? issues : actionItems;
+    
+    // Filter out the current item
+    const availableItems = items.filter(item => 
+      !(item.id === currentRelationshipItem.id && 
+        targetType === (currentRelationshipItem.type === 'issue' ? 'issue' : 'action-item'))
+    );
+    
+    if (availableItems.length === 0) {
+      targetSelect.innerHTML = '<option value="">No items available</option>';
+      return;
+    }
+    
+    targetSelect.innerHTML = 
+      '<option value="">Select item...</option>' +
+      availableItems.map(item => 
+        `<option value="${item.id}">${item.title} (${item.status})</option>`
+      ).join('');
+  } catch (error) {
+    console.error('Error populating target dropdown:', error);
+    targetSelect.innerHTML = '<option value="">Error loading items</option>';
+  }
+}
+
+// Add a new relationship
+async function addRelationship() {
+  if (!currentRelationshipItem) return;
+  
+  const relationshipType = document.getElementById('relationship-type').value;
+  const targetType = document.getElementById('relationship-target-type').value;
+  const targetId = document.getElementById('relationship-target-id').value;
+  
+  if (!relationshipType || !targetId) {
+    alert('Please select both relationship type and target item');
+    return;
+  }
+  
+  try {
+    const endpoint = currentRelationshipItem.type === 'issue' ? 'issues' : 'action-items';
+    await axios.post(
+      `/api/${endpoint}/${currentRelationshipItem.id}/relationships`,
+      {
+        targetId: parseInt(targetId),
+        targetType,
+        relationshipType
+      },
+      { withCredentials: true }
+    );
+    
+    // Reload relationships
+    await loadRelationships();
+    
+    // Reload the board to update count badges
+    await renderKanbanBoard();
+    
+    // Reset form
+    document.getElementById('relationship-type').value = '';
+    document.getElementById('relationship-target-id').value = '';
+  } catch (error) {
+    console.error('Error adding relationship:', error);
+    alert(error.response?.data?.error || 'Failed to add relationship');
+  }
+}
+
+// Delete a relationship
+async function deleteRelationship(relationshipId) {
+  if (!currentRelationshipItem) return;
+  
+  if (!confirm('Are you sure you want to delete this relationship?')) {
+    return;
+  }
+  
+  try {
+    const endpoint = currentRelationshipItem.type === 'issue' ? 'issues' : 'action-items';
+    await axios.delete(
+      `/api/${endpoint}/${currentRelationshipItem.id}/relationships/${relationshipId}`,
+      { withCredentials: true }
+    );
+    
+    // Reload relationships
+    await loadRelationships();
+    
+    // Reload the board to update count badges
+    await renderKanbanBoard();
+  } catch (error) {
+    console.error('Error deleting relationship:', error);
+    alert('Failed to delete relationship');
+  }
 }
 
