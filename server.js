@@ -5,7 +5,11 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { neon } = require("@neondatabase/serverless");
+const { neon, Pool, neonConfig } = require("@neondatabase/serverless");
+const ws = require("ws");
+
+// Configure WebSocket for Node.js < v22
+neonConfig.webSocketConstructor = ws;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,6 +18,7 @@ const JWT_EXPIRY = "7d";
 
 // Database connection
 const sql = neon(process.env.DATABASE_URL);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Security middleware
 app.use(
@@ -324,13 +329,12 @@ app.post("/api/projects", authenticateToken, requireRole('Project Manager'), asy
     }
 
     const [newProject] = await sql`
-      INSERT INTO projects (name, description, template, created_by, status)
+      INSERT INTO projects (name, description, template, created_by)
       VALUES (
         ${name}, 
         ${description || ''}, 
         ${template || 'generic'},
-        ${req.user.id.toString()},
-        'active'
+        ${req.user.id.toString()}
       )
       RETURNING *
     `;
@@ -366,31 +370,57 @@ app.delete("/api/projects/:id", authenticateToken, requireRole('System Administr
 
 // ============= ISSUES ROUTES =============
 
-// Get issues
+// Get issues with filtering and search
 app.get('/api/issues', authenticateToken, async (req, res) => {
   try {
-    const { projectId, status, priority, assignee, category } = req.query;
+    const { projectId, status, priority, assignee, category, search } = req.query;
     
-    let issues;
+    // Build dynamic WHERE conditions
+    let conditions = [];
+    let params = [];
     
     if (projectId) {
-      const pid = parseInt(projectId);
-      if (status) {
-        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} AND status = ${status} ORDER BY created_at DESC`;
-      } else if (priority) {
-        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} AND priority = ${priority} ORDER BY created_at DESC`;
-      } else if (assignee) {
-        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} AND assignee = ${assignee} ORDER BY created_at DESC`;
-      } else if (category) {
-        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} AND category = ${category} ORDER BY created_at DESC`;
-      } else {
-        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} ORDER BY created_at DESC`;
-      }
-    } else {
-      issues = await sql`SELECT * FROM issues ORDER BY created_at DESC`;
+      conditions.push(`project_id = $${params.length + 1}`);
+      params.push(parseInt(projectId));
     }
     
-    res.json(issues);
+    if (status) {
+      conditions.push(`status = $${params.length + 1}`);
+      params.push(status);
+    }
+    
+    if (priority) {
+      conditions.push(`priority = $${params.length + 1}`);
+      params.push(priority);
+    }
+    
+    if (assignee) {
+      conditions.push(`assignee = $${params.length + 1}`);
+      params.push(assignee);
+    }
+    
+    if (category) {
+      conditions.push(`category = $${params.length + 1}`);
+      params.push(category);
+    }
+    
+    if (search) {
+      conditions.push(`(title ILIKE $${params.length + 1} OR description ILIKE $${params.length + 2})`);
+      params.push(`%${search}%`);
+      params.push(`%${search}%`);
+    }
+    
+    // Build final query
+    const whereClause = conditions.length > 0 
+      ? 'WHERE ' + conditions.join(' AND ')
+      : '';
+    
+    const query = `SELECT * FROM issues ${whereClause} ORDER BY created_at DESC`;
+    
+    // Execute using pool.query() for dynamic SQL
+    const result = await pool.query(query, params);
+    
+    res.json(result.rows);
   } catch (error) {
     console.error('Error fetching issues:', error);
     res.status(500).json({ error: 'Failed to fetch issues' });
@@ -504,21 +534,52 @@ app.delete('/api/issues/:id', authenticateToken, requireRole('Team Lead'), async
 
 // ============= ACTION ITEMS ROUTES =============
 
-// Get action items
+// Get action items with filtering and search
 app.get("/api/action-items", authenticateToken, async (req, res) => {
   try {
-    const { projectId } = req.query;
+    const { projectId, status, priority, assignee, search } = req.query;
     
-    let items;
+    // Build dynamic WHERE conditions
+    let conditions = [];
+    let params = [];
     
     if (projectId) {
-      const pid = parseInt(projectId);
-      items = await sql`SELECT * FROM action_items WHERE project_id = ${pid} ORDER BY created_at DESC`;
-    } else {
-      items = await sql`SELECT * FROM action_items ORDER BY created_at DESC`;
+      conditions.push(`project_id = $${params.length + 1}`);
+      params.push(parseInt(projectId));
     }
     
-    res.json(items);
+    if (status) {
+      conditions.push(`status = $${params.length + 1}`);
+      params.push(status);
+    }
+    
+    if (priority) {
+      conditions.push(`priority = $${params.length + 1}`);
+      params.push(priority);
+    }
+    
+    if (assignee) {
+      conditions.push(`assignee = $${params.length + 1}`);
+      params.push(assignee);
+    }
+    
+    if (search) {
+      conditions.push(`(title ILIKE $${params.length + 1} OR description ILIKE $${params.length + 2})`);
+      params.push(`%${search}%`);
+      params.push(`%${search}%`);
+    }
+    
+    // Build final query
+    const whereClause = conditions.length > 0 
+      ? 'WHERE ' + conditions.join(' AND ')
+      : '';
+    
+    const query = `SELECT * FROM action_items ${whereClause} ORDER BY created_at DESC`;
+    
+    // Execute using pool.query() for dynamic SQL
+    const result = await pool.query(query, params);
+    
+    res.json(result.rows);
   } catch (error) {
     console.error('Error fetching action items:', error);
     res.status(500).json({ error: 'Failed to fetch action items' });

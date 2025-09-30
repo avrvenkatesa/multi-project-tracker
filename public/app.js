@@ -4,12 +4,36 @@ let projects = [];
 let issues = [];
 let actionItems = [];
 
+// Filter state
+let currentFilters = {
+  search: '',
+  type: '',
+  status: '',
+  priority: '',
+  assignee: '',
+  category: ''
+};
+
+// Debounce function for search
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
 // Initialize app
 document.addEventListener("DOMContentLoaded", async function () {
     console.log("Multi-Project Tracker initialized");
     await AuthManager.init();
     loadProjects();
     setupEventListeners();
+    initializeFilters();
 });
 
 // Setup event listeners (replaces inline onclick handlers)
@@ -129,18 +153,30 @@ async function selectProject(projectId) {
     await loadProjectData(projectId);
 }
 
-// Load project data
+// Load project data with filters
 async function loadProjectData(projectId) {
     try {
+        // Build query params with filters
+        const params = new URLSearchParams({ projectId: projectId.toString() });
+        
+        if (currentFilters.status) params.append('status', currentFilters.status);
+        if (currentFilters.priority) params.append('priority', currentFilters.priority);
+        if (currentFilters.assignee) params.append('assignee', currentFilters.assignee);
+        if (currentFilters.category) params.append('category', currentFilters.category);
+        if (currentFilters.search) params.append('search', currentFilters.search);
+        
         const [issuesResponse, actionItemsResponse] = await Promise.all([
-            axios.get(`/api/issues?projectId=${projectId}`),
-            axios.get(`/api/action-items?projectId=${projectId}`),
+            axios.get(`/api/issues?${params.toString()}`),
+            axios.get(`/api/action-items?${params.toString()}`),
         ]);
 
         issues = issuesResponse.data;
         actionItems = actionItemsResponse.data;
 
         renderKanbanBoard();
+        displayActiveFilters();
+        displayResultsCount();
+        populateAssigneeFilter();
     } catch (error) {
         console.error("Error loading project data:", error);
     }
@@ -148,7 +184,17 @@ async function loadProjectData(projectId) {
 
 // Render Kanban board
 function renderKanbanBoard() {
-    const allItems = [...issues, ...actionItems];
+    // Filter by type if selected
+    let itemsToDisplay = [];
+    if (currentFilters.type === 'issue') {
+        itemsToDisplay = [...issues];
+    } else if (currentFilters.type === 'action') {
+        itemsToDisplay = [...actionItems];
+    } else {
+        itemsToDisplay = [...issues, ...actionItems];
+    }
+    
+    const allItems = itemsToDisplay;
     const columns = ["To Do", "In Progress", "Blocked", "Done"];
 
     columns.forEach((status) => {
@@ -913,5 +959,272 @@ async function updateUserRole(userId) {
         console.error('Error updating role:', error);
         AuthManager.showNotification(error.message, 'error');
     }
+}
+
+// ============= FILTER FUNCTIONS =============
+
+// Initialize filter listeners
+function initializeFilters() {
+  // Search input with debouncing
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce((e) => {
+      currentFilters.search = e.target.value;
+      applyFilters();
+      updateURL();
+    }, 300));
+  }
+  
+  // Type filter
+  const typeFilter = document.getElementById('type-filter');
+  if (typeFilter) {
+    typeFilter.addEventListener('change', (e) => {
+      currentFilters.type = e.target.value;
+      applyFilters();
+      updateURL();
+    });
+  }
+  
+  // Status filter
+  const statusFilter = document.getElementById('status-filter');
+  if (statusFilter) {
+    statusFilter.addEventListener('change', (e) => {
+      currentFilters.status = e.target.value;
+      applyFilters();
+      updateURL();
+    });
+  }
+  
+  // Priority filter
+  const priorityFilter = document.getElementById('priority-filter');
+  if (priorityFilter) {
+    priorityFilter.addEventListener('change', (e) => {
+      currentFilters.priority = e.target.value;
+      applyFilters();
+      updateURL();
+    });
+  }
+  
+  // Assignee filter
+  const assigneeFilter = document.getElementById('assignee-filter');
+  if (assigneeFilter) {
+    assigneeFilter.addEventListener('change', (e) => {
+      currentFilters.assignee = e.target.value;
+      applyFilters();
+      updateURL();
+    });
+  }
+  
+  // Clear filters button
+  const clearBtn = document.getElementById('clear-filters-btn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearAllFilters);
+  }
+  
+  // Load filters from URL on page load
+  loadFiltersFromURL();
+  
+  // Populate assignee dropdown
+  populateAssigneeFilter();
+}
+
+// Apply filters - reload data with filter params
+async function applyFilters() {
+  if (!currentProject) return;
+  
+  await loadProjectData(currentProject.id);
+}
+
+// Clear all filters
+function clearAllFilters() {
+  currentFilters = {
+    search: '',
+    type: '',
+    status: '',
+    priority: '',
+    assignee: '',
+    category: ''
+  };
+  
+  // Reset form inputs
+  const searchInput = document.getElementById('search-input');
+  const typeFilter = document.getElementById('type-filter');
+  const statusFilter = document.getElementById('status-filter');
+  const priorityFilter = document.getElementById('priority-filter');
+  const assigneeFilter = document.getElementById('assignee-filter');
+  
+  if (searchInput) searchInput.value = '';
+  if (typeFilter) typeFilter.value = '';
+  if (statusFilter) statusFilter.value = '';
+  if (priorityFilter) priorityFilter.value = '';
+  if (assigneeFilter) assigneeFilter.value = '';
+  
+  // Reload data
+  applyFilters();
+  updateURL();
+  
+  // Hide active filters display
+  const activeFiltersDiv = document.getElementById('active-filters');
+  const resultsCountDiv = document.getElementById('results-count');
+  
+  if (activeFiltersDiv) activeFiltersDiv.classList.add('hidden');
+  if (resultsCountDiv) resultsCountDiv.classList.add('hidden');
+}
+
+// Display active filters as badges
+function displayActiveFilters() {
+  const container = document.getElementById('active-filters');
+  if (!container) return;
+  
+  const activeFilters = [];
+  
+  if (currentFilters.search) {
+    activeFilters.push({ key: 'search', label: `Search: "${currentFilters.search}"` });
+  }
+  if (currentFilters.type) {
+    const typeLabel = currentFilters.type === 'issue' ? 'Issues Only' : 'Action Items Only';
+    activeFilters.push({ key: 'type', label: `Type: ${typeLabel}` });
+  }
+  if (currentFilters.status) {
+    activeFilters.push({ key: 'status', label: `Status: ${currentFilters.status}` });
+  }
+  if (currentFilters.priority) {
+    activeFilters.push({ key: 'priority', label: `Priority: ${currentFilters.priority}` });
+  }
+  if (currentFilters.assignee) {
+    activeFilters.push({ key: 'assignee', label: `Assignee: ${currentFilters.assignee}` });
+  }
+  if (currentFilters.category) {
+    activeFilters.push({ key: 'category', label: `Category: ${currentFilters.category}` });
+  }
+  
+  if (activeFilters.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+  
+  container.classList.remove('hidden');
+  container.innerHTML = activeFilters.map(filter => `
+    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+      ${filter.label}
+      <button 
+        data-remove-filter="${filter.key}"
+        class="ml-2 text-blue-600 hover:text-blue-800"
+      >
+        ×
+      </button>
+    </span>
+  `).join('');
+  
+  // Add event listeners for remove buttons
+  container.querySelectorAll('[data-remove-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      removeFilter(btn.getAttribute('data-remove-filter'));
+    });
+  });
+}
+
+// Remove a single filter
+function removeFilter(filterKey) {
+  currentFilters[filterKey] = '';
+  
+  // Update UI
+  if (filterKey === 'search') {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+  } else {
+    const filterElement = document.getElementById(`${filterKey}-filter`);
+    if (filterElement) filterElement.value = '';
+  }
+  
+  applyFilters();
+  updateURL();
+}
+
+// Display results count
+function displayResultsCount() {
+  const container = document.getElementById('results-count');
+  if (!container) return;
+  
+  const totalItems = issues.length + actionItems.length;
+  
+  if (totalItems === 0 || Object.values(currentFilters).every(v => !v)) {
+    container.classList.add('hidden');
+    return;
+  }
+  
+  container.classList.remove('hidden');
+  container.textContent = `Found ${totalItems} item${totalItems !== 1 ? 's' : ''}`;
+}
+
+// Populate assignee filter with unique assignees
+function populateAssigneeFilter() {
+  const select = document.getElementById('assignee-filter');
+  if (!select) return;
+  
+  // Get unique assignees from issues and action items
+  const assignees = new Set();
+  [...issues, ...actionItems].forEach(item => {
+    if (item.assignee && item.assignee.trim()) {
+      assignees.add(item.assignee);
+    }
+  });
+  
+  // Add assignee options (keep existing options)
+  const existingOptions = select.innerHTML;
+  const assigneeOptions = Array.from(assignees)
+    .sort()
+    .map(assignee => `<option value="${assignee}">${assignee}</option>`)
+    .join('');
+  
+  // Keep "All Assignees" and "Unassigned" options at the top
+  select.innerHTML = `
+    <option value="">All Assignees</option>
+    <option value="Unassigned">Unassigned</option>
+    ${assigneeOptions}
+  `;
+}
+
+// Update URL with current filters (for shareable links)
+function updateURL() {
+  if (!currentProject) return;
+  
+  const params = new URLSearchParams();
+  params.set('project', currentProject.id);
+  
+  if (currentFilters.search) params.set('search', currentFilters.search);
+  if (currentFilters.type) params.set('type', currentFilters.type);
+  if (currentFilters.status) params.set('status', currentFilters.status);
+  if (currentFilters.priority) params.set('priority', currentFilters.priority);
+  if (currentFilters.assignee) params.set('assignee', currentFilters.assignee);
+  if (currentFilters.category) params.set('category', currentFilters.category);
+  
+  const newURL = `${window.location.pathname}?${params.toString()}`;
+  window.history.replaceState({}, '', newURL);
+}
+
+// Load filters from URL on page load
+function loadFiltersFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  
+  currentFilters.search = params.get('search') || '';
+  currentFilters.type = params.get('type') || '';
+  currentFilters.status = params.get('status') || '';
+  currentFilters.priority = params.get('priority') || '';
+  currentFilters.assignee = params.get('assignee') || '';
+  currentFilters.category = params.get('category') || '';
+  
+  // Update form inputs
+  const searchInput = document.getElementById('search-input');
+  const typeFilter = document.getElementById('type-filter');
+  const statusFilter = document.getElementById('status-filter');
+  const priorityFilter = document.getElementById('priority-filter');
+  const assigneeFilter = document.getElementById('assignee-filter');
+  
+  if (searchInput && currentFilters.search) searchInput.value = currentFilters.search;
+  if (typeFilter && currentFilters.type) typeFilter.value = currentFilters.type;
+  if (statusFilter && currentFilters.status) statusFilter.value = currentFilters.status;
+  if (priorityFilter && currentFilters.priority) priorityFilter.value = currentFilters.priority;
+  if (assigneeFilter && currentFilters.assignee) assigneeFilter.value = currentFilters.assignee;
 }
 

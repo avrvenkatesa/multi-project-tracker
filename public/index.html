@@ -103,6 +103,98 @@
                             </div>
                         </div>
 
+                        <!-- Filters & Search -->
+                        <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-semibold text-gray-700">Filters & Search</h4>
+                                <button 
+                                    id="clear-filters-btn"
+                                    class="text-sm text-blue-600 hover:text-blue-700 underline">
+                                    Clear All
+                                </button>
+                            </div>
+                            
+                            <!-- Filter Form -->
+                            <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
+                                <!-- Search -->
+                                <div class="md:col-span-2">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Search</label>
+                                    <input 
+                                        type="text" 
+                                        id="search-input"
+                                        placeholder="Search titles and descriptions..."
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                                
+                                <!-- Type Filter -->
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Type</label>
+                                    <select 
+                                        id="type-filter"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                        <option value="">All Types</option>
+                                        <option value="issue">Issues Only</option>
+                                        <option value="action">Action Items Only</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Status Filter -->
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                                    <select 
+                                        id="status-filter"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                        <option value="">All Statuses</option>
+                                        <option value="To Do">To Do</option>
+                                        <option value="In Progress">In Progress</option>
+                                        <option value="Blocked">Blocked</option>
+                                        <option value="Done">Done</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Priority Filter -->
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+                                    <select 
+                                        id="priority-filter"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                        <option value="">All Priorities</option>
+                                        <option value="critical">Critical</option>
+                                        <option value="high">High</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="low">Low</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Assignee Filter -->
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Assignee</label>
+                                    <select 
+                                        id="assignee-filter"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                        <option value="">All Assignees</option>
+                                        <option value="Unassigned">Unassigned</option>
+                                        <!-- Dynamic options will be added by JavaScript -->
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Active Filters Display -->
+                            <div id="active-filters" class="mt-3 flex flex-wrap gap-2 hidden">
+                                <!-- Filter badges will be added here dynamically -->
+                            </div>
+                            
+                            <!-- Results Count -->
+                            <div id="results-count" class="mt-2 text-sm text-gray-600 hidden">
+                                <!-- Count will be displayed here -->
+                            </div>
+                        </div>
+
                         <!-- Kanban Board -->
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div class="bg-gray-100 rounded-lg p-4">
