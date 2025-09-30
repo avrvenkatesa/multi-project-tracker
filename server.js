@@ -371,33 +371,25 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
   try {
     const { projectId, status, priority, assignee, category } = req.query;
     
-    let query = 'SELECT * FROM issues WHERE 1=1';
-    const params = [];
+    let issues;
     
     if (projectId) {
-      params.push(parseInt(projectId));
-      query += ` AND project_id = $${params.length}`;
-    }
-    if (status) {
-      params.push(status);
-      query += ` AND status = $${params.length}`;
-    }
-    if (priority) {
-      params.push(priority);
-      query += ` AND priority = $${params.length}`;
-    }
-    if (assignee) {
-      params.push(assignee);
-      query += ` AND assignee = $${params.length}`;
-    }
-    if (category) {
-      params.push(category);
-      query += ` AND category = $${params.length}`;
+      const pid = parseInt(projectId);
+      if (status) {
+        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} AND status = ${status} ORDER BY created_at DESC`;
+      } else if (priority) {
+        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} AND priority = ${priority} ORDER BY created_at DESC`;
+      } else if (assignee) {
+        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} AND assignee = ${assignee} ORDER BY created_at DESC`;
+      } else if (category) {
+        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} AND category = ${category} ORDER BY created_at DESC`;
+      } else {
+        issues = await sql`SELECT * FROM issues WHERE project_id = ${pid} ORDER BY created_at DESC`;
+      }
+    } else {
+      issues = await sql`SELECT * FROM issues ORDER BY created_at DESC`;
     }
     
-    query += ' ORDER BY created_at DESC';
-    
-    const issues = await sql(query, params);
     res.json(issues);
   } catch (error) {
     console.error('Error fetching issues:', error);
@@ -517,17 +509,15 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
   try {
     const { projectId } = req.query;
     
-    let query = 'SELECT * FROM action_items';
-    const params = [];
+    let items;
     
     if (projectId) {
-      params.push(parseInt(projectId));
-      query += ` WHERE project_id = $${params.length}`;
+      const pid = parseInt(projectId);
+      items = await sql`SELECT * FROM action_items WHERE project_id = ${pid} ORDER BY created_at DESC`;
+    } else {
+      items = await sql`SELECT * FROM action_items ORDER BY created_at DESC`;
     }
     
-    query += ' ORDER BY created_at DESC';
-    
-    const items = await sql(query, params);
     res.json(items);
   } catch (error) {
     console.error('Error fetching action items:', error);

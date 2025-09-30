@@ -101,6 +101,13 @@ The application uses express-rate-limit for API protection and implements proper
 - Added permission-based UI visibility (buttons, modals, features)
 - Deployed comprehensive security measures across the entire stack
 
+### Latest Updates (September 30, 2025)
+- Fixed Content Security Policy to allow unpkg.com connections for axios source maps
+- Removed all inline event handlers, replaced with proper event listeners for CSP compliance
+- Implemented full Action Item creation modal with title, description, priority, status, assignee, and due date
+- Fixed issue creation form to handle missing project properties with default fallback options
+- Added robust error handling for dynamic dropdown generation in issue/action item forms
+
 ### Demo Credentials
 - Email: demo@multiproject.com
 - Password: demo123
