@@ -5,7 +5,11 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { neon, Pool } = require("@neondatabase/serverless");
+const { neon, Pool, neonConfig } = require("@neondatabase/serverless");
+const ws = require("ws");
+
+// Configure WebSocket for Node.js < v22
+neonConfig.webSocketConstructor = ws;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -325,13 +329,12 @@ app.post("/api/projects", authenticateToken, requireRole('Project Manager'), asy
     }
 
     const [newProject] = await sql`
-      INSERT INTO projects (name, description, template, created_by, status)
+      INSERT INTO projects (name, description, template, created_by)
       VALUES (
         ${name}, 
         ${description || ''}, 
         ${template || 'generic'},
-        ${req.user.id.toString()},
-        'active'
+        ${req.user.id.toString()}
       )
       RETURNING *
     `;
