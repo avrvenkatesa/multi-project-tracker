@@ -5,7 +5,7 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { neon } = require("@neondatabase/serverless");
+const { neon, Pool } = require("@neondatabase/serverless");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,6 +14,7 @@ const JWT_EXPIRY = "7d";
 
 // Database connection
 const sql = neon(process.env.DATABASE_URL);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Security middleware
 app.use(
@@ -413,10 +414,10 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
     
     const query = `SELECT * FROM issues ${whereClause} ORDER BY created_at DESC`;
     
-    // Execute using sql.query() for dynamic SQL
-    const result = await sql.query(query, params);
+    // Execute using pool.query() for dynamic SQL
+    const result = await pool.query(query, params);
     
-    res.json(result.rows || result);
+    res.json(result.rows);
   } catch (error) {
     console.error('Error fetching issues:', error);
     res.status(500).json({ error: 'Failed to fetch issues' });
@@ -572,10 +573,10 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
     
     const query = `SELECT * FROM action_items ${whereClause} ORDER BY created_at DESC`;
     
-    // Execute using sql.query() for dynamic SQL
-    const result = await sql.query(query, params);
+    // Execute using pool.query() for dynamic SQL
+    const result = await pool.query(query, params);
     
-    res.json(result.rows || result);
+    res.json(result.rows);
   } catch (error) {
     console.error('Error fetching action items:', error);
     res.status(500).json({ error: 'Failed to fetch action items' });

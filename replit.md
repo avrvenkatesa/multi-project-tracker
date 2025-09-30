@@ -107,6 +107,13 @@ The application uses express-rate-limit for API protection and implements proper
 - Implemented full Action Item creation modal with title, description, priority, status, assignee, and due date
 - Fixed issue creation form to handle missing project properties with default fallback options
 - Added robust error handling for dynamic dropdown generation in issue/action item forms
+- **Board Filtering and Search (Story 1.4.2)**:
+  - Backend: Added comprehensive filtering to GET /api/issues and /api/action-items endpoints using Neon's sql.query() for dynamic parameterized queries
+  - Frontend: Implemented filter UI with search input, status/priority/assignee dropdowns above Kanban board
+  - Features: Real-time search with 300ms debounce, active filter badges with remove buttons, results count display
+  - State Management: Filter state persists in URL parameters for shareable filtered views
+  - Security: SQL injection protected via parameterized queries, CSP compliant (no inline handlers)
+  - Dynamic assignee dropdown populated from actual project data
 
 ### Demo Credentials
 - Email: demo@multiproject.com
