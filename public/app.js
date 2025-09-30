@@ -7,6 +7,7 @@ let actionItems = [];
 // Filter state
 let currentFilters = {
   search: '',
+  type: '',
   status: '',
   priority: '',
   assignee: '',
@@ -183,7 +184,17 @@ async function loadProjectData(projectId) {
 
 // Render Kanban board
 function renderKanbanBoard() {
-    const allItems = [...issues, ...actionItems];
+    // Filter by type if selected
+    let itemsToDisplay = [];
+    if (currentFilters.type === 'issue') {
+        itemsToDisplay = [...issues];
+    } else if (currentFilters.type === 'action') {
+        itemsToDisplay = [...actionItems];
+    } else {
+        itemsToDisplay = [...issues, ...actionItems];
+    }
+    
+    const allItems = itemsToDisplay;
     const columns = ["To Do", "In Progress", "Blocked", "Done"];
 
     columns.forEach((status) => {
@@ -964,6 +975,16 @@ function initializeFilters() {
     }, 300));
   }
   
+  // Type filter
+  const typeFilter = document.getElementById('type-filter');
+  if (typeFilter) {
+    typeFilter.addEventListener('change', (e) => {
+      currentFilters.type = e.target.value;
+      applyFilters();
+      updateURL();
+    });
+  }
+  
   // Status filter
   const statusFilter = document.getElementById('status-filter');
   if (statusFilter) {
@@ -1018,6 +1039,7 @@ async function applyFilters() {
 function clearAllFilters() {
   currentFilters = {
     search: '',
+    type: '',
     status: '',
     priority: '',
     assignee: '',
@@ -1026,11 +1048,13 @@ function clearAllFilters() {
   
   // Reset form inputs
   const searchInput = document.getElementById('search-input');
+  const typeFilter = document.getElementById('type-filter');
   const statusFilter = document.getElementById('status-filter');
   const priorityFilter = document.getElementById('priority-filter');
   const assigneeFilter = document.getElementById('assignee-filter');
   
   if (searchInput) searchInput.value = '';
+  if (typeFilter) typeFilter.value = '';
   if (statusFilter) statusFilter.value = '';
   if (priorityFilter) priorityFilter.value = '';
   if (assigneeFilter) assigneeFilter.value = '';
@@ -1056,6 +1080,10 @@ function displayActiveFilters() {
   
   if (currentFilters.search) {
     activeFilters.push({ key: 'search', label: `Search: "${currentFilters.search}"` });
+  }
+  if (currentFilters.type) {
+    const typeLabel = currentFilters.type === 'issue' ? 'Issues Only' : 'Action Items Only';
+    activeFilters.push({ key: 'type', label: `Type: ${typeLabel}` });
   }
   if (currentFilters.status) {
     activeFilters.push({ key: 'status', label: `Status: ${currentFilters.status}` });
@@ -1165,6 +1193,7 @@ function updateURL() {
   params.set('project', currentProject.id);
   
   if (currentFilters.search) params.set('search', currentFilters.search);
+  if (currentFilters.type) params.set('type', currentFilters.type);
   if (currentFilters.status) params.set('status', currentFilters.status);
   if (currentFilters.priority) params.set('priority', currentFilters.priority);
   if (currentFilters.assignee) params.set('assignee', currentFilters.assignee);
@@ -1179,6 +1208,7 @@ function loadFiltersFromURL() {
   const params = new URLSearchParams(window.location.search);
   
   currentFilters.search = params.get('search') || '';
+  currentFilters.type = params.get('type') || '';
   currentFilters.status = params.get('status') || '';
   currentFilters.priority = params.get('priority') || '';
   currentFilters.assignee = params.get('assignee') || '';
@@ -1186,11 +1216,13 @@ function loadFiltersFromURL() {
   
   // Update form inputs
   const searchInput = document.getElementById('search-input');
+  const typeFilter = document.getElementById('type-filter');
   const statusFilter = document.getElementById('status-filter');
   const priorityFilter = document.getElementById('priority-filter');
   const assigneeFilter = document.getElementById('assignee-filter');
   
   if (searchInput && currentFilters.search) searchInput.value = currentFilters.search;
+  if (typeFilter && currentFilters.type) typeFilter.value = currentFilters.type;
   if (statusFilter && currentFilters.status) statusFilter.value = currentFilters.status;
   if (priorityFilter && currentFilters.priority) priorityFilter.value = currentFilters.priority;
   if (assigneeFilter && currentFilters.assignee) assigneeFilter.value = currentFilters.assignee;
