@@ -153,45 +153,52 @@ function renderKanbanBoard() {
 
     columns.forEach((status) => {
         const columnItems = allItems.filter((item) => item.status === status);
-        const columnId = status.toLowerCase().replace(" ", "");
+        const columnId = status.toLowerCase().replace(/ /g, "");
         const container = document.getElementById(`${columnId}-column`);
 
         if (container) {
-            container.innerHTML = columnItems
-                .map(
-                    (item) => `
-                <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move"
-                     draggable="true"
-                     data-item-id="${item.id}"
-                     data-item-type="${item.type || 'issue'}">
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
-                        <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
+            // Set minimum height for empty columns
+            if (columnItems.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-sm text-center py-8">Drop items here</div>';
+                container.style.minHeight = '100px';
+            } else {
+                container.innerHTML = columnItems
+                    .map(
+                        (item) => `
+                    <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move"
+                         draggable="true"
+                         data-item-id="${item.id}"
+                         data-item-type="${item.type || 'issue'}">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
+                            <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
+                        </div>
+                        <h5 class="font-medium text-sm mb-1">${item.title}</h5>
+                        <p class="text-xs text-gray-600 mb-2">${(item.description || "").substring(0, 80)}...</p>
+                        ${
+                            item.progress !== undefined
+                                ? `<div class="w-full bg-gray-200 rounded-full h-1 mb-2">
+                                <div class="bg-blue-600 h-1 rounded-full" style="width: ${item.progress}%"></div>
+                            </div>`
+                                : ""
+                        }
+                        <div class="flex justify-between items-center text-xs text-gray-500">
+                            <span>${item.assignee || "Unassigned"}</span>
+                            <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
+                        </div>
                     </div>
-                    <h5 class="font-medium text-sm mb-1">${item.title}</h5>
-                    <p class="text-xs text-gray-600 mb-2">${(item.description || "").substring(0, 80)}...</p>
-                    ${
-                        item.progress !== undefined
-                            ? `<div class="w-full bg-gray-200 rounded-full h-1 mb-2">
-                            <div class="bg-blue-600 h-1 rounded-full" style="width: ${item.progress}%"></div>
-                        </div>`
-                            : ""
-                    }
-                    <div class="flex justify-between items-center text-xs text-gray-500">
-                        <span>${item.assignee || "Unassigned"}</span>
-                        <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
-                    </div>
-                </div>
-            `,
-                )
-                .join("");
+                `,
+                    )
+                    .join("");
+                container.style.minHeight = 'auto';
+            }
             
             // Add drag and drop event listeners to cards
             container.querySelectorAll('.kanban-card').forEach(card => {
                 card.addEventListener('dragstart', handleDragStart);
             });
             
-            // Add drop zone listeners to column
+            // Add drop zone listeners to column (always, even if empty)
             container.addEventListener('dragover', handleDragOver);
             container.addEventListener('drop', handleDrop);
         }
