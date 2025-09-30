@@ -1,0 +1,626 @@
+REPLIT PROMPT: Story 1.4.2 - Board Filtering and Search
+Project Context
+Project: Multi-Project Issue and Action Item Tracking System
+Current Tech Stack: Node.js + Express.js + Vanilla JavaScript + Tailwind CSS + Neon PostgreSQL
+Current State: Kanban board with drag-and-drop working, RBAC complete
+Story: [STORY 1.4.2] Board Filtering and Search
+GitHub Issue: TBD (create first)
+Branch: feature/10-board-filtering
+Dependencies:
+
+Story 1.4.1 (Drag-and-Drop Kanban) - COMPLETE ✅
+Story 1.2.1 (User Authentication) - COMPLETE ✅
+
+Problem Statement
+Currently, the Kanban board displays all issues and action items for a project. As projects grow, users need to:
+
+Find specific items quickly
+Filter by assignee, priority, category, or status
+Search by title or description text
+Combine multiple filters
+Share filtered views with team members
+
+Without filtering, users must manually scan through all cards to find what they need.
+Requirements
+ARCHITECTURE
+Files to Modify:
+server.js              (Backend - add filter query params)
+public/app.js          (Frontend - filter UI and logic)
+public/index.html      (Frontend - filter form HTML)
+No database changes needed - existing data structure supports filtering.
+BACKEND IMPLEMENTATION
+Update GET /api/issues Endpoint
+Current code in server.js:
+javascriptapp.get('/api/issues', optionalAuth, async (req, res) => {
+  try {
+    const { projectId, status, priority, assignee, category } = req.query;
+    
+    let query;
+    if (projectId) {
+      query = sql`SELECT * FROM issues WHERE project_id = ${projectId}`;
+    } else {
+      query = sql`SELECT * FROM issues`;
+    }
+    
+    const issues = await query;
+    res.json(issues);
+  } catch (error) {
+    console.error('Error getting issues:', error);
+    res.status(500).json({ error: 'Failed to get issues' });
+  }
+});
+Updated code with filtering:
+javascriptapp.get('/api/issues', optionalAuth, async (req, res) => {
+  try {
+    const { 
+      projectId, 
+      status, 
+      priority, 
+      assignee, 
+      category,
+      search 
+    } = req.query;
+    
+    // Build dynamic query
+    let conditions = [];
+    let params = [];
+    
+    if (projectId) {
+      conditions.push(`project_id = $${params.length + 1}`);
+      params.push(parseInt(projectId));
+    }
+    
+    if (status) {
+      conditions.push(`status = $${params.length + 1}`);
+      params.push(status);
+    }
+    
+    if (priority) {
+      conditions.push(`priority = $${params.length + 1}`);
+      params.push(priority);
+    }
+    
+    if (assignee) {
+      conditions.push(`assignee = $${params.length + 1}`);
+      params.push(assignee);
+    }
+    
+    if (category) {
+      conditions.push(`category = $${params.length + 1}`);
+      params.push(category);
+    }
+    
+    if (search) {
+      conditions.push(`(title ILIKE $${params.length + 1} OR description ILIKE $${params.length + 2})`);
+      params.push(`%${search}%`);
+      params.push(`%${search}%`);
+    }
+    
+    // Build WHERE clause
+    const whereClause = conditions.length > 0 
+      ? 'WHERE ' + conditions.join(' AND ')
+      : '';
+    
+    // Execute query
+    const query = `
+      SELECT * FROM issues 
+      ${whereClause}
+      ORDER BY created_at DESC
+    `;
+    
+    const issues = await sql.unsafe(query, params);
+    res.json(issues);
+    
+  } catch (error) {
+    console.error('Error getting issues:', error);
+    res.status(500).json({ error: 'Failed to get issues' });
+  }
+});
+Update GET /api/action-items Endpoint
+Apply same pattern to action items:
+javascriptapp.get("/api/action-items", optionalAuth, async (req, res) => {
+  try {
+    const { 
+      projectId,
+      status,
+      priority,
+      assignee,
+      search
+    } = req.query;
+    
+    let conditions = [];
+    let params = [];
+    
+    if (projectId) {
+      conditions.push(`project_id = $${params.length + 1}`);
+      params.push(parseInt(projectId));
+    }
+    
+    if (status) {
+      conditions.push(`status = $${params.length + 1}`);
+      params.push(status);
+    }
+    
+    if (priority) {
+      conditions.push(`priority = $${params.length + 1}`);
+      params.push(priority);
+    }
+    
+    if (assignee) {
+      conditions.push(`assignee = $${params.length + 1}`);
+      params.push(assignee);
+    }
+    
+    if (search) {
+      conditions.push(`(title ILIKE $${params.length + 1} OR description ILIKE $${params.length + 2})`);
+      params.push(`%${search}%`);
+      params.push(`%${search}%`);
+    }
+    
+    const whereClause = conditions.length > 0 
+      ? 'WHERE ' + conditions.join(' AND ')
+      : '';
+    
+    const query = `
+      SELECT * FROM action_items 
+      ${whereClause}
+      ORDER BY created_at DESC
+    `;
+    
+    const actionItems = await sql.unsafe(query, params);
+    res.json(actionItems);
+    
+  } catch (error) {
+    console.error('Error getting action items:', error);
+    res.status(500).json({ error: 'Failed to get action items' });
+  }
+});
+FRONTEND IMPLEMENTATION
+Add Filter Form to HTML
+In public/index.html, add filter form above Kanban board:
+html<!-- Add this BEFORE the Kanban Board grid -->
+<div class="bg-white rounded-lg shadow-md p-4 mb-4">
+    <div class="flex items-center justify-between mb-3">
+        <h4 class="font-semibold text-gray-700">Filters & Search</h4>
+        <button 
+            id="clear-filters-btn" 
+            onclick="clearAllFilters()"
+            class="text-sm text-blue-600 hover:text-blue-700 underline">
+            Clear All
+        </button>
+    </div>
+    
+    <!-- Filter Form -->
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <!-- Search -->
+        <div class="md:col-span-2">
+            <label class="block text-xs font-medium text-gray-600 mb-1">Search</label>
+            <input 
+                type="text" 
+                id="search-input"
+                placeholder="Search titles and descriptions..."
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+        </div>
+        
+        <!-- Status Filter -->
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Status</label>
+            <select 
+                id="status-filter"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+                <option value="">All Statuses</option>
+                <option value="To Do">To Do</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Blocked">Blocked</option>
+                <option value="Done">Done</option>
+            </select>
+        </div>
+        
+        <!-- Priority Filter -->
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+            <select 
+                id="priority-filter"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+                <option value="">All Priorities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+            </select>
+        </div>
+        
+        <!-- Assignee Filter -->
+        <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Assignee</label>
+            <select 
+                id="assignee-filter"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+                <option value="">All Assignees</option>
+                <option value="Unassigned">Unassigned</option>
+                <!-- Dynamic options will be added by JavaScript -->
+            </select>
+        </div>
+    </div>
+    
+    <!-- Active Filters Display -->
+    <div id="active-filters" class="mt-3 flex flex-wrap gap-2 hidden">
+        <!-- Filter badges will be added here dynamically -->
+    </div>
+    
+    <!-- Results Count -->
+    <div id="results-count" class="mt-2 text-sm text-gray-600 hidden">
+        <!-- Count will be displayed here -->
+    </div>
+</div>
+
+<!-- Kanban Board continues here -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- existing board code -->
+</div>
+Add Filter Logic to app.js
+Add these functions to public/app.js:
+javascript// Global filter state
+let currentFilters = {
+  search: '',
+  status: '',
+  priority: '',
+  assignee: '',
+  category: ''
+};
+
+// Debounce function for search
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Initialize filter listeners (call this in DOMContentLoaded)
+function initializeFilters() {
+  // Search input with debouncing
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce((e) => {
+      currentFilters.search = e.target.value;
+      applyFilters();
+      updateURL();
+    }, 300));
+  }
+  
+  // Status filter
+  const statusFilter = document.getElementById('status-filter');
+  if (statusFilter) {
+    statusFilter.addEventListener('change', (e) => {
+      currentFilters.status = e.target.value;
+      applyFilters();
+      updateURL();
+    });
+  }
+  
+  // Priority filter
+  const priorityFilter = document.getElementById('priority-filter');
+  if (priorityFilter) {
+    priorityFilter.addEventListener('change', (e) => {
+      currentFilters.priority = e.target.value;
+      applyFilters();
+      updateURL();
+    });
+  }
+  
+  // Assignee filter
+  const assigneeFilter = document.getElementById('assignee-filter');
+  if (assigneeFilter) {
+    assigneeFilter.addEventListener('change', (e) => {
+      currentFilters.assignee = e.target.value;
+      applyFilters();
+      updateURL();
+    });
+  }
+  
+  // Load filters from URL on page load
+  loadFiltersFromURL();
+  
+  // Populate assignee dropdown
+  populateAssigneeFilter();
+}
+
+// Apply filters - reload data with filter params
+async function applyFilters() {
+  if (!currentProject) return;
+  
+  await loadProjectData(currentProject.id);
+  displayActiveFilters();
+  displayResultsCount();
+}
+
+// Update loadProjectData to include filters
+async function loadProjectData(projectId) {
+  try {
+    // Build query params
+    const params = new URLSearchParams({ projectId });
+    
+    if (currentFilters.status) params.append('status', currentFilters.status);
+    if (currentFilters.priority) params.append('priority', currentFilters.priority);
+    if (currentFilters.assignee) params.append('assignee', currentFilters.assignee);
+    if (currentFilters.category) params.append('category', currentFilters.category);
+    if (currentFilters.search) params.append('search', currentFilters.search);
+    
+    const [issuesResponse, actionItemsResponse] = await Promise.all([
+      axios.get(`/api/issues?${params.toString()}`, { withCredentials: true }),
+      axios.get(`/api/action-items?${params.toString()}`, { withCredentials: true }),
+    ]);
+
+    issues = issuesResponse.data;
+    actionItems = actionItemsResponse.data;
+
+    renderKanbanBoard();
+  } catch (error) {
+    console.error("Error loading project data:", error);
+  }
+}
+
+// Clear all filters
+function clearAllFilters() {
+  currentFilters = {
+    search: '',
+    status: '',
+    priority: '',
+    assignee: '',
+    category: ''
+  };
+  
+  // Reset form inputs
+  document.getElementById('search-input').value = '';
+  document.getElementById('status-filter').value = '';
+  document.getElementById('priority-filter').value = '';
+  document.getElementById('assignee-filter').value = '';
+  
+  // Reload data
+  applyFilters();
+  updateURL();
+  
+  // Hide active filters display
+  document.getElementById('active-filters').classList.add('hidden');
+  document.getElementById('results-count').classList.add('hidden');
+}
+
+// Display active filters as badges
+function displayActiveFilters() {
+  const container = document.getElementById('active-filters');
+  if (!container) return;
+  
+  const activeFilters = [];
+  
+  if (currentFilters.search) {
+    activeFilters.push({ key: 'search', label: `Search: "${currentFilters.search}"` });
+  }
+  if (currentFilters.status) {
+    activeFilters.push({ key: 'status', label: `Status: ${currentFilters.status}` });
+  }
+  if (currentFilters.priority) {
+    activeFilters.push({ key: 'priority', label: `Priority: ${currentFilters.priority}` });
+  }
+  if (currentFilters.assignee) {
+    activeFilters.push({ key: 'assignee', label: `Assignee: ${currentFilters.assignee}` });
+  }
+  if (currentFilters.category) {
+    activeFilters.push({ key: 'category', label: `Category: ${currentFilters.category}` });
+  }
+  
+  if (activeFilters.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+  
+  container.classList.remove('hidden');
+  container.innerHTML = activeFilters.map(filter => `
+    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+      ${filter.label}
+      <button 
+        onclick="removeFilter('${filter.key}')" 
+        class="ml-2 hover:text-blue-900">
+        ×
+      </button>
+    </span>
+  `).join('');
+}
+
+// Remove individual filter
+function removeFilter(key) {
+  currentFilters[key] = '';
+  
+  // Reset corresponding input
+  if (key === 'search') {
+    document.getElementById('search-input').value = '';
+  } else {
+    document.getElementById(`${key}-filter`).value = '';
+  }
+  
+  applyFilters();
+  updateURL();
+}
+
+// Display results count
+function displayResultsCount() {
+  const container = document.getElementById('results-count');
+  if (!container) return;
+  
+  const totalItems = issues.length + actionItems.length;
+  
+  if (Object.values(currentFilters).some(v => v !== '')) {
+    container.classList.remove('hidden');
+    container.textContent = `Showing ${totalItems} item${totalItems !== 1 ? 's' : ''}`;
+  } else {
+    container.classList.add('hidden');
+  }
+}
+
+// Update URL with filter params (for sharing)
+function updateURL() {
+  const params = new URLSearchParams();
+  
+  if (currentProject) {
+    params.append('project', currentProject.id);
+  }
+  
+  Object.entries(currentFilters).forEach(([key, value]) => {
+    if (value) {
+      params.append(key, value);
+    }
+  });
+  
+  const newURL = `${window.location.pathname}?${params.toString()}`;
+  window.history.replaceState({}, '', newURL);
+}
+
+// Load filters from URL on page load
+function loadFiltersFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  
+  currentFilters.search = params.get('search') || '';
+  currentFilters.status = params.get('status') || '';
+  currentFilters.priority = params.get('priority') || '';
+  currentFilters.assignee = params.get('assignee') || '';
+  currentFilters.category = params.get('category') || '';
+  
+  // Set form values
+  if (currentFilters.search) {
+    document.getElementById('search-input').value = currentFilters.search;
+  }
+  if (currentFilters.status) {
+    document.getElementById('status-filter').value = currentFilters.status;
+  }
+  if (currentFilters.priority) {
+    document.getElementById('priority-filter').value = currentFilters.priority;
+  }
+  if (currentFilters.assignee) {
+    document.getElementById('assignee-filter').value = currentFilters.assignee;
+  }
+}
+
+// Populate assignee dropdown with unique assignees
+function populateAssigneeFilter() {
+  const assigneeFilter = document.getElementById('assignee-filter');
+  if (!assigneeFilter) return;
+  
+  // Get unique assignees from current data
+  const allItems = [...issues, ...actionItems];
+  const uniqueAssignees = [...new Set(allItems.map(item => item.assignee).filter(a => a))];
+  
+  // Keep existing options
+  const existingOptions = assigneeFilter.innerHTML;
+  
+  // Add unique assignees
+  uniqueAssignees.forEach(assignee => {
+    if (!assigneeFilter.querySelector(`option[value="${assignee}"]`)) {
+      const option = document.createElement('option');
+      option.value = assignee;
+      option.textContent = assignee;
+      assigneeFilter.appendChild(option);
+    }
+  });
+}
+Update your DOMContentLoaded:
+javascriptdocument.addEventListener("DOMContentLoaded", function () {
+    console.log("Multi-Project Tracker initialized");
+    
+    axios.defaults.withCredentials = true;
+    
+    // Add 401 response interceptor (existing code)
+    axios.interceptors.response.use(
+        (response) => response,
+        (error) => {
+            if (error.response && error.response.status === 401) {
+                if (window.AuthManager) {
+                    AuthManager.showNotification('Please login to perform this action', 'warning');
+                    AuthManager.showAuthModal('login');
+                }
+            }
+            return Promise.reject(error);
+        }
+    );
+    
+    loadProjects();
+    setupEventListeners();
+    initializeFilters(); // ADD THIS LINE
+});
+TESTING REQUIREMENTS
+Test Scenarios:
+
+Single Filter Tests:
+
+Filter by status = "In Progress" → only shows In Progress items
+Filter by priority = "critical" → only shows critical items
+Filter by assignee = "Demo User" → only shows items assigned to Demo User
+
+
+Combined Filter Tests:
+
+Filter by status = "To Do" AND priority = "high"
+Filter by assignee = "Demo User" AND status = "In Progress"
+All filters active simultaneously
+
+
+Search Tests:
+
+Search "migration" → finds items with migration in title or description
+Search is case-insensitive
+Search with filters active → combines search + filters
+
+
+Clear Filters:
+
+Click "Clear All" → resets to show all items
+Remove individual filter badge → removes just that filter
+
+
+URL Persistence:
+
+Apply filters → URL updates with query params
+Copy URL → paste in new tab → filters persist
+Share filtered URL with team member
+
+
+Edge Cases:
+
+No results found → board shows empty columns with message
+Very long search term → doesn't break UI
+Special characters in search → handles correctly
+
+
+
+ACCEPTANCE CRITERIA
+Story is complete when:
+
+✅ Can filter by status, priority, assignee independently
+✅ Multiple filters work in combination
+✅ Search finds items by title and description
+✅ Search is case-insensitive
+✅ Active filters display as removable badges
+✅ Clear all filters button works
+✅ Results count displays correctly
+✅ Filters persist in URL (shareable)
+✅ Loading filters from URL works on page load
+✅ No performance issues with filtering
+✅ Mobile-responsive filter interface
+✅ All existing functionality still works
+
+DELIVERABLES
+Updated Files:
+
+server.js - Add filter query params to GET endpoints
+public/app.js - Filter logic and UI updates
+public/index.html - Filter form HTML
+
+No database changes needed.
