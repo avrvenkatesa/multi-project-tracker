@@ -224,10 +224,10 @@ async function handleDrop(e) {
     const columnId = columnElement.id;
     
     const statusMap = {
-        'todocolumn': 'To Do',
-        'inprogresscolumn': 'In Progress',
-        'blockedcolumn': 'Blocked',
-        'donecolumn': 'Done'
+        'todo-column': 'To Do',
+        'inprogress-column': 'In Progress',
+        'blocked-column': 'Blocked',
+        'done-column': 'Done'
     };
     
     const newStatus = statusMap[columnId];
