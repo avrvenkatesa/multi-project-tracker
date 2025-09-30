@@ -122,6 +122,7 @@ The application uses express-rate-limit for API protection and implements proper
   - Features: View outgoing/incoming relationships, add new relationships with type selector and target picker, delete relationships
   - Security: Prevents self-referencing relationships, checks for duplicate relationships, Team Member+ role required
   - UI: Relationship modal shows current relationships color-coded (blue for outgoing, yellow for incoming auto-managed)
+  - Visual Indicators: Kanban cards display relationship count badges (e.g., "2") in blue when relationships exist, auto-update on add/delete
 
 ### Demo Credentials
 - Email: demo@multiproject.com

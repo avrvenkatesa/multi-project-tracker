@@ -180,7 +180,7 @@ async function loadProjectData(projectId) {
         issues = issuesResponse.data;
         actionItems = actionItemsResponse.data;
 
-        renderKanbanBoard();
+        await renderKanbanBoard();
         displayActiveFilters();
         displayResultsCount();
         populateAssigneeFilter();
@@ -190,7 +190,7 @@ async function loadProjectData(projectId) {
 }
 
 // Render Kanban board
-function renderKanbanBoard() {
+async function renderKanbanBoard() {
     // Filter by type if selected
     let itemsToDisplay = [];
     if (currentFilters.type === 'issue') {
@@ -202,6 +202,26 @@ function renderKanbanBoard() {
     }
     
     const allItems = itemsToDisplay;
+    
+    // Load relationship counts for ALL items first (BEFORE rendering)
+    const relationshipCounts = {};
+    await Promise.all(allItems.map(async (item) => {
+        try {
+            const endpoint = item.type === 'issue' ? 'issues' : 'action-items';
+            const response = await axios.get(
+                `/api/${endpoint}/${item.id}/relationships`,
+                { withCredentials: true }
+            );
+            
+            const { outgoing, incoming } = response.data;
+            const count = (outgoing?.length || 0) + (incoming?.length || 0);
+            relationshipCounts[`${item.type}-${item.id}`] = count;
+        } catch (error) {
+            console.error(`Error loading relationships for ${item.type} ${item.id}:`, error);
+            relationshipCounts[`${item.type}-${item.id}`] = 0;
+        }
+    }));
+    
     const columns = ["To Do", "In Progress", "Blocked", "Done"];
 
     columns.forEach((status) => {
@@ -216,9 +236,11 @@ function renderKanbanBoard() {
                 container.style.minHeight = '100px';
             } else {
                 container.innerHTML = columnItems
-                    .map(
-                        (item) => `
-                    <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move"
+                    .map((item) => {
+                        const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
+                        
+                        return `
+                    <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move hover:shadow-md transition-shadow"
                          draggable="true"
                          data-item-id="${item.id}"
                          data-item-type="${item.type || 'issue'}">
@@ -239,15 +261,21 @@ function renderKanbanBoard() {
                             <span>${item.assignee || "Unassigned"}</span>
                             <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
                         </div>
-                        <button class="manage-relationships-btn w-full text-xs bg-gray-100 hover:bg-gray-200 py-1 rounded text-gray-700 transition" 
-                                data-item-id="${item.id}" 
-                                data-item-type="${item.type || 'issue'}" 
-                                data-item-title="${item.title}">
-                            🔗 Relationships
-                        </button>
+                        <div class="mt-2 pt-2 border-t border-gray-100">
+                            <button class="manage-relationships-btn flex items-center text-xs ${relCount > 0 ? 'text-blue-600 font-medium' : 'text-gray-600'} hover:text-blue-700 transition-colors w-full" 
+                                    data-item-id="${item.id}" 
+                                    data-item-type="${item.type || 'issue'}" 
+                                    data-item-title="${item.title.replace(/"/g, '&quot;')}">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                </svg>
+                                <span>Relationships</span>
+                                ${relCount > 0 ? `<span class="ml-auto px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">${relCount}</span>` : ''}
+                            </button>
+                        </div>
                     </div>
-                `,
-                    )
+                `;
+                    })
                     .join("");
                 container.style.minHeight = 'auto';
             }
@@ -1405,11 +1433,12 @@ async function addRelationship() {
     // Reload relationships
     await loadRelationships();
     
+    // Reload the board to update count badges
+    await renderKanbanBoard();
+    
     // Reset form
     document.getElementById('relationship-type').value = '';
     document.getElementById('relationship-target-id').value = '';
-    
-    alert('Relationship added successfully!');
   } catch (error) {
     console.error('Error adding relationship:', error);
     alert(error.response?.data?.error || 'Failed to add relationship');
@@ -1434,7 +1463,8 @@ async function deleteRelationship(relationshipId) {
     // Reload relationships
     await loadRelationships();
     
-    alert('Relationship deleted successfully!');
+    // Reload the board to update count badges
+    await renderKanbanBoard();
   } catch (error) {
     console.error('Error deleting relationship:', error);
     alert('Failed to delete relationship');
