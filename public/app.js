@@ -428,7 +428,9 @@ function showCreateIssue() {
 
 // Helper functions for dynamic dropdowns
 function generateCategoryOptions() {
-    if (!currentProject) return '<option value="General">General</option>';
+    if (!currentProject || !currentProject.categories || currentProject.categories.length === 0) {
+        return '<option value="General">General</option><option value="Bug">Bug</option><option value="Feature">Feature</option><option value="Task">Task</option>';
+    }
     
     return currentProject.categories.map(category => 
         `<option value="${category}">${category}</option>`
@@ -436,7 +438,9 @@ function generateCategoryOptions() {
 }
 
 function generatePhaseOptions() {
-    if (!currentProject) return '<option value="Planning">Planning</option>';
+    if (!currentProject || !currentProject.phases || currentProject.phases.length === 0) {
+        return '<option value="Planning">Planning</option><option value="Development">Development</option><option value="Testing">Testing</option><option value="Deployment">Deployment</option>';
+    }
     
     return currentProject.phases.map(phase => 
         `<option value="${phase}">${phase}</option>`
@@ -444,7 +448,9 @@ function generatePhaseOptions() {
 }
 
 function generateComponentOptions() {
-    if (!currentProject) return '<option value="General">General</option>';
+    if (!currentProject || !currentProject.components || currentProject.components.length === 0) {
+        return '<option value="General">General</option><option value="Frontend">Frontend</option><option value="Backend">Backend</option><option value="Database">Database</option>';
+    }
     
     return currentProject.components.map(component => 
         `<option value="${component}">${component}</option>`
