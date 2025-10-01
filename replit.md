@@ -84,7 +84,7 @@ Implemented comprehensive AI-powered relationship detection from meeting transcr
 - **Frontend Display**: Visual indicators for AI-generated relationships, confidence scores, transcript references in both relationship modal and AI analysis results
 - **Relationship Types**: blocks/blocked_by, parent_of/child_of, relates_to, depends_on/depended_by
 
-### RBAC for AI Analysis (Latest Update)
+### RBAC for AI Analysis (Latest Update - October 1, 2025)
 Implemented comprehensive authorization and security controls for AI-powered features:
 - **Database Schema**: 
   - Added `visibility`, `can_view_users`, `project_sensitive`, `contains_confidential` to `meeting_transcripts`
@@ -98,7 +98,12 @@ Implemented comprehensive authorization and security controls for AI-powered fea
   - `canUpdateItemStatus`: Managers can update any item; Team Members can update their own items
 - **Assignment Validation**: Automatic reassignment to self when permissions insufficient, with audit logging
 - **Audit Trail**: All AI operations logged (upload, analyze, create_items, update_status, modify)
-- **Frontend**: Graceful permission error handling with clear user messaging
+- **Frontend**: 
+  - UI elements properly hidden based on role permissions
+  - `AuthManager.canUploadTranscript()` method enforces visibility of AI Analysis and View Transcripts buttons
+  - Redundant permission check in modal prevents access even if UI hiding is bypassed
+  - Graceful permission error handling with clear user messaging
+- **Bug Fixed**: Team Members can no longer see or access AI Analysis upload functionality
 
 ### Known Limitations
 - **Performance**: Relationship loading uses N+1 query pattern on Kanban board; consider batching in future updates
