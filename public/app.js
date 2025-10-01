@@ -48,6 +48,7 @@ function setupEventListeners() {
     document.getElementById('create-project-btn')?.addEventListener('click', showCreateProject);
     document.getElementById('create-issue-btn')?.addEventListener('click', showCreateIssue);
     document.getElementById('create-action-item-btn')?.addEventListener('click', showCreateActionItem);
+    document.getElementById('ai-analysis-btn')?.addEventListener('click', showAIAnalysisModal);
     
     // Relationship modal buttons
     document.getElementById('close-relationship-modal-btn')?.addEventListener('click', closeRelationshipModal);
@@ -1470,4 +1471,295 @@ async function deleteRelationship(relationshipId) {
     alert('Failed to delete relationship');
   }
 }
+
+// ===== AI MEETING ANALYSIS =====
+
+// Global state for AI analysis
+let currentAIAnalysis = null;
+let selectedFile = null;
+
+// Show AI analysis modal
+function showAIAnalysisModal() {
+  if (!currentProject) {
+    alert('Please select a project first');
+    return;
+  }
+
+  if (!AuthManager.isLoggedIn()) {
+    AuthManager.showNotification('Please login to use AI analysis', 'warning');
+    AuthManager.showAuthModal('login');
+    return;
+  }
+
+  document.getElementById('ai-analysis-modal').classList.remove('hidden');
+  resetAnalysis();
+}
+
+// Close AI analysis modal
+function closeAIAnalysisModal() {
+  document.getElementById('ai-analysis-modal').classList.add('hidden');
+  resetAnalysis();
+}
+
+// Reset to upload step
+function resetAnalysis() {
+  document.getElementById('upload-step').classList.remove('hidden');
+  document.getElementById('review-step').classList.add('hidden');
+  document.getElementById('transcript-file').value = '';
+  document.getElementById('file-name').classList.add('hidden');
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('analysis-progress').classList.add('hidden');
+  selectedFile = null;
+  currentAIAnalysis = null;
+}
+
+// Handle file selection
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  selectedFile = file;
+  
+  // Show file name and size
+  const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+  document.getElementById('file-name').textContent = `Selected: ${file.name} (${fileSizeMB} MB)`;
+  document.getElementById('file-name').classList.remove('hidden');
+  
+  // Enable analyze button
+  document.getElementById('analyze-btn').disabled = false;
+}
+
+// Analyze transcript with AI
+async function analyzeTranscript() {
+  if (!selectedFile || !currentProject) return;
+  
+  const analyzeBtn = document.getElementById('analyze-btn');
+  const progressDiv = document.getElementById('analysis-progress');
+  
+  try {
+    // Show progress
+    analyzeBtn.disabled = true;
+    progressDiv.classList.remove('hidden');
+    
+    // Create FormData
+    const formData = new FormData();
+    formData.append('transcript', selectedFile);
+    formData.append('projectId', currentProject.id);
+    
+    // Call API
+    const response = await axios.post('/api/meetings/analyze', formData, {
+      withCredentials: true,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    currentAIAnalysis = response.data;
+    
+    // Show review step
+    displayAIResults();
+    document.getElementById('upload-step').classList.add('hidden');
+    document.getElementById('review-step').classList.remove('hidden');
+    
+  } catch (error) {
+    console.error('Error analyzing transcript:', error);
+    alert(error.response?.data?.error || 'Failed to analyze transcript. Please check your OpenAI API key.');
+    progressDiv.classList.add('hidden');
+    analyzeBtn.disabled = false;
+  }
+}
+
+// Display AI analysis results
+function displayAIResults() {
+  if (!currentAIAnalysis) return;
+  
+  const { actionItems, issues, metadata } = currentAIAnalysis;
+  
+  // Update cost info
+  document.getElementById('analysis-cost').textContent = 
+    `Cost: ${metadata.estimatedCost} | Tokens: ${metadata.tokensUsed.total}`;
+  
+  // Display action items
+  const actionItemsDiv = document.getElementById('ai-action-items');
+  const actionCount = document.getElementById('ai-action-count');
+  actionCount.textContent = actionItems.length;
+  
+  if (actionItems.length === 0) {
+    actionItemsDiv.innerHTML = '<p class="text-sm text-gray-500 italic">No action items found</p>';
+  } else {
+    actionItemsDiv.innerHTML = actionItems.map((item, idx) => `
+      <div class="border rounded p-3 hover:bg-gray-50">
+        <div class="flex items-start">
+          <input type="checkbox" id="action-${idx}" checked class="mt-1 mr-3" data-index="${idx}">
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h6 class="font-medium text-sm">${escapeHtml(item.title)}</h6>
+              <span class="text-xs px-2 py-1 rounded ${getPriorityClass(item.priority)}">${item.priority}</span>
+            </div>
+            <p class="text-xs text-gray-600 mt-1">${escapeHtml(item.description || 'No description')}</p>
+            <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
+              <span>👤 ${escapeHtml(item.assignee || 'Unassigned')}</span>
+              ${item.dueDate ? `<span>📅 ${item.dueDate}</span>` : ''}
+              <span>🎯 Confidence: ${item.confidence}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+  
+  // Display issues
+  const issuesDiv = document.getElementById('ai-issues');
+  const issueCount = document.getElementById('ai-issue-count');
+  issueCount.textContent = issues.length;
+  
+  if (issues.length === 0) {
+    issuesDiv.innerHTML = '<p class="text-sm text-gray-500 italic">No issues found</p>';
+  } else {
+    issuesDiv.innerHTML = issues.map((issue, idx) => `
+      <div class="border rounded p-3 hover:bg-gray-50">
+        <div class="flex items-start">
+          <input type="checkbox" id="issue-${idx}" checked class="mt-1 mr-3" data-index="${idx}">
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h6 class="font-medium text-sm">${escapeHtml(issue.title)}</h6>
+              <span class="text-xs px-2 py-1 rounded ${getPriorityClass(issue.priority)}">${issue.priority}</span>
+            </div>
+            <p class="text-xs text-gray-600 mt-1">${escapeHtml(issue.description || 'No description')}</p>
+            <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
+              <span>🏷️ ${escapeHtml(issue.category || 'General')}</span>
+              <span>🎯 Confidence: ${issue.confidence}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+// Toggle all action items
+function toggleAllActionItems() {
+  const checkboxes = document.querySelectorAll('#ai-action-items input[type="checkbox"]');
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+}
+
+// Toggle all issues
+function toggleAllIssues() {
+  const checkboxes = document.querySelectorAll('#ai-issues input[type="checkbox"]');
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+}
+
+// Create all selected items
+async function createAllItems() {
+  if (!currentAIAnalysis || !currentProject) return;
+  
+  // Get selected action items
+  const selectedActionItems = [];
+  const actionCheckboxes = document.querySelectorAll('#ai-action-items input[type="checkbox"]:checked');
+  actionCheckboxes.forEach(cb => {
+    const idx = parseInt(cb.getAttribute('data-index'));
+    selectedActionItems.push(currentAIAnalysis.actionItems[idx]);
+  });
+  
+  // Get selected issues
+  const selectedIssues = [];
+  const issueCheckboxes = document.querySelectorAll('#ai-issues input[type="checkbox"]:checked');
+  issueCheckboxes.forEach(cb => {
+    const idx = parseInt(cb.getAttribute('data-index'));
+    selectedIssues.push(currentAIAnalysis.issues[idx]);
+  });
+  
+  if (selectedActionItems.length === 0 && selectedIssues.length === 0) {
+    alert('Please select at least one item to create');
+    return;
+  }
+  
+  try {
+    const response = await axios.post('/api/meetings/create-items', {
+      projectId: currentProject.id,
+      actionItems: selectedActionItems,
+      issues: selectedIssues
+    }, { withCredentials: true });
+    
+    alert(`Created ${response.data.actionItems.length} action items and ${response.data.issues.length} issues!`);
+    
+    // Close modal and reload data
+    closeAIAnalysisModal();
+    await loadProjectData(currentProject.id);
+    
+  } catch (error) {
+    console.error('Error creating items:', error);
+    alert(error.response?.data?.error || 'Failed to create items');
+  }
+}
+
+// Get priority CSS class
+function getPriorityClass(priority) {
+  const classes = {
+    critical: 'bg-red-100 text-red-800',
+    high: 'bg-orange-100 text-orange-800',
+    medium: 'bg-yellow-100 text-yellow-800',
+    low: 'bg-green-100 text-green-800'
+  };
+  return classes[priority] || classes.medium;
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Initialize AI modal event listeners
+document.addEventListener('DOMContentLoaded', function() {
+  // Close button
+  const closeBtn = document.getElementById('close-ai-analysis-modal-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeAIAnalysisModal);
+  }
+  
+  // File input
+  const fileInput = document.getElementById('transcript-file');
+  if (fileInput) {
+    fileInput.addEventListener('change', handleFileSelect);
+  }
+  
+  // Analyze button
+  const analyzeBtn = document.getElementById('analyze-btn');
+  if (analyzeBtn) {
+    analyzeBtn.addEventListener('click', analyzeTranscript);
+  }
+  
+  // Toggle buttons
+  const toggleActionsBtn = document.getElementById('toggle-all-actions-btn');
+  if (toggleActionsBtn) {
+    toggleActionsBtn.addEventListener('click', toggleAllActionItems);
+  }
+  
+  const toggleIssuesBtn = document.getElementById('toggle-all-issues-btn');
+  if (toggleIssuesBtn) {
+    toggleIssuesBtn.addEventListener('click', toggleAllIssues);
+  }
+  
+  // Reset button
+  const resetBtn = document.getElementById('reset-analysis-btn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', resetAnalysis);
+  }
+  
+  // Cancel button
+  const cancelBtn = document.getElementById('cancel-ai-modal-btn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', closeAIAnalysisModal);
+  }
+  
+  // Create items button
+  const createBtn = document.getElementById('create-all-items-btn');
+  if (createBtn) {
+    createBtn.addEventListener('click', createAllItems);
+  }
+});
 
