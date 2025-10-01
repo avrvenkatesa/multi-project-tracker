@@ -151,6 +151,15 @@ The application uses express-rate-limit for API protection and implements proper
   - Confidence Colors: 90%+ green, 75%+ blue, 60%+ yellow, <60% orange for visual quality indication
   - UI Integration: All Kanban cards automatically display creation source with appropriate styling
   - Analysis Grouping: AI-generated items linked by unique ai_analysis_id for batch tracking
+- **Enhanced AI Extraction Prompt (October 1, 2025)**:
+  - Improved extraction rules with 5 categories for action items (direct assignments, commitments, soft assignments, recurring tasks, implied tasks)
+  - Enhanced issue detection for 5 types (problems, blockers, risks, technical debt, timeline concerns)
+  - Advanced assignee extraction supporting direct/implied/multiple assignments with fallback to null
+  - Smart due date extraction including specific dates, relative dates (next Friday), and recurring patterns
+  - Refined priority assessment with keyword-based classification (critical/high/medium/low)
+  - Detailed confidence scoring guidelines (90-100% explicit, 80-89% partial, 70-79% implied, <70% ambiguous)
+  - Added current meeting date context for relative date calculations
+  - Comprehensive extraction directive to capture ALL action items and issues, even implied ones
 
 ### Demo Credentials
 - Email: demo@multiproject.com

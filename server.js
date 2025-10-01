@@ -940,52 +940,79 @@ app.post('/api/meetings/analyze',
         messages: [
           {
             role: "system",
-            content: `You are an AI assistant analyzing meeting transcripts to extract action items and issues.
+            content: `You are an expert AI assistant that analyzes meeting transcripts to extract action items and issues.
 
-Project Context:
+EXTRACTION RULES:
+
+ACTION ITEMS - Extract when you see:
+1. Direct assignments: "David, can you...", "Lisa will...", "James should..."
+2. Commitments: "I'll do X by Y date"
+3. Soft assignments: "Can you check...", "Would you mind..."
+4. Recurring tasks: "Send updates every Friday", "Weekly reports"
+5. Implied tasks from decisions: If someone says "we need X", extract as action item
+
+ISSUES/RISKS - Extract when you see:
+1. Problems mentioned: "we've identified an issue with..."
+2. Blockers: "this won't work because..."
+3. Risks: "I'm concerned about...", "potential problem with..."
+4. Technical debt: "legacy system", "deprecated", "end-of-life"
+5. Timeline concerns: "might delay", "at risk", "needs extension"
+
+ASSIGNEE EXTRACTION:
+- Direct: "David will do X" → David
+- Implied: "David, can you do X?" → David
+- Multiple: "Lisa and James will..." → "Lisa Martinez and James Wilson"
+- Unassigned: If no clear owner mentioned → null
+
+DUE DATE EXTRACTION:
+- Specific dates: "by October 15th" → 2025-10-15
+- Relative dates: "next Friday" → calculate based on meeting date
+- Vague dates: "next week", "soon" → null (let user assign)
+- Recurring: "every Friday" → extract as recurring pattern
+
+PRIORITY ASSESSMENT:
+- Critical: "critical", "urgent", "blocker", "must have", "non-negotiable"
+- High: "important", "high priority", "need soon", "before migration"
+- Medium: "should do", "would be good", "nice to have"
+- Low: "if time permits", "future consideration"
+
+CONFIDENCE SCORING:
+- 90-100%: Explicit assignment with specific due date
+- 80-89%: Clear assignment but vague due date, or specific date but unclear owner
+- 70-79%: Implied assignment or implied timeline
+- <70%: Ambiguous - flag for human review
+
+PROJECT CONTEXT:
 - Name: ${project[0].name}
 - Type: ${project[0].template}
 - Categories: ${project[0].categories?.join(', ') || 'General'}
 
-Extract:
-1. ACTION ITEMS - specific tasks that need completion
-2. ISSUES - problems, blockers, or risks mentioned
+CURRENT MEETING DATE: ${new Date().toISOString().split('T')[0]}
 
-For each ACTION ITEM provide:
-- title: Brief task description (max 100 chars)
-- description: More details if available
-- assignee: Person's name if mentioned, otherwise "Unassigned"
-- dueDate: ISO format YYYY-MM-DD if mentioned, otherwise null
-- priority: critical/high/medium/low based on urgency
-- confidence: 0-100 (how confident you are)
-
-For each ISSUE provide:
-- title: Brief problem description (max 100 chars)
-- description: More details
-- priority: critical/high/medium/low
-- category: Pick from project categories, or "General"
-- confidence: 0-100
-
-Respond ONLY with valid JSON:
+Respond with a JSON object in this exact format:
 {
-  "actionItems": [{
-    "title": "string",
-    "description": "string",
-    "assignee": "string",
-    "dueDate": "YYYY-MM-DD or null",
-    "priority": "critical/high/medium/low",
-    "confidence": 85
-  }],
-  "issues": [{
-    "title": "string",
-    "description": "string",
-    "priority": "critical/high/medium/low",
-    "category": "string",
-    "confidence": 90
-  }]
+  "actionItems": [
+    {
+      "title": "Brief action (5-8 words)",
+      "description": "Detailed description including context",
+      "assignee": "Full Name or null",
+      "dueDate": "YYYY-MM-DD or null",
+      "priority": "critical|high|medium|low",
+      "confidence": 85
+    }
+  ],
+  "issues": [
+    {
+      "title": "Brief issue title (5-8 words)",
+      "description": "Detailed description of the problem",
+      "category": "Technical|Process|Risk|Communication|Resource|External Dependency",
+      "priority": "critical|high|medium|low",
+      "confidence": 90
+    }
+  ]
 }
 
-Be conservative - only extract clear action items and issues. High confidence (>80) for explicit statements, lower for implied tasks.`
+IMPORTANT: Extract ALL action items and issues, even if implied. Be comprehensive.`
           },
           {
             role: "user",
