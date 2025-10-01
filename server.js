@@ -675,6 +675,27 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
   }
 });
 
+// Get single issue by ID
+app.get('/api/issues/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      'SELECT * FROM issues WHERE id = $1',
+      [parseInt(id)]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching issue:', error);
+    res.status(500).json({ error: 'Failed to fetch issue' });
+  }
+});
+
 // Create issue (Team Member or higher)
 app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (req, res) => {
   const { 
@@ -839,6 +860,27 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching action items:', error);
     res.status(500).json({ error: 'Failed to fetch action items' });
+  }
+});
+
+// Get single action item by ID
+app.get('/api/action-items/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      'SELECT * FROM action_items WHERE id = $1',
+      [parseInt(id)]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching action item:', error);
+    res.status(500).json({ error: 'Failed to fetch action item' });
   }
 });
 
