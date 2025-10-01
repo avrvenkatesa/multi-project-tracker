@@ -1140,6 +1140,26 @@ app.post('/api/meetings/create-items',
       // Generate unique analysis ID for this batch
       const analysisId = `ai-analysis-${Date.now()}-${req.user.id}`;
 
+      // Helper function to validate and sanitize due dates
+      const sanitizeDueDate = (dateStr) => {
+        if (!dateStr) return null;
+        
+        // Check if it's a valid date format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(dateStr)) {
+          // Invalid format (e.g., "Recurring: every Friday"), return null
+          return null;
+        }
+        
+        // Verify it's a valid date
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+          return null;
+        }
+        
+        return dateStr;
+      };
+
       // Create action items
       if (actionItems && actionItems.length > 0) {
         for (const item of actionItems) {
@@ -1154,7 +1174,7 @@ app.post('/api/meetings/create-items',
               ${parseInt(projectId)},
               ${item.priority || 'medium'},
               ${item.assignee || ''},
-              ${item.dueDate || null},
+              ${sanitizeDueDate(item.dueDate)},
               'To Do',
               ${req.user.id},
               ${true},
