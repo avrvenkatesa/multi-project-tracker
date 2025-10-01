@@ -2770,12 +2770,11 @@ app.get('/api/issues/:issueId/comments', authenticateToken, async (req, res) => 
     const issueCheck = await pool.query(`
       SELECT i.project_id 
       FROM issues i
-      JOIN project_members pm ON pm.project_id = i.project_id
-      WHERE i.id = $1 AND pm.user_id = $2
-    `, [issueId, req.user.id]);
+      WHERE i.id = $1
+    `, [issueId]);
     
     if (issueCheck.rows.length === 0) {
-      return res.status(403).json({ error: 'Access denied' });
+      return res.status(404).json({ error: 'Issue not found' });
     }
     
     const result = await pool.query(`
@@ -2815,14 +2814,13 @@ app.post('/api/issues/:issueId/comments', authenticateToken, async (req, res) =>
     }
     
     const issueCheck = await client.query(`
-      SELECT i.*, pm.role as project_role
+      SELECT i.*
       FROM issues i
-      JOIN project_members pm ON pm.project_id = i.project_id
-      WHERE i.id = $1 AND pm.user_id = $2
-    `, [issueId, req.user.id]);
+      WHERE i.id = $1
+    `, [issueId]);
     
     if (issueCheck.rows.length === 0) {
-      return res.status(403).json({ error: 'Access denied' });
+      return res.status(404).json({ error: 'Issue not found' });
     }
     
     const issue = issueCheck.rows[0];
@@ -2839,8 +2837,7 @@ app.post('/api/issues/:issueId/comments', authenticateToken, async (req, res) =>
         SELECT id, username 
         FROM users 
         WHERE username = ANY($1::text[])
-        AND id IN (SELECT user_id FROM project_members WHERE project_id = $2)
-      `, [mentionedUsernames, issue.project_id]);
+      `, [mentionedUsernames]);
       
       mentionedUserIds = mentionResult.rows.map(u => u.id);
     }
@@ -2945,23 +2942,19 @@ app.delete('/api/issues/:issueId/comments/:commentId', authenticateToken, async 
     
     const result = await pool.query(`
       SELECT 
-        ic.user_id as comment_owner,
-        pm.role as project_role
+        ic.user_id as comment_owner
       FROM issue_comments ic
-      JOIN issues i ON ic.issue_id = i.id
-      JOIN project_members pm ON pm.project_id = i.project_id AND pm.user_id = $2
-      WHERE ic.id = $1 AND ic.issue_id = $3
-    `, [commentId, req.user.id, issueId]);
+      WHERE ic.id = $1 AND ic.issue_id = $2
+    `, [commentId, issueId]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Comment not found' });
     }
     
-    const { comment_owner, project_role } = result.rows[0];
+    const { comment_owner } = result.rows[0];
     
-    const canDelete = comment_owner === req.user.id || 
-                     project_role === 'Project Manager' || 
-                     project_role === 'System Administrator';
+    const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+    const canDelete = comment_owner === req.user.id || userRoleLevel >= ROLE_HIERARCHY['Project Manager'];
     
     if (!canDelete) {
       return res.status(403).json({ 
@@ -2986,12 +2979,11 @@ app.get('/api/action-items/:itemId/comments', authenticateToken, async (req, res
     const issueCheck = await pool.query(`
       SELECT ai.project_id 
       FROM action_items ai
-      JOIN project_members pm ON pm.project_id = ai.project_id
-      WHERE ai.id = $1 AND pm.user_id = $2
-    `, [itemId, req.user.id]);
+      WHERE ai.id = $1
+    `, [itemId]);
     
     if (issueCheck.rows.length === 0) {
-      return res.status(403).json({ error: 'Access denied' });
+      return res.status(404).json({ error: 'Action item not found' });
     }
     
     const result = await pool.query(`
@@ -3031,14 +3023,13 @@ app.post('/api/action-items/:itemId/comments', authenticateToken, async (req, re
     }
     
     const itemCheck = await client.query(`
-      SELECT ai.*, pm.role as project_role
+      SELECT ai.*
       FROM action_items ai
-      JOIN project_members pm ON pm.project_id = ai.project_id
-      WHERE ai.id = $1 AND pm.user_id = $2
-    `, [itemId, req.user.id]);
+      WHERE ai.id = $1
+    `, [itemId]);
     
     if (itemCheck.rows.length === 0) {
-      return res.status(403).json({ error: 'Access denied' });
+      return res.status(404).json({ error: 'Action item not found' });
     }
     
     const item = itemCheck.rows[0];
@@ -3054,8 +3045,7 @@ app.post('/api/action-items/:itemId/comments', authenticateToken, async (req, re
       const mentionResult = await client.query(`
         SELECT id FROM users 
         WHERE username = ANY($1::text[])
-        AND id IN (SELECT user_id FROM project_members WHERE project_id = $2)
-      `, [mentionedUsernames, item.project_id]);
+      `, [mentionedUsernames]);
       mentionedUserIds = mentionResult.rows.map(u => u.id);
     }
     
@@ -3159,23 +3149,19 @@ app.delete('/api/action-items/:itemId/comments/:commentId', authenticateToken, a
     
     const result = await pool.query(`
       SELECT 
-        aic.user_id as comment_owner,
-        pm.role as project_role
+        aic.user_id as comment_owner
       FROM action_item_comments aic
-      JOIN action_items ai ON aic.action_item_id = ai.id
-      JOIN project_members pm ON pm.project_id = ai.project_id AND pm.user_id = $2
-      WHERE aic.id = $1 AND aic.action_item_id = $3
-    `, [commentId, req.user.id, itemId]);
+      WHERE aic.id = $1 AND aic.action_item_id = $2
+    `, [commentId, itemId]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Comment not found' });
     }
     
-    const { comment_owner, project_role } = result.rows[0];
+    const { comment_owner } = result.rows[0];
     
-    const canDelete = comment_owner === req.user.id || 
-                     project_role === 'Project Manager' || 
-                     project_role === 'System Administrator';
+    const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+    const canDelete = comment_owner === req.user.id || userRoleLevel >= ROLE_HIERARCHY['Project Manager'];
     
     if (!canDelete) {
       return res.status(403).json({ 
