@@ -21,6 +21,10 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const JWT_EXPIRY = "7d";
 
+if (JWT_SECRET === "your-secret-key-change-in-production") {
+  console.warn("⚠️  WARNING: Using default JWT secret. Set JWT_SECRET environment variable in production!");
+}
+
 // Database connection
 const sql = neon(process.env.DATABASE_URL);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -64,8 +68,20 @@ app.use(
   }),
 );
 
+const allowedOrigins = new Set([
+  'http://localhost:5000',
+  'http://127.0.0.1:5000',
+  process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : null
+].filter(Boolean));
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 

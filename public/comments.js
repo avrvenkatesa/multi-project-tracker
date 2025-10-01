@@ -104,6 +104,18 @@ function renderComment(comment, itemType) {
   `;
 }
 
+function sanitizeUrl(url) {
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return trimmed.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    }
+  } catch (e) {
+  }
+  return '';
+}
+
 function formatCommentText(text) {
   text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -111,7 +123,11 @@ function formatCommentText(text) {
   text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
   text = text.replace(/_(.+?)_/g, '<em>$1</em>');
   text = text.replace(/`(.+?)`/g, '<code class="bg-gray-200 px-1 py-0.5 rounded text-sm">$1</code>');
-  text = text.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-indigo-600 hover:underline" target="_blank">$1</a>');
+  text = text.replace(/\[(.+?)\]\((.+?)\)/g, (match, linkText, url) => {
+    const sanitized = sanitizeUrl(url);
+    if (!sanitized) return linkText;
+    return `<a href="${sanitized}" class="text-indigo-600 hover:underline" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
+  });
   text = text.replace(/@(\w+)/g, '<span class="text-indigo-600 font-medium">@$1</span>');
   return text;
 }
