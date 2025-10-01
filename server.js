@@ -1633,9 +1633,19 @@ app.post('/api/meetings/analyze',
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
-      const { projectId, meetingDate, title } = req.body;
+      const { projectId, meetingDate, title, visibility } = req.body;
       if (!projectId) {
         return res.status(400).json({ error: 'Project ID required' });
+      }
+
+      // PERMISSION CHECK: Can user upload transcripts to this project?
+      const canUpload = await canUploadTranscript(req.user.id, parseInt(projectId));
+      if (!canUpload) {
+        await fs.unlink(req.file.path); // Clean up uploaded file
+        return res.status(403).json({ 
+          error: 'Insufficient permissions',
+          message: 'Only Project Managers and System Administrators can upload transcripts and run AI analysis'
+        });
       }
 
       // Read uploaded file
@@ -1663,9 +1673,9 @@ app.post('/api/meetings/analyze',
         INSERT INTO meeting_transcripts (
           project_id, title, meeting_date, uploaded_by,
           original_filename, file_size, transcript_text,
-          analysis_id, status
+          analysis_id, status, visibility
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'processing')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'processing', $9)
         RETURNING id
       `, [
         parseInt(projectId),
@@ -1675,10 +1685,18 @@ app.post('/api/meetings/analyze',
         req.file.originalname,
         req.file.size,
         transcriptText,
-        analysisId
+        analysisId,
+        visibility || 'project_managers' // Default: only managers can view
       ]);
       
       transcriptId = transcriptResult.rows[0].id;
+
+      // Audit the upload action
+      await auditAIAction(transcriptId, req.user.id, 'upload', { 
+        projectId: parseInt(projectId), 
+        filename: req.file.originalname,
+        visibility: visibility || 'project_managers'
+      });
 
       // Clean up uploaded file
       await fs.unlink(filePath);
@@ -2147,16 +2165,27 @@ app.post('/api/meetings/create-items-smart',
         return res.status(400).json({ error: 'Project ID required' });
       }
 
+      // PERMISSION CHECK: Can user create items from AI analysis?
+      const canCreate = await canCreateItemsFromAI(req.user.id, parseInt(projectId));
+      if (!canCreate) {
+        return res.status(403).json({ 
+          error: 'Insufficient permissions',
+          message: 'Only Project Managers and System Administrators can create items from AI analysis'
+        });
+      }
+
       const results = {
         actionItems: {
           created: [],
           updated: [],
-          duplicates: []
+          duplicates: [],
+          permissionDenied: []
         },
         issues: {
           created: [],
           updated: [],
-          duplicates: []
+          duplicates: [],
+          permissionDenied: []
         }
       };
 
@@ -2176,6 +2205,34 @@ app.post('/api/meetings/create-items-smart',
       // Process action items with duplicate detection
       if (actionItems && actionItems.length > 0) {
         for (const item of actionItems) {
+          // PERMISSION CHECK: Validate assignment permissions
+          let finalAssignee = item.assignee || '';
+          if (item.assignee) {
+            const assignCheck = await canAssignTo(req.user.id, item.assignee, parseInt(projectId));
+            if (!assignCheck.allowed) {
+              if (assignCheck.suggestedAction === 'assign_to_self') {
+                // Reassign to self if user can't assign to others
+                const userInfo = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+                finalAssignee = userInfo.rows[0]?.username || '';
+                results.actionItems.permissionDenied.push({
+                  title: item.title,
+                  originalAssignee: item.assignee,
+                  reassignedTo: finalAssignee,
+                  reason: 'Insufficient permissions to assign to others'
+                });
+              } else {
+                // Skip this item if can't assign
+                results.actionItems.permissionDenied.push({
+                  title: item.title,
+                  originalAssignee: item.assignee,
+                  reason: assignCheck.reason,
+                  action: 'skipped'
+                });
+                continue;
+              }
+            }
+          }
+
           // Check for potential duplicate
           const duplicate = await findPotentialDuplicate(item, parseInt(projectId), 'action_item');
           
@@ -2197,23 +2254,31 @@ app.post('/api/meetings/create-items-smart',
               INSERT INTO action_items (
                 title, description, project_id, priority, assignee, 
                 due_date, status, created_by,
-                created_by_ai, ai_confidence, ai_analysis_id, transcript_id
+                created_by_ai, ai_confidence, ai_analysis_id, transcript_id, created_via_ai_by
               ) VALUES (
                 ${item.title.substring(0, 200)},
                 ${item.description?.substring(0, 1000) || ''},
                 ${parseInt(projectId)},
                 ${item.priority || 'medium'},
-                ${item.assignee || ''},
+                ${finalAssignee},
                 ${sanitizeDueDate(item.dueDate)},
                 'To Do',
                 ${req.user.id},
                 ${true},
                 ${item.confidence || null},
                 ${finalAnalysisId},
-                ${transcriptId || null}
+                ${transcriptId || null},
+                ${req.user.id}
               ) RETURNING *
             `;
             results.actionItems.created.push(newItem[0]);
+            
+            // Audit item creation
+            await auditAIAction(transcriptId, req.user.id, 'create_items', {
+              itemType: 'action_item',
+              itemId: newItem[0].id,
+              title: item.title
+            });
           }
         }
       }
@@ -2242,7 +2307,7 @@ app.post('/api/meetings/create-items-smart',
               INSERT INTO issues (
                 title, description, project_id, priority, category,
                 status, created_by,
-                created_by_ai, ai_confidence, ai_analysis_id, transcript_id
+                created_by_ai, ai_confidence, ai_analysis_id, transcript_id, created_via_ai_by
               ) VALUES (
                 ${issue.title.substring(0, 200)},
                 ${issue.description?.substring(0, 1000) || ''},
@@ -2254,10 +2319,18 @@ app.post('/api/meetings/create-items-smart',
                 ${true},
                 ${issue.confidence || null},
                 ${finalAnalysisId},
-                ${transcriptId || null}
+                ${transcriptId || null},
+                ${req.user.id}
               ) RETURNING *
             `;
             results.issues.created.push(newIssue[0]);
+            
+            // Audit item creation
+            await auditAIAction(transcriptId, req.user.id, 'create_items', {
+              itemType: 'issue',
+              itemId: newIssue[0].id,
+              title: issue.title
+            });
           }
         }
       }
