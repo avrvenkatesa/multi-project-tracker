@@ -1703,10 +1703,10 @@ function displayAIResults() {
       </div>
     `;
     
-    // Insert guidance before action items section
-    const actionItemsSection = reviewStepContent.querySelector('.space-y-6');
-    if (actionItemsSection) {
-      actionItemsSection.insertAdjacentHTML('afterbegin', guidanceHTML);
+    // Insert guidance after the existing info box
+    const existingInfoBox = reviewStepContent.querySelector('.bg-blue-50');
+    if (existingInfoBox) {
+      existingInfoBox.insertAdjacentHTML('afterend', guidanceHTML);
     }
   } else {
     // Update existing guidance with new stats
