@@ -1,0 +1,649 @@
+REPLIT PROMPT: Story 2.1.1 - AI Meeting Analysis (GPT-3.5)
+Project Context
+Project: Multi-Project Issue and Action Item Tracking System
+Current Tech Stack: Node.js + Express.js + Vanilla JavaScript + Tailwind CSS + Neon PostgreSQL
+Story: Story 2.1.1 - AI-Powered Meeting Transcript Analysis
+GitHub Epic: #13
+Branch: feature/13-ai-meeting-analysis
+AI Model: GPT-3.5-Turbo (10-20x cheaper than GPT-4, ~$0.001 per analysis)
+Cost Analysis
+
+GPT-3.5-Turbo: ~$0.001-0.01 per transcript analysis
+100 analyses: ~$0.10-1.00 total
+Input: $0.0005 per 1K tokens
+Output: $0.0015 per 1K tokens
+Average transcript (2000 words) ≈ 2500 tokens = $0.005
+
+Requirements
+ARCHITECTURE
+New Dependencies:
+json{
+  "openai": "^4.20.0",
+  "multer": "^1.4.5-lts.1"
+}
+Files to Create/Modify:
+server.js              (Backend - AI analysis endpoints, file upload)
+public/app.js          (Frontend - upload UI, review interface)
+public/index.html      (Frontend - upload modal, review modal)
+package.json           (Add dependencies)
+Environment Variables (Replit Secrets):
+envOPENAI_API_KEY=sk-your-key-here
+BACKEND IMPLEMENTATION
+1. Install Dependencies
+bashnpm install openai multer
+2. Add to server.js
+After your existing imports, add:
+javascriptconst multer = require('multer');
+const { OpenAI } = require('openai');
+const fs = require('fs').promises;
+const path = require('path');
+
+// Initialize OpenAI with GPT-3.5-Turbo (cost-effective)
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// Configure multer for file uploads
+const upload = multer({ 
+  dest: 'uploads/',
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['text/plain'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only .txt files allowed'));
+    }
+  }
+});
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+fs.mkdir(uploadsDir, { recursive: true }).catch(console.error);
+Add AI analysis endpoint:
+javascript// Upload and analyze meeting transcript
+app.post('/api/meetings/analyze', 
+  authenticateToken, 
+  requireRole('Team Member'),
+  upload.single('transcript'), 
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const { projectId } = req.body;
+      if (!projectId) {
+        return res.status(400).json({ error: 'Project ID required' });
+      }
+
+      // Read uploaded file
+      const filePath = req.file.path;
+      const transcriptText = await fs.readFile(filePath, 'utf8');
+
+      // Clean up uploaded file immediately
+      await fs.unlink(filePath);
+
+      // Validate transcript length (GPT-3.5 has 16K context window)
+      const estimatedTokens = Math.ceil(transcriptText.length / 4);
+      if (estimatedTokens > 12000) {
+        return res.status(400).json({ 
+          error: 'Transcript too long. Please limit to ~10,000 words (48,000 characters)' 
+        });
+      }
+
+      // Get project context for better AI results
+      const [project] = await sql`SELECT * FROM projects WHERE id = ${projectId}`;
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      console.log(`Analyzing transcript (${estimatedTokens} tokens) with GPT-3.5-Turbo...`);
+      
+      // Call OpenAI with GPT-3.5-Turbo (cost-effective)
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo-1106", // Latest GPT-3.5 with JSON mode
+        messages: [
+          {
+            role: "system",
+            content: `You are an AI assistant analyzing meeting transcripts to extract action items and issues.
+
+Project Context:
+- Name: ${project.name}
+- Type: ${project.template}
+- Categories: ${project.categories?.join(', ') || 'General'}
+
+Extract:
+1. ACTION ITEMS - specific tasks that need completion
+2. ISSUES - problems, blockers, or risks mentioned
+
+For each ACTION ITEM provide:
+- title: Brief task description (max 100 chars)
+- description: More details if available
+- assignee: Person's name if mentioned, otherwise "Unassigned"
+- dueDate: ISO format YYYY-MM-DD if mentioned, otherwise null
+- priority: critical/high/medium/low based on urgency
+- confidence: 0-100 (how confident you are)
+
+For each ISSUE provide:
+- title: Brief problem description (max 100 chars)
+- description: More details
+- priority: critical/high/medium/low
+- category: Pick from project categories, or "General"
+- confidence: 0-100
+
+Respond ONLY with valid JSON:
+{
+  "actionItems": [{
+    "title": "string",
+    "description": "string",
+    "assignee": "string",
+    "dueDate": "YYYY-MM-DD or null",
+    "priority": "critical/high/medium/low",
+    "confidence": 85
+  }],
+  "issues": [{
+    "title": "string",
+    "description": "string",
+    "priority": "critical/high/medium/low",
+    "category": "string",
+    "confidence": 90
+  }]
+}
+
+Be conservative - only extract clear action items and issues. High confidence (>80) for explicit statements, lower for implied tasks.`
+          },
+          {
+            role: "user",
+            content: `Analyze this meeting transcript:\n\n${transcriptText}`
+          }
+        ],
+        temperature: 0.3, // Lower temperature for more consistent extraction
+        response_format: { type: "json_object" },
+        max_tokens: 2000 // Limit response size for cost control
+      });
+
+      const aiResponse = completion.choices[0].message.content;
+      const parsedResponse = JSON.parse(aiResponse);
+
+      // Calculate cost (approximate)
+      const inputTokens = completion.usage.prompt_tokens;
+      const outputTokens = completion.usage.completion_tokens;
+      const estimatedCost = (inputTokens * 0.0005 / 1000) + (outputTokens * 0.0015 / 1000);
+
+      // Add metadata to response
+      const result = {
+        ...parsedResponse,
+        metadata: {
+          projectId: parseInt(projectId),
+          analyzedAt: new Date().toISOString(),
+          analyzedBy: req.user.id,
+          transcriptLength: transcriptText.length,
+          model: "gpt-3.5-turbo-1106",
+          tokensUsed: {
+            input: inputTokens,
+            output: outputTokens,
+            total: completion.usage.total_tokens
+          },
+          estimatedCost: `$${estimatedCost.toFixed(4)}`
+        }
+      };
+
+      console.log(`Analysis complete: ${parsedResponse.actionItems?.length || 0} action items, ${parsedResponse.issues?.length || 0} issues`);
+      console.log(`Tokens used: ${completion.usage.total_tokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
+      
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error analyzing transcript:', error);
+      
+      // Clean up file if it still exists
+      if (req.file?.path) {
+        try {
+          await fs.unlink(req.file.path);
+        } catch (unlinkError) {
+          // Ignore cleanup errors
+        }
+      }
+
+      if (error.message?.includes('API key')) {
+        return res.status(500).json({ 
+          error: 'OpenAI API not configured. Please add OPENAI_API_KEY to Replit Secrets.' 
+        });
+      }
+
+      if (error.code === 'insufficient_quota') {
+        return res.status(500).json({ 
+          error: 'OpenAI API quota exceeded. Please check your OpenAI account.' 
+        });
+      }
+
+      res.status(500).json({ 
+        error: 'Failed to analyze transcript',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+});
+
+// Batch create items from AI suggestions
+app.post('/api/meetings/create-items', 
+  authenticateToken,
+  requireRole('Team Member'),
+  async (req, res) => {
+    try {
+      const { projectId, actionItems, issues } = req.body;
+
+      if (!projectId) {
+        return res.status(400).json({ error: 'Project ID required' });
+      }
+
+      const created = {
+        actionItems: [],
+        issues: []
+      };
+
+      // Create action items
+      if (actionItems && actionItems.length > 0) {
+        for (const item of actionItems) {
+          const [newItem] = await sql`
+            INSERT INTO action_items (
+              title, description, project_id, priority, assignee, 
+              due_date, status, created_by
+            ) VALUES (
+              ${item.title.substring(0, 200)}, -- Limit title length
+              ${item.description?.substring(0, 1000) || ''},
+              ${parseInt(projectId)},
+              ${item.priority || 'medium'},
+              ${item.assignee || ''},
+              ${item.dueDate || null},
+              'To Do',
+              ${req.user.id}
+            ) RETURNING *
+          `;
+          created.actionItems.push(newItem);
+        }
+      }
+
+      // Create issues
+      if (issues && issues.length > 0) {
+        for (const issue of issues) {
+          const [newIssue] = await sql`
+            INSERT INTO issues (
+              title, description, project_id, priority, category,
+              status, created_by
+            ) VALUES (
+              ${issue.title.substring(0, 200)},
+              ${issue.description?.substring(0, 1000) || ''},
+              ${parseInt(projectId)},
+              ${issue.priority || 'medium'},
+              ${issue.category || 'General'},
+              'To Do',
+              ${req.user.id}
+            ) RETURNING *
+          `;
+          created.issues.push(newIssue);
+        }
+      }
+
+      console.log(`Created ${created.actionItems.length} action items and ${created.issues.length} issues from AI analysis`);
+      res.json(created);
+
+    } catch (error) {
+      console.error('Error creating items from AI suggestions:', error);
+      res.status(500).json({ error: 'Failed to create items' });
+    }
+});
+FRONTEND IMPLEMENTATION
+1. Add Upload Modal to index.html
+Add before closing </body> tag:
+html<!-- AI Meeting Analysis Modal -->
+<div id="ai-analysis-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between p-6 border-b">
+      <div>
+        <h3 class="text-xl font-semibold text-gray-800">AI Meeting Analysis</h3>
+        <p class="text-xs text-gray-500 mt-1">Powered by GPT-3.5-Turbo (~$0.001 per analysis)</p>
+      </div>
+      <button onclick="closeAIAnalysisModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+    </div>
+    
+    <div class="p-6">
+      <!-- Step 1: Upload -->
+      <div id="upload-step" class="mb-6">
+        <h4 class="font-semibold mb-3">Step 1: Upload Meeting Transcript</h4>
+        <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+          <input type="file" id="transcript-file" accept=".txt" class="hidden" onchange="handleFileSelect(event)">
+          <label for="transcript-file" class="cursor-pointer">
+            <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <p class="text-sm text-gray-600 font-medium">Click to upload or drag and drop</p>
+            <p class="text-xs text-gray-500 mt-1">Text files (.txt) only, up to 10MB</p>
+            <p class="text-xs text-gray-400 mt-1">Maximum ~10,000 words</p>
+          </label>
+          <p id="file-name" class="mt-3 text-sm text-green-600 font-medium hidden"></p>
+        </div>
+        <button id="analyze-btn" onclick="analyzeTranscript()" disabled
+                class="mt-4 w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-colors">
+          Analyze with AI
+        </button>
+        <div id="analysis-progress" class="hidden mt-4 text-center">
+          <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <p class="text-sm text-gray-600 mt-2">Analyzing transcript with GPT-3.5...</p>
+          <p class="text-xs text-gray-500 mt-1">This may take 30-60 seconds</p>
+        </div>
+      </div>
+
+      <!-- Step 2: Review AI Suggestions -->
+      <div id="review-step" class="hidden">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <p class="text-sm text-blue-800">
+            <strong>Analysis Complete!</strong> Review the suggestions below. 
+            Uncheck any items you don't want to create.
+          </p>
+          <p class="text-xs text-blue-600 mt-1" id="analysis-cost">
+            Cost: ~$0.001 | Tokens: 0
+          </p>
+        </div>
+
+        <!-- Action Items -->
+        <div class="mb-6">
+          <div class="flex items-center justify-between mb-2">
+            <h5 class="font-medium text-gray-700">Action Items (<span id="ai-action-count">0</span>)</h5>
+            <button onclick="toggleAllActionItems()" class="text-xs text-blue-600 hover:text-blue-700">
+              Select All / None
+            </button>
+          </div>
+          <div id="ai-action-items" class="space-y-2 max-h-60 overflow-y-auto">
+            <!-- AI suggestions will be listed here -->
+          </div>
+        </div>
+
+        <!-- Issues -->
+        <div class="mb-6">
+          <div class="flex items-center justify-between mb-2">
+            <h5 class="font-medium text-gray-700">Issues (<span id="ai-issue-count">0</span>)</h5>
+            <button onclick="toggleAllIssues()" class="text-xs text-blue-600 hover:text-blue-700">
+              Select All / None
+            </button>
+          </div>
+          <div id="ai-issues" class="space-y-2 max-h-60 overflow-y-auto">
+            <!-- AI suggestions will be listed here -->
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-between items-center pt-4 border-t">
+          <button onclick="resetAnalysis()" class="text-sm text-gray-600 hover:text-gray-800">
+            ← Upload New Transcript
+          </button>
+          <div class="space-x-3">
+            <button onclick="closeAIAnalysisModal()" class="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
+              Cancel
+            </button>
+            <button onclick="createAllItems()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+              Create Selected Items
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+2. Add AI Analysis Functions to app.js
+javascript// Global state for AI analysis
+let currentAIAnalysis = null;
+let selectedFile = null;
+
+// Show AI analysis modal
+function showAIAnalysisModal() {
+  if (!currentProject) {
+    alert('Please select a project first');
+    return;
+  }
+
+  if (!AuthManager.isLoggedIn()) {
+    AuthManager.showNotification('Please login to use AI analysis', 'warning');
+    AuthManager.showAuthModal('login');
+    return;
+  }
+
+  document.getElementById('ai-analysis-modal').classList.remove('hidden');
+  resetAnalysis();
+}
+
+// Close AI analysis modal
+function closeAIAnalysisModal() {
+  document.getElementById('ai-analysis-modal').classList.add('hidden');
+}
+
+// Reset to upload step
+function resetAnalysis() {
+  document.getElementById('upload-step').classList.remove('hidden');
+  document.getElementById('review-step').classList.add('hidden');
+  document.getElementById('transcript-file').value = '';
+  document.getElementById('file-name').classList.add('hidden');
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('analysis-progress').classList.add('hidden');
+  selectedFile = null;
+  currentAIAnalysis = null;
+}
+
+// Handle file selection
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  selectedFile = file;
+  
+  // Show file name and size
+  const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+  document.getElementById('file-name').textContent = `Selected: ${file.name} (${fileSizeMB} MB)`;
+  document.getElementById('file-name').classList.remove('hidden');
+  
+  // Enable analyze button
+  document.getElementById('analyze-btn').disabled = false;
+}
+
+// Analyze transcript with AI
+async function analyzeTranscript() {
+  if (!selectedFile || !currentProject) return;
+
+  // Show progress
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('analysis-progress').classList.remove('hidden');
+
+  try {
+    const formData = new FormData();
+    formData.append('transcript', selectedFile);
+    formData.append('projectId', currentProject.id);
+
+    const response = await fetch('/api/meetings/analyze', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Analysis failed');
+    }
+
+    const result = await response.json();
+    currentAIAnalysis = result;
+
+    // Hide upload step, show review step
+    document.getElementById('upload-step').classList.add('hidden');
+    document.getElementById('review-step').classList.remove('hidden');
+
+    // Show cost info
+    if (result.metadata) {
+      document.getElementById('analysis-cost').textContent = 
+        `Cost: ${result.metadata.estimatedCost} | Tokens: ${result.metadata.tokensUsed.total}`;
+    }
+
+    // Render AI suggestions
+    renderAISuggestions(result);
+
+    showSuccessMessage(`Analysis complete! Found ${result.actionItems.length} action items and ${result.issues.length} issues.`);
+
+  } catch (error) {
+    console.error('Error analyzing transcript:', error);
+    showErrorMessage(error.message || 'Failed to analyze transcript');
+    document.getElementById('analyze-btn').disabled = false;
+    document.getElementById('analysis-progress').classList.add('hidden');
+  }
+}
+
+// Render AI suggestions for review
+function renderAISuggestions(analysis) {
+  const { actionItems, issues } = analysis;
+
+  // Render action items
+  document.getElementById('ai-action-count').textContent = actionItems?.length || 0;
+  const actionContainer = document.getElementById('ai-action-items');
+  
+  if (!actionItems || actionItems.length === 0) {
+    actionContainer.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">No action items found</p>';
+  } else {
+    actionContainer.innerHTML = actionItems.map((item, index) => `
+      <div class="border rounded-lg p-3 bg-gray-50 hover:bg-gray-100 transition-colors">
+        <div class="flex items-start">
+          <input type="checkbox" id="action-${index}" checked class="ai-action-checkbox mt-1 mr-3">
+          <div class="flex-1">
+            <div class="flex items-center space-x-2 mb-1">
+              <label for="action-${index}" class="font-medium text-sm cursor-pointer">${item.title}</label>
+              <span class="px-2 py-0.5 text-xs rounded font-medium ${getPriorityBadgeClass(item.priority)}">${item.priority}</span>
+            </div>
+            <p class="text-xs text-gray-600 mb-2">${item.description || 'No description'}</p>
+            <div class="flex items-center space-x-3 text-xs text-gray-500">
+              <span>👤 ${item.assignee}</span>
+              ${item.dueDate ? `<span>📅 ${new Date(item.dueDate).toLocaleDateString()}</span>` : ''}
+              <span class="ml-auto ${item.confidence >= 80 ? 'text-green-600' : item.confidence >= 60 ? 'text-yellow-600' : 'text-orange-600'}">${item.confidence}% confidence</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Render issues
+  document.getElementById('ai-issue-count').textContent = issues?.length || 0;
+  const issueContainer = document.getElementById('ai-issues');
+  
+  if (!issues || issues.length === 0) {
+    issueContainer.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">No issues found</p>';
+  } else {
+    issueContainer.innerHTML = issues.map((issue, index) => `
+      <div class="border rounded-lg p-3 bg-gray-50 hover:bg-gray-100 transition-colors">
+        <div class="flex items-start">
+          <input type="checkbox" id="issue-${index}" checked class="ai-issue-checkbox mt-1 mr-3">
+          <div class="flex-1">
+            <div class="flex items-center space-x-2 mb-1">
+              <label for="issue-${index}" class="font-medium text-sm cursor-pointer">${issue.title}</label>
+              <span class="px-2 py-0.5 text-xs rounded font-medium ${getPriorityBadgeClass(issue.priority)}">${issue.priority}</span>
+            </div>
+            <p class="text-xs text-gray-600 mb-2">${issue.description || 'No description'}</p>
+            <div class="flex items-center space-x-3 text-xs text-gray-500">
+              <span>📁 ${issue.category}</span>
+              <span class="ml-auto ${issue.confidence >= 80 ? 'text-green-600' : issue.confidence >= 60 ? 'text-yellow-600' : 'text-orange-600'}">${issue.confidence}% confidence</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+// Helper function for priority badge colors
+function getPriorityBadgeClass(priority) {
+  const classes = {
+    critical: 'bg-red-100 text-red-800',
+    high: 'bg-orange-100 text-orange-800',
+    medium: 'bg-yellow-100 text-yellow-800',
+    low: 'bg-green-100 text-green-800'
+  };
+  return classes[priority?.toLowerCase()] || classes.medium;
+}
+
+// Toggle all action items
+function toggleAllActionItems() {
+  const checkboxes = document.querySelectorAll('.ai-action-checkbox');
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+}
+
+// Toggle all issues
+function toggleAllIssues() {
+  const checkboxes = document.querySelectorAll('.ai-issue-checkbox');
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+}
+
+// Create all selected items
+async function createAllItems() {
+  if (!currentAIAnalysis) return;
+
+  // Get selected action items
+  const selectedActions = [];
+  document.querySelectorAll('.ai-action-checkbox:checked').forEach(cb => {
+    const index = parseInt(cb.id.split('-')[1]);
+    selectedActions.push(currentAIAnalysis.actionItems[index]);
+  });
+
+  // Get selected issues
+  const selectedIssues = [];
+  document.querySelectorAll('.ai-issue-checkbox:checked').forEach(cb => {
+    const index = parseInt(cb.id.split('-')[1]);
+    selectedIssues.push(currentAIAnalysis.issues[index]);
+  });
+
+  if (selectedActions.length === 0 && selectedIssues.length === 0) {
+    showErrorMessage('Please select at least one item to create');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/meetings/create-items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        projectId: currentProject.id,
+        actionItems: selectedActions,
+        issues: selectedIssues
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to create items');
+    }
+
+    const result = await response.json();
+    
+    showSuccessMessage(
+      `Created ${result.actionItems.length} action items and ${result.issues.length} issues!`
+    );
+
+    // Reload board
+    await loadProjectData(currentProject.id);
+
+    // Close modal
+    closeAIAnalysisModal();
+
+  } catch (error) {
+    console.error('Error creating items:', error);
+    showErrorMessage('Failed to create items');
+  }
+}
+3. Add AI Analysis Button
+In index.html, find the button row with "+ Issue" and "+ Action Item", add:
+html<button
+  onclick="showAIAnalysisModal()"
+  data-requires-auth
+  class="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700 flex items-center gap-1 transition-colors">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+  </svg>
+  AI Analysis
+</button>
