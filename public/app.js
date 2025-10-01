@@ -1581,6 +1581,12 @@ function showAIAnalysisModal() {
     return;
   }
 
+  // Check if user has permission to upload transcripts
+  if (!AuthManager.canUploadTranscript()) {
+    AuthManager.showNotification('Insufficient permissions - Only Project Managers and System Administrators can upload transcripts and run AI analysis', 'error');
+    return;
+  }
+
   document.getElementById('ai-analysis-modal').classList.remove('hidden');
   resetAnalysis();
 }

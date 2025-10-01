@@ -143,6 +143,10 @@ const AuthManager = {
     return this.hasRole('System Administrator');
   },
 
+  canUploadTranscript() {
+    return this.hasRole('Project Manager');
+  },
+
   isReadOnly() {
     return this.currentUser && 
            (this.currentUser.role === 'Stakeholder' || 
@@ -216,6 +220,26 @@ const AuthManager = {
         btn.classList.add('opacity-50', 'cursor-not-allowed');
         btn.title = 'Read-only access - cannot create items';
       });
+    }
+    
+    // Hide AI Analysis button for users who cannot upload transcripts
+    const aiAnalysisBtn = document.getElementById('ai-analysis-btn');
+    if (aiAnalysisBtn) {
+      if (this.canUploadTranscript()) {
+        aiAnalysisBtn.classList.remove('hidden');
+      } else {
+        aiAnalysisBtn.classList.add('hidden');
+      }
+    }
+    
+    // Hide View Transcripts button for users who cannot upload transcripts
+    const viewTranscriptsBtn = document.getElementById('view-transcripts-btn');
+    if (viewTranscriptsBtn) {
+      if (this.canUploadTranscript()) {
+        viewTranscriptsBtn.classList.remove('hidden');
+      } else {
+        viewTranscriptsBtn.classList.add('hidden');
+      }
     }
     
     const userManagementLink = document.getElementById('user-management-link');
