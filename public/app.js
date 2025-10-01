@@ -1817,7 +1817,7 @@ function displayAIResults() {
       matchedContainer.innerHTML = '';
     }
     
-    // Display unmatched updates
+    // Display unmatched updates with search functionality
     if (statusUpdateResults.unmatched.length > 0) {
       unmatchedContainer.innerHTML = `
         <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -1825,15 +1825,41 @@ function displayAIResults() {
             ⚠️ Needs Manual Review (${statusUpdateResults.unmatched.length})
           </h6>
           <p class="text-xs text-yellow-800 mb-3">
-            These status updates couldn't be automatically matched. Please review and update manually.
+            Search for matching items below, or save to Review Queue to handle later.
           </p>
-          <div class="space-y-2">
-            ${statusUpdateResults.unmatched.map(unmatched => `
-              <div class="bg-white border border-yellow-300 rounded-lg p-3">
+          <div class="space-y-3" id="unmatched-items-container">
+            ${statusUpdateResults.unmatched.map((unmatched, idx) => `
+              <div class="bg-white border border-yellow-300 rounded-lg p-3" data-unmatched-idx="${idx}">
                 <p class="font-medium text-sm text-gray-900 mb-1">${escapeHtml(unmatched.update.itemDescription)}</p>
                 <p class="text-xs text-gray-600 mb-2">"${escapeHtml(unmatched.update.evidence)}"</p>
-                <p class="text-xs text-yellow-700">Reason: ${escapeHtml(unmatched.reason)}</p>
-                ${unmatched.closestMatch ? `<p class="text-xs text-gray-500 mt-1">Closest match: ${escapeHtml(unmatched.closestMatch)}</p>` : ''}
+                <p class="text-xs text-yellow-700 mb-2">Reason: ${escapeHtml(unmatched.reason)}</p>
+                ${unmatched.closestMatch ? `<p class="text-xs text-gray-500 mb-2">Closest match: ${escapeHtml(unmatched.closestMatch)}</p>` : ''}
+                
+                <!-- Search Box -->
+                <div class="mt-3 border-t pt-3">
+                  <div class="flex gap-2 mb-2">
+                    <input type="text" 
+                           placeholder="Search for matching items..." 
+                           class="flex-1 px-3 py-1 text-xs border rounded"
+                           id="search-input-${idx}"
+                           data-unmatched-idx="${idx}">
+                    <button onclick="searchExistingItems(${idx})" 
+                            class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                      Search
+                    </button>
+                  </div>
+                  
+                  <!-- Search Results -->
+                  <div id="search-results-${idx}" class="hidden space-y-1 mb-2"></div>
+                  
+                  <!-- Actions -->
+                  <div class="flex gap-2">
+                    <button onclick="saveToReviewQueue(${idx})" 
+                            class="flex-1 px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700">
+                      📋 Save to Review Queue
+                    </button>
+                  </div>
+                </div>
               </div>
             `).join('')}
           </div>
@@ -1854,6 +1880,130 @@ function getStatusBadgeClass(status) {
     'Blocked': 'bg-red-100 text-red-800'
   };
   return statusClasses[status] || 'bg-gray-100 text-gray-800';
+}
+
+// Search existing items for unmatched updates
+async function searchExistingItems(unmatchedIdx) {
+  if (!currentProject || !currentAIAnalysis) return;
+  
+  const searchInput = document.getElementById(`search-input-${unmatchedIdx}`);
+  const searchResults = document.getElementById(`search-results-${unmatchedIdx}`);
+  const query = searchInput.value.trim();
+  
+  if (!query) {
+    alert('Please enter a search term');
+    return;
+  }
+  
+  try {
+    const response = await axios.get('/api/search-items', {
+      params: {
+        projectId: currentProject.id,
+        query: query
+      },
+      withCredentials: true
+    });
+    
+    const items = response.data.items;
+    
+    if (items.length === 0) {
+      searchResults.innerHTML = '<p class="text-xs text-gray-500 italic p-2">No matching items found</p>';
+      searchResults.classList.remove('hidden');
+      return;
+    }
+    
+    searchResults.innerHTML = items.map(item => `
+      <div class="flex items-start justify-between p-2 bg-gray-50 rounded border border-gray-200 text-xs">
+        <div class="flex-1">
+          <p class="font-medium">${escapeHtml(item.title)}</p>
+          <p class="text-gray-500 mt-1">${escapeHtml(item.description?.substring(0, 60) || 'No description')}...</p>
+          <div class="flex gap-2 mt-1 text-xs text-gray-400">
+            <span>${item.type === 'action' ? '✓ Action' : '⚠️ Issue'}</span>
+            <span>Status: ${item.status}</span>
+          </div>
+        </div>
+        <button onclick="matchItemFromSearch(${unmatchedIdx}, ${item.id}, '${item.type}')" 
+                class="ml-2 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap">
+          Match & Update
+        </button>
+      </div>
+    `).join('');
+    searchResults.classList.remove('hidden');
+    
+  } catch (error) {
+    console.error('Error searching items:', error);
+    alert('Failed to search items');
+  }
+}
+
+// Match unmatched update to a found item (from search)
+async function matchItemFromSearch(unmatchedIdx, itemId, itemType) {
+  if (!currentAIAnalysis || !currentProject) return;
+  
+  const unmatched = currentAIAnalysis.statusUpdateResults.unmatched[unmatchedIdx];
+  
+  if (!confirm(`Match this status update to the selected ${itemType}?\n\nUpdate: "${unmatched.update.itemDescription}"\nStatus: ${unmatched.update.statusChange}`)) {
+    return;
+  }
+  
+  try {
+    // First save to queue
+    const queueResponse = await axios.post('/api/review-queue', {
+      projectId: currentProject.id,
+      transcriptId: currentAIAnalysis.transcriptId,
+      unmatchedUpdate: unmatched
+    }, { withCredentials: true });
+    
+    const queueId = queueResponse.data.id;
+    
+    // Then immediately match it
+    await axios.post(`/api/review-queue/${queueId}/match`, {
+      itemId: itemId,
+      itemType: itemType
+    }, { withCredentials: true });
+    
+    alert('Item matched and status updated successfully!');
+    
+    // Remove from unmatched list
+    const container = document.querySelector(`[data-unmatched-idx="${unmatchedIdx}"]`);
+    if (container) {
+      container.remove();
+    }
+    
+    // Reload project data to show updated status
+    await loadProjectData(currentProject.id);
+    
+  } catch (error) {
+    console.error('Error matching item:', error);
+    alert(error.response?.data?.error || 'Failed to match item');
+  }
+}
+
+// Save unmatched update to review queue
+async function saveToReviewQueue(unmatchedIdx) {
+  if (!currentAIAnalysis || !currentProject) return;
+  
+  const unmatched = currentAIAnalysis.statusUpdateResults.unmatched[unmatchedIdx];
+  
+  try {
+    await axios.post('/api/review-queue', {
+      projectId: currentProject.id,
+      transcriptId: currentAIAnalysis.transcriptId,
+      unmatchedUpdate: unmatched
+    }, { withCredentials: true });
+    
+    alert('Saved to Review Queue! You can process it later from the kanban board.');
+    
+    // Remove from unmatched list
+    const container = document.querySelector(`[data-unmatched-idx="${unmatchedIdx}"]`);
+    if (container) {
+      container.remove();
+    }
+    
+  } catch (error) {
+    console.error('Error saving to queue:', error);
+    alert(error.response?.data?.error || 'Failed to save to queue');
+  }
 }
 
 // Toggle all action items
