@@ -1,0 +1,889 @@
+REPLIT PROMPT: AI Relationship Detection & Creation
+Enhancement Overview
+Enable AI to detect and create relationships between items:
+
+Dependencies: "blocked by", "depends on", "waiting for"
+Parent-Child: "subtask of", "part of", "breaks down into"
+Related: "similar to", "relates to", "connected with"
+
+
+Database Schema for Relationships
+Step 1: Create Relationships Tables
+sql-- Issue Relationships
+CREATE TABLE issue_relationships (
+  id SERIAL PRIMARY KEY,
+  source_issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  target_issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  relationship_type VARCHAR(50) NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT NOW(),
+  created_by_ai BOOLEAN DEFAULT FALSE,
+  ai_confidence DECIMAL(5,2),
+  transcript_id INTEGER REFERENCES meeting_transcripts(id) ON DELETE SET NULL,
+  notes TEXT,
+  
+  CONSTRAINT valid_issue_relationship CHECK (
+    relationship_type IN ('blocks', 'blocked_by', 'parent_of', 'child_of', 'relates_to', 'duplicates', 'duplicated_by')
+  ),
+  CONSTRAINT no_self_reference CHECK (source_issue_id != target_issue_id),
+  UNIQUE(source_issue_id, target_issue_id, relationship_type)
+);
+
+-- Action Item Relationships
+CREATE TABLE action_item_relationships (
+  id SERIAL PRIMARY KEY,
+  source_item_id INTEGER NOT NULL REFERENCES action_items(id) ON DELETE CASCADE,
+  target_item_id INTEGER NOT NULL REFERENCES action_items(id) ON DELETE CASCADE,
+  relationship_type VARCHAR(50) NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT NOW(),
+  created_by_ai BOOLEAN DEFAULT FALSE,
+  ai_confidence DECIMAL(5,2),
+  transcript_id INTEGER REFERENCES meeting_transcripts(id) ON DELETE SET NULL,
+  notes TEXT,
+  
+  CONSTRAINT valid_action_item_relationship CHECK (
+    relationship_type IN ('blocks', 'blocked_by', 'parent_of', 'child_of', 'relates_to', 'depends_on', 'depended_by')
+  ),
+  CONSTRAINT no_self_reference CHECK (source_item_id != target_item_id),
+  UNIQUE(source_item_id, target_item_id, relationship_type)
+);
+
+-- Cross-type relationships (Action Items blocking Issues, etc.)
+CREATE TABLE cross_item_relationships (
+  id SERIAL PRIMARY KEY,
+  source_type VARCHAR(20) NOT NULL, -- 'issue' or 'action_item'
+  source_id INTEGER NOT NULL,
+  target_type VARCHAR(20) NOT NULL, -- 'issue' or 'action_item'
+  target_id INTEGER NOT NULL,
+  relationship_type VARCHAR(50) NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT NOW(),
+  created_by_ai BOOLEAN DEFAULT FALSE,
+  ai_confidence DECIMAL(5,2),
+  transcript_id INTEGER REFERENCES meeting_transcripts(id) ON DELETE SET NULL,
+  notes TEXT,
+  
+  CONSTRAINT valid_cross_relationship CHECK (
+    relationship_type IN ('blocks', 'blocked_by', 'relates_to', 'depends_on', 'depended_by')
+  ),
+  CONSTRAINT valid_types CHECK (
+    source_type IN ('issue', 'action_item') AND target_type IN ('issue', 'action_item')
+  ),
+  CONSTRAINT no_same_type CHECK (
+    NOT (source_type = target_type AND source_id = target_id)
+  )
+);
+
+-- Indexes for performance
+CREATE INDEX idx_issue_rel_source ON issue_relationships(source_issue_id);
+CREATE INDEX idx_issue_rel_target ON issue_relationships(target_issue_id);
+CREATE INDEX idx_action_rel_source ON action_item_relationships(source_item_id);
+CREATE INDEX idx_action_rel_target ON action_item_relationships(target_item_id);
+CREATE INDEX idx_cross_rel_source ON cross_item_relationships(source_type, source_id);
+CREATE INDEX idx_cross_rel_target ON cross_item_relationships(target_type, target_id);
+
+-- Comments for documentation
+COMMENT ON TABLE issue_relationships IS 'Tracks relationships between issues (blocking, parent-child, related)';
+COMMENT ON TABLE action_item_relationships IS 'Tracks relationships between action items';
+COMMENT ON TABLE cross_item_relationships IS 'Tracks relationships between issues and action items';
+
+Enhanced AI Prompt with Relationship Detection
+File: server.js
+javascriptconst relationshipDetectionPrompt = `You are an expert AI assistant that analyzes meeting transcripts to:
+1. Extract NEW action items and issues
+2. Detect STATUS UPDATES for existing work
+3. IDENTIFY RELATIONSHIPS between work items (NEW)
+
+[... previous sections on extraction and status updates ...]
+
+# PHASE 3: RELATIONSHIP DETECTION
+
+Scan the transcript for statements indicating relationships between work items:
+
+## DEPENDENCY RELATIONSHIPS (BLOCKING):
+
+**Patterns to detect:**
+- "X is blocked by Y"
+- "can't start X until Y is done"
+- "X depends on Y"
+- "waiting for Y before X"
+- "Y needs to be completed before X"
+- "X is waiting on Y"
+
+**Example:**
+"We can't start the migration testing until the security audit is completed"
+→ Relationship: "Migration testing" BLOCKED_BY "Security audit"
+
+## PARENT-CHILD RELATIONSHIPS (HIERARCHY):
+
+**Patterns to detect:**
+- "X is part of Y"
+- "X is a subtask of Y"
+- "Y includes X"
+- "break down X into Y and Z"
+- "X consists of Y"
+- "Y is a component of X"
+
+**Example:**
+"The database migration is part of the overall Pathfinder migration project"
+→ Relationship: "Database migration" CHILD_OF "Pathfinder migration"
+
+## RELATED RELATIONSHIPS (ASSOCIATION):
+
+**Patterns to detect:**
+- "X relates to Y"
+- "X and Y are connected"
+- "similar to X"
+- "X impacts Y"
+- "coordinate X with Y"
+- "X and Y should be aligned"
+
+**Example:**
+"The network configuration should be coordinated with the security settings"
+→ Relationship: "Network configuration" RELATES_TO "Security settings"
+
+## EXTRACTION RULES:
+
+1. **Be specific**: Extract actual work item titles/descriptions, not vague references
+2. **Directional**: Note the direction (A blocks B vs B blocked by A)
+3. **High confidence only**: Only extract relationships explicitly stated (confidence >75%)
+4. **Context matters**: Consider the full sentence context
+5. **Multiple relationships**: One item can have multiple relationships
+
+## RESPONSE FORMAT:
+
+{
+  "newItems": {
+    "actionItems": [...],
+    "issues": [...]
+  },
+  "statusUpdates": [...],
+  "relationships": [
+    {
+      "sourceItem": "Migration testing",
+      "targetItem": "Security audit",
+      "relationshipType": "blocked_by",
+      "evidence": "We can't start the migration testing until the security audit is completed",
+      "sourceAssignee": "Michael Rodriguez",
+      "targetAssignee": "Lisa Martinez",
+      "confidence": 95
+    },
+    {
+      "sourceItem": "Database migration",
+      "targetItem": "Pathfinder migration",
+      "relationshipType": "child_of",
+      "evidence": "The database migration is part of the overall Pathfinder migration project",
+      "confidence": 90
+    },
+    {
+      "sourceItem": "Network configuration",
+      "targetItem": "Security settings",
+      "relationshipType": "relates_to",
+      "evidence": "The network configuration should be coordinated with the security settings",
+      "confidence": 85
+    }
+  ]
+}
+
+## RELATIONSHIP TYPES:
+
+- **blocked_by**: Source cannot proceed until target is complete
+- **blocks**: Source prevents target from proceeding (inverse of blocked_by)
+- **child_of**: Source is a subtask/component of target
+- **parent_of**: Source contains target as subtask (inverse of child_of)
+- **relates_to**: Source and target are associated/connected
+- **depends_on**: Source requires target (similar to blocked_by but softer)
+
+## CONFIDENCE SCORING FOR RELATIONSHIPS:
+
+- 90-100%: Explicit blocking/dependency statement with clear items
+- 80-89%: Clear relationship but one item description is somewhat vague
+- 75-79%: Implied relationship with reasonable certainty
+- <75%: Don't extract (too ambiguous)
+
+IMPORTANT: Only extract relationships where BOTH items are clearly identifiable work items being discussed in the meeting.`;
+
+Backend Implementation
+Step 2: Relationship Processing Function
+File: server.js
+javascriptconst stringSimilarity = require('string-similarity');
+
+/**
+ * Process relationships detected by AI
+ * Match items and create relationship records
+ * @param {Array} relationships - Relationships from AI
+ * @param {number} projectId - Project ID
+ * @param {number} userId - User performing the analysis
+ * @param {number} transcriptId - Transcript ID
+ * @returns {Object} Results of relationship creation
+ */
+async function processRelationships(relationships, projectId, userId, transcriptId) {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const results = {
+      created: [],
+      failed: [],
+      alreadyExists: []
+    };
+    
+    for (const rel of relationships) {
+      try {
+        // Find source item
+        const sourceMatch = await findItemByDescription(
+          rel.sourceItem, 
+          rel.sourceAssignee, 
+          projectId, 
+          client
+        );
+        
+        if (!sourceMatch.found) {
+          results.failed.push({
+            relationship: rel,
+            reason: `Source item not found: "${rel.sourceItem}"`
+          });
+          continue;
+        }
+        
+        // Find target item
+        const targetMatch = await findItemByDescription(
+          rel.targetItem, 
+          rel.targetAssignee, 
+          projectId, 
+          client
+        );
+        
+        if (!targetMatch.found) {
+          results.failed.push({
+            relationship: rel,
+            reason: `Target item not found: "${rel.targetItem}"`
+          });
+          continue;
+        }
+        
+        // Determine relationship table
+        const sourceType = sourceMatch.type;
+        const targetType = targetMatch.type;
+        
+        let relationshipCreated = false;
+        
+        // Same type relationships
+        if (sourceType === targetType) {
+          const table = sourceType === 'issue' 
+            ? 'issue_relationships' 
+            : 'action_item_relationships';
+          const sourceCol = sourceType === 'issue' 
+            ? 'source_issue_id' 
+            : 'source_item_id';
+          const targetCol = sourceType === 'issue' 
+            ? 'target_issue_id' 
+            : 'target_item_id';
+          
+          // Check if relationship already exists
+          const existingCheck = await client.query(`
+            SELECT id FROM ${table}
+            WHERE ${sourceCol} = $1 AND ${targetCol} = $2 AND relationship_type = $3
+          `, [sourceMatch.id, targetMatch.id, rel.relationshipType]);
+          
+          if (existingCheck.rows.length > 0) {
+            results.alreadyExists.push({
+              relationship: rel,
+              existingId: existingCheck.rows[0].id
+            });
+            continue;
+          }
+          
+          // Create relationship
+          const insertResult = await client.query(`
+            INSERT INTO ${table} (
+              ${sourceCol}, ${targetCol}, relationship_type,
+              created_by, created_by_ai, ai_confidence, transcript_id,
+              notes
+            )
+            VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7)
+            RETURNING id
+          `, [
+            sourceMatch.id,
+            targetMatch.id,
+            rel.relationshipType,
+            userId,
+            rel.confidence,
+            transcriptId,
+            `Evidence: "${rel.evidence}"`
+          ]);
+          
+          // Create inverse relationship if applicable
+          const inverseType = getInverseRelationship(rel.relationshipType);
+          if (inverseType) {
+            await client.query(`
+              INSERT INTO ${table} (
+                ${sourceCol}, ${targetCol}, relationship_type,
+                created_by, created_by_ai, ai_confidence, transcript_id,
+                notes
+              )
+              VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7)
+            `, [
+              targetMatch.id,
+              sourceMatch.id,
+              inverseType,
+              userId,
+              rel.confidence,
+              transcriptId,
+              `Inverse of: "${rel.evidence}"`
+            ]);
+          }
+          
+          relationshipCreated = true;
+          
+        } else {
+          // Cross-type relationship
+          const existingCheck = await client.query(`
+            SELECT id FROM cross_item_relationships
+            WHERE source_type = $1 AND source_id = $2 
+            AND target_type = $3 AND target_id = $4 
+            AND relationship_type = $5
+          `, [sourceType, sourceMatch.id, targetType, targetMatch.id, rel.relationshipType]);
+          
+          if (existingCheck.rows.length > 0) {
+            results.alreadyExists.push({
+              relationship: rel,
+              existingId: existingCheck.rows[0].id
+            });
+            continue;
+          }
+          
+          // Create cross-type relationship
+          const insertResult = await client.query(`
+            INSERT INTO cross_item_relationships (
+              source_type, source_id, target_type, target_id, relationship_type,
+              created_by, created_by_ai, ai_confidence, transcript_id, notes
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9)
+            RETURNING id
+          `, [
+            sourceType,
+            sourceMatch.id,
+            targetType,
+            targetMatch.id,
+            rel.relationshipType,
+            userId,
+            rel.confidence,
+            transcriptId,
+            `Evidence: "${rel.evidence}"`
+          ]);
+          
+          relationshipCreated = true;
+        }
+        
+        if (relationshipCreated) {
+          results.created.push({
+            sourceItem: sourceMatch.title,
+            sourceType: sourceType,
+            sourceId: sourceMatch.id,
+            targetItem: targetMatch.title,
+            targetType: targetType,
+            targetId: targetMatch.id,
+            relationshipType: rel.relationshipType,
+            confidence: rel.confidence,
+            evidence: rel.evidence
+          });
+        }
+        
+      } catch (error) {
+        console.error('Error processing relationship:', error);
+        results.failed.push({
+          relationship: rel,
+          reason: error.message
+        });
+      }
+    }
+    
+    await client.query('COMMIT');
+    return results;
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Find an item (issue or action item) by description
+ * @param {string} description - Item description from AI
+ * @param {string} assignee - Assignee name (optional)
+ * @param {number} projectId - Project ID
+ * @param {Object} client - Database client
+ * @returns {Object} Match result with item details
+ */
+async function findItemByDescription(description, assignee, projectId, client) {
+  // Search in issues first
+  let query = `
+    SELECT id, title, assignee, 'issue' as type
+    FROM issues
+    WHERE project_id = $1
+    ${assignee ? 'AND assignee ILIKE $2' : ''}
+    ORDER BY created_at DESC
+    LIMIT 30
+  `;
+  
+  let params = assignee ? [projectId, `%${assignee}%`] : [projectId];
+  let results = await client.query(query, params);
+  
+  // Search in action items
+  query = `
+    SELECT id, title, assignee, 'action_item' as type
+    FROM action_items
+    WHERE project_id = $1
+    ${assignee ? 'AND assignee ILIKE $2' : ''}
+    ORDER BY created_at DESC
+    LIMIT 30
+  `;
+  
+  const actionResults = await client.query(query, params);
+  
+  // Combine results
+  const allItems = [...results.rows, ...actionResults.rows];
+  
+  if (allItems.length === 0) {
+    return { found: false };
+  }
+  
+  // Use string similarity to find best match
+  const titles = allItems.map(item => item.title);
+  const matches = stringSimilarity.findBestMatch(description, titles);
+  const bestMatchIndex = matches.bestMatchIndex;
+  const matchConfidence = matches.bestMatch.rating * 100;
+  
+  // Require at least 70% similarity
+  if (matchConfidence < 70) {
+    return { found: false, closestMatch: allItems[bestMatchIndex].title };
+  }
+  
+  const matchedItem = allItems[bestMatchIndex];
+  
+  return {
+    found: true,
+    id: matchedItem.id,
+    title: matchedItem.title,
+    type: matchedItem.type,
+    matchConfidence: matchConfidence
+  };
+}
+
+/**
+ * Get inverse relationship type
+ * @param {string} relationshipType - Original relationship type
+ * @returns {string|null} Inverse relationship or null
+ */
+function getInverseRelationship(relationshipType) {
+  const inverseMap = {
+    'blocks': 'blocked_by',
+    'blocked_by': 'blocks',
+    'parent_of': 'child_of',
+    'child_of': 'parent_of',
+    'depends_on': 'depended_by',
+    'depended_by': 'depends_on',
+    'relates_to': 'relates_to' // Symmetric
+  };
+  
+  return inverseMap[relationshipType] || null;
+}
+Step 3: Update Main AI Analysis Endpoint
+javascriptapp.post('/api/ai-analysis/upload', authenticateToken, upload.single('transcript'), async (req, res) => {
+  const startTime = Date.now();
+  const analysisId = uuidv4();
+  let transcriptId = null;
+  
+  try {
+    // ... existing code for file upload and transcript storage ...
+    
+    // Call AI with enhanced prompt including relationship detection
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo-1106',
+      messages: [
+        { role: 'system', content: relationshipDetectionPrompt },
+        { 
+          role: 'user', 
+          content: `Meeting Date: ${meetingDate}\n\nProject ID: ${projectId}\n\nTranscript:\n${transcriptText}` 
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 4000, // Increased for relationships
+      response_format: { type: 'json_object' }
+    });
+    
+    const aiResults = JSON.parse(completion.choices[0].message.content);
+    
+    // Process status updates
+    let statusUpdateResults = null;
+    if (aiResults.statusUpdates && aiResults.statusUpdates.length > 0) {
+      statusUpdateResults = await processStatusUpdates(
+        aiResults.statusUpdates, 
+        projectId, 
+        req.user.id, 
+        transcriptId
+      );
+    }
+    
+    // NEW: Process relationships
+    let relationshipResults = null;
+    if (aiResults.relationships && aiResults.relationships.length > 0) {
+      relationshipResults = await processRelationships(
+        aiResults.relationships,
+        projectId,
+        req.user.id,
+        transcriptId
+      );
+    }
+    
+    // ... existing code for updating transcript and returning results ...
+    
+    res.json({
+      success: true,
+      analysisId: analysisId,
+      transcriptId: transcriptId,
+      results: {
+        newItems: aiResults.newItems || { actionItems: [], issues: [] },
+        statusUpdates: aiResults.statusUpdates || [],
+        relationships: aiResults.relationships || []
+      },
+      processingResults: {
+        statusUpdates: statusUpdateResults,
+        relationships: relationshipResults
+      },
+      metadata: {
+        processingTime: `${Date.now() - startTime}ms`,
+        totalTokens: completion.usage.total_tokens,
+        estimatedCost: `$${((completion.usage.prompt_tokens * 0.0015 + completion.usage.completion_tokens * 0.002) / 1000).toFixed(4)}`,
+        model: 'gpt-3.5-turbo-1106'
+      }
+    });
+    
+  } catch (error) {
+    // ... error handling ...
+  }
+});
+
+Frontend Implementation
+Step 4: Display Relationships in Results
+File: public/index.html
+html<!-- Relationships Section -->
+<div class="mb-6" id="relationships-section" style="display: none;">
+  <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+    <span class="text-2xl">🔗</span>
+    Relationships Detected
+    <span id="relationships-count" class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-sm">0</span>
+  </h3>
+  
+  <!-- Successfully Created Relationships -->
+  <div id="created-relationships" class="mb-4"></div>
+  
+  <!-- Failed Relationships (couldn't match items) -->
+  <div id="failed-relationships"></div>
+  
+  <!-- Already Existing Relationships -->
+  <div id="existing-relationships"></div>
+</div>
+File: public/app.js
+javascript/**
+ * Display relationship detection results
+ */
+function displayRelationshipResults(relationshipResults) {
+  if (!relationshipResults || relationshipResults.created.length === 0) {
+    return;
+  }
+  
+  const section = document.getElementById('relationships-section');
+  const countSpan = document.getElementById('relationships-count');
+  const createdContainer = document.getElementById('created-relationships');
+  const failedContainer = document.getElementById('failed-relationships');
+  const existingContainer = document.getElementById('existing-relationships');
+  
+  section.style.display = 'block';
+  countSpan.textContent = relationshipResults.created.length;
+  
+  // Display created relationships
+  if (relationshipResults.created.length > 0) {
+    createdContainer.innerHTML = `
+      <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        <h4 class="font-semibold text-purple-900 mb-3">
+          ✅ Relationships Created (${relationshipResults.created.length})
+        </h4>
+        <div class="space-y-3">
+          ${relationshipResults.created.map(rel => `
+            <div class="bg-white border-l-4 ${getRelationshipBorderColor(rel.relationshipType)} rounded-lg p-3">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="font-medium text-gray-900">${rel.sourceItem}</span>
+                <span class="px-2 py-1 text-xs rounded ${getRelationshipBadgeClass(rel.relationshipType)}">
+                  ${formatRelationshipType(rel.relationshipType)}
+                </span>
+                <span class="font-medium text-gray-900">${rel.targetItem}</span>
+              </div>
+              <p class="text-sm text-gray-600 italic mb-2">"${rel.evidence}"</p>
+              <div class="flex gap-3 text-xs text-gray-500">
+                <span>🎯 Confidence: ${rel.confidence}%</span>
+                <span>📝 ${rel.sourceType === 'issue' ? 'Issue' : 'Action'} #${rel.sourceId} → ${rel.targetType === 'issue' ? 'Issue' : 'Action'} #${rel.targetId}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
+  // Display failed relationships
+  if (relationshipResults.failed.length > 0) {
+    failedContainer.innerHTML = `
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+        <h4 class="font-semibold text-yellow-900 mb-2">
+          ⚠️ Could Not Create (${relationshipResults.failed.length})
+        </h4>
+        <p class="text-sm text-yellow-800 mb-3">
+          These relationships couldn't be created because one or both items weren't found.
+        </p>
+        <div class="space-y-2">
+          ${relationshipResults.failed.map(failed => `
+            <div class="bg-white border border-yellow-300 rounded-lg p-3">
+              <p class="font-medium text-gray-900 mb-1">
+                ${failed.relationship.sourceItem} ${formatRelationshipType(failed.relationship.relationshipType)} ${failed.relationship.targetItem}
+              </p>
+              <p class="text-xs text-yellow-700">${failed.reason}</p>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
+  // Display already existing relationships
+  if (relationshipResults.alreadyExists && relationshipResults.alreadyExists.length > 0) {
+    existingContainer.innerHTML = `
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h4 class="font-semibold text-blue-900 mb-2">
+          ℹ️ Already Exists (${relationshipResults.alreadyExists.length})
+        </h4>
+        <p class="text-sm text-blue-800">
+          These relationships were already created previously.
+        </p>
+      </div>
+    `;
+  }
+}
+
+/**
+ * Get border color for relationship type
+ */
+function getRelationshipBorderColor(type) {
+  const colors = {
+    'blocked_by': 'border-red-400',
+    'blocks': 'border-red-400',
+    'child_of': 'border-blue-400',
+    'parent_of': 'border-blue-400',
+    'relates_to': 'border-green-400',
+    'depends_on': 'border-orange-400',
+    'depended_by': 'border-orange-400'
+  };
+  return colors[type] || 'border-gray-400';
+}
+
+/**
+ * Get badge styling for relationship type
+ */
+function getRelationshipBadgeClass(type) {
+  const classes = {
+    'blocked_by': 'bg-red-100 text-red-800',
+    'blocks': 'bg-red-100 text-red-800',
+    'child_of': 'bg-blue-100 text-blue-800',
+    'parent_of': 'bg-blue-100 text-blue-800',
+    'relates_to': 'bg-green-100 text-green-800',
+    'depends_on': 'bg-orange-100 text-orange-800',
+    'depended_by': 'bg-orange-100 text-orange-800'
+  };
+  return classes[type] || 'bg-gray-100 text-gray-800';
+}
+
+/**
+ * Format relationship type for display
+ */
+function formatRelationshipType(type) {
+  const formatted = {
+    'blocked_by': '🚫 Blocked By',
+    'blocks': '🚫 Blocks',
+    'child_of': '📦 Child Of',
+    'parent_of': '📦 Parent Of',
+    'relates_to': '🔗 Relates To',
+    'depends_on': '⚡ Depends On',
+    'depended_by': '⚡ Depended By'
+  };
+  return formatted[type] || type;
+}
+Step 5: Display Relationships on Kanban Cards
+Update Kanban card rendering to show relationship indicators:
+javascript/**
+ * Render Kanban card with relationship indicators
+ */
+function renderKanbanCard(item) {
+  // ... existing card HTML ...
+  
+  // Add relationship indicators
+  const relationshipBadges = getRelationshipBadges(item.id, item.type);
+  
+  return `
+    <div class="bg-white p-4 rounded shadow cursor-move">
+      <!-- Title and badges -->
+      <div class="flex justify-between items-start mb-2">
+        <h4 class="font-semibold">${item.title}</h4>
+        ${getAISourceBadge(item)}
+      </div>
+      
+      <!-- Relationship indicators -->
+      ${relationshipBadges ? `
+        <div class="flex flex-wrap gap-1 mb-2">
+          ${relationshipBadges}
+        </div>
+      ` : ''}
+      
+      <!-- Rest of card content -->
+      ...
+    </div>
+  `;
+}
+
+/**
+ * Get relationship badges for an item
+ */
+async function getRelationshipBadges(itemId, itemType) {
+  try {
+    const response = await fetch(
+      `/api/relationships?itemId=${itemId}&itemType=${itemType}`,
+      { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }}
+    );
+    
+    const relationships = await response.json();
+    
+    if (relationships.length === 0) return '';
+    
+    return relationships.map(rel => {
+      const icon = rel.relationship_type === 'blocked_by' ? '🚫' :
+                   rel.relationship_type === 'blocks' ? '⛔' :
+                   rel.relationship_type === 'child_of' ? '📦' :
+                   rel.relationship_type === 'parent_of' ? '📁' :
+                   '🔗';
+      
+      return `
+        <span class="text-xs px-2 py-1 rounded ${getRelationshipBadgeClass(rel.relationship_type)}" 
+              title="${formatRelationshipType(rel.relationship_type)}: ${rel.related_title}">
+          ${icon}
+        </span>
+      `;
+    }).join('');
+    
+  } catch (error) {
+    console.error('Error fetching relationships:', error);
+    return '';
+  }
+}
+Step 6: API Endpoint to Get Relationships
+javascript/**
+ * Get relationships for an item
+ */
+app.get('/api/relationships', authenticateToken, async (req, res) => {
+  try {
+    const { itemId, itemType } = req.query;
+    
+    let relationships = [];
+    
+    if (itemType === 'issue') {
+      // Get issue relationships
+      const result = await pool.query(`
+        SELECT 
+          ir.relationship_type,
+          i.id as related_id,
+          i.title as related_title,
+          i.status as related_status,
+          ir.created_by_ai,
+          ir.ai_confidence
+        FROM issue_relationships ir
+        JOIN issues i ON i.id = CASE 
+          WHEN ir.source_issue_id = $1 THEN ir.target_issue_id
+          ELSE ir.source_issue_id
+        END
+        WHERE ir.source_issue_id = $1 OR ir.target_issue_id = $1
+      `, [itemId]);
+      
+      relationships = result.rows;
+      
+    } else if (itemType === 'action_item') {
+      // Get action item relationships
+      const result = await pool.query(`
+        SELECT 
+          air.relationship_type,
+          ai.id as related_id,
+          ai.title as related_title,
+          ai.status as related_status,
+          air.created_by_ai,
+          air.ai_confidence
+        FROM action_item_relationships air
+        JOIN action_items ai ON ai.id = CASE 
+          WHEN air.source_item_id = $1 THEN air.target_item_id
+          ELSE air.source_item_id
+        END
+        WHERE air.source_item_id = $1 OR air.target_item_id = $1
+      `, [itemId]);
+      
+      relationships = result.rows;
+    }
+    
+    // Also get cross-type relationships
+    const crossResult = await pool.query(`
+      SELECT 
+        cir.relationship_type,
+        cir.target_type as related_type,
+        cir.target_id as related_id,
+        CASE 
+          WHEN cir.target_type = 'issue' THEN (SELECT title FROM issues WHERE id = cir.target_id)
+          ELSE (SELECT title FROM action_items WHERE id = cir.target_id)
+        END as related_title,
+        CASE 
+          WHEN cir.target_type = 'issue' THEN (SELECT status FROM issues WHERE id = cir.target_id)
+          ELSE (SELECT status FROM action_items WHERE id = cir.target_id)
+        END as related_status,
+        cir.created_by_ai,
+        cir.ai_confidence
+      FROM cross_item_relationships cir
+      WHERE cir.source_type = $1 AND cir.source_id = $2
+      
+      UNION
+      
+      SELECT 
+        cir.relationship_type,
+        cir.source_type as related_type,
+        cir.source_id as related_id,
+        CASE 
+          WHEN cir.source_type = 'issue' THEN (SELECT title FROM issues WHERE id = cir.source_id)
+          ELSE (SELECT title FROM action_items WHERE id = cir.source_id)
+        END as related_title,
+        CASE 
+          WHEN cir.source_type = 'issue' THEN (SELECT status FROM issues WHERE id = cir.source_id)
+          ELSE (SELECT status FROM action_items WHERE id = cir.source_id)
+        END as related_status,
+        cir.created_by_ai,
+        cir.ai_confidence
+      FROM cross_item_relationships cir
+      WHERE cir.target_type = $1 AND cir.target_id = $2
+    `, [itemType, itemId]);
+    
+    relationships = [...relationships, ...crossResult.rows];
+    
+    res.json(relationships);
+    
+  } catch (error) {
+    console.error('Error fetching relationships:', error);
+    res.status(500).json({ error: 'Failed to fetch relationships' });
+  }
+});
