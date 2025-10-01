@@ -1653,7 +1653,15 @@ async function analyzeTranscript() {
     
   } catch (error) {
     console.error('Error analyzing transcript:', error);
-    alert(error.response?.data?.error || 'Failed to analyze transcript. Please check your OpenAI API key.');
+    const errorMessage = error.response?.data?.message || error.response?.data?.error;
+    
+    if (error.response?.status === 403) {
+      // Permission denied error
+      alert(`⚠️ Permission Denied\n\n${errorMessage}\n\nOnly Project Managers and System Administrators can upload transcripts and run AI analysis.`);
+    } else {
+      alert(errorMessage || 'Failed to analyze transcript. Please check your OpenAI API key.');
+    }
+    
     progressDiv.classList.add('hidden');
     analyzeBtn.disabled = false;
   }
@@ -2395,7 +2403,14 @@ async function createAllItems() {
     
   } catch (error) {
     console.error('Error creating items:', error);
-    alert(error.response?.data?.error || 'Failed to create items');
+    const errorMessage = error.response?.data?.message || error.response?.data?.error;
+    
+    if (error.response?.status === 403) {
+      // Permission denied error
+      alert(`⚠️ Permission Denied\n\n${errorMessage}\n\nOnly Project Managers and System Administrators can create items from AI analysis.`);
+    } else {
+      alert(errorMessage || 'Failed to create items');
+    }
   }
 }
 
