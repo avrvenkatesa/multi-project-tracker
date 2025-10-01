@@ -7,6 +7,9 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { neon, Pool, neonConfig } = require("@neondatabase/serverless");
 const ws = require("ws");
+const multer = require('multer');
+const { OpenAI } = require('openai');
+const fs = require('fs').promises;
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -19,6 +22,29 @@ const JWT_EXPIRY = "7d";
 // Database connection
 const sql = neon(process.env.DATABASE_URL);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// Initialize OpenAI with GPT-3.5-Turbo (cost-effective)
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// Configure multer for file uploads
+const upload = multer({ 
+  dest: 'uploads/',
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['text/plain'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only .txt files allowed'));
+    }
+  }
+});
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+fs.mkdir(uploadsDir, { recursive: true }).catch(console.error);
 
 // Security middleware
 app.use(
@@ -844,6 +870,239 @@ app.delete('/api/:itemType/:id/relationships/:relationshipId', authenticateToken
     console.error('Error deleting relationship:', error);
     res.status(500).json({ error: 'Failed to delete relationship' });
   }
+});
+
+// Upload and analyze meeting transcript
+app.post('/api/meetings/analyze', 
+  authenticateToken, 
+  requireRole('Team Member'),
+  upload.single('transcript'), 
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const { projectId } = req.body;
+      if (!projectId) {
+        return res.status(400).json({ error: 'Project ID required' });
+      }
+
+      // Read uploaded file
+      const filePath = req.file.path;
+      const transcriptText = await fs.readFile(filePath, 'utf8');
+
+      // Clean up uploaded file immediately
+      await fs.unlink(filePath);
+
+      // Validate transcript length (GPT-3.5 has 16K context window)
+      const estimatedTokens = Math.ceil(transcriptText.length / 4);
+      if (estimatedTokens > 12000) {
+        return res.status(400).json({ 
+          error: 'Transcript too long. Please limit to ~10,000 words (48,000 characters)' 
+        });
+      }
+
+      // Get project context for better AI results
+      const project = await sql`SELECT * FROM projects WHERE id = ${parseInt(projectId)}`;
+      if (!project || project.length === 0) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      console.log(`Analyzing transcript (${estimatedTokens} tokens) with GPT-3.5-Turbo...`);
+      
+      // Call OpenAI with GPT-3.5-Turbo (cost-effective)
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo-1106", // Latest GPT-3.5 with JSON mode
+        messages: [
+          {
+            role: "system",
+            content: `You are an AI assistant analyzing meeting transcripts to extract action items and issues.
+
+Project Context:
+- Name: ${project[0].name}
+- Type: ${project[0].template}
+- Categories: ${project[0].categories?.join(', ') || 'General'}
+
+Extract:
+1. ACTION ITEMS - specific tasks that need completion
+2. ISSUES - problems, blockers, or risks mentioned
+
+For each ACTION ITEM provide:
+- title: Brief task description (max 100 chars)
+- description: More details if available
+- assignee: Person's name if mentioned, otherwise "Unassigned"
+- dueDate: ISO format YYYY-MM-DD if mentioned, otherwise null
+- priority: critical/high/medium/low based on urgency
+- confidence: 0-100 (how confident you are)
+
+For each ISSUE provide:
+- title: Brief problem description (max 100 chars)
+- description: More details
+- priority: critical/high/medium/low
+- category: Pick from project categories, or "General"
+- confidence: 0-100
+
+Respond ONLY with valid JSON:
+{
+  "actionItems": [{
+    "title": "string",
+    "description": "string",
+    "assignee": "string",
+    "dueDate": "YYYY-MM-DD or null",
+    "priority": "critical/high/medium/low",
+    "confidence": 85
+  }],
+  "issues": [{
+    "title": "string",
+    "description": "string",
+    "priority": "critical/high/medium/low",
+    "category": "string",
+    "confidence": 90
+  }]
+}
+
+Be conservative - only extract clear action items and issues. High confidence (>80) for explicit statements, lower for implied tasks.`
+          },
+          {
+            role: "user",
+            content: `Analyze this meeting transcript:\n\n${transcriptText}`
+          }
+        ],
+        temperature: 0.3, // Lower temperature for more consistent extraction
+        response_format: { type: "json_object" },
+        max_tokens: 2000 // Limit response size for cost control
+      });
+
+      const aiResponse = completion.choices[0].message.content;
+      const parsedResponse = JSON.parse(aiResponse);
+
+      // Calculate cost (approximate)
+      const inputTokens = completion.usage.prompt_tokens;
+      const outputTokens = completion.usage.completion_tokens;
+      const estimatedCost = (inputTokens * 0.0005 / 1000) + (outputTokens * 0.0015 / 1000);
+
+      // Add metadata to response
+      const result = {
+        ...parsedResponse,
+        metadata: {
+          projectId: parseInt(projectId),
+          analyzedAt: new Date().toISOString(),
+          analyzedBy: req.user.id,
+          transcriptLength: transcriptText.length,
+          model: "gpt-3.5-turbo-1106",
+          tokensUsed: {
+            input: inputTokens,
+            output: outputTokens,
+            total: completion.usage.total_tokens
+          },
+          estimatedCost: `$${estimatedCost.toFixed(4)}`
+        }
+      };
+
+      console.log(`Analysis complete: ${parsedResponse.actionItems?.length || 0} action items, ${parsedResponse.issues?.length || 0} issues`);
+      console.log(`Tokens used: ${completion.usage.total_tokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
+      
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error analyzing transcript:', error);
+      
+      // Clean up file if it still exists
+      if (req.file?.path) {
+        try {
+          await fs.unlink(req.file.path);
+        } catch (unlinkError) {
+          // Ignore cleanup errors
+        }
+      }
+
+      if (error.message?.includes('API key')) {
+        return res.status(500).json({ 
+          error: 'OpenAI API not configured. Please add OPENAI_API_KEY to Replit Secrets.' 
+        });
+      }
+
+      if (error.code === 'insufficient_quota') {
+        return res.status(500).json({ 
+          error: 'OpenAI API quota exceeded. Please check your OpenAI account.' 
+        });
+      }
+
+      res.status(500).json({ 
+        error: 'Failed to analyze transcript',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+});
+
+// Batch create items from AI suggestions
+app.post('/api/meetings/create-items', 
+  authenticateToken,
+  requireRole('Team Member'),
+  async (req, res) => {
+    try {
+      const { projectId, actionItems, issues } = req.body;
+
+      if (!projectId) {
+        return res.status(400).json({ error: 'Project ID required' });
+      }
+
+      const created = {
+        actionItems: [],
+        issues: []
+      };
+
+      // Create action items
+      if (actionItems && actionItems.length > 0) {
+        for (const item of actionItems) {
+          const newItem = await sql`
+            INSERT INTO action_items (
+              title, description, project_id, priority, assignee, 
+              due_date, status, created_by
+            ) VALUES (
+              ${item.title.substring(0, 200)},
+              ${item.description?.substring(0, 1000) || ''},
+              ${parseInt(projectId)},
+              ${item.priority || 'medium'},
+              ${item.assignee || ''},
+              ${item.dueDate || null},
+              'To Do',
+              ${req.user.id}
+            ) RETURNING *
+          `;
+          created.actionItems.push(newItem[0]);
+        }
+      }
+
+      // Create issues
+      if (issues && issues.length > 0) {
+        for (const issue of issues) {
+          const newIssue = await sql`
+            INSERT INTO issues (
+              title, description, project_id, priority, category,
+              status, created_by
+            ) VALUES (
+              ${issue.title.substring(0, 200)},
+              ${issue.description?.substring(0, 1000) || ''},
+              ${parseInt(projectId)},
+              ${issue.priority || 'medium'},
+              ${issue.category || 'General'},
+              'To Do',
+              ${req.user.id}
+            ) RETURNING *
+          `;
+          created.issues.push(newIssue[0]);
+        }
+      }
+
+      console.log(`Created ${created.actionItems.length} action items and ${created.issues.length} issues from AI analysis`);
+      res.json(created);
+
+    } catch (error) {
+      console.error('Error creating items from AI suggestions:', error);
+      res.status(500).json({ error: 'Failed to create items' });
+    }
 });
 
 // Serve frontend
