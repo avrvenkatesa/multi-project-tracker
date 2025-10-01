@@ -1,0 +1,902 @@
+REPLIT PROMPT: AI Analysis Enhancements - Transcript Storage & Smart Updates
+Enhancement Overview
+Enhancement 1: Transcript Storage & Cross-Referencing
+Store uploaded transcripts in the database and link them to generated issues/action items for full traceability and audit capability.
+Enhancement 2: Smart Duplicate Detection & Status Updates
+Detect when AI analysis identifies items that already exist in the system, and intelligently update them rather than creating duplicates.
+
+Part 1: Transcript Storage & Cross-Referencing
+Database Schema Changes
+File: Database migration or server.js schema setup
+sql-- New table: meeting_transcripts
+CREATE TABLE meeting_transcripts (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title VARCHAR(255) NOT NULL,
+  meeting_date DATE NOT NULL,
+  uploaded_by INTEGER NOT NULL REFERENCES users(id),
+  uploaded_at TIMESTAMP DEFAULT NOW(),
+  
+  -- File information
+  original_filename VARCHAR(255) NOT NULL,
+  file_size INTEGER NOT NULL,
+  file_path VARCHAR(500),  -- For file storage systems
+  
+  -- Transcript content
+  transcript_text TEXT NOT NULL,
+  
+  -- AI analysis metadata
+  analysis_id VARCHAR(100) UNIQUE,
+  ai_model VARCHAR(50) DEFAULT 'gpt-3.5-turbo',
+  processing_time_ms INTEGER,
+  total_tokens INTEGER,
+  estimated_cost DECIMAL(10, 4),
+  
+  -- Extraction statistics
+  action_items_extracted INTEGER DEFAULT 0,
+  issues_extracted INTEGER DEFAULT 0,
+  avg_confidence DECIMAL(5, 2),
+  
+  -- Status
+  status VARCHAR(50) DEFAULT 'processed',  -- uploaded, processing, processed, failed
+  error_message TEXT,
+  
+  -- Metadata
+  tags TEXT[],
+  notes TEXT,
+  
+  CONSTRAINT valid_status CHECK (status IN ('uploaded', 'processing', 'processed', 'failed'))
+);
+
+-- Add indexes for performance
+CREATE INDEX idx_transcripts_project ON meeting_transcripts(project_id);
+CREATE INDEX idx_transcripts_date ON meeting_transcripts(meeting_date);
+CREATE INDEX idx_transcripts_analysis ON meeting_transcripts(analysis_id);
+CREATE INDEX idx_transcripts_uploaded_by ON meeting_transcripts(uploaded_by);
+
+-- Update issues table to add transcript reference
+ALTER TABLE issues 
+ADD COLUMN transcript_id INTEGER REFERENCES meeting_transcripts(id) ON DELETE SET NULL,
+ADD COLUMN extracted_from_line INTEGER;  -- Line number in transcript where item was found
+
+-- Update action_items table to add transcript reference
+ALTER TABLE action_items 
+ADD COLUMN transcript_id INTEGER REFERENCES meeting_transcripts(id) ON DELETE SET NULL,
+ADD COLUMN extracted_from_line INTEGER;
+
+-- Create index for transcript lookups
+CREATE INDEX idx_issues_transcript ON issues(transcript_id);
+CREATE INDEX idx_action_items_transcript ON action_items(transcript_id);
+
+-- Add comments for documentation
+COMMENT ON TABLE meeting_transcripts IS 'Stores uploaded meeting transcripts and AI analysis metadata';
+COMMENT ON COLUMN meeting_transcripts.analysis_id IS 'Unique identifier for this AI analysis session';
+COMMENT ON COLUMN issues.transcript_id IS 'Reference to the transcript this issue was extracted from (if AI-generated)';
+COMMENT ON COLUMN action_items.transcript_id IS 'Reference to the transcript this action item was extracted from (if AI-generated)';
+
+Backend API Changes
+File: server.js
+1. Enhanced Upload Endpoint
+javascriptconst { v4: uuidv4 } = require('uuid');
+
+// Enhanced AI Analysis Upload Endpoint
+app.post('/api/ai-analysis/upload', authenticateToken, upload.single('transcript'), async (req, res) => {
+  const startTime = Date.now();
+  const analysisId = uuidv4();
+  let transcriptId = null;
+  
+  try {
+    const file = req.file;
+    const { projectId, meetingDate, title } = req.body;
+    
+    // Validate inputs
+    if (!file || !projectId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Read transcript content
+    const transcriptText = fs.readFileSync(file.path, 'utf-8');
+    
+    // STEP 1: Store transcript in database FIRST
+    const transcriptResult = await pool.query(`
+      INSERT INTO meeting_transcripts (
+        project_id, title, meeting_date, uploaded_by,
+        original_filename, file_size, transcript_text,
+        analysis_id, status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'processing')
+      RETURNING id
+    `, [
+      projectId,
+      title || `Meeting ${new Date().toLocaleDateString()}`,
+      meetingDate || new Date().toISOString().split('T')[0],
+      req.user.id,
+      file.originalname,
+      file.size,
+      transcriptText,
+      analysisId
+    ]);
+    
+    transcriptId = transcriptResult.rows[0].id;
+    
+    // STEP 2: Call AI for analysis
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo-1106',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Meeting Date: ${meetingDate}\n\nTranscript:\n${transcriptText}` }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+      response_format: { type: 'json_object' }
+    });
+    
+    const aiResults = JSON.parse(completion.choices[0].message.content);
+    const processingTime = Date.now() - startTime;
+    
+    // Calculate costs
+    const promptTokens = completion.usage.prompt_tokens;
+    const completionTokens = completion.usage.completion_tokens;
+    const totalTokens = completion.usage.total_tokens;
+    const estimatedCost = (promptTokens * 0.0015 + completionTokens * 0.002) / 1000; // GPT-3.5-turbo pricing
+    
+    // STEP 3: Update transcript with analysis results
+    await pool.query(`
+      UPDATE meeting_transcripts
+      SET 
+        status = 'processed',
+        processing_time_ms = $1,
+        total_tokens = $2,
+        estimated_cost = $3,
+        action_items_extracted = $4,
+        issues_extracted = $5,
+        avg_confidence = $6
+      WHERE id = $7
+    `, [
+      processingTime,
+      totalTokens,
+      estimatedCost,
+      aiResults.actionItems?.length || 0,
+      aiResults.issues?.length || 0,
+      calculateAvgConfidence(aiResults),
+      transcriptId
+    ]);
+    
+    // STEP 4: Return results with transcript ID
+    res.json({
+      success: true,
+      analysisId: analysisId,
+      transcriptId: transcriptId,
+      results: aiResults,
+      metadata: {
+        processingTime: `${processingTime}ms`,
+        totalTokens: totalTokens,
+        estimatedCost: `$${estimatedCost.toFixed(4)}`,
+        model: 'gpt-3.5-turbo-1106'
+      }
+    });
+    
+    // Clean up uploaded file
+    fs.unlinkSync(file.path);
+    
+  } catch (error) {
+    console.error('Error in AI analysis:', error);
+    
+    // Update transcript status to failed if it was created
+    if (transcriptId) {
+      await pool.query(`
+        UPDATE meeting_transcripts
+        SET status = 'failed', error_message = $1
+        WHERE id = $2
+      `, [error.message, transcriptId]);
+    }
+    
+    res.status(500).json({ 
+      error: 'AI analysis failed',
+      details: error.message 
+    });
+  }
+});
+
+// Helper function to calculate average confidence
+function calculateAvgConfidence(aiResults) {
+  const allItems = [
+    ...(aiResults.actionItems || []),
+    ...(aiResults.issues || [])
+  ];
+  
+  if (allItems.length === 0) return null;
+  
+  const totalConfidence = allItems.reduce((sum, item) => sum + (item.confidence || 0), 0);
+  return (totalConfidence / allItems.length).toFixed(2);
+}
+2. Enhanced Batch Creation Endpoint
+javascript// Enhanced endpoint to create items with transcript reference
+app.post('/api/ai-analysis/create-items', authenticateToken, async (req, res) => {
+  const { projectId, transcriptId, items } = req.body;
+  
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const createdItems = {
+      issues: [],
+      actionItems: []
+    };
+    
+    // Verify transcript exists and belongs to project
+    const transcriptCheck = await client.query(
+      'SELECT id FROM meeting_transcripts WHERE id = $1 AND project_id = $2',
+      [transcriptId, projectId]
+    );
+    
+    if (transcriptCheck.rows.length === 0) {
+      throw new Error('Invalid transcript ID or project mismatch');
+    }
+    
+    // Create issues with transcript reference
+    for (const issue of items.issues || []) {
+      const result = await client.query(`
+        INSERT INTO issues (
+          title, description, project_id, priority, status,
+          assignee, category, created_by, created_at,
+          created_by_ai, ai_confidence, ai_analysis_id,
+          transcript_id
+        )
+        VALUES ($1, $2, $3, $4, 'To Do', $5, $6, $7, NOW(), TRUE, $8, $9, $10)
+        RETURNING *
+      `, [
+        issue.title,
+        issue.description,
+        projectId,
+        issue.priority,
+        issue.assignee,
+        issue.category,
+        req.user.id,
+        issue.confidence,
+        issue.analysisId,
+        transcriptId  // NEW: Link to transcript
+      ]);
+      
+      createdItems.issues.push(result.rows[0]);
+    }
+    
+    // Create action items with transcript reference
+    for (const item of items.actionItems || []) {
+      const result = await client.query(`
+        INSERT INTO action_items (
+          title, description, project_id, priority, status,
+          assignee, due_date, created_by, created_at,
+          created_by_ai, ai_confidence, ai_analysis_id,
+          transcript_id
+        )
+        VALUES ($1, $2, $3, $4, 'To Do', $5, $6, $7, NOW(), TRUE, $8, $9, $10)
+        RETURNING *
+      `, [
+        item.title,
+        item.description,
+        projectId,
+        item.priority,
+        item.assignee,
+        item.dueDate,
+        req.user.id,
+        item.confidence,
+        item.analysisId,
+        transcriptId  // NEW: Link to transcript
+      ]);
+      
+      createdItems.actionItems.push(result.rows[0]);
+    }
+    
+    await client.query('COMMIT');
+    
+    res.json({
+      success: true,
+      created: createdItems,
+      message: `Created ${createdItems.issues.length} issues and ${createdItems.actionItems.length} action items`
+    });
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating items:', error);
+    res.status(500).json({ error: 'Failed to create items', details: error.message });
+  } finally {
+    client.release();
+  }
+});
+3. New Endpoints for Transcript Management
+javascript// Get all transcripts for a project
+app.get('/api/transcripts', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    
+    const result = await pool.query(`
+      SELECT 
+        t.*,
+        u.username as uploaded_by_name,
+        (SELECT COUNT(*) FROM issues WHERE transcript_id = t.id) as linked_issues,
+        (SELECT COUNT(*) FROM action_items WHERE transcript_id = t.id) as linked_action_items
+      FROM meeting_transcripts t
+      JOIN users u ON t.uploaded_by = u.id
+      WHERE t.project_id = $1
+      ORDER BY t.meeting_date DESC, t.uploaded_at DESC
+    `, [projectId]);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching transcripts:', error);
+    res.status(500).json({ error: 'Failed to fetch transcripts' });
+  }
+});
+
+// Get single transcript with linked items
+app.get('/api/transcripts/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get transcript
+    const transcriptResult = await pool.query(`
+      SELECT t.*, u.username as uploaded_by_name
+      FROM meeting_transcripts t
+      JOIN users u ON t.uploaded_by = u.id
+      WHERE t.id = $1
+    `, [id]);
+    
+    if (transcriptResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Transcript not found' });
+    }
+    
+    const transcript = transcriptResult.rows[0];
+    
+    // Get linked issues
+    const issuesResult = await pool.query(`
+      SELECT * FROM issues 
+      WHERE transcript_id = $1
+      ORDER BY created_at DESC
+    `, [id]);
+    
+    // Get linked action items
+    const actionItemsResult = await pool.query(`
+      SELECT * FROM action_items 
+      WHERE transcript_id = $1
+      ORDER BY created_at DESC
+    `, [id]);
+    
+    res.json({
+      transcript: transcript,
+      linkedItems: {
+        issues: issuesResult.rows,
+        actionItems: actionItemsResult.rows
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching transcript:', error);
+    res.status(500).json({ error: 'Failed to fetch transcript' });
+  }
+});
+
+// Delete transcript (and optionally its linked items)
+app.delete('/api/transcripts/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { id } = req.params;
+    const { deleteLinkedItems } = req.query; // ?deleteLinkedItems=true
+    
+    await client.query('BEGIN');
+    
+    if (deleteLinkedItems === 'true') {
+      // Delete linked issues and action items
+      await client.query('DELETE FROM issues WHERE transcript_id = $1', [id]);
+      await client.query('DELETE FROM action_items WHERE transcript_id = $1', [id]);
+    } else {
+      // Just unlink them (set transcript_id to NULL)
+      await client.query('UPDATE issues SET transcript_id = NULL WHERE transcript_id = $1', [id]);
+      await client.query('UPDATE action_items SET transcript_id = NULL WHERE transcript_id = $1', [id]);
+    }
+    
+    // Delete transcript
+    await client.query('DELETE FROM meeting_transcripts WHERE id = $1', [id]);
+    
+    await client.query('COMMIT');
+    
+    res.json({ success: true, message: 'Transcript deleted' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting transcript:', error);
+    res.status(500).json({ error: 'Failed to delete transcript' });
+  } finally {
+    client.release();
+  }
+});
+
+Part 2: Smart Duplicate Detection & Status Updates
+Strategy Overview
+When analyzing a new transcript, check if similar items already exist:
+
+Fuzzy Title Matching: Use string similarity to find potential duplicates
+Assignee Matching: Same assignee increases likelihood of duplicate
+Date Proximity: Similar due dates suggest duplicate
+Smart Actions:
+
+If high confidence match → Update existing item (add comment, update status)
+If medium confidence → Flag for user review (show as potential duplicate)
+If low confidence → Create new item
+
+
+
+
+Implementation
+1. Install String Similarity Library
+bashnpm install string-similarity
+2. Duplicate Detection Function
+File: server.js
+javascriptconst stringSimilarity = require('string-similarity');
+
+/**
+ * Find potential duplicate items in the system
+ * @param {Object} newItem - The new item from AI analysis
+ * @param {string} itemType - 'issue' or 'actionItem'
+ * @param {number} projectId - Project ID
+ * @returns {Object} Match result with confidence and existing item
+ */
+async function findPotentialDuplicate(newItem, itemType, projectId) {
+  const table = itemType === 'issue' ? 'issues' : 'action_items';
+  
+  // Get all existing items in the project with same/similar assignee
+  const query = `
+    SELECT id, title, description, assignee, status, due_date, priority
+    FROM ${table}
+    WHERE project_id = $1
+    AND status != 'Done'
+    AND status != 'Cancelled'
+    ${newItem.assignee ? 'AND assignee = $2' : ''}
+    ORDER BY created_at DESC
+    LIMIT 50
+  `;
+  
+  const params = newItem.assignee ? [projectId, newItem.assignee] : [projectId];
+  const result = await pool.query(query, params);
+  
+  if (result.rows.length === 0) {
+    return { isDuplicate: false, confidence: 0, existingItem: null };
+  }
+  
+  // Find best title match
+  const existingTitles = result.rows.map(item => item.title);
+  const matches = stringSimilarity.findBestMatch(newItem.title, existingTitles);
+  const bestMatch = matches.bestMatch;
+  const matchedItem = result.rows[matches.bestMatchIndex];
+  
+  // Calculate overall duplicate confidence
+  let duplicateConfidence = bestMatch.rating * 100;
+  
+  // Boost confidence if assignees match
+  if (newItem.assignee && matchedItem.assignee === newItem.assignee) {
+    duplicateConfidence += 10;
+  }
+  
+  // Boost confidence if due dates are close (within 7 days)
+  if (newItem.dueDate && matchedItem.due_date) {
+    const daysDiff = Math.abs(
+      (new Date(newItem.dueDate) - new Date(matchedItem.due_date)) / (1000 * 60 * 60 * 24)
+    );
+    if (daysDiff <= 7) {
+      duplicateConfidence += 10;
+    }
+  }
+  
+  // Boost confidence if descriptions are similar
+  if (newItem.description && matchedItem.description) {
+    const descSimilarity = stringSimilarity.compareTwoStrings(
+      newItem.description.toLowerCase(),
+      matchedItem.description.toLowerCase()
+    );
+    duplicateConfidence += descSimilarity * 10;
+  }
+  
+  // Cap at 100
+  duplicateConfidence = Math.min(duplicateConfidence, 100);
+  
+  return {
+    isDuplicate: duplicateConfidence >= 70, // Threshold for automatic handling
+    confidence: Math.round(duplicateConfidence),
+    existingItem: matchedItem,
+    suggestion: duplicateConfidence >= 90 ? 'update' : 
+                duplicateConfidence >= 70 ? 'review' : 
+                'create'
+  };
+}
+
+/**
+ * Update existing item with information from AI analysis
+ * @param {Object} existingItem - The existing item in the database
+ * @param {Object} newItem - The new item from AI analysis
+ * @param {string} itemType - 'issue' or 'actionItem'
+ * @param {number} userId - User who ran the analysis
+ * @param {number} transcriptId - ID of the transcript
+ */
+async function updateExistingItem(existingItem, newItem, itemType, userId, transcriptId) {
+  const table = itemType === 'issue' ? 'issues' : 'action_items';
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Build update based on what's new/different
+    const updates = [];
+    const params = [];
+    let paramCount = 1;
+    
+    // Update priority if AI suggests higher priority
+    const priorityOrder = { low: 1, medium: 2, high: 3, critical: 4 };
+    if (priorityOrder[newItem.priority] > priorityOrder[existingItem.priority]) {
+      updates.push(`priority = $${paramCount++}`);
+      params.push(newItem.priority);
+    }
+    
+    // Update due date if not set or AI suggests earlier date
+    if (newItem.dueDate && (!existingItem.due_date || new Date(newItem.dueDate) < new Date(existingItem.due_date))) {
+      updates.push(`due_date = $${paramCount++}`);
+      params.push(newItem.dueDate);
+    }
+    
+    // Update assignee if not set
+    if (newItem.assignee && !existingItem.assignee) {
+      updates.push(`assignee = $${paramCount++}`);
+      params.push(newItem.assignee);
+    }
+    
+    // Add updated timestamp
+    updates.push(`updated_at = NOW()`);
+    
+    // Only update if there are changes
+    if (updates.length > 1) { // > 1 because updated_at is always included
+      params.push(existingItem.id);
+      const updateQuery = `
+        UPDATE ${table}
+        SET ${updates.join(', ')}
+        WHERE id = $${paramCount}
+        RETURNING *
+      `;
+      
+      await client.query(updateQuery, params);
+    }
+    
+    // Add comment noting the AI update
+    const commentTable = itemType === 'issue' ? 'issue_comments' : 'action_item_comments';
+    const foreignKey = itemType === 'issue' ? 'issue_id' : 'action_item_id';
+    
+    await client.query(`
+      INSERT INTO ${commentTable} (${foreignKey}, user_id, comment, created_at)
+      VALUES ($1, $2, $3, NOW())
+    `, [
+      existingItem.id,
+      userId,
+      `🤖 AI Analysis Update: This item was mentioned again in a meeting transcript (Transcript ID: ${transcriptId}). ${updates.length > 1 ? 'Some fields have been updated based on the new information.' : 'No changes were needed.'}`
+    ]);
+    
+    await client.query('COMMIT');
+    
+    return { updated: true, itemId: existingItem.id };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+3. Enhanced AI Analysis with Duplicate Detection
+javascript// Enhanced endpoint that detects duplicates
+app.post('/api/ai-analysis/create-items-smart', authenticateToken, async (req, res) => {
+  const { projectId, transcriptId, items } = req.body;
+  
+  try {
+    const results = {
+      created: { issues: [], actionItems: [] },
+      updated: { issues: [], actionItems: [] },
+      duplicates: { issues: [], actionItems: [] }
+    };
+    
+    // Process issues
+    for (const issue of items.issues || []) {
+      const duplicate = await findPotentialDuplicate(issue, 'issue', projectId);
+      
+      if (duplicate.suggestion === 'update') {
+        // High confidence duplicate - update existing
+        const updated = await updateExistingItem(
+          duplicate.existingItem, issue, 'issue', req.user.id, transcriptId
+        );
+        results.updated.issues.push({
+          ...duplicate.existingItem,
+          duplicateConfidence: duplicate.confidence
+        });
+      } else if (duplicate.suggestion === 'review') {
+        // Medium confidence - flag for user review
+        results.duplicates.issues.push({
+          newItem: issue,
+          existingItem: duplicate.existingItem,
+          confidence: duplicate.confidence,
+          recommendation: 'Please review - potential duplicate detected'
+        });
+      } else {
+        // Low confidence or no match - create new
+        const created = await createNewItem(issue, 'issue', projectId, req.user.id, transcriptId);
+        results.created.issues.push(created);
+      }
+    }
+    
+    // Process action items (same logic)
+    for (const item of items.actionItems || []) {
+      const duplicate = await findPotentialDuplicate(item, 'actionItem', projectId);
+      
+      if (duplicate.suggestion === 'update') {
+        const updated = await updateExistingItem(
+          duplicate.existingItem, item, 'actionItem', req.user.id, transcriptId
+        );
+        results.updated.actionItems.push({
+          ...duplicate.existingItem,
+          duplicateConfidence: duplicate.confidence
+        });
+      } else if (duplicate.suggestion === 'review') {
+        results.duplicates.actionItems.push({
+          newItem: item,
+          existingItem: duplicate.existingItem,
+          confidence: duplicate.confidence,
+          recommendation: 'Please review - potential duplicate detected'
+        });
+      } else {
+        const created = await createNewItem(item, 'actionItem', projectId, req.user.id, transcriptId);
+        results.created.actionItems.push(created);
+      }
+    }
+    
+    res.json({
+      success: true,
+      results: results,
+      summary: {
+        created: results.created.issues.length + results.created.actionItems.length,
+        updated: results.updated.issues.length + results.updated.actionItems.length,
+        needsReview: results.duplicates.issues.length + results.duplicates.actionItems.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error in smart item creation:', error);
+    res.status(500).json({ error: 'Failed to process items', details: error.message });
+  }
+});
+
+// Helper function to create new item
+async function createNewItem(item, itemType, projectId, userId, transcriptId) {
+  const table = itemType === 'issue' ? 'issues' : 'action_items';
+  
+  const query = `
+    INSERT INTO ${table} (
+      title, description, project_id, priority, status,
+      assignee, ${itemType === 'actionItem' ? 'due_date,' : 'category,'}
+      created_by, created_at, created_by_ai, ai_confidence, transcript_id
+    )
+    VALUES ($1, $2, $3, $4, 'To Do', $5, $6, $7, NOW(), TRUE, $8, $9)
+    RETURNING *
+  `;
+  
+  const params = [
+    item.title,
+    item.description,
+    projectId,
+    item.priority,
+    item.assignee,
+    itemType === 'actionItem' ? item.dueDate : item.category,
+    userId,
+    item.confidence,
+    transcriptId
+  ];
+  
+  const result = await pool.query(query, params);
+  return result.rows[0];
+}
+
+Frontend Updates
+1. Enhanced Results Display with Duplicate Handling
+File: public/index.html - Update AI Analysis modal
+html<!-- Add tabs for different result categories -->
+<div class="border-b border-gray-200 mb-4">
+  <nav class="flex space-x-4">
+    <button id="tab-new" onclick="switchResultTab('new')" 
+            class="tab-button active px-4 py-2 border-b-2 font-medium">
+      New Items <span id="count-new" class="ml-2 bg-green-100 text-green-800 px-2 py-1 rounded-full text-sm">0</span>
+    </button>
+    <button id="tab-updated" onclick="switchResultTab('updated')" 
+            class="tab-button px-4 py-2 border-b-2 font-medium">
+      Updated <span id="count-updated" class="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm">0</span>
+    </button>
+    <button id="tab-duplicates" onclick="switchResultTab('duplicates')" 
+            class="tab-button px-4 py-2 border-b-2 font-medium">
+      Needs Review <span id="count-duplicates" class="ml-2 bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-sm">0</span>
+    </button>
+  </nav>
+</div>
+
+<!-- Tab content areas -->
+<div id="tab-content-new" class="tab-content">
+  <!-- New items list -->
+</div>
+
+<div id="tab-content-updated" class="tab-content hidden">
+  <!-- Updated items list -->
+</div>
+
+<div id="tab-content-duplicates" class="tab-content hidden">
+  <!-- Duplicate review interface -->
+  <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+    <p class="text-sm text-yellow-800">
+      The following items appear similar to existing items in your project. 
+      Please review and decide whether to update the existing item or create a new one.
+    </p>
+  </div>
+  
+  <div id="duplicate-items-container"></div>
+</div>
+2. Transcript Library View
+Add a new page/section to view all transcripts:
+html<!-- Transcripts Library -->
+<div id="transcripts-view" class="hidden">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold">Meeting Transcripts</h2>
+    <button onclick="showModal('aiAnalysisModal')" 
+            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
+      <span class="text-lg">⚡</span> Upload New Transcript
+    </button>
+  </div>
+  
+  <!-- Transcripts list -->
+  <div id="transcripts-list" class="space-y-4"></div>
+</div>
+File: public/app.js
+javascript// Render transcripts list
+async function renderTranscripts(projectId) {
+  try {
+    const response = await fetch(`/api/transcripts?projectId=${projectId}`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    const transcripts = await response.json();
+    const container = document.getElementById('transcripts-list');
+    
+    if (transcripts.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-12 text-gray-500">
+          <p class="text-lg">No transcripts uploaded yet</p>
+          <p class="text-sm mt-2">Upload a meeting transcript to get started</p>
+        </div>
+      `;
+      return;
+    }
+    
+    container.innerHTML = transcripts.map(t => `
+      <div class="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition">
+        <div class="flex justify-between items-start">
+          <div class="flex-1">
+            <h3 class="text-lg font-semibold mb-2">${t.title}</h3>
+            <div class="flex items-center gap-4 text-sm text-gray-600 mb-3">
+              <span>📅 ${new Date(t.meeting_date).toLocaleDateString()}</span>
+              <span>👤 ${t.uploaded_by_name}</span>
+              <span>⏱️ ${t.processing_time_ms}ms</span>
+              <span class="text-green-600">✓ ${t.status}</span>
+            </div>
+            
+            <!-- Statistics -->
+            <div class="flex gap-4 mb-3">
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
+                ${t.linked_action_items} Action Items
+              </span>
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-red-100 text-red-800">
+                ${t.linked_issues} Issues
+              </span>
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                ${t.avg_confidence}% Avg Confidence
+              </span>
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">
+                $${Number(t.estimated_cost).toFixed(4)} Cost
+              </span>
+            </div>
+            
+            <!-- Preview -->
+            <p class="text-sm text-gray-600 line-clamp-2">
+              ${t.transcript_text.substring(0, 200)}...
+            </p>
+          </div>
+          
+          <div class="flex gap-2 ml-4">
+            <button onclick="viewTranscript(${t.id})" 
+                    class="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">
+              View Details
+            </button>
+            <button onclick="deleteTranscript(${t.id})" 
+                    class="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700">
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error rendering transcripts:', error);
+  }
+}
+
+// View transcript details
+async function viewTranscript(transcriptId) {
+  try {
+    const response = await fetch(`/api/transcripts/${transcriptId}`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    const data = await response.json();
+    
+    // Show transcript in modal
+    showTranscriptDetailModal(data);
+    
+  } catch (error) {
+    console.error('Error viewing transcript:', error);
+    alert('Failed to load transcript details');
+  }
+}
+
+Configuration & Settings
+Add configuration options for duplicate detection:
+javascript// Configuration for duplicate detection thresholds
+const DUPLICATE_DETECTION_CONFIG = {
+  // Title similarity threshold (0-100)
+  titleSimilarityThreshold: 70,
+  
+  // Confidence threshold for automatic update (vs flagging for review)
+  autoUpdateThreshold: 90,
+  
+  // Confidence threshold for flagging as potential duplicate
+  reviewThreshold: 70,
+  
+  // Days within which due dates are considered "close"
+  dueDateProximityDays: 7,
+  
+  // Maximum number of existing items to check (performance)
+  maxItemsToCheck: 50,
+  
+  // Enable/disable duplicate detection
+  enabled: true
+};
+
+Testing Checklist
+Transcript Storage:
+
+ Upload transcript - stored in database
+ Transcript metadata (tokens, cost, time) recorded correctly
+ Created issues/action items have transcript_id set
+ Can view list of all transcripts for a project
+ Can view transcript details with linked items
+ Can delete transcript (with/without linked items)
+
+Duplicate Detection:
+
+ Identical title → detected as duplicate (90%+ confidence)
+ Similar title + same assignee → high confidence match
+ Similar title + different assignee → medium confidence
+ High confidence → existing item updated automatically
+ Medium confidence → flagged for user review
+ Low confidence → new item created
+ Comments added to updated items noting AI update
+ User can override duplicate detection decision
+
+
+Summary
+These enhancements add:
+✅ Full transcript storage with metadata and cost tracking
+✅ Cross-referencing between transcripts and items
+✅ Audit trail - know where every AI-generated item came from
+✅ Smart duplicate detection using string similarity
+✅ Automatic updates for high-confidence matches
+✅ User review workflow for ambiguous duplicates
+✅ Transcript library for managing all uploaded transcripts
