@@ -203,12 +203,13 @@ async function canViewTranscript(userId, transcript) {
       return user.project_role === 'Project Manager' || user.project_role === 'System Administrator';
       
     case 'specific_users':
-      // Check if user is in allowed list
-      return transcript.can_view_users && transcript.can_view_users.includes(userId);
+      // Check if user is in allowed list - ensure type compatibility
+      if (!transcript.can_view_users || !Array.isArray(transcript.can_view_users)) return false;
+      return transcript.can_view_users.includes(parseInt(userId));
       
     case 'uploader_only':
       // Only the uploader
-      return transcript.uploaded_by === userId;
+      return parseInt(transcript.uploaded_by) === parseInt(userId);
       
     default:
       return false;
@@ -217,6 +218,7 @@ async function canViewTranscript(userId, transcript) {
 
 /**
  * Check if user can create items from AI analysis
+ * Same permissions as manual item creation (Team Member or higher)
  */
 async function canCreateItemsFromAI(userId, projectId) {
   const result = await pool.query(`
@@ -232,11 +234,17 @@ async function canCreateItemsFromAI(userId, projectId) {
   
   const user = result.rows[0];
   
-  // Must have same permissions as manual item creation
+  // System Administrators can always create
   if (user.role === 'System Administrator') return true;
-  if (user.project_role === 'Project Manager' || user.project_role === 'System Administrator') return true;
   
-  // Team members cannot create items from AI (prevents privilege escalation)
+  // Project members with Team Member role or higher can create
+  if (user.project_role === 'Project Manager' || 
+      user.project_role === 'System Administrator' ||
+      user.project_role === 'Team Lead' ||
+      user.project_role === 'Team Member') {
+    return true;
+  }
+  
   return false;
 }
 
@@ -245,7 +253,7 @@ async function canCreateItemsFromAI(userId, projectId) {
  */
 async function canAssignTo(userId, assigneeName, projectId) {
   const userResult = await pool.query(`
-    SELECT u.role, pm.role as project_role
+    SELECT u.role, u.username, pm.role as project_role
     FROM users u
     LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
     WHERE u.id = $1
@@ -258,24 +266,24 @@ async function canAssignTo(userId, assigneeName, projectId) {
   const user = userResult.rows[0];
   
   // System Administrators and Project Managers can assign to anyone
-  if (user.role === 'System Administrator' || user.project_role === 'Project Manager' || user.project_role === 'System Administrator') {
+  if (user.role === 'System Administrator' || 
+      user.project_role === 'Project Manager' || 
+      user.project_role === 'System Administrator' ||
+      user.project_role === 'Team Lead') {
     return { allowed: true };
   }
   
-  // Team members can only assign to themselves
-  const selfResult = await pool.query(
-    'SELECT id, username FROM users WHERE id = $1 AND username ILIKE $2',
-    [userId, `%${assigneeName}%`]
-  );
-  
-  if (selfResult.rows.length > 0) {
+  // Team members can only assign to themselves - check if assignee name matches their username
+  if (user.username && assigneeName && 
+      user.username.toLowerCase() === assigneeName.toLowerCase()) {
     return { allowed: true };
   }
   
   return { 
     allowed: false, 
     reason: 'Insufficient permissions to assign to others',
-    suggestedAction: 'assign_to_self'
+    suggestedAction: 'assign_to_self',
+    selfUsername: user.username
   };
 }
 
@@ -286,6 +294,7 @@ async function canUpdateItemStatus(userId, item) {
   const result = await pool.query(`
     SELECT 
       u.role,
+      u.username,
       pm.role as project_role
     FROM users u
     LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
@@ -301,8 +310,15 @@ async function canUpdateItemStatus(userId, item) {
   if (user.project_role === 'Project Manager' || user.project_role === 'System Administrator') return true;
   
   // Team members can update their own items
-  if (item.assignee && item.assignee.toLowerCase().includes(user.username?.toLowerCase())) return true;
-  if (item.created_by === userId) return true;
+  // Check by exact username match (case-insensitive) or created_by ID
+  if (item.assignee && user.username) {
+    const assigneeLower = item.assignee.toLowerCase().trim();
+    const usernameLower = user.username.toLowerCase().trim();
+    if (assigneeLower === usernameLower) return true;
+  }
+  
+  // Check if user created this item (normalize to int for comparison)
+  if (item.created_by && parseInt(item.created_by) === parseInt(userId)) return true;
   
   return false;
 }
@@ -2235,15 +2251,23 @@ app.post('/api/meetings/create-items-smart',
           if (item.assignee) {
             const assignCheck = await canAssignTo(req.user.id, item.assignee, parseInt(projectId));
             if (!assignCheck.allowed) {
-              if (assignCheck.suggestedAction === 'assign_to_self') {
+              if (assignCheck.suggestedAction === 'assign_to_self' && assignCheck.selfUsername) {
                 // Reassign to self if user can't assign to others
-                const userInfo = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
-                finalAssignee = userInfo.rows[0]?.username || '';
+                finalAssignee = assignCheck.selfUsername;
                 results.actionItems.permissionDenied.push({
                   title: item.title,
                   originalAssignee: item.assignee,
                   reassignedTo: finalAssignee,
-                  reason: 'Insufficient permissions to assign to others'
+                  reason: 'Insufficient permissions to assign to others - reassigned to self'
+                });
+                
+                // Audit the permission override
+                await auditAIAction(transcriptId, req.user.id, 'modify', {
+                  itemType: 'action_item',
+                  title: item.title,
+                  action: 'assignment_override',
+                  originalAssignee: item.assignee,
+                  newAssignee: finalAssignee
                 });
               } else {
                 // Skip this item if can't assign

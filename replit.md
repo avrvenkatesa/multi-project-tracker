@@ -84,6 +84,22 @@ Implemented comprehensive AI-powered relationship detection from meeting transcr
 - **Frontend Display**: Visual indicators for AI-generated relationships, confidence scores, transcript references in both relationship modal and AI analysis results
 - **Relationship Types**: blocks/blocked_by, parent_of/child_of, relates_to, depends_on/depended_by
 
+### RBAC for AI Analysis (Latest Update)
+Implemented comprehensive authorization and security controls for AI-powered features:
+- **Database Schema**: 
+  - Added `visibility`, `can_view_users`, `project_sensitive`, `contains_confidential` to `meeting_transcripts`
+  - Created `ai_analysis_audit` table for complete audit trail
+  - Added `created_via_ai_by` to `issues` and `action_items` tables
+- **Permission Functions**:
+  - `canUploadTranscript`: Only Project Managers and System Administrators
+  - `canViewTranscript`: Role-based visibility (all, project_managers, specific_users, uploader_only)
+  - `canCreateItemsFromAI`: Team Member or higher (same as manual creation)
+  - `canAssignTo`: Managers/Team Leads can assign to anyone; Team Members can only self-assign
+  - `canUpdateItemStatus`: Managers can update any item; Team Members can update their own items
+- **Assignment Validation**: Automatic reassignment to self when permissions insufficient, with audit logging
+- **Audit Trail**: All AI operations logged (upload, analyze, create_items, update_status, modify)
+- **Frontend**: Graceful permission error handling with clear user messaging
+
 ### Known Limitations
 - **Performance**: Relationship loading uses N+1 query pattern on Kanban board; consider batching in future updates
 - **Authorization**: Manual relationship creation endpoints lack project ownership validation (potential IDOR); AI-created relationships are project-scoped
