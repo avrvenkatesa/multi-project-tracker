@@ -910,6 +910,135 @@ function calculateAvgConfidence(aiResults) {
   return (totalConfidence / allItems.length).toFixed(2);
 }
 
+// Helper function to find potential duplicate items using string similarity
+async function findPotentialDuplicate(newItem, projectId, itemType = 'action_item') {
+  const similarityThreshold = 0.75; // 75% similarity threshold
+  
+  try {
+    const table = itemType === 'action_item' ? 'action_items' : 'issues';
+    const query = `
+      SELECT * FROM ${table}
+      WHERE project_id = $1
+        AND status != 'Done'
+        AND status != 'Closed'
+      ORDER BY created_at DESC
+      LIMIT 50
+    `;
+    
+    const result = await pool.query(query, [projectId]);
+    const existingItems = result.rows;
+    
+    // Find the most similar item
+    let bestMatch = null;
+    let bestScore = 0;
+    
+    for (const existingItem of existingItems) {
+      // Compare titles
+      const titleScore = stringSimilarity.compareTwoStrings(
+        newItem.title.toLowerCase(),
+        existingItem.title.toLowerCase()
+      );
+      
+      // Compare descriptions if available
+      const descScore = (newItem.description && existingItem.description)
+        ? stringSimilarity.compareTwoStrings(
+            newItem.description.toLowerCase(),
+            existingItem.description.toLowerCase()
+          )
+        : 0;
+      
+      // Weighted average (title is more important)
+      const combinedScore = (titleScore * 0.7) + (descScore * 0.3);
+      
+      if (combinedScore > bestScore && combinedScore >= similarityThreshold) {
+        bestScore = combinedScore;
+        bestMatch = {
+          item: existingItem,
+          similarity: combinedScore
+        };
+      }
+    }
+    
+    return bestMatch;
+  } catch (error) {
+    console.error('Error finding duplicate:', error);
+    return null;
+  }
+}
+
+// Helper function to update existing item with new information
+async function updateExistingItem(existingItem, newItem, itemType = 'action_item') {
+  try {
+    const table = itemType === 'action_item' ? 'action_items' : 'issues';
+    
+    // Merge descriptions
+    const updatedDescription = existingItem.description 
+      ? `${existingItem.description}\n\n[Updated from transcript]: ${newItem.description}`
+      : newItem.description;
+    
+    // Update priority if new one is higher
+    const priorityRank = { low: 1, medium: 2, high: 3, critical: 4 };
+    const updatedPriority = priorityRank[newItem.priority] > priorityRank[existingItem.priority]
+      ? newItem.priority
+      : existingItem.priority;
+    
+    // Update assignee if new one is provided and old one is empty
+    const updatedAssignee = (!existingItem.assignee || existingItem.assignee === '') && newItem.assignee
+      ? newItem.assignee
+      : existingItem.assignee;
+    
+    // Update due date if new one is provided and old one is null
+    const updatedDueDate = !existingItem.due_date && newItem.dueDate
+      ? newItem.dueDate
+      : existingItem.due_date;
+    
+    if (itemType === 'action_item') {
+      const updateQuery = `
+        UPDATE action_items
+        SET 
+          description = $1,
+          priority = $2,
+          assignee = $3,
+          due_date = $4,
+          updated_at = NOW()
+        WHERE id = $5
+        RETURNING *
+      `;
+      
+      const result = await pool.query(updateQuery, [
+        updatedDescription,
+        updatedPriority,
+        updatedAssignee,
+        updatedDueDate,
+        existingItem.id
+      ]);
+      
+      return result.rows[0];
+    } else {
+      const updateQuery = `
+        UPDATE issues
+        SET 
+          description = $1,
+          priority = $2,
+          updated_at = NOW()
+        WHERE id = $3
+        RETURNING *
+      `;
+      
+      const result = await pool.query(updateQuery, [
+        updatedDescription,
+        updatedPriority,
+        existingItem.id
+      ]);
+      
+      return result.rows[0];
+    }
+  } catch (error) {
+    console.error('Error updating existing item:', error);
+    return null;
+  }
+}
+
 // Upload and analyze meeting transcript (with transcript storage)
 app.post('/api/meetings/analyze', 
   authenticateToken, 
@@ -1297,6 +1426,236 @@ app.post('/api/meetings/create-items',
     } catch (error) {
       console.error('Error creating items from AI suggestions:', error);
       res.status(500).json({ error: 'Failed to create items' });
+    }
+});
+
+// Smart create items with duplicate detection (Story 2.2.1)
+app.post('/api/meetings/create-items-smart', 
+  authenticateToken,
+  requireRole('Team Member'),
+  async (req, res) => {
+    try {
+      const { projectId, transcriptId, analysisId, actionItems, issues } = req.body;
+
+      if (!projectId) {
+        return res.status(400).json({ error: 'Project ID required' });
+      }
+
+      const results = {
+        actionItems: {
+          created: [],
+          updated: [],
+          duplicates: []
+        },
+        issues: {
+          created: [],
+          updated: [],
+          duplicates: []
+        }
+      };
+
+      // Use provided analysis ID or generate one
+      const finalAnalysisId = analysisId || `ai-analysis-${Date.now()}-${req.user.id}`;
+
+      // Helper function to validate and sanitize due dates
+      const sanitizeDueDate = (dateStr) => {
+        if (!dateStr) return null;
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(dateStr)) return null;
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return null;
+        return dateStr;
+      };
+
+      // Process action items with duplicate detection
+      if (actionItems && actionItems.length > 0) {
+        for (const item of actionItems) {
+          // Check for potential duplicate
+          const duplicate = await findPotentialDuplicate(item, parseInt(projectId), 'action_item');
+          
+          if (duplicate) {
+            // Update existing item
+            const updated = await updateExistingItem(duplicate.item, item, 'action_item');
+            if (updated) {
+              results.actionItems.updated.push(updated);
+              results.actionItems.duplicates.push({
+                existingId: duplicate.item.id,
+                existingTitle: duplicate.item.title,
+                similarity: Math.round(duplicate.similarity * 100),
+                action: 'updated'
+              });
+            }
+          } else {
+            // Create new item
+            const newItem = await sql`
+              INSERT INTO action_items (
+                title, description, project_id, priority, assignee, 
+                due_date, status, created_by,
+                created_by_ai, ai_confidence, ai_analysis_id, transcript_id
+              ) VALUES (
+                ${item.title.substring(0, 200)},
+                ${item.description?.substring(0, 1000) || ''},
+                ${parseInt(projectId)},
+                ${item.priority || 'medium'},
+                ${item.assignee || ''},
+                ${sanitizeDueDate(item.dueDate)},
+                'To Do',
+                ${req.user.id},
+                ${true},
+                ${item.confidence || null},
+                ${finalAnalysisId},
+                ${transcriptId || null}
+              ) RETURNING *
+            `;
+            results.actionItems.created.push(newItem[0]);
+          }
+        }
+      }
+
+      // Process issues with duplicate detection
+      if (issues && issues.length > 0) {
+        for (const issue of issues) {
+          // Check for potential duplicate
+          const duplicate = await findPotentialDuplicate(issue, parseInt(projectId), 'issue');
+          
+          if (duplicate) {
+            // Update existing item
+            const updated = await updateExistingItem(duplicate.item, issue, 'issue');
+            if (updated) {
+              results.issues.updated.push(updated);
+              results.issues.duplicates.push({
+                existingId: duplicate.item.id,
+                existingTitle: duplicate.item.title,
+                similarity: Math.round(duplicate.similarity * 100),
+                action: 'updated'
+              });
+            }
+          } else {
+            // Create new issue
+            const newIssue = await sql`
+              INSERT INTO issues (
+                title, description, project_id, priority, category,
+                status, created_by,
+                created_by_ai, ai_confidence, ai_analysis_id, transcript_id
+              ) VALUES (
+                ${issue.title.substring(0, 200)},
+                ${issue.description?.substring(0, 1000) || ''},
+                ${parseInt(projectId)},
+                ${issue.priority || 'medium'},
+                ${issue.category || 'General'},
+                'To Do',
+                ${req.user.id},
+                ${true},
+                ${issue.confidence || null},
+                ${finalAnalysisId},
+                ${transcriptId || null}
+              ) RETURNING *
+            `;
+            results.issues.created.push(newIssue[0]);
+          }
+        }
+      }
+
+      const totalCreated = results.actionItems.created.length + results.issues.created.length;
+      const totalUpdated = results.actionItems.updated.length + results.issues.updated.length;
+      
+      console.log(`Smart create: ${totalCreated} new items, ${totalUpdated} updated items`);
+      res.json(results);
+
+    } catch (error) {
+      console.error('Error creating items with duplicate detection:', error);
+      res.status(500).json({ error: 'Failed to create items' });
+    }
+});
+
+// GET all transcripts for a project
+app.get('/api/transcripts',
+  authenticateToken,
+  requireRole('Stakeholder'),
+  async (req, res) => {
+    try {
+      const { projectId } = req.query;
+      
+      if (!projectId) {
+        return res.status(400).json({ error: 'Project ID required' });
+      }
+      
+      const query = `
+        SELECT 
+          id, project_id, title, meeting_date, uploaded_by, uploaded_at,
+          original_filename, file_size, status, 
+          action_items_extracted, issues_extracted, avg_confidence,
+          total_tokens, estimated_cost, processing_time_ms, error_message
+        FROM meeting_transcripts
+        WHERE project_id = $1
+        ORDER BY uploaded_at DESC
+      `;
+      
+      const result = await pool.query(query, [parseInt(projectId)]);
+      res.json(result.rows);
+      
+    } catch (error) {
+      console.error('Error fetching transcripts:', error);
+      res.status(500).json({ error: 'Failed to fetch transcripts' });
+    }
+});
+
+// GET single transcript with full text
+app.get('/api/transcripts/:id',
+  authenticateToken,
+  requireRole('Stakeholder'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const query = `
+        SELECT * FROM meeting_transcripts
+        WHERE id = $1
+      `;
+      
+      const result = await pool.query(query, [parseInt(id)]);
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Transcript not found' });
+      }
+      
+      res.json(result.rows[0]);
+      
+    } catch (error) {
+      console.error('Error fetching transcript:', error);
+      res.status(500).json({ error: 'Failed to fetch transcript' });
+    }
+});
+
+// DELETE transcript (soft delete by marking items)
+app.delete('/api/transcripts/:id',
+  authenticateToken,
+  requireRole('Project Manager'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if transcript exists
+      const checkQuery = `SELECT id FROM meeting_transcripts WHERE id = $1`;
+      const checkResult = await pool.query(checkQuery, [parseInt(id)]);
+      
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Transcript not found' });
+      }
+      
+      // Delete the transcript
+      const deleteQuery = `DELETE FROM meeting_transcripts WHERE id = $1`;
+      await pool.query(deleteQuery, [parseInt(id)]);
+      
+      // Note: Items created from this transcript remain but transcript_id will be null
+      // due to ON DELETE SET NULL constraint
+      
+      console.log(`Transcript ${id} deleted`);
+      res.json({ message: 'Transcript deleted successfully' });
+      
+    } catch (error) {
+      console.error('Error deleting transcript:', error);
+      res.status(500).json({ error: 'Failed to delete transcript' });
     }
 });
 
