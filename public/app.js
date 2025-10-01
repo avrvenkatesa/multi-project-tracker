@@ -1485,7 +1485,7 @@ function showAIAnalysisModal() {
     return;
   }
 
-  if (!AuthManager.isLoggedIn()) {
+  if (!AuthManager.isAuthenticated) {
     AuthManager.showNotification('Please login to use AI analysis', 'warning');
     AuthManager.showAuthModal('login');
     return;
