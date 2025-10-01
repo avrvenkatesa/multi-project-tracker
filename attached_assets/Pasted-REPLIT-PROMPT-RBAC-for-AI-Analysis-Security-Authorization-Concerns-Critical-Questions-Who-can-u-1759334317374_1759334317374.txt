@@ -1,0 +1,1023 @@
+REPLIT PROMPT: RBAC for AI Analysis
+Security & Authorization Concerns
+Critical Questions:
+
+Who can upload transcripts and run AI analysis?
+
+All team members?
+Only Project Managers?
+Only certain roles?
+
+
+Who can create items from AI suggestions?
+
+Should match manual creation permissions
+Prevent privilege escalation
+
+
+Who can see transcripts?
+
+Privacy concerns (sensitive discussions)
+Confidential information in transcripts
+
+
+Can AI assign tasks to anyone?
+
+Or only to people the uploader could manually assign to?
+Prevent unauthorized task delegation
+
+
+Can AI update items the user doesn't own?
+
+Status updates affect others' work
+Relationship creation impacts multiple items
+
+
+What about cross-project access?
+
+Transcripts might reference multiple projects
+Relationship creation across project boundaries
+
+
+
+
+Recommended RBAC Model
+Permission Matrix
+ActionAdminProject ManagerTeam MemberViewerUpload Transcript✅✅❌❌View Own Transcripts✅✅✅✅View All Transcripts✅✅❌❌Delete Transcript✅✅ (own)❌❌Create Items from AI✅✅❌❌Update Items via AI✅✅❌❌Create Relationships✅✅❌❌Override AI Suggestions✅✅✅ (review mode)❌Assign to Any User✅✅❌❌Assign to Self Only✅✅✅❌
+
+Implementation
+Step 1: Update Database Schema
+Add permission tracking and audit fields:
+sql-- Add permission fields to meeting_transcripts
+ALTER TABLE meeting_transcripts
+ADD COLUMN visibility VARCHAR(50) DEFAULT 'project_managers',
+ADD COLUMN can_view_users INTEGER[], -- Specific users who can view
+ADD COLUMN project_sensitive BOOLEAN DEFAULT FALSE,
+ADD COLUMN contains_confidential BOOLEAN DEFAULT FALSE;
+
+COMMENT ON COLUMN meeting_transcripts.visibility IS 'Who can view: all, project_managers, specific_users, uploader_only';
+
+-- Add audit trail for AI actions
+CREATE TABLE ai_analysis_audit (
+  id SERIAL PRIMARY KEY,
+  transcript_id INTEGER NOT NULL REFERENCES meeting_transcripts(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  action VARCHAR(100) NOT NULL, -- 'upload', 'create_items', 'update_status', 'create_relationship', 'view', 'delete'
+  item_type VARCHAR(50), -- 'issue', 'action_item', 'relationship'
+  item_id INTEGER,
+  details JSONB,
+  permission_override BOOLEAN DEFAULT FALSE,
+  override_reason TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  CONSTRAINT valid_action CHECK (
+    action IN ('upload', 'analyze', 'create_items', 'update_status', 'create_relationship', 'view', 'delete', 'modify')
+  )
+);
+
+CREATE INDEX idx_ai_audit_transcript ON ai_analysis_audit(transcript_id);
+CREATE INDEX idx_ai_audit_user ON ai_analysis_audit(user_id);
+CREATE INDEX idx_ai_audit_action ON ai_analysis_audit(action);
+
+-- Add constraints to existing tables
+ALTER TABLE issues
+ADD COLUMN created_via_ai_by INTEGER REFERENCES users(id),
+ADD CONSTRAINT check_ai_creator_permission CHECK (
+  created_by_ai = FALSE OR created_via_ai_by IS NOT NULL
+);
+
+ALTER TABLE action_items
+ADD COLUMN created_via_ai_by INTEGER REFERENCES users(id),
+ADD CONSTRAINT check_ai_creator_permission CHECK (
+  created_by_ai = FALSE OR created_via_ai_by IS NOT NULL
+);
+
+COMMENT ON COLUMN issues.created_via_ai_by IS 'User who ran the AI analysis that created this item';
+COMMENT ON COLUMN action_items.created_via_ai_by IS 'User who ran the AI analysis that created this item';
+
+Step 2: Permission Checking Functions
+File: server.js
+javascript/**
+ * Check if user can upload transcripts to a project
+ * @param {number} userId - User ID
+ * @param {number} projectId - Project ID
+ * @returns {boolean} Permission granted
+ */
+async function canUploadTranscript(userId, projectId) {
+  const result = await pool.query(`
+    SELECT 
+      u.role,
+      pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, projectId]);
+  
+  if (result.rows.length === 0) return false;
+  
+  const user = result.rows[0];
+  
+  // Admins can always upload
+  if (user.role === 'admin') return true;
+  
+  // Project Managers can upload to their projects
+  if (user.project_role === 'manager' || user.project_role === 'admin') return true;
+  
+  // Regular team members cannot upload
+  return false;
+}
+
+/**
+ * Check if user can view a transcript
+ * @param {number} userId - User ID
+ * @param {Object} transcript - Transcript object
+ * @returns {boolean} Permission granted
+ */
+async function canViewTranscript(userId, transcript) {
+  const result = await pool.query(`
+    SELECT 
+      u.role,
+      pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, transcript.project_id]);
+  
+  if (result.rows.length === 0) return false;
+  
+  const user = result.rows[0];
+  
+  // Admins can view all transcripts
+  if (user.role === 'admin') return true;
+  
+  // Check visibility settings
+  switch (transcript.visibility) {
+    case 'all':
+      // Anyone in the project can view
+      return user.project_role !== null;
+      
+    case 'project_managers':
+      // Only managers and admins
+      return user.project_role === 'manager' || user.project_role === 'admin';
+      
+    case 'specific_users':
+      // Check if user is in allowed list
+      return transcript.can_view_users && transcript.can_view_users.includes(userId);
+      
+    case 'uploader_only':
+      // Only the uploader
+      return transcript.uploaded_by === userId;
+      
+    default:
+      return false;
+  }
+}
+
+/**
+ * Check if user can create items from AI analysis
+ * @param {number} userId - User ID
+ * @param {number} projectId - Project ID
+ * @returns {boolean} Permission granted
+ */
+async function canCreateItemsFromAI(userId, projectId) {
+  const result = await pool.query(`
+    SELECT 
+      u.role,
+      pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, projectId]);
+  
+  if (result.rows.length === 0) return false;
+  
+  const user = result.rows[0];
+  
+  // Must have same permissions as manual item creation
+  if (user.role === 'admin') return true;
+  if (user.project_role === 'manager' || user.project_role === 'admin') return true;
+  
+  // Team members cannot create items from AI (prevents privilege escalation)
+  return false;
+}
+
+/**
+ * Check if user can assign tasks to a specific assignee
+ * @param {number} userId - User performing assignment
+ * @param {string} assigneeName - Name of assignee
+ * @param {number} projectId - Project ID
+ * @returns {Object} Permission result
+ */
+async function canAssignTo(userId, assigneeName, projectId) {
+  const userResult = await pool.query(`
+    SELECT u.role, pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, projectId]);
+  
+  if (userResult.rows.length === 0) {
+    return { allowed: false, reason: 'User not in project' };
+  }
+  
+  const user = userResult.rows[0];
+  
+  // Admins and Project Managers can assign to anyone
+  if (user.role === 'admin' || user.project_role === 'manager' || user.project_role === 'admin') {
+    return { allowed: true };
+  }
+  
+  // Team members can only assign to themselves
+  const selfResult = await pool.query(
+    'SELECT id FROM users WHERE id = $1 AND username ILIKE $2',
+    [userId, `%${assigneeName}%`]
+  );
+  
+  if (selfResult.rows.length > 0) {
+    return { allowed: true };
+  }
+  
+  return { 
+    allowed: false, 
+    reason: 'Insufficient permissions to assign to others',
+    suggestedAction: 'assign_to_self'
+  };
+}
+
+/**
+ * Check if user can update an existing item's status
+ * @param {number} userId - User ID
+ * @param {Object} item - Item object
+ * @returns {boolean} Permission granted
+ */
+async function canUpdateItemStatus(userId, item) {
+  const result = await pool.query(`
+    SELECT 
+      u.role,
+      pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, item.project_id]);
+  
+  if (result.rows.length === 0) return false;
+  
+  const user = result.rows[0];
+  
+  // Admins and Project Managers can update any item
+  if (user.role === 'admin') return true;
+  if (user.project_role === 'manager' || user.project_role === 'admin') return true;
+  
+  // Team members can update their own items
+  if (item.assignee && item.assignee.includes(userId)) return true;
+  if (item.created_by === userId) return true;
+  
+  return false;
+}
+
+/**
+ * Audit AI analysis action
+ * @param {number} transcriptId - Transcript ID
+ * @param {number} userId - User ID
+ * @param {string} action - Action type
+ * @param {Object} details - Additional details
+ */
+async function auditAIAction(transcriptId, userId, action, details = {}) {
+  await pool.query(`
+    INSERT INTO ai_analysis_audit (
+      transcript_id, user_id, action, item_type, item_id, details
+    )
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `, [
+    transcriptId,
+    userId,
+    action,
+    details.itemType || null,
+    details.itemId || null,
+    JSON.stringify(details)
+  ]);
+}
+
+Step 3: Protected AI Analysis Endpoints
+File: server.js
+javascript/**
+ * PROTECTED: Upload and analyze transcript
+ * Requires Project Manager or Admin role
+ */
+app.post('/api/ai-analysis/upload', authenticateToken, upload.single('transcript'), async (req, res) => {
+  const { projectId, meetingDate, title, visibility } = req.body;
+  
+  try {
+    // PERMISSION CHECK 1: Can user upload transcripts?
+    const canUpload = await canUploadTranscript(req.user.id, projectId);
+    if (!canUpload) {
+      return res.status(403).json({ 
+        error: 'Insufficient permissions',
+        message: 'Only Project Managers and Admins can upload transcripts and run AI analysis'
+      });
+    }
+    
+    // Audit the upload action
+    await auditAIAction(null, req.user.id, 'upload', { 
+      projectId, 
+      filename: req.file.originalname 
+    });
+    
+    // ... existing upload and analysis code ...
+    
+    // Store transcript with visibility settings
+    const transcriptResult = await pool.query(`
+      INSERT INTO meeting_transcripts (
+        project_id, title, meeting_date, uploaded_by,
+        original_filename, file_size, transcript_text,
+        analysis_id, status, visibility
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'processing', $9)
+      RETURNING id
+    `, [
+      projectId,
+      title || `Meeting ${new Date().toLocaleDateString()}`,
+      meetingDate || new Date().toISOString().split('T')[0],
+      req.user.id,
+      req.file.originalname,
+      req.file.size,
+      transcriptText,
+      analysisId,
+      visibility || 'project_managers' // Default: only managers can view
+    ]);
+    
+    const transcriptId = transcriptResult.rows[0].id;
+    
+    // ... continue with AI analysis ...
+    
+    // Audit the analysis
+    await auditAIAction(transcriptId, req.user.id, 'analyze', {
+      actionItemsFound: aiResults.newItems?.actionItems?.length || 0,
+      issuesFound: aiResults.newItems?.issues?.length || 0,
+      relationshipsFound: aiResults.relationships?.length || 0
+    });
+    
+    res.json({ success: true, transcriptId, results: aiResults });
+    
+  } catch (error) {
+    console.error('AI analysis error:', error);
+    res.status(500).json({ error: 'AI analysis failed' });
+  }
+});
+
+/**
+ * PROTECTED: Create items from AI suggestions
+ * Requires Project Manager or Admin role
+ * Validates assignment permissions
+ */
+app.post('/api/ai-analysis/create-items-smart', authenticateToken, async (req, res) => {
+  const { projectId, transcriptId, items } = req.body;
+  
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // PERMISSION CHECK 1: Can user create items from AI?
+    const canCreate = await canCreateItemsFromAI(req.user.id, projectId);
+    if (!canCreate) {
+      return res.status(403).json({ 
+        error: 'Insufficient permissions',
+        message: 'Only Project Managers and Admins can create items from AI analysis'
+      });
+    }
+    
+    const results = {
+      created: { issues: [], actionItems: [] },
+      permissionDenied: [],
+      assignmentModified: []
+    };
+    
+    // Process issues with permission checks
+    for (const issue of items.issues || []) {
+      // PERMISSION CHECK 2: Can user assign to this person?
+      if (issue.assignee) {
+        const assignCheck = await canAssignTo(req.user.id, issue.assignee, projectId);
+        
+        if (!assignCheck.allowed) {
+          // Modify assignment or deny based on policy
+          if (assignCheck.suggestedAction === 'assign_to_self') {
+            // Reassign to self
+            const userInfo = await client.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+            issue.assignee = userInfo.rows[0].username;
+            results.assignmentModified.push({
+              item: issue.title,
+              originalAssignee: issue.assignee,
+              newAssignee: userInfo.rows[0].username,
+              reason: 'Insufficient permission to assign to others'
+            });
+          } else {
+            // Deny creation
+            results.permissionDenied.push({
+              item: issue.title,
+              reason: assignCheck.reason
+            });
+            continue;
+          }
+        }
+      }
+      
+      // Create the issue
+      const createdIssue = await client.query(`
+        INSERT INTO issues (
+          title, description, project_id, priority, status,
+          assignee, category, created_by, created_at,
+          created_by_ai, ai_confidence, transcript_id,
+          created_via_ai_by
+        )
+        VALUES ($1, $2, $3, $4, 'To Do', $5, $6, $7, NOW(), TRUE, $8, $9, $10)
+        RETURNING *
+      `, [
+        issue.title,
+        issue.description,
+        projectId,
+        issue.priority,
+        issue.assignee,
+        issue.category,
+        req.user.id, // created_by (system user for AI)
+        issue.confidence,
+        transcriptId,
+        req.user.id // created_via_ai_by (actual user who ran analysis)
+      ]);
+      
+      results.created.issues.push(createdIssue.rows[0]);
+      
+      // Audit the creation
+      await auditAIAction(transcriptId, req.user.id, 'create_items', {
+        itemType: 'issue',
+        itemId: createdIssue.rows[0].id,
+        title: issue.title
+      });
+    }
+    
+    // Process action items (same permission logic)
+    for (const item of items.actionItems || []) {
+      if (item.assignee) {
+        const assignCheck = await canAssignTo(req.user.id, item.assignee, projectId);
+        
+        if (!assignCheck.allowed) {
+          if (assignCheck.suggestedAction === 'assign_to_self') {
+            const userInfo = await client.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+            item.assignee = userInfo.rows[0].username;
+            results.assignmentModified.push({
+              item: item.title,
+              originalAssignee: item.assignee,
+              newAssignee: userInfo.rows[0].username,
+              reason: 'Insufficient permission to assign to others'
+            });
+          } else {
+            results.permissionDenied.push({
+              item: item.title,
+              reason: assignCheck.reason
+            });
+            continue;
+          }
+        }
+      }
+      
+      const createdItem = await client.query(`
+        INSERT INTO action_items (
+          title, description, project_id, priority, status,
+          assignee, due_date, created_by, created_at,
+          created_by_ai, ai_confidence, transcript_id,
+          created_via_ai_by
+        )
+        VALUES ($1, $2, $3, $4, 'To Do', $5, $6, $7, NOW(), TRUE, $8, $9, $10)
+        RETURNING *
+      `, [
+        item.title,
+        item.description,
+        projectId,
+        item.priority,
+        item.assignee,
+        item.dueDate,
+        req.user.id,
+        item.confidence,
+        transcriptId,
+        req.user.id
+      ]);
+      
+      results.created.actionItems.push(createdItem.rows[0]);
+      
+      await auditAIAction(transcriptId, req.user.id, 'create_items', {
+        itemType: 'action_item',
+        itemId: createdItem.rows[0].id,
+        title: item.title
+      });
+    }
+    
+    await client.query('COMMIT');
+    
+    res.json({
+      success: true,
+      results: results,
+      warnings: {
+        permissionDenied: results.permissionDenied.length,
+        assignmentModified: results.assignmentModified.length
+      }
+    });
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating items:', error);
+    res.status(500).json({ error: 'Failed to create items' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * PROTECTED: Get transcripts
+ * Returns only transcripts user has permission to view
+ */
+app.get('/api/transcripts', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    
+    // Get user's role in project
+    const userRole = await pool.query(`
+      SELECT u.role, pm.role as project_role
+      FROM users u
+      LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+      WHERE u.id = $1
+    `, [req.user.id, projectId]);
+    
+    if (userRole.rows.length === 0) {
+      return res.status(403).json({ error: 'Not a member of this project' });
+    }
+    
+    const user = userRole.rows[0];
+    
+    // Build query based on permissions
+    let query = `
+      SELECT 
+        t.*,
+        u.username as uploaded_by_name,
+        (SELECT COUNT(*) FROM issues WHERE transcript_id = t.id) as linked_issues,
+        (SELECT COUNT(*) FROM action_items WHERE transcript_id = t.id) as linked_action_items
+      FROM meeting_transcripts t
+      JOIN users u ON t.uploaded_by = u.id
+      WHERE t.project_id = $1
+    `;
+    
+    // Filter based on visibility and user role
+    if (user.role !== 'admin') {
+      query += `
+        AND (
+          t.visibility = 'all'
+          OR (t.visibility = 'project_managers' AND $2 IN ('manager', 'admin'))
+          OR t.uploaded_by = $3
+          OR $3 = ANY(t.can_view_users)
+        )
+      `;
+    }
+    
+    query += ' ORDER BY t.meeting_date DESC, t.uploaded_at DESC';
+    
+    const params = user.role === 'admin' 
+      ? [projectId]
+      : [projectId, user.project_role, req.user.id];
+    
+    const result = await pool.query(query, params);
+    
+    // Audit view action
+    for (const transcript of result.rows) {
+      await auditAIAction(transcript.id, req.user.id, 'view', {});
+    }
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching transcripts:', error);
+    res.status(500).json({ error: 'Failed to fetch transcripts' });
+  }
+});
+
+/**
+ * PROTECTED: View single transcript
+ * Checks view permissions
+ */
+app.get('/api/transcripts/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get transcript
+    const transcriptResult = await pool.query(`
+      SELECT t.*, u.username as uploaded_by_name
+      FROM meeting_transcripts t
+      JOIN users u ON t.uploaded_by = u.id
+      WHERE t.id = $1
+    `, [id]);
+    
+    if (transcriptResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Transcript not found' });
+    }
+    
+    const transcript = transcriptResult.rows[0];
+    
+    // PERMISSION CHECK: Can user view this transcript?
+    const canView = await canViewTranscript(req.user.id, transcript);
+    if (!canView) {
+      return res.status(403).json({ 
+        error: 'Insufficient permissions',
+        message: 'You do not have permission to view this transcript'
+      });
+    }
+    
+    // Get linked items
+    const issuesResult = await pool.query(
+      'SELECT * FROM issues WHERE transcript_id = $1 ORDER BY created_at DESC',
+      [id]
+    );
+    
+    const actionItemsResult = await pool.query(
+      'SELECT * FROM action_items WHERE transcript_id = $1 ORDER BY created_at DESC',
+      [id]
+    );
+    
+    // Audit view action
+    await auditAIAction(id, req.user.id, 'view', {});
+    
+    res.json({
+      transcript: transcript,
+      linkedItems: {
+        issues: issuesResult.rows,
+        actionItems: actionItemsResult.rows
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching transcript:', error);
+    res.status(500).json({ error: 'Failed to fetch transcript' });
+  }
+});
+
+/**
+ * PROTECTED: Delete transcript
+ * Only uploader, project managers, or admins
+ */
+app.delete('/api/transcripts/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { id } = req.params;
+    const { deleteLinkedItems } = req.query;
+    
+    // Get transcript
+    const transcriptResult = await client.query(
+      'SELECT * FROM meeting_transcripts WHERE id = $1',
+      [id]
+    );
+    
+    if (transcriptResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Transcript not found' });
+    }
+    
+    const transcript = transcriptResult.rows[0];
+    
+    // PERMISSION CHECK: Can user delete?
+    const userRole = await client.query(`
+      SELECT u.role, pm.role as project_role
+      FROM users u
+      LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+      WHERE u.id = $1
+    `, [req.user.id, transcript.project_id]);
+    
+    if (userRole.rows.length === 0) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    
+    const user = userRole.rows[0];
+    const canDelete = user.role === 'admin' || 
+                     user.project_role === 'manager' || 
+                     user.project_role === 'admin' ||
+                     transcript.uploaded_by === req.user.id;
+    
+    if (!canDelete) {
+      return res.status(403).json({ 
+        error: 'Insufficient permissions',
+        message: 'Only the uploader, project managers, or admins can delete transcripts'
+      });
+    }
+    
+    await client.query('BEGIN');
+    
+    if (deleteLinkedItems === 'true') {
+      // Delete linked items (only if user has permission)
+      await client.query('DELETE FROM issues WHERE transcript_id = $1', [id]);
+      await client.query('DELETE FROM action_items WHERE transcript_id = $1', [id]);
+    } else {
+      // Just unlink
+      await client.query('UPDATE issues SET transcript_id = NULL WHERE transcript_id = $1', [id]);
+      await client.query('UPDATE action_items SET transcript_id = NULL WHERE transcript_id = $1', [id]);
+    }
+    
+    // Delete transcript
+    await client.query('DELETE FROM meeting_transcripts WHERE id = $1', [id]);
+    
+    // Audit deletion
+    await auditAIAction(id, req.user.id, 'delete', { 
+      deletedLinkedItems: deleteLinkedItems === 'true' 
+    });
+    
+    await client.query('COMMIT');
+    
+    res.json({ success: true, message: 'Transcript deleted' });
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting transcript:', error);
+    res.status(500).json({ error: 'Failed to delete transcript' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Get AI analysis audit log
+ * Admin only
+ */
+app.get('/api/ai-analysis/audit', authenticateToken, async (req, res) => {
+  try {
+    // Check admin permission
+    const userResult = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id]);
+    if (userResult.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { projectId, userId, transcriptId, action } = req.query;
+    
+    let query = `
+      SELECT 
+        a.*,
+        u.username,
+        t.title as transcript_title
+      FROM ai_analysis_audit a
+      JOIN users u ON a.user_id = u.id
+      LEFT JOIN meeting_transcripts t ON a.transcript_id = t.id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramCount = 1;
+    
+    if (projectId) {
+      query += ` AND t.project_id = $${paramCount++}`;
+      params.push(projectId);
+    }
+    
+    if (userId) {
+      query += ` AND a.user_id = $${paramCount++}`;
+      params.push(userId);
+    }
+    
+    if (transcriptId) {
+      query += ` AND a.transcript_id = $${paramCount++}`;
+      params.push(transcriptId);
+    }
+    
+    if (action) {
+      query += ` AND a.action = $${paramCount++}`;
+      params.push(action);
+    }
+    
+    query += ' ORDER BY a.created_at DESC LIMIT 100';
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching audit log:', error);
+    res.status(500).json({ error: 'Failed to fetch audit log' });
+  }
+});
+
+Step 4: Frontend Permission Handling
+File: public/app.js
+javascript/**
+ * Check if current user can upload transcripts
+ */
+async function canCurrentUserUploadTranscripts() {
+  try {
+    const response = await fetch('/api/user/permissions', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const permissions = await response.json();
+    return permissions.canUploadTranscripts;
+  } catch (error) {
+    console.error('Error checking permissions:', error);
+    return false;
+  }
+}
+
+/**
+ * Show/hide AI Analysis button based on permissions
+ */
+async function updateAIAnalysisButtonVisibility() {
+  const aiButton = document.querySelector('[onclick*="aiAnalysisModal"]');
+  
+  if (!aiButton) return;
+  
+  const canUpload = await canCurrentUserUploadTranscripts();
+  
+  if (!canUpload) {
+    aiButton.style.display = 'none';
+    
+    // Show info message
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800';
+    infoDiv.innerHTML = `
+      <strong>ℹ️ AI Analysis:</strong> Only Project Managers and Admins can upload transcripts and run AI analysis.
+    `;
+    aiButton.parentElement.appendChild(infoDiv);
+  }
+}
+
+/**
+ * Display permission warnings in AI results
+ */
+function displayPermissionWarnings(warnings) {
+  if (!warnings || (warnings.permissionDenied === 0 && warnings.assignmentModified === 0)) {
+    return;
+  }
+  
+  const warningsContainer = document.getElementById('ai-warnings');
+  
+  let html = '<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">';
+  html += '<h4 class="font-semibold text-yellow-900 mb-2">⚠️ Permission Adjustments</h4>';
+  
+  if (warnings.permissionDenied > 0) {
+    html += `<p class="text-sm text-yellow-800 mb-2">
+      ${warnings.permissionDenied} item(s) could not be created due to insufficient permissions.
+    </p>`;
+  }
+  
+  if (warnings.assignmentModified > 0) {
+    html += `<p class="text-sm text-yellow-800">
+      ${warnings.assignmentModified} item(s) were reassigned to you because you don't have permission to assign to others.
+    </p>`;
+  }
+  
+  html += '</div>';
+  
+  warningsContainer.innerHTML = html;
+}
+
+// Call on page load
+document.addEventListener('DOMContentLoaded', () => {
+  updateAIAnalysisButtonVisibility();
+});
+
+Step 5: Configuration & Settings
+Add admin configuration for AI Analysis permissions:
+File: public/index.html - Settings page
+html<!-- AI Analysis Settings (Admin Only) -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+  <h3 class="text-lg font-semibold mb-4">AI Analysis Permissions</h3>
+  
+  <div class="space-y-4">
+    <!-- Who can upload transcripts -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        Who can upload transcripts and run AI analysis?
+      </label>
+      <select id="ai-upload-permission" class="w-full px-3 py-2 border rounded-lg">
+        <option value="admin_only">Admins Only</option>
+        <option value="managers" selected>Project Managers & Admins</option>
+        <option value="all">All Team Members</option>
+      </select>
+    </div>
+    
+    <!-- Default transcript visibility -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        Default transcript visibility
+      </label>
+      <select id="ai-default-visibility" class="w-full px-3 py-2 border rounded-lg">
+        <option value="uploader_only">Uploader Only</option>
+        <option value="project_managers" selected>Project Managers & Above</option>
+        <option value="all">All Project Members</option>
+      </select>
+      <p class="text-xs text-gray-500 mt-1">
+        Transcripts may contain sensitive discussions. Choose carefully.
+      </p>
+    </div>
+    
+    <!-- Assignment restrictions -->
+    <div>
+      <label class="flex items-center gap-2">
+        <input type="checkbox" id="ai-restrict-assignments" checked class="rounded">
+        <span class="text-sm text-gray-700">
+          Restrict AI assignments to users the uploader can manually assign to
+        </span>
+      </label>
+    </div>
+    
+    <!-- Auto-assignment policy -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        When AI suggests assignments the user cannot make
+      </label>
+      <select id="ai-assignment-policy" class="w-full px-3 py-2 border rounded-lg">
+        <option value="reassign_to_self" selected>Reassign to uploader</option>
+        <option value="leave_unassigned">Leave unassigned</option>
+        <option value="skip_creation">Skip item creation</option>
+      </select>
+    </div>
+    
+    <!-- Audit logging -->
+    <div>
+      <label class="flex items-center gap-2">
+        <input type="checkbox" id="ai-audit-logging" checked disabled class="rounded">
+        <span class="text-sm text-gray-700">
+          Enable comprehensive audit logging for AI analysis (required)
+        </span>
+      </label>
+    </div>
+  </div>
+  
+  <button onclick="saveAISettings()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
+    Save Settings
+  </button>
+</div>
+
+<!-- Audit Log Viewer (Admin Only) -->
+<div class="bg-white rounded-lg shadow-md p-6">
+  <div class="flex justify-between items-center mb-4">
+    <h3 class="text-lg font-semibold">AI Analysis Audit Log</h3>
+    <button onclick="refreshAuditLog()" class="text-indigo-600 hover:text-indigo-800">
+      🔄 Refresh
+    </button>
+  </div>
+  
+  <div id="ai-audit-log" class="overflow-x-auto">
+    <!-- Audit log table will be populated here -->
+  </div>
+</div>
+
+Security Best Practices
+1. Principle of Least Privilege
+
+Only Project Managers+ can run AI analysis
+Users can only assign to people they could manually assign to
+Status updates require same permissions as manual updates
+
+2. Audit Everything
+
+Log all AI analysis actions
+Track who created what via AI
+Maintain chain of custody for transcripts
+
+3. Data Privacy
+
+Transcripts can contain sensitive information
+Default to restrictive visibility
+Allow granular access control
+
+4. Prevent Privilege Escalation
+
+AI cannot grant permissions user doesn't have
+Assignment restrictions enforced
+Cross-project boundaries respected
+
+5. Transparency
+
+AI-created items clearly marked
+Show who ran the analysis that created items
+Display permission adjustments to users
+
+
+Testing Checklist
+Permission Tests:
+
+ Admin can upload transcripts ✅
+ Project Manager can upload transcripts ✅
+ Team Member cannot upload transcripts ❌
+ Viewer cannot upload transcripts ❌
+ Team Member cannot assign to others via AI
+ Manager can assign to anyone via AI
+ User can only view transcripts they have permission for
+ Audit log captures all AI actions
+
+Edge Cases:
+
+ What if AI suggests assigning to someone not in project?
+ What if user loses permissions after upload but before creation?
+ What if transcript references items from different projects?
+ Can viewer see AI-created items even though they can't see transcript?
+
+
+Summary
+This RBAC implementation ensures:
+✅ Controlled Access - Only authorized users can run AI analysis
+✅ No Privilege Escalation - AI respects user permissions
+✅ Assignment Controls - Cannot assign to unauthorized users
+✅ Data Privacy - Transcripts have visibility settings
+✅ Full Audit Trail - All AI actions logged
+✅ Transparent - Users see permission adjustments
+✅ Configurable - Admins control policies
