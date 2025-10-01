@@ -2827,7 +2827,7 @@ app.post('/api/issues/:issueId/comments', authenticateToken, async (req, res) =>
     
     await client.query('BEGIN');
     
-    const mentionPattern = /@(\w+)/g;
+    const mentionPattern = /@(\w+(?:\s+\w+)*)/g;
     const mentionMatches = [...comment.matchAll(mentionPattern)];
     const mentionedUsernames = mentionMatches.map(m => m[1]);
     
@@ -2837,7 +2837,7 @@ app.post('/api/issues/:issueId/comments', authenticateToken, async (req, res) =>
         SELECT id, username 
         FROM users 
         WHERE LOWER(REPLACE(username, ' ', '')) = ANY(
-          SELECT LOWER(unnest($1::text[]))
+          SELECT LOWER(REPLACE(unnest($1::text[]), ' ', ''))
         )
       `, [mentionedUsernames]);
       
@@ -2911,7 +2911,7 @@ app.put('/api/issues/:issueId/comments/:commentId', authenticateToken, async (re
       return res.status(403).json({ error: 'Can only edit your own comments' });
     }
     
-    const mentionPattern = /@(\w+)/g;
+    const mentionPattern = /@(\w+(?:\s+\w+)*)/g;
     const mentionMatches = [...comment.matchAll(mentionPattern)];
     const mentionedUsernames = mentionMatches.map(m => m[1]);
     
@@ -3041,7 +3041,7 @@ app.post('/api/action-items/:itemId/comments', authenticateToken, async (req, re
     
     await client.query('BEGIN');
     
-    const mentionPattern = /@(\w+)/g;
+    const mentionPattern = /@(\w+(?:\s+\w+)*)/g;
     const mentionMatches = [...comment.matchAll(mentionPattern)];
     const mentionedUsernames = mentionMatches.map(m => m[1]);
     
@@ -3123,7 +3123,7 @@ app.put('/api/action-items/:itemId/comments/:commentId', authenticateToken, asyn
       return res.status(403).json({ error: 'Can only edit your own comments' });
     }
     
-    const mentionPattern = /@(\w+)/g;
+    const mentionPattern = /@(\w+(?:\s+\w+)*)/g;
     const mentionMatches = [...comment.matchAll(mentionPattern)];
     const mentionedUsernames = mentionMatches.map(m => m[1]);
     
