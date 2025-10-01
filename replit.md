@@ -1,7 +1,7 @@
 # Multi-Project Tracker
 
 ## Overview
-Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures.
+Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -10,6 +10,11 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend
 The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS. It features a dynamic UI that adjusts based on user roles and authentication status, including conditional rendering of actions and a user management interface for administrators. HTTP communication uses the Fetch API with credentialed requests, and event handling is managed through delegation.
+
+**AI Analysis Features:**
+- **In-Modal Search**: Search for existing items directly within the AI analysis modal to manually match unmatched status updates
+- **Review Queue**: Persistent queue for status updates that couldn't be automatically matched; accessible from the kanban board for later processing
+- **Smart Matching**: Real-time search and match functionality with confidence scoring and evidence display
 
 ### Backend
 The backend is a RESTful API built with Express.js, using a PostgreSQL database via Drizzle ORM. It implements a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permission enforcement. All sensitive endpoints are protected by role-based middleware, and request validation is handled with Joi.
@@ -25,6 +30,8 @@ A PostgreSQL database, managed by Drizzle ORM, stores:
 - **Action Items**: Granular action item tracking.
 - **Meeting Transcripts**: Metadata, text, analysis results, and cost.
 - **Issue Relationships**: Tracks dependencies and links between issues.
+- **Status Update Review Queue**: Unmatched status updates from AI analysis awaiting manual review.
+- **Comments**: Audit trail for action items and issues (action_item_comments, issue_comments).
 Foreign key constraints ensure data integrity, and Drizzle manages schema migrations.
 
 ### Request Handling
