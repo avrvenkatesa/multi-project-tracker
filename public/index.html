@@ -81,34 +81,39 @@
                 <div id="project-view" class="hidden">
                     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
                         <div class="flex justify-between items-center mb-4">
-                            <h3
-                                id="current-project-name"
-                                class="text-xl font-semibold"
-                            ></h3>
-                            <div class="space-x-2">
+                            <div class="flex items-center gap-4">
+                                <h3
+                                    id="current-project-name"
+                                    class="text-xl font-semibold"
+                                ></h3>
+                                <!-- AI Analysis button moved to left side -->
+                                <button
+                                    id="ai-analysis-btn"
+                                    data-requires-write
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-2 shadow-lg transition-transform hover:scale-105"
+                                >
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                    </svg>
+                                    AI Analysis
+                                </button>
+                            </div>
+                            
+                            <!-- Create buttons remain on right -->
+                            <div class="flex gap-2">
                                 <button
                                     id="create-issue-btn"
                                     data-requires-write
-                                    class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                                    class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
                                 >
-                                    + Issue
+                                    <span class="text-lg">+</span> Issue
                                 </button>
                                 <button
                                     id="create-action-item-btn"
                                     data-requires-write
-                                    class="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
+                                    class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2"
                                 >
-                                    + Action Item
-                                </button>
-                                <button
-                                    id="ai-analysis-btn"
-                                    data-requires-write
-                                    class="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 flex items-center gap-1"
-                                >
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                                    </svg>
-                                    AI Analysis
+                                    <span class="text-lg">+</span> Action Item
                                 </button>
                             </div>
                         </div>

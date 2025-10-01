@@ -136,6 +136,11 @@ The application uses express-rate-limit for API protection and implements proper
   - Security: Team Member+ role required, file type validation, 10MB size limit, automatic file cleanup
   - Cost: ~$0.001-0.01 per transcript analysis using GPT-3.5-Turbo (10-20x cheaper than GPT-4)
   - UI: "AI Analysis" button in project toolbar with lightbulb icon, CSP-compliant event listeners
+- **UI Improvement (October 1, 2025)**:
+  - Repositioned AI Analysis button from right-side button group to left side next to project title
+  - Separated "analyze" action from "create" actions for better visual hierarchy and reduced clutter
+  - Enhanced button styling with shadow and hover scale effect for improved prominence
+  - Maintained CSP compliance and role-based visibility (data-requires-write)
 
 ### Demo Credentials
 - Email: demo@multiproject.com
