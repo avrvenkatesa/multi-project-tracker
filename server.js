@@ -3268,26 +3268,26 @@ app.get('/api/projects/:projectId/members', authenticateToken, async (req, res) 
   try {
     const { projectId } = req.params;
     
-    const accessCheck = await pool.query(
-      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
-      [projectId, req.user.id]
+    // Verify project exists
+    const projectCheck = await pool.query(
+      'SELECT id FROM projects WHERE id = $1',
+      [projectId]
     );
     
-    if (accessCheck.rows.length === 0) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
     }
     
+    // Return all users (for @mentions) with their global role
     const result = await pool.query(`
       SELECT 
         u.id,
         u.username,
         u.email,
-        pm.role
-      FROM project_members pm
-      JOIN users u ON pm.user_id = u.id
-      WHERE pm.project_id = $1
+        u.role
+      FROM users u
       ORDER BY u.username ASC
-    `, [projectId]);
+    `);
     
     res.json(result.rows);
     
