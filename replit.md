@@ -141,6 +141,16 @@ The application uses express-rate-limit for API protection and implements proper
   - Separated "analyze" action from "create" actions for better visual hierarchy and reduced clutter
   - Enhanced button styling with shadow and hover scale effect for improved prominence
   - Maintained CSP compliance and role-based visibility (data-requires-write)
+- **Visual Distinction for AI-Generated Items (Story 2.1.2)**:
+  - Database: Added created_by_ai (boolean), ai_confidence (decimal 0-100), ai_analysis_id (text) columns to issues and action_items tables
+  - Backend: Updated POST /api/issues and POST /api/action-items to accept optional AI metadata fields
+  - Backend: Modified POST /api/meetings/create-items to automatically flag AI-generated items with confidence scores and analysis IDs
+  - Frontend: Added 4 helper functions for AI badge rendering and card styling (getAISourceBadge, getConfidenceColor, getAICardBorderClass, getAICardBackgroundClass)
+  - Visual Design: AI-generated cards display indigo background (bg-indigo-50) with colored left border based on confidence level
+  - Badge System: Manual items show "👤 Manual" badge, AI items show "⚡ AI XX%" badge with color-coded confidence
+  - Confidence Colors: 90%+ green, 75%+ blue, 60%+ yellow, <60% orange for visual quality indication
+  - UI Integration: All Kanban cards automatically display creation source with appropriate styling
+  - Analysis Grouping: AI-generated items linked by unique ai_analysis_id for batch tracking
 
 ### Demo Credentials
 - Email: demo@multiproject.com
