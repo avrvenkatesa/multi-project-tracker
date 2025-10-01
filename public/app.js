@@ -97,6 +97,12 @@ document.addEventListener("DOMContentLoaded", async function () {
     console.log("Multi-Project Tracker initialized");
     await AuthManager.init();
     loadProjects();
+    
+    // Toggle review queue button
+    const toggleQueueBtn = document.getElementById('toggle-review-queue-btn');
+    if (toggleQueueBtn) {
+        toggleQueueBtn.addEventListener('click', window.toggleReviewQueue);
+    }
     setupEventListeners();
     initializeFilters();
 });
@@ -1846,8 +1852,8 @@ function displayAIResults() {
                            class="flex-1 px-3 py-1 text-xs border rounded"
                            id="search-input-${idx}"
                            data-unmatched-idx="${idx}">
-                    <button onclick="searchExistingItems(${idx})" 
-                            class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                    <button class="unmatched-search-btn px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                            data-idx="${idx}">
                       Search
                     </button>
                   </div>
@@ -1857,8 +1863,8 @@ function displayAIResults() {
                   
                   <!-- Actions -->
                   <div class="flex gap-2">
-                    <button onclick="saveToReviewQueue(${idx})" 
-                            class="flex-1 px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700">
+                    <button class="save-to-queue-btn flex-1 px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700"
+                            data-idx="${idx}">
                       📋 Save to Review Queue
                     </button>
                   </div>
@@ -1868,6 +1874,30 @@ function displayAIResults() {
           </div>
         </div>
       `;
+      
+      // Add event delegation for search and save buttons
+      const unmatchedItemsContainer = document.getElementById('unmatched-items-container');
+      if (unmatchedItemsContainer) {
+        // Handle search button clicks
+        unmatchedItemsContainer.addEventListener('click', function(e) {
+          if (e.target.classList.contains('unmatched-search-btn')) {
+            const idx = parseInt(e.target.dataset.idx);
+            window.searchExistingItems(idx);
+          }
+          // Handle save to queue button clicks
+          if (e.target.classList.contains('save-to-queue-btn')) {
+            const idx = parseInt(e.target.dataset.idx);
+            window.saveToReviewQueue(idx);
+          }
+          // Handle match button clicks from search results
+          if (e.target.classList.contains('match-from-search-btn')) {
+            const unmatchedIdx = parseInt(e.target.dataset.unmatchedIdx);
+            const itemId = parseInt(e.target.dataset.itemId);
+            const itemType = e.target.dataset.itemType;
+            window.matchItemFromSearch(unmatchedIdx, itemId, itemType);
+          }
+        });
+      }
     } else {
       unmatchedContainer.innerHTML = '';
     }
@@ -1925,8 +1955,10 @@ window.searchExistingItems = async function(unmatchedIdx) {
             <span>Status: ${item.status}</span>
           </div>
         </div>
-        <button onclick="matchItemFromSearch(${unmatchedIdx}, ${item.id}, '${item.type}')" 
-                class="ml-2 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap">
+        <button class="match-from-search-btn ml-2 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap"
+                data-unmatched-idx="${unmatchedIdx}"
+                data-item-id="${item.id}"
+                data-item-type="${item.type}">
           Match & Update
         </button>
       </div>
@@ -2061,8 +2093,8 @@ function displayReviewQueue(queueItems) {
                  placeholder="Search to match..." 
                  class="flex-1 px-2 py-1 text-xs border rounded"
                  id="queue-search-${item.id}">
-          <button onclick="searchForQueueItem(${item.id})" 
-                  class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+          <button class="queue-search-btn px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                  data-queue-id="${item.id}">
             Search
           </button>
         </div>
@@ -2072,14 +2104,38 @@ function displayReviewQueue(queueItems) {
         
         <!-- Actions -->
         <div class="flex gap-2">
-          <button onclick="dismissQueueItem(${item.id})" 
-                  class="flex-1 px-2 py-1 bg-gray-400 text-white text-xs rounded hover:bg-gray-500">
+          <button class="queue-dismiss-btn flex-1 px-2 py-1 bg-gray-400 text-white text-xs rounded hover:bg-gray-500"
+                  data-queue-id="${item.id}">
             Dismiss
           </button>
         </div>
       </div>
     </div>
   `).join('');
+  
+  // Add event delegation for queue buttons
+  const queueItemsContainer = document.getElementById('review-queue-items');
+  if (queueItemsContainer) {
+    queueItemsContainer.addEventListener('click', function(e) {
+      // Handle queue search button
+      if (e.target.classList.contains('queue-search-btn')) {
+        const queueId = parseInt(e.target.dataset.queueId);
+        window.searchForQueueItem(queueId);
+      }
+      // Handle queue dismiss button
+      if (e.target.classList.contains('queue-dismiss-btn')) {
+        const queueId = parseInt(e.target.dataset.queueId);
+        window.dismissQueueItem(queueId);
+      }
+      // Handle match button from queue search results
+      if (e.target.classList.contains('queue-match-btn')) {
+        const queueId = parseInt(e.target.dataset.queueId);
+        const itemId = parseInt(e.target.dataset.itemId);
+        const itemType = e.target.dataset.itemType;
+        window.matchQueueItem(queueId, itemId, itemType);
+      }
+    });
+  }
 }
 
 // Search for items to match queue item
@@ -2118,8 +2174,10 @@ window.searchForQueueItem = async function(queueId) {
           <p class="font-medium">${escapeHtml(item.title)}</p>
           <p class="text-gray-500 mt-1">${escapeHtml(item.description?.substring(0, 50) || 'No description')}...</p>
         </div>
-        <button onclick="matchQueueItem(${queueId}, ${item.id}, '${item.type}')" 
-                class="ml-2 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap">
+        <button class="queue-match-btn ml-2 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap"
+                data-queue-id="${queueId}"
+                data-item-id="${item.id}"
+                data-item-type="${item.type}">
           Match
         </button>
       </div>
