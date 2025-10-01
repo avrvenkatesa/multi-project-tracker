@@ -1818,6 +1818,222 @@ app.delete('/api/transcripts/:id',
     }
 });
 
+// Review Queue API Endpoints
+
+// Save unmatched status update to review queue
+app.post('/api/review-queue',
+  authenticateToken,
+  requireRole('Team Member'),
+  async (req, res) => {
+    try {
+      const { projectId, transcriptId, unmatchedUpdate } = req.body;
+      
+      const result = await pool.query(`
+        INSERT INTO status_update_review_queue (
+          project_id, transcript_id, item_description, assignee,
+          status_change, evidence, progress_details, ai_confidence,
+          unmatched_reason, closest_match, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *
+      `, [
+        projectId,
+        transcriptId || null,
+        unmatchedUpdate.update.itemDescription,
+        unmatchedUpdate.update.assignee || null,
+        unmatchedUpdate.update.statusChange,
+        unmatchedUpdate.update.evidence,
+        unmatchedUpdate.update.progressDetails || null,
+        unmatchedUpdate.update.confidence || null,
+        unmatchedUpdate.reason,
+        unmatchedUpdate.closestMatch || null,
+        req.user.id
+      ]);
+      
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error('Error saving to review queue:', error);
+      res.status(500).json({ error: 'Failed to save to review queue' });
+    }
+});
+
+// Get all unresolved review queue items for a project
+app.get('/api/review-queue',
+  authenticateToken,
+  requireRole('Stakeholder'),
+  async (req, res) => {
+    try {
+      const { projectId } = req.query;
+      
+      if (!projectId) {
+        return res.status(400).json({ error: 'Project ID required' });
+      }
+      
+      const result = await pool.query(`
+        SELECT * FROM status_update_review_queue
+        WHERE project_id = $1 AND resolved = FALSE
+        ORDER BY created_at DESC
+      `, [parseInt(projectId)]);
+      
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Error fetching review queue:', error);
+      res.status(500).json({ error: 'Failed to fetch review queue' });
+    }
+});
+
+// Search existing items (for in-modal search)
+app.get('/api/search-items',
+  authenticateToken,
+  requireRole('Stakeholder'),
+  async (req, res) => {
+    try {
+      const { projectId, query } = req.query;
+      
+      if (!projectId || !query) {
+        return res.status(400).json({ error: 'Project ID and query required' });
+      }
+      
+      const searchQuery = `%${query}%`;
+      
+      const actionItems = await pool.query(`
+        SELECT id, title, description, status, assignee, 'action' as type
+        FROM action_items
+        WHERE project_id = $1 
+        AND (title ILIKE $2 OR description ILIKE $2)
+        AND status != 'Done' AND status != 'Cancelled'
+        ORDER BY created_at DESC
+        LIMIT 10
+      `, [parseInt(projectId), searchQuery]);
+      
+      const issues = await pool.query(`
+        SELECT id, title, description, status, assignee, 'issue' as type
+        FROM issues
+        WHERE project_id = $1 
+        AND (title ILIKE $2 OR description ILIKE $2)
+        AND status != 'Done' AND status != 'Cancelled'
+        ORDER BY created_at DESC
+        LIMIT 10
+      `, [parseInt(projectId), searchQuery]);
+      
+      res.json({
+        items: [...actionItems.rows, ...issues.rows]
+      });
+    } catch (error) {
+      console.error('Error searching items:', error);
+      res.status(500).json({ error: 'Failed to search items' });
+    }
+});
+
+// Match review queue item to existing item and update status
+app.post('/api/review-queue/:id/match',
+  authenticateToken,
+  requireRole('Team Member'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { itemId, itemType } = req.body;
+      
+      const client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        // Get queue item details
+        const queueItem = await client.query(`
+          SELECT * FROM status_update_review_queue WHERE id = $1
+        `, [parseInt(id)]);
+        
+        if (queueItem.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'Queue item not found' });
+        }
+        
+        const item = queueItem.rows[0];
+        const table = itemType === 'issue' ? 'issues' : 'action_items';
+        const commentTable = itemType === 'issue' ? 'issue_comments' : 'action_item_comments';
+        const foreignKey = itemType === 'issue' ? 'issue_id' : 'action_item_id';
+        
+        // Get current item status
+        const currentItem = await client.query(`
+          SELECT status FROM ${table} WHERE id = $1
+        `, [parseInt(itemId)]);
+        
+        if (currentItem.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'Item not found' });
+        }
+        
+        const oldStatus = currentItem.rows[0].status;
+        
+        // Update item status
+        await client.query(`
+          UPDATE ${table}
+          SET status = $1, updated_at = NOW()
+          WHERE id = $2
+        `, [item.status_change, parseInt(itemId)]);
+        
+        // Add comment with evidence
+        await client.query(`
+          INSERT INTO ${commentTable} (${foreignKey}, user_id, comment, created_at)
+          VALUES ($1, $2, $3, NOW())
+        `, [
+          parseInt(itemId),
+          req.user.id,
+          `🔄 Status updated via Review Queue\n\n` +
+          `**Evidence:** "${item.evidence}"\n\n` +
+          `**Status:** ${oldStatus} → ${item.status_change}\n\n` +
+          (item.progress_details ? `**Details:** ${item.progress_details}\n\n` : '') +
+          `**AI Confidence:** ${item.ai_confidence}%`
+        ]);
+        
+        // Mark queue item as resolved
+        await client.query(`
+          UPDATE status_update_review_queue
+          SET resolved = TRUE, resolved_at = NOW(), resolved_by = $1
+          WHERE id = $2
+        `, [req.user.id, parseInt(id)]);
+        
+        await client.query('COMMIT');
+        
+        res.json({ 
+          message: 'Item matched and updated successfully',
+          oldStatus,
+          newStatus: item.status_change
+        });
+        
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error('Error matching queue item:', error);
+      res.status(500).json({ error: 'Failed to match queue item' });
+    }
+});
+
+// Dismiss/delete review queue item
+app.delete('/api/review-queue/:id',
+  authenticateToken,
+  requireRole('Team Member'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      await pool.query(`
+        UPDATE status_update_review_queue
+        SET resolved = TRUE, resolved_at = NOW(), resolved_by = $1
+        WHERE id = $2
+      `, [req.user.id, parseInt(id)]);
+      
+      res.json({ message: 'Queue item dismissed' });
+    } catch (error) {
+      console.error('Error dismissing queue item:', error);
+      res.status(500).json({ error: 'Failed to dismiss queue item' });
+    }
+});
+
 // Serve frontend
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
