@@ -462,7 +462,11 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
     category, 
     assignee, 
     dueDate, 
-    projectId
+    projectId,
+    // AI-related fields
+    createdByAI = false,
+    aiConfidence = null,
+    aiAnalysisId = null
   } = req.body;
   
   if (!title || !projectId) {
@@ -482,7 +486,8 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
     const [newIssue] = await sql`
       INSERT INTO issues (
         title, description, priority, category, assignee, 
-        due_date, project_id, status, created_by
+        due_date, project_id, status, created_by,
+        created_by_ai, ai_confidence, ai_analysis_id
       ) VALUES (
         ${title.trim()}, 
         ${description?.trim() || ''}, 
@@ -492,7 +497,10 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
         ${dueDate || null}, 
         ${parseInt(projectId)}, 
         'To Do',
-        ${req.user.id.toString()}
+        ${req.user.id.toString()},
+        ${createdByAI},
+        ${aiConfidence},
+        ${aiAnalysisId}
       ) RETURNING *
     `;
     
@@ -615,7 +623,18 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
 // Create action item (Team Member or higher)
 app.post("/api/action-items", authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
-    const { title, description, projectId, priority, assignee, dueDate } = req.body;
+    const { 
+      title, 
+      description, 
+      projectId, 
+      priority, 
+      assignee, 
+      dueDate,
+      // AI-related fields
+      createdByAI = false,
+      aiConfidence = null,
+      aiAnalysisId = null
+    } = req.body;
     
     if (!title || !projectId) {
       return res.status(400).json({ error: 'Title and Project ID are required' });
@@ -624,7 +643,8 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
     const [newItem] = await sql`
       INSERT INTO action_items (
         title, description, project_id, priority, assignee, 
-        due_date, status, created_by
+        due_date, status, created_by,
+        created_by_ai, ai_confidence, ai_analysis_id
       ) VALUES (
         ${title.trim()}, 
         ${description?.trim() || ''}, 
@@ -633,7 +653,10 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
         ${assignee || ''}, 
         ${dueDate || null}, 
         'To Do',
-        ${req.user.id.toString()}
+        ${req.user.id.toString()},
+        ${createdByAI},
+        ${aiConfidence},
+        ${aiAnalysisId}
       ) RETURNING *
     `;
     
@@ -1053,13 +1076,17 @@ app.post('/api/meetings/create-items',
         issues: []
       };
 
+      // Generate unique analysis ID for this batch
+      const analysisId = `ai-analysis-${Date.now()}-${req.user.id}`;
+
       // Create action items
       if (actionItems && actionItems.length > 0) {
         for (const item of actionItems) {
           const newItem = await sql`
             INSERT INTO action_items (
               title, description, project_id, priority, assignee, 
-              due_date, status, created_by
+              due_date, status, created_by,
+              created_by_ai, ai_confidence, ai_analysis_id
             ) VALUES (
               ${item.title.substring(0, 200)},
               ${item.description?.substring(0, 1000) || ''},
@@ -1068,7 +1095,10 @@ app.post('/api/meetings/create-items',
               ${item.assignee || ''},
               ${item.dueDate || null},
               'To Do',
-              ${req.user.id}
+              ${req.user.id},
+              ${true},
+              ${item.confidence || null},
+              ${analysisId}
             ) RETURNING *
           `;
           created.actionItems.push(newItem[0]);
@@ -1081,7 +1111,8 @@ app.post('/api/meetings/create-items',
           const newIssue = await sql`
             INSERT INTO issues (
               title, description, project_id, priority, category,
-              status, created_by
+              status, created_by,
+              created_by_ai, ai_confidence, ai_analysis_id
             ) VALUES (
               ${issue.title.substring(0, 200)},
               ${issue.description?.substring(0, 1000) || ''},
@@ -1089,7 +1120,10 @@ app.post('/api/meetings/create-items',
               ${issue.priority || 'medium'},
               ${issue.category || 'General'},
               'To Do',
-              ${req.user.id}
+              ${req.user.id},
+              ${true},
+              ${issue.confidence || null},
+              ${analysisId}
             ) RETURNING *
           `;
           created.issues.push(newIssue[0]);
