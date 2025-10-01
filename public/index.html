@@ -97,6 +97,16 @@
                                     </svg>
                                     AI Analysis
                                 </button>
+                                <!-- View Transcripts button -->
+                                <button
+                                    id="view-transcripts-btn"
+                                    class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 flex items-center gap-2 transition-all"
+                                >
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    Transcripts
+                                </button>
                             </div>
                             
                             <!-- Create buttons remain on right -->
@@ -416,6 +426,59 @@
                                         Create Selected Items
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transcripts Viewer Modal -->
+            <div id="transcripts-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-center justify-between p-6 border-b">
+                        <h3 class="text-xl font-semibold text-gray-800">Meeting Transcripts</h3>
+                        <button id="close-transcripts-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                    </div>
+                    
+                    <div class="p-6">
+                        <!-- Loading State -->
+                        <div id="transcripts-loading" class="text-center py-8 hidden">
+                            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
+                            <p class="text-sm text-gray-600 mt-2">Loading transcripts...</p>
+                        </div>
+
+                        <!-- Transcripts List -->
+                        <div id="transcripts-list-view" class="hidden">
+                            <div id="transcripts-list" class="space-y-3">
+                                <!-- Transcripts will be listed here -->
+                            </div>
+                            <div id="no-transcripts" class="text-center py-8 text-gray-500 hidden">
+                                <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                <p>No transcripts yet</p>
+                                <p class="text-sm mt-1">Upload a meeting transcript using the AI Analysis button</p>
+                            </div>
+                        </div>
+
+                        <!-- Single Transcript View -->
+                        <div id="transcript-detail-view" class="hidden">
+                            <button id="back-to-list-btn" class="text-sm text-blue-600 hover:text-blue-700 mb-4 flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                </svg>
+                                Back to list
+                            </button>
+                            
+                            <div id="transcript-header" class="bg-gray-50 rounded-lg p-4 mb-4">
+                                <!-- Transcript metadata will go here -->
+                            </div>
+                            
+                            <div class="bg-white border rounded-lg p-4">
+                                <h4 class="font-semibold mb-3">Transcript Text</h4>
+                                <pre id="transcript-text" class="whitespace-pre-wrap text-sm text-gray-700 font-mono bg-gray-50 p-4 rounded max-h-96 overflow-y-auto">
+                                    <!-- Transcript text will go here -->
+                                </pre>
                             </div>
                         </div>
                     </div>

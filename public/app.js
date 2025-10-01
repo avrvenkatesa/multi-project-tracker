@@ -1902,5 +1902,186 @@ document.addEventListener('DOMContentLoaded', function() {
   if (createBtn) {
     createBtn.addEventListener('click', createAllItems);
   }
+  
+  // Transcripts modal event listeners
+  const viewTranscriptsBtn = document.getElementById('view-transcripts-btn');
+  if (viewTranscriptsBtn) {
+    viewTranscriptsBtn.addEventListener('click', openTranscriptsModal);
+  }
+  
+  const closeTranscriptsBtn = document.getElementById('close-transcripts-modal-btn');
+  if (closeTranscriptsBtn) {
+    closeTranscriptsBtn.addEventListener('click', closeTranscriptsModal);
+  }
+  
+  const backToListBtn = document.getElementById('back-to-list-btn');
+  if (backToListBtn) {
+    backToListBtn.addEventListener('click', showTranscriptsList);
+  }
 });
+
+// ============= TRANSCRIPTS VIEWER =============
+
+// Open transcripts modal
+async function openTranscriptsModal() {
+  if (!currentProject) return;
+  
+  const modal = document.getElementById('transcripts-modal');
+  const loading = document.getElementById('transcripts-loading');
+  const listView = document.getElementById('transcripts-list-view');
+  const detailView = document.getElementById('transcript-detail-view');
+  
+  // Show modal and loading
+  modal.classList.remove('hidden');
+  loading.classList.remove('hidden');
+  listView.classList.add('hidden');
+  detailView.classList.add('hidden');
+  
+  try {
+    const response = await axios.get(`/api/transcripts?projectId=${currentProject.id}`, {
+      withCredentials: true
+    });
+    
+    const transcripts = response.data;
+    
+    // Hide loading
+    loading.classList.add('hidden');
+    listView.classList.remove('hidden');
+    
+    // Display transcripts
+    if (transcripts.length === 0) {
+      document.getElementById('no-transcripts').classList.remove('hidden');
+      document.getElementById('transcripts-list').innerHTML = '';
+    } else {
+      document.getElementById('no-transcripts').classList.add('hidden');
+      renderTranscriptsList(transcripts);
+    }
+    
+  } catch (error) {
+    console.error('Error loading transcripts:', error);
+    loading.classList.add('hidden');
+    listView.classList.remove('hidden');
+    document.getElementById('transcripts-list').innerHTML = `
+      <div class="text-center py-8 text-red-600">
+        <p>Failed to load transcripts</p>
+        <p class="text-sm mt-1">${error.response?.data?.error || error.message}</p>
+      </div>
+    `;
+  }
+}
+
+// Close transcripts modal
+function closeTranscriptsModal() {
+  document.getElementById('transcripts-modal').classList.add('hidden');
+}
+
+// Render transcripts list
+function renderTranscriptsList(transcripts) {
+  const listContainer = document.getElementById('transcripts-list');
+  
+  listContainer.innerHTML = transcripts.map(transcript => {
+    const date = new Date(transcript.meeting_date).toLocaleDateString();
+    const uploadedDate = new Date(transcript.uploaded_at).toLocaleDateString();
+    const status = transcript.status === 'processed' ? '✓' : '⚠';
+    const statusColor = transcript.status === 'processed' ? 'text-green-600' : 'text-yellow-600';
+    
+    return `
+      <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-all" 
+           data-transcript-id="${transcript.id}">
+        <div class="flex justify-between items-start">
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <h4 class="font-semibold text-gray-800">${escapeHtml(transcript.title)}</h4>
+              <span class="${statusColor} font-bold">${status}</span>
+            </div>
+            <p class="text-sm text-gray-600 mt-1">Meeting Date: ${date}</p>
+            <p class="text-xs text-gray-500">Uploaded: ${uploadedDate} | File: ${transcript.original_filename}</p>
+          </div>
+          <div class="text-right">
+            <div class="text-sm font-medium text-gray-700">
+              ${transcript.action_items_extracted || 0} Actions, ${transcript.issues_extracted || 0} Issues
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+              ${transcript.avg_confidence ? `Confidence: ${transcript.avg_confidence}%` : ''}
+            </div>
+            <div class="text-xs text-gray-400 mt-1">
+              ${transcript.estimated_cost ? `Cost: $${transcript.estimated_cost}` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  // Add click handlers to each transcript
+  document.querySelectorAll('[data-transcript-id]').forEach(item => {
+    item.addEventListener('click', function() {
+      const transcriptId = this.getAttribute('data-transcript-id');
+      viewTranscriptDetail(transcriptId);
+    });
+  });
+}
+
+// View single transcript detail
+async function viewTranscriptDetail(transcriptId) {
+  const loading = document.getElementById('transcripts-loading');
+  const listView = document.getElementById('transcripts-list-view');
+  const detailView = document.getElementById('transcript-detail-view');
+  
+  // Show loading
+  listView.classList.add('hidden');
+  loading.classList.remove('hidden');
+  
+  try {
+    const response = await axios.get(`/api/transcripts/${transcriptId}`, {
+      withCredentials: true
+    });
+    
+    const transcript = response.data;
+    
+    // Hide loading, show detail
+    loading.classList.add('hidden');
+    detailView.classList.remove('hidden');
+    
+    // Render transcript details
+    const date = new Date(transcript.meeting_date).toLocaleDateString();
+    const uploadedDate = new Date(transcript.uploaded_at).toLocaleDateString();
+    
+    document.getElementById('transcript-header').innerHTML = `
+      <h3 class="text-lg font-semibold text-gray-800 mb-2">${escapeHtml(transcript.title)}</h3>
+      <div class="grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <p class="text-gray-600">Meeting Date: <span class="font-medium">${date}</span></p>
+          <p class="text-gray-600">Uploaded: <span class="font-medium">${uploadedDate}</span></p>
+          <p class="text-gray-600">File: <span class="font-medium">${escapeHtml(transcript.original_filename)}</span></p>
+        </div>
+        <div>
+          <p class="text-gray-600">Status: <span class="font-medium ${transcript.status === 'processed' ? 'text-green-600' : 'text-yellow-600'}">${transcript.status}</span></p>
+          <p class="text-gray-600">Extracted: <span class="font-medium">${transcript.action_items_extracted || 0} actions, ${transcript.issues_extracted || 0} issues</span></p>
+          ${transcript.avg_confidence ? `<p class="text-gray-600">Avg Confidence: <span class="font-medium">${transcript.avg_confidence}%</span></p>` : ''}
+          ${transcript.estimated_cost ? `<p class="text-gray-600">Cost: <span class="font-medium">$${transcript.estimated_cost}</span></p>` : ''}
+        </div>
+      </div>
+    `;
+    
+    document.getElementById('transcript-text').textContent = transcript.transcript_text || 'No transcript text available';
+    
+  } catch (error) {
+    console.error('Error loading transcript:', error);
+    loading.classList.add('hidden');
+    detailView.classList.remove('hidden');
+    document.getElementById('transcript-header').innerHTML = `
+      <div class="text-center py-4 text-red-600">
+        <p>Failed to load transcript</p>
+        <p class="text-sm mt-1">${error.response?.data?.error || error.message}</p>
+      </div>
+    `;
+  }
+}
+
+// Show transcripts list
+function showTranscriptsList() {
+  document.getElementById('transcript-detail-view').classList.add('hidden');
+  document.getElementById('transcripts-list-view').classList.remove('hidden');
+}
 
