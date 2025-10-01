@@ -160,6 +160,13 @@ The application uses express-rate-limit for API protection and implements proper
   - Detailed confidence scoring guidelines (90-100% explicit, 80-89% partial, 70-79% implied, <70% ambiguous)
   - Added current meeting date context for relative date calculations
   - Comprehensive extraction directive to capture ALL action items and issues, even implied ones
+  - **Special Cases Enhancement**: Added 5 edge case patterns for maximum capture rate:
+    - Recurring tasks: "I'll send X every Friday" extracts with frequency in description
+    - Soft commitments: "I'll/I can/Let me do X" extracts as action items
+    - Relative dates: "tomorrow", "next week", "end of week", weekday names calculate actual dates
+    - Implied actions: "we need X" followed by "I'll handle that" extracts as action
+    - Meeting scheduling: "I'll send invite", "Let's schedule" extracts as scheduling actions
+  - Enhanced extraction logic: Re-reads transcript carefully, trusts soft commitments, calculates relative dates automatically
 
 ### Demo Credentials
 - Email: demo@multiproject.com

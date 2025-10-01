@@ -982,6 +982,40 @@ CONFIDENCE SCORING:
 - 70-79%: Implied assignment or implied timeline
 - <70%: Ambiguous - flag for human review
 
+SPECIAL CASES TO CATCH:
+
+1. RECURRING TASKS:
+   Pattern: "I'll send/provide/update X every [timeframe]"
+   Extract as: Action item with note about recurring nature
+   Example: "I'll send risk reports every Friday" → Action with description mentioning "recurring every Friday"
+
+2. SOFT COMMITMENTS:
+   Pattern: "I'll [action]", "I can [action]", "Let me [action]"
+   Extract as: Action item assigned to the speaker
+   Example: "I'll set up a meeting" → Action: "Set up meeting"
+
+3. RELATIVE DATES:
+   - "tomorrow" → Add 1 day to meeting date
+   - "next week" → Add 7 days to meeting date
+   - "end of week" → Next Friday from meeting date
+   - "Monday" (or any weekday) → Next occurring Monday
+
+4. IMPLIED ACTIONS FROM DECISIONS:
+   Pattern: "we need to [action]" followed by discussion
+   Look for who takes ownership in follow-up statements
+   Example: "We need X" ... [later] "I'll handle that" → Extract as action
+
+5. MEETING SCHEDULING COMMITMENTS:
+   Pattern: "I'll send out a meeting invite", "Let's schedule", "I'll set up"
+   Extract as: Action to schedule/organize the mentioned meeting
+
+ENHANCED EXTRACTION LOGIC:
+- Re-read transcript carefully to catch implied commitments
+- If someone says "I'll do X", extract it even without explicit due date
+- For recurring tasks, include frequency in description (e.g., "Send reports (recurring: every Friday)")
+- Trust soft commitments as much as explicit assignments
+- Calculate relative dates from the current meeting date
+
 PROJECT CONTEXT:
 - Name: ${project[0].name}
 - Type: ${project[0].template}
