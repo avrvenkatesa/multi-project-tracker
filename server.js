@@ -1172,6 +1172,22 @@ async function processStatusUpdates(statusUpdates, projectId, userId, transcript
         
         const matchedItem = existingItems.rows[bestMatchIndex];
         
+        // PERMISSION CHECK: Can user update this item's status?
+        const canUpdate = await canUpdateItemStatus(userId, {
+          ...matchedItem,
+          project_id: projectId
+        });
+        
+        if (!canUpdate) {
+          results.unmatched.push({
+            update: update,
+            reason: 'Insufficient permissions to update this item',
+            matchedItem: matchedItem.title,
+            action: 'permission_denied'
+          });
+          continue;
+        }
+        
         let newStatus = matchedItem.status;
         if (update.statusChange === 'Done') {
           newStatus = 'Done';
@@ -1189,6 +1205,15 @@ async function processStatusUpdates(statusUpdates, projectId, userId, transcript
         `;
         
         await client.query(updateQuery, [newStatus, matchedItem.id]);
+        
+        // Audit the status update
+        await auditAIAction(transcriptId, userId, 'update_status', {
+          itemType: itemType === 'issue' ? 'issue' : 'action_item',
+          itemId: matchedItem.id,
+          oldStatus: matchedItem.status,
+          newStatus: newStatus,
+          title: matchedItem.title
+        });
         
         const commentTable = itemType === 'issue' ? 'issue_comments' : 'action_item_comments';
         const foreignKey = itemType === 'issue' ? 'issue_id' : 'action_item_id';
