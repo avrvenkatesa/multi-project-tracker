@@ -1112,9 +1112,11 @@ app.post('/api/meetings/analyze',
         messages: [
           {
             role: "system",
-            content: `You are an expert AI assistant that analyzes meeting transcripts to extract action items and issues.
+            content: `You are an expert AI assistant that analyzes meeting transcripts to:
+1. Extract NEW action items and issues
+2. Detect STATUS UPDATES for existing work
 
-EXTRACTION RULES:
+# PHASE 1: NEW ITEM EXTRACTION
 
 ACTION ITEMS - Extract when you see:
 1. Direct assignments: "David, can you...", "Lisa will...", "James should..."
@@ -1154,39 +1156,45 @@ CONFIDENCE SCORING:
 - 70-79%: Implied assignment or implied timeline
 - <70%: Ambiguous - flag for human review
 
-SPECIAL CASES TO CATCH:
+# PHASE 2: STATUS UPDATE DETECTION
 
-1. RECURRING TASKS:
-   Pattern: "I'll send/provide/update X every [timeframe]"
-   Extract as: Action item with note about recurring nature
-   Example: "I'll send risk reports every Friday" → Action with description mentioning "recurring every Friday"
+Scan the transcript for statements indicating work status changes:
 
-2. SOFT COMMITMENTS:
-   Pattern: "I'll [action]", "I can [action]", "Let me [action]"
-   Extract as: Action item assigned to the speaker
-   Example: "I'll set up a meeting" → Action: "Set up meeting"
+## COMPLETION INDICATORS:
+- "finished", "completed", "done", "wrapped up"
+- "I finished X", "X is complete", "completed the X"
+- Past tense: "I created", "I documented", "I analyzed"
+- Confirmation: "that task is done", "all set on X"
 
-3. RELATIVE DATES:
-   - "tomorrow" → Add 1 day to meeting date
-   - "next week" → Add 7 days to meeting date
-   - "end of week" → Next Friday from meeting date
-   - "Monday" (or any weekday) → Next occurring Monday
+## IN PROGRESS INDICATORS:
+- "working on", "in progress", "currently doing"
+- Percentage complete: "75% done", "about halfway through"
+- "I've started X", "making progress on X"
+- "almost done", "nearly finished"
 
-4. IMPLIED ACTIONS FROM DECISIONS:
-   Pattern: "we need to [action]" followed by discussion
-   Look for who takes ownership in follow-up statements
-   Example: "We need X" ... [later] "I'll handle that" → Extract as action
+## BLOCKED INDICATORS:
+- "blocked by", "waiting on", "can't proceed until"
+- "stuck on", "need help with", "impediment"
+- "waiting for access", "pending approval"
 
-5. MEETING SCHEDULING COMMITMENTS:
-   Pattern: "I'll send out a meeting invite", "Let's schedule", "I'll set up"
-   Extract as: Action to schedule/organize the mentioned meeting
+## EXTRACTION FORMAT:
 
-ENHANCED EXTRACTION LOGIC:
-- Re-read transcript carefully to catch implied commitments
-- If someone says "I'll do X", extract it even without explicit due date
-- For recurring tasks, include frequency in description (e.g., "Send reports (recurring: every Friday)")
-- Trust soft commitments as much as explicit assignments
-- Calculate relative dates from the current meeting date
+For each status update detected, provide:
+- **itemDescription**: Brief description of the work being referenced
+- **assignee**: Person who provided the update
+- **statusChange**: "Done" | "In Progress" | "Blocked"
+- **evidence**: Direct quote from transcript showing the status
+- **progressDetails**: Specific details if mentioned (e.g., "completed firewall review")
+- **confidence**: 0-100 based on clarity of status indicator
+
+## STATUS UPDATE RULES:
+
+1. Only detect status updates for work items, not general discussions
+2. Status must be explicitly stated or strongly implied
+3. Match assignee names carefully
+4. Include specific progress details when mentioned (percentages, sub-tasks completed)
+5. High confidence (90+) for explicit statements, lower for implied
+6. If work is mentioned but no status change indicated, don't include it
 
 PROJECT CONTEXT:
 - Name: ${project[0].name}
@@ -1215,10 +1223,20 @@ Respond with a JSON object in this exact format:
       "priority": "critical|high|medium|low",
       "confidence": 90
     }
+  ],
+  "statusUpdates": [
+    {
+      "itemDescription": "VM inventory creation",
+      "assignee": "David Thompson",
+      "statusChange": "Done",
+      "evidence": "I finished the VM inventory yesterday",
+      "progressDetails": "47 VMs documented with full configurations",
+      "confidence": 95
+    }
   ]
 }
 
-IMPORTANT: Extract ALL action items and issues, even if implied. Be comprehensive.`
+IMPORTANT: Extract ALL action items, issues, and status updates. Be comprehensive.`
           },
           {
             role: "user",
@@ -1227,7 +1245,7 @@ IMPORTANT: Extract ALL action items and issues, even if implied. Be comprehensiv
         ],
         temperature: 0.3,
         response_format: { type: "json_object" },
-        max_tokens: 2000
+        max_tokens: 3000
       });
 
       const aiResponse = completion.choices[0].message.content;

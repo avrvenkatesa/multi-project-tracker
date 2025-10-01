@@ -1,0 +1,480 @@
+REPLIT PROMPT: Add Status Update Detection to AI Analysis
+Problem
+The AI currently only creates new items from transcripts. It doesn't detect when existing items are mentioned with status updates like "completed," "in progress," or "blocked."
+Solution Architecture
+Two-Phase AI Analysis:
+Phase 1: Extract New Items (current functionality)
+
+Action items and issues mentioned for the first time
+New commitments and problems
+
+Phase 2: Detect Status Updates (NEW)
+
+References to existing work with status indicators
+Completion statements
+Progress updates
+Blockers mentioned
+
+
+Enhanced AI Prompt
+File: server.js
+Replace the AI system prompt with this enhanced version:
+javascriptconst enhancedSystemPrompt = `You are an expert AI assistant that analyzes meeting transcripts to:
+1. Extract NEW action items and issues
+2. Detect STATUS UPDATES for existing work
+
+# PHASE 1: NEW ITEM EXTRACTION
+
+[... keep all existing extraction rules from previous prompt ...]
+
+# PHASE 2: STATUS UPDATE DETECTION
+
+Scan the transcript for statements indicating work status changes:
+
+## COMPLETION INDICATORS:
+- "finished", "completed", "done", "wrapped up"
+- "I finished X", "X is complete", "completed the X"
+- Past tense: "I created", "I documented", "I analyzed"
+- Confirmation: "that task is done", "all set on X"
+
+## IN PROGRESS INDICATORS:
+- "working on", "in progress", "currently doing"
+- Percentage complete: "75% done", "about halfway through"
+- "I've started X", "making progress on X"
+- "almost done", "nearly finished"
+
+## BLOCKED INDICATORS:
+- "blocked by", "waiting on", "can't proceed until"
+- "stuck on", "need help with", "impediment"
+- "waiting for access", "pending approval"
+
+## EXTRACTION FORMAT:
+
+For each status update detected, provide:
+- **itemDescription**: Brief description of the work being referenced
+- **assignee**: Person who provided the update
+- **statusChange**: "To Do" → "In Progress" → "Done" → "Blocked"
+- **evidence**: Direct quote from transcript showing the status
+- **confidence**: 0-100 based on clarity of status indicator
+
+## RESPONSE FORMAT:
+
+{
+  "newItems": {
+    "actionItems": [...],
+    "issues": [...]
+  },
+  "statusUpdates": [
+    {
+      "itemDescription": "VM inventory creation",
+      "assignee": "David Thompson",
+      "statusChange": "Done",
+      "evidence": "I finished the VM inventory yesterday",
+      "progressDetails": "47 VMs documented with full configurations",
+      "confidence": 95
+    },
+    {
+      "itemDescription": "Security audit",
+      "assignee": "Lisa Martinez",
+      "statusChange": "In Progress",
+      "evidence": "I'm about 75% done with the security audit",
+      "progressDetails": "Completed firewall review, still need encryption review",
+      "confidence": 90
+    }
+  ]
+}
+
+## IMPORTANT RULES:
+
+1. Only detect status updates for work items, not general discussions
+2. Status must be explicitly stated or strongly implied
+3. Match assignee names carefully
+4. Include specific progress details when mentioned (percentages, sub-tasks completed)
+5. High confidence (90+) for explicit statements, lower for implied
+6. If work is mentioned but no status change indicated, don't include it
+
+CURRENT MEETING DATE: ${meetingDate}`;
+
+Backend Implementation
+Step 1: Update AI Analysis Endpoint
+File: server.js
+javascriptapp.post('/api/ai-analysis/upload', authenticateToken, upload.single('transcript'), async (req, res) => {
+  const startTime = Date.now();
+  const analysisId = uuidv4();
+  let transcriptId = null;
+  
+  try {
+    const file = req.file;
+    const { projectId, meetingDate, title } = req.body;
+    
+    // Validate inputs
+    if (!file || !projectId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Read transcript content
+    const transcriptText = fs.readFileSync(file.path, 'utf-8');
+    
+    // Store transcript in database
+    const transcriptResult = await pool.query(`
+      INSERT INTO meeting_transcripts (
+        project_id, title, meeting_date, uploaded_by,
+        original_filename, file_size, transcript_text,
+        analysis_id, status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'processing')
+      RETURNING id
+    `, [
+      projectId,
+      title || `Meeting ${new Date().toLocaleDateString()}`,
+      meetingDate || new Date().toISOString().split('T')[0],
+      req.user.id,
+      file.originalname,
+      file.size,
+      transcriptText,
+      analysisId
+    ]);
+    
+    transcriptId = transcriptResult.rows[0].id;
+    
+    // Call AI with enhanced prompt
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo-1106',
+      messages: [
+        { role: 'system', content: enhancedSystemPrompt },
+        { 
+          role: 'user', 
+          content: `Meeting Date: ${meetingDate}\n\nProject ID: ${projectId}\n\nTranscript:\n${transcriptText}` 
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 3000, // Increased for status updates
+      response_format: { type: 'json_object' }
+    });
+    
+    const aiResults = JSON.parse(completion.choices[0].message.content);
+    const processingTime = Date.now() - startTime;
+    
+    // Calculate costs
+    const totalTokens = completion.usage.total_tokens;
+    const estimatedCost = (completion.usage.prompt_tokens * 0.0015 + completion.usage.completion_tokens * 0.002) / 1000;
+    
+    // ===== NEW: Process Status Updates =====
+    let statusUpdateResults = null;
+    if (aiResults.statusUpdates && aiResults.statusUpdates.length > 0) {
+      statusUpdateResults = await processStatusUpdates(
+        aiResults.statusUpdates, 
+        projectId, 
+        req.user.id, 
+        transcriptId
+      );
+    }
+    
+    // Update transcript with analysis results
+    await pool.query(`
+      UPDATE meeting_transcripts
+      SET 
+        status = 'processed',
+        processing_time_ms = $1,
+        total_tokens = $2,
+        estimated_cost = $3,
+        action_items_extracted = $4,
+        issues_extracted = $5,
+        avg_confidence = $6
+      WHERE id = $7
+    `, [
+      processingTime,
+      totalTokens,
+      estimatedCost,
+      aiResults.newItems?.actionItems?.length || 0,
+      aiResults.newItems?.issues?.length || 0,
+      calculateAvgConfidence(aiResults.newItems),
+      transcriptId
+    ]);
+    
+    // Return results with status updates
+    res.json({
+      success: true,
+      analysisId: analysisId,
+      transcriptId: transcriptId,
+      results: {
+        newItems: aiResults.newItems || { actionItems: [], issues: [] },
+        statusUpdates: aiResults.statusUpdates || []
+      },
+      statusUpdateResults: statusUpdateResults,
+      metadata: {
+        processingTime: `${processingTime}ms`,
+        totalTokens: totalTokens,
+        estimatedCost: `$${estimatedCost.toFixed(4)}`,
+        model: 'gpt-3.5-turbo-1106'
+      }
+    });
+    
+    // Clean up uploaded file
+    fs.unlinkSync(file.path);
+    
+  } catch (error) {
+    console.error('Error in AI analysis:', error);
+    
+    // Update transcript status to failed if it was created
+    if (transcriptId) {
+      await pool.query(`
+        UPDATE meeting_transcripts
+        SET status = 'failed', error_message = $1
+        WHERE id = $2
+      `, [error.message, transcriptId]);
+    }
+    
+    res.status(500).json({ 
+      error: 'AI analysis failed',
+      details: error.message 
+    });
+  }
+});
+Step 2: Status Update Processing Function
+javascript/**
+ * Process status updates detected by AI
+ * Match to existing items and update their status
+ * @param {Array} statusUpdates - Status updates from AI
+ * @param {number} projectId - Project ID
+ * @param {number} userId - User performing the update
+ * @param {number} transcriptId - Transcript ID
+ * @returns {Object} Results of status updates
+ */
+async function processStatusUpdates(statusUpdates, projectId, userId, transcriptId) {
+  const stringSimilarity = require('string-similarity');
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const results = {
+      matched: [],
+      unmatched: [],
+      errors: []
+    };
+    
+    for (const update of statusUpdates) {
+      try {
+        // Determine if this is an issue or action item based on description
+        const itemType = update.itemDescription.toLowerCase().includes('issue') || 
+                        update.itemDescription.toLowerCase().includes('risk') || 
+                        update.itemDescription.toLowerCase().includes('problem')
+                        ? 'issue' : 'actionItem';
+        
+        const table = itemType === 'issue' ? 'issues' : 'action_items';
+        
+        // Find matching item in database
+        const searchQuery = `
+          SELECT id, title, description, status, assignee, priority
+          FROM ${table}
+          WHERE project_id = $1
+          AND status != 'Done'
+          AND status != 'Cancelled'
+          ${update.assignee ? 'AND assignee ILIKE $2' : ''}
+          ORDER BY created_at DESC
+          LIMIT 20
+        `;
+        
+        const searchParams = update.assignee 
+          ? [projectId, `%${update.assignee}%`] 
+          : [projectId];
+        
+        const existingItems = await client.query(searchQuery, searchParams);
+        
+        if (existingItems.rows.length === 0) {
+          results.unmatched.push({
+            update: update,
+            reason: 'No matching items found in project'
+          });
+          continue;
+        }
+        
+        // Use string similarity to find best match
+        const existingTitles = existingItems.rows.map(item => item.title);
+        const matches = stringSimilarity.findBestMatch(update.itemDescription, existingTitles);
+        const bestMatchIndex = matches.bestMatchIndex;
+        const matchConfidence = matches.bestMatch.rating * 100;
+        
+        // Require at least 60% similarity to match
+        if (matchConfidence < 60) {
+          results.unmatched.push({
+            update: update,
+            reason: `Low similarity match: ${matchConfidence.toFixed(0)}%`,
+            closestMatch: existingItems.rows[bestMatchIndex].title
+          });
+          continue;
+        }
+        
+        const matchedItem = existingItems.rows[bestMatchIndex];
+        
+        // Determine new status
+        let newStatus = matchedItem.status;
+        if (update.statusChange === 'Done') {
+          newStatus = 'Done';
+        } else if (update.statusChange === 'In Progress') {
+          newStatus = 'In Progress';
+        } else if (update.statusChange === 'Blocked') {
+          newStatus = 'Blocked';
+        }
+        
+        // Update the item status
+        const updateQuery = `
+          UPDATE ${table}
+          SET status = $1, updated_at = NOW()
+          WHERE id = $2
+          RETURNING *
+        `;
+        
+        const updatedResult = await client.query(updateQuery, [newStatus, matchedItem.id]);
+        
+        // Add comment with status change details
+        const commentTable = itemType === 'issue' ? 'issue_comments' : 'action_item_comments';
+        const foreignKey = itemType === 'issue' ? 'issue_id' : 'action_item_id';
+        
+        await client.query(`
+          INSERT INTO ${commentTable} (${foreignKey}, user_id, comment, created_at)
+          VALUES ($1, $2, $3, NOW())
+        `, [
+          matchedItem.id,
+          userId,
+          `🤖 Status updated via AI Analysis (Transcript ID: ${transcriptId})\n\n` +
+          `**Evidence:** "${update.evidence}"\n\n` +
+          `**Status:** ${matchedItem.status} → ${newStatus}\n\n` +
+          (update.progressDetails ? `**Details:** ${update.progressDetails}\n\n` : '') +
+          `**Confidence:** ${update.confidence}%`
+        ]);
+        
+        results.matched.push({
+          itemId: matchedItem.id,
+          itemTitle: matchedItem.title,
+          itemType: itemType,
+          oldStatus: matchedItem.status,
+          newStatus: newStatus,
+          matchConfidence: matchConfidence.toFixed(0),
+          aiConfidence: update.confidence,
+          evidence: update.evidence
+        });
+        
+      } catch (error) {
+        console.error('Error processing status update:', error);
+        results.errors.push({
+          update: update,
+          error: error.message
+        });
+      }
+    }
+    
+    await client.query('COMMIT');
+    return results;
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+Frontend Updates
+Display Status Updates in Results
+File: public/index.html - Update AI Analysis results modal
+Add a new section for status updates:
+html<!-- Status Updates Section -->
+<div class="mb-6" id="status-updates-section" style="display: none;">
+  <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+    <span class="text-2xl">🔄</span>
+    Status Updates
+    <span id="status-updates-count" class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm">0</span>
+  </h3>
+  
+  <!-- Matched Updates -->
+  <div id="matched-updates" class="mb-4"></div>
+  
+  <!-- Unmatched Updates (manual review needed) -->
+  <div id="unmatched-updates"></div>
+</div>
+File: public/app.js
+javascript/**
+ * Display AI analysis results with status updates
+ */
+function displayAIResults(results, statusUpdateResults) {
+  // Display new items (existing code)
+  displayNewItems(results.newItems);
+  
+  // NEW: Display status updates
+  if (statusUpdateResults && statusUpdateResults.matched.length > 0) {
+    const statusSection = document.getElementById('status-updates-section');
+    const countSpan = document.getElementById('status-updates-count');
+    const matchedContainer = document.getElementById('matched-updates');
+    
+    statusSection.style.display = 'block';
+    countSpan.textContent = statusUpdateResults.matched.length;
+    
+    // Display matched updates
+    matchedContainer.innerHTML = `
+      <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-3">
+        <h4 class="font-semibold text-green-900 mb-2">
+          ✅ Successfully Updated (${statusUpdateResults.matched.length})
+        </h4>
+        <div class="space-y-3">
+          ${statusUpdateResults.matched.map(match => `
+            <div class="bg-white border border-green-300 rounded-lg p-3">
+              <div class="flex justify-between items-start mb-2">
+                <h5 class="font-medium text-gray-900">${match.itemTitle}</h5>
+                <span class="px-2 py-1 text-xs rounded ${getStatusBadgeClass(match.newStatus)}">
+                  ${match.oldStatus} → ${match.newStatus}
+                </span>
+              </div>
+              <p class="text-sm text-gray-600 italic mb-2">"${match.evidence}"</p>
+              <div class="flex gap-3 text-xs text-gray-500">
+                <span>🎯 Match: ${match.matchConfidence}%</span>
+                <span>🤖 AI Confidence: ${match.aiConfidence}%</span>
+                <span>📝 ${match.itemType === 'issue' ? 'Issue' : 'Action Item'} #${match.itemId}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
+  // Display unmatched updates (need manual review)
+  if (statusUpdateResults && statusUpdateResults.unmatched.length > 0) {
+    const unmatchedContainer = document.getElementById('unmatched-updates');
+    
+    unmatchedContainer.innerHTML = `
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <h4 class="font-semibold text-yellow-900 mb-2">
+          ⚠️ Needs Manual Review (${statusUpdateResults.unmatched.length})
+        </h4>
+        <p class="text-sm text-yellow-800 mb-3">
+          These status updates couldn't be automatically matched. Please review and update manually.
+        </p>
+        <div class="space-y-2">
+          ${statusUpdateResults.unmatched.map(unmatched => `
+            <div class="bg-white border border-yellow-300 rounded-lg p-3">
+              <p class="font-medium text-gray-900 mb-1">${unmatched.update.itemDescription}</p>
+              <p class="text-sm text-gray-600 mb-2">"${unmatched.update.evidence}"</p>
+              <p class="text-xs text-yellow-700">Reason: ${unmatched.reason}</p>
+              ${unmatched.closestMatch ? `<p class="text-xs text-gray-500 mt-1">Closest match: ${unmatched.closestMatch}</p>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+}
+
+/**
+ * Get badge styling for status
+ */
+function getStatusBadgeClass(status) {
+  const statusClasses = {
+    'To Do': 'bg-gray-100 text-gray-800',
+    'In Progress': 'bg-blue-100 text-blue-800',
+    'Done': 'bg-green-100 text-green-800',
+    'Blocked': 'bg-red-100 text-red-800'
+  };
+  return statusClasses[status] || 'bg-gray-100 text-gray-800';
+}
