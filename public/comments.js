@@ -485,6 +485,8 @@ async function goToMention(itemId, commentType, mentionId) {
     
     AuthManager.showNotification(`Opening ${commentType === 'issue' ? 'issue' : 'action item'}...`, 'info');
     
+    await openItemDetailModal(itemId, commentType === 'issue' ? 'issue' : 'action-item');
+    
   } catch (error) {
     console.error('Error marking mention as read:', error);
   }
