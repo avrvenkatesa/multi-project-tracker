@@ -1886,7 +1886,7 @@ function getStatusBadgeClass(status) {
 }
 
 // Search existing items for unmatched updates
-async function searchExistingItems(unmatchedIdx) {
+window.searchExistingItems = async function(unmatchedIdx) {
   if (!currentProject || !currentAIAnalysis) return;
   
   const searchInput = document.getElementById(`search-input-${unmatchedIdx}`);
@@ -1940,7 +1940,7 @@ async function searchExistingItems(unmatchedIdx) {
 }
 
 // Match unmatched update to a found item (from search)
-async function matchItemFromSearch(unmatchedIdx, itemId, itemType) {
+window.matchItemFromSearch = async function(unmatchedIdx, itemId, itemType) {
   if (!currentAIAnalysis || !currentProject) return;
   
   const unmatched = currentAIAnalysis.statusUpdateResults.unmatched[unmatchedIdx];
@@ -1983,7 +1983,7 @@ async function matchItemFromSearch(unmatchedIdx, itemId, itemType) {
 }
 
 // Save unmatched update to review queue
-async function saveToReviewQueue(unmatchedIdx) {
+window.saveToReviewQueue = async function(unmatchedIdx) {
   if (!currentAIAnalysis || !currentProject) return;
   
   const unmatched = currentAIAnalysis.statusUpdateResults.unmatched[unmatchedIdx];
@@ -2083,7 +2083,7 @@ function displayReviewQueue(queueItems) {
 }
 
 // Search for items to match queue item
-async function searchForQueueItem(queueId) {
+window.searchForQueueItem = async function(queueId) {
   if (!currentProject) return;
   
   const searchInput = document.getElementById(`queue-search-${queueId}`);
@@ -2133,7 +2133,7 @@ async function searchForQueueItem(queueId) {
 }
 
 // Match queue item to existing item
-async function matchQueueItem(queueId, itemId, itemType) {
+window.matchQueueItem = async function(queueId, itemId, itemType) {
   if (!confirm('Match this status update to the selected item?')) {
     return;
   }
@@ -2163,7 +2163,7 @@ async function matchQueueItem(queueId, itemId, itemType) {
 }
 
 // Dismiss queue item
-async function dismissQueueItem(queueId) {
+window.dismissQueueItem = async function(queueId) {
   if (!confirm('Dismiss this item from the review queue?')) {
     return;
   }
@@ -2189,7 +2189,7 @@ async function dismissQueueItem(queueId) {
 }
 
 // Toggle review queue visibility
-function toggleReviewQueue() {
+window.toggleReviewQueue = function() {
   const panel = document.getElementById('review-queue-panel');
   panel.classList.toggle('hidden');
 }
