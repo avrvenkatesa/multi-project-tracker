@@ -10,6 +10,8 @@ const ws = require("ws");
 const multer = require('multer');
 const { OpenAI } = require('openai');
 const fs = require('fs').promises;
+const { v4: uuidv4 } = require('uuid');
+const stringSimilarity = require('string-similarity');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -895,18 +897,35 @@ app.delete('/api/:itemType/:id/relationships/:relationshipId', authenticateToken
   }
 });
 
-// Upload and analyze meeting transcript
+// Helper function to calculate average confidence
+function calculateAvgConfidence(aiResults) {
+  const allItems = [
+    ...(aiResults.actionItems || []),
+    ...(aiResults.issues || [])
+  ];
+  
+  if (allItems.length === 0) return null;
+  
+  const totalConfidence = allItems.reduce((sum, item) => sum + (item.confidence || 0), 0);
+  return (totalConfidence / allItems.length).toFixed(2);
+}
+
+// Upload and analyze meeting transcript (with transcript storage)
 app.post('/api/meetings/analyze', 
   authenticateToken, 
   requireRole('Team Member'),
   upload.single('transcript'), 
   async (req, res) => {
+    const startTime = Date.now();
+    const analysisId = uuidv4();
+    let transcriptId = null;
+    
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
-      const { projectId } = req.body;
+      const { projectId, meetingDate, title } = req.body;
       if (!projectId) {
         return res.status(400).json({ error: 'Project ID required' });
       }
@@ -915,12 +934,10 @@ app.post('/api/meetings/analyze',
       const filePath = req.file.path;
       const transcriptText = await fs.readFile(filePath, 'utf8');
 
-      // Clean up uploaded file immediately
-      await fs.unlink(filePath);
-
       // Validate transcript length (GPT-3.5 has 16K context window)
       const estimatedTokens = Math.ceil(transcriptText.length / 4);
       if (estimatedTokens > 12000) {
+        await fs.unlink(filePath);
         return res.status(400).json({ 
           error: 'Transcript too long. Please limit to ~10,000 words (48,000 characters)' 
         });
@@ -929,14 +946,40 @@ app.post('/api/meetings/analyze',
       // Get project context for better AI results
       const project = await sql`SELECT * FROM projects WHERE id = ${parseInt(projectId)}`;
       if (!project || project.length === 0) {
+        await fs.unlink(filePath);
         return res.status(404).json({ error: 'Project not found' });
       }
 
+      // STEP 1: Store transcript in database FIRST
+      const transcriptResult = await pool.query(`
+        INSERT INTO meeting_transcripts (
+          project_id, title, meeting_date, uploaded_by,
+          original_filename, file_size, transcript_text,
+          analysis_id, status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'processing')
+        RETURNING id
+      `, [
+        parseInt(projectId),
+        title || `Meeting ${new Date().toLocaleDateString()}`,
+        meetingDate || new Date().toISOString().split('T')[0],
+        req.user.id,
+        req.file.originalname,
+        req.file.size,
+        transcriptText,
+        analysisId
+      ]);
+      
+      transcriptId = transcriptResult.rows[0].id;
+
+      // Clean up uploaded file
+      await fs.unlink(filePath);
+
       console.log(`Analyzing transcript (${estimatedTokens} tokens) with GPT-3.5-Turbo...`);
       
-      // Call OpenAI with GPT-3.5-Turbo (cost-effective)
+      // STEP 2: Call AI for analysis
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo-1106", // Latest GPT-3.5 with JSON mode
+        model: "gpt-3.5-turbo-1106",
         messages: [
           {
             role: "system",
@@ -1021,7 +1064,7 @@ PROJECT CONTEXT:
 - Type: ${project[0].template}
 - Categories: ${project[0].categories?.join(', ') || 'General'}
 
-CURRENT MEETING DATE: ${new Date().toISOString().split('T')[0]}
+CURRENT MEETING DATE: ${meetingDate || new Date().toISOString().split('T')[0]}
 
 Respond with a JSON object in this exact format:
 {
@@ -1053,21 +1096,51 @@ IMPORTANT: Extract ALL action items and issues, even if implied. Be comprehensiv
             content: `Analyze this meeting transcript:\n\n${transcriptText}`
           }
         ],
-        temperature: 0.3, // Lower temperature for more consistent extraction
+        temperature: 0.3,
         response_format: { type: "json_object" },
-        max_tokens: 2000 // Limit response size for cost control
+        max_tokens: 2000
       });
 
       const aiResponse = completion.choices[0].message.content;
       const parsedResponse = JSON.parse(aiResponse);
+      const processingTime = Date.now() - startTime;
 
-      // Calculate cost (approximate)
+      // Calculate costs
       const inputTokens = completion.usage.prompt_tokens;
       const outputTokens = completion.usage.completion_tokens;
+      const totalTokens = completion.usage.total_tokens;
       const estimatedCost = (inputTokens * 0.0005 / 1000) + (outputTokens * 0.0015 / 1000);
 
-      // Add metadata to response
-      const result = {
+      // STEP 3: Update transcript with analysis results
+      await pool.query(`
+        UPDATE meeting_transcripts
+        SET 
+          status = 'processed',
+          processing_time_ms = $1,
+          total_tokens = $2,
+          estimated_cost = $3,
+          action_items_extracted = $4,
+          issues_extracted = $5,
+          avg_confidence = $6
+        WHERE id = $7
+      `, [
+        processingTime,
+        totalTokens,
+        estimatedCost,
+        parsedResponse.actionItems?.length || 0,
+        parsedResponse.issues?.length || 0,
+        calculateAvgConfidence(parsedResponse),
+        transcriptId
+      ]);
+
+      console.log(`Analysis complete: ${parsedResponse.actionItems?.length || 0} action items, ${parsedResponse.issues?.length || 0} issues`);
+      console.log(`Tokens used: ${totalTokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
+
+      // STEP 4: Return results with transcript ID
+      res.json({
+        success: true,
+        analysisId: analysisId,
+        transcriptId: transcriptId,
         ...parsedResponse,
         metadata: {
           projectId: parseInt(projectId),
@@ -1078,19 +1151,24 @@ IMPORTANT: Extract ALL action items and issues, even if implied. Be comprehensiv
           tokensUsed: {
             input: inputTokens,
             output: outputTokens,
-            total: completion.usage.total_tokens
+            total: totalTokens
           },
-          estimatedCost: `$${estimatedCost.toFixed(4)}`
+          estimatedCost: `$${estimatedCost.toFixed(4)}`,
+          processingTime: `${processingTime}ms`
         }
-      };
-
-      console.log(`Analysis complete: ${parsedResponse.actionItems?.length || 0} action items, ${parsedResponse.issues?.length || 0} issues`);
-      console.log(`Tokens used: ${completion.usage.total_tokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
-      
-      res.json(result);
+      });
 
     } catch (error) {
       console.error('Error analyzing transcript:', error);
+      
+      // Update transcript status to failed if it was created
+      if (transcriptId) {
+        await pool.query(`
+          UPDATE meeting_transcripts
+          SET status = 'failed', error_message = $1
+          WHERE id = $2
+        `, [error.message, transcriptId]).catch(() => {});
+      }
       
       // Clean up file if it still exists
       if (req.file?.path) {
@@ -1120,13 +1198,13 @@ IMPORTANT: Extract ALL action items and issues, even if implied. Be comprehensiv
     }
 });
 
-// Batch create items from AI suggestions
+// Batch create items from AI suggestions (with transcript linking)
 app.post('/api/meetings/create-items', 
   authenticateToken,
   requireRole('Team Member'),
   async (req, res) => {
     try {
-      const { projectId, actionItems, issues } = req.body;
+      const { projectId, transcriptId, analysisId, actionItems, issues } = req.body;
 
       if (!projectId) {
         return res.status(400).json({ error: 'Project ID required' });
@@ -1137,8 +1215,8 @@ app.post('/api/meetings/create-items',
         issues: []
       };
 
-      // Generate unique analysis ID for this batch
-      const analysisId = `ai-analysis-${Date.now()}-${req.user.id}`;
+      // Use provided analysis ID or generate one
+      const finalAnalysisId = analysisId || `ai-analysis-${Date.now()}-${req.user.id}`;
 
       // Helper function to validate and sanitize due dates
       const sanitizeDueDate = (dateStr) => {
@@ -1167,7 +1245,7 @@ app.post('/api/meetings/create-items',
             INSERT INTO action_items (
               title, description, project_id, priority, assignee, 
               due_date, status, created_by,
-              created_by_ai, ai_confidence, ai_analysis_id
+              created_by_ai, ai_confidence, ai_analysis_id, transcript_id
             ) VALUES (
               ${item.title.substring(0, 200)},
               ${item.description?.substring(0, 1000) || ''},
@@ -1179,7 +1257,8 @@ app.post('/api/meetings/create-items',
               ${req.user.id},
               ${true},
               ${item.confidence || null},
-              ${analysisId}
+              ${finalAnalysisId},
+              ${transcriptId || null}
             ) RETURNING *
           `;
           created.actionItems.push(newItem[0]);
@@ -1193,7 +1272,7 @@ app.post('/api/meetings/create-items',
             INSERT INTO issues (
               title, description, project_id, priority, category,
               status, created_by,
-              created_by_ai, ai_confidence, ai_analysis_id
+              created_by_ai, ai_confidence, ai_analysis_id, transcript_id
             ) VALUES (
               ${issue.title.substring(0, 200)},
               ${issue.description?.substring(0, 1000) || ''},
@@ -1204,7 +1283,8 @@ app.post('/api/meetings/create-items',
               ${req.user.id},
               ${true},
               ${issue.confidence || null},
-              ${analysisId}
+              ${finalAnalysisId},
+              ${transcriptId || null}
             ) RETURNING *
           `;
           created.issues.push(newIssue[0]);

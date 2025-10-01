@@ -28,6 +28,8 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "openai": "^6.0.0",
+    "string-similarity": "^4.0.4",
+    "uuid": "^13.0.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {

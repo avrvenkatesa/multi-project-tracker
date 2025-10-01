@@ -1818,6 +1818,8 @@ async function createAllItems() {
   try {
     const response = await axios.post('/api/meetings/create-items', {
       projectId: currentProject.id,
+      transcriptId: currentAIAnalysis.transcriptId,
+      analysisId: currentAIAnalysis.analysisId,
       actionItems: selectedActionItems,
       issues: selectedIssues
     }, { withCredentials: true });
