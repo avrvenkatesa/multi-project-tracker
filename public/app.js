@@ -1644,9 +1644,79 @@ function displayAIResults() {
   
   const { actionItems, issues, metadata } = currentAIAnalysis;
   
+  // Calculate statistics
+  const totalItems = actionItems.length + issues.length;
+  const allItems = [...actionItems, ...issues];
+  const avgConfidence = totalItems > 0 
+    ? Math.round(allItems.reduce((sum, item) => sum + item.confidence, 0) / totalItems)
+    : 0;
+  const assignedCount = actionItems.filter(item => item.assignee && item.assignee !== 'Unassigned').length;
+  
   // Update cost info
   document.getElementById('analysis-cost').textContent = 
     `Cost: ${metadata.estimatedCost} | Tokens: ${metadata.tokensUsed.total}`;
+  
+  // Display guidance and statistics
+  const reviewStepContent = document.getElementById('review-step');
+  const existingGuidance = reviewStepContent.querySelector('.ai-guidance-box');
+  
+  if (!existingGuidance) {
+    const guidanceHTML = `
+      <div class="ai-guidance-box mb-6">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <div class="flex items-start gap-3">
+            <span class="text-2xl">💡</span>
+            <div>
+              <h4 class="font-semibold text-blue-900 mb-1">AI Extraction Results</h4>
+              <p class="text-sm text-blue-800 mb-2">
+                The AI has analyzed your transcript and identified <strong>${totalItems} items</strong> 
+                with an average confidence of <strong>${avgConfidence}%</strong>.
+              </p>
+              <ul class="text-sm text-blue-700 space-y-1">
+                <li>✓ All high-priority items with clear owners and dates have been captured</li>
+                <li>✓ Items marked "Unassigned" need an owner to be assigned</li>
+                <li>✓ Review items with confidence below 80% carefully</li>
+                <li>✓ You can manually add any items the AI may have missed</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+            <div class="text-3xl font-bold text-green-600">${actionItems.length}</div>
+            <div class="text-sm text-gray-600">Action Items</div>
+          </div>
+          <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+            <div class="text-3xl font-bold text-red-600">${issues.length}</div>
+            <div class="text-sm text-gray-600">Issues</div>
+          </div>
+          <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+            <div class="text-3xl font-bold text-blue-600">${avgConfidence}%</div>
+            <div class="text-sm text-gray-600">Avg Confidence</div>
+          </div>
+          <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+            <div class="text-3xl font-bold text-purple-600">${assignedCount}</div>
+            <div class="text-sm text-gray-600">With Assignees</div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Insert guidance before action items section
+    const actionItemsSection = reviewStepContent.querySelector('.space-y-6');
+    if (actionItemsSection) {
+      actionItemsSection.insertAdjacentHTML('afterbegin', guidanceHTML);
+    }
+  } else {
+    // Update existing guidance with new stats
+    existingGuidance.querySelector('.bg-blue-50 strong:first-of-type').textContent = `${totalItems} items`;
+    existingGuidance.querySelector('.bg-blue-50 strong:last-of-type').textContent = `${avgConfidence}%`;
+    existingGuidance.querySelectorAll('.text-3xl')[0].textContent = actionItems.length;
+    existingGuidance.querySelectorAll('.text-3xl')[1].textContent = issues.length;
+    existingGuidance.querySelectorAll('.text-3xl')[2].textContent = `${avgConfidence}%`;
+    existingGuidance.querySelectorAll('.text-3xl')[3].textContent = assignedCount;
+  }
   
   // Display action items
   const actionItemsDiv = document.getElementById('ai-action-items');
