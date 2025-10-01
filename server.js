@@ -910,6 +910,133 @@ function calculateAvgConfidence(aiResults) {
   return (totalConfidence / allItems.length).toFixed(2);
 }
 
+async function processStatusUpdates(statusUpdates, projectId, userId, transcriptId) {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const results = {
+      matched: [],
+      unmatched: [],
+      errors: []
+    };
+    
+    for (const update of statusUpdates) {
+      try {
+        const itemType = update.itemDescription.toLowerCase().includes('issue') || 
+                        update.itemDescription.toLowerCase().includes('risk') || 
+                        update.itemDescription.toLowerCase().includes('problem')
+                        ? 'issue' : 'actionItem';
+        
+        const table = itemType === 'issue' ? 'issues' : 'action_items';
+        
+        const searchQuery = `
+          SELECT id, title, description, status, assignee, priority
+          FROM ${table}
+          WHERE project_id = $1
+          AND status != 'Done'
+          AND status != 'Cancelled'
+          ${update.assignee ? 'AND assignee ILIKE $2' : ''}
+          ORDER BY created_at DESC
+          LIMIT 20
+        `;
+        
+        const searchParams = update.assignee 
+          ? [projectId, `%${update.assignee}%`] 
+          : [projectId];
+        
+        const existingItems = await client.query(searchQuery, searchParams);
+        
+        if (existingItems.rows.length === 0) {
+          results.unmatched.push({
+            update: update,
+            reason: 'No matching items found in project'
+          });
+          continue;
+        }
+        
+        const existingTitles = existingItems.rows.map(item => item.title);
+        const matches = stringSimilarity.findBestMatch(update.itemDescription, existingTitles);
+        const bestMatchIndex = matches.bestMatchIndex;
+        const matchConfidence = matches.bestMatch.rating * 100;
+        
+        if (matchConfidence < 60) {
+          results.unmatched.push({
+            update: update,
+            reason: `Low similarity match: ${matchConfidence.toFixed(0)}%`,
+            closestMatch: existingItems.rows[bestMatchIndex].title
+          });
+          continue;
+        }
+        
+        const matchedItem = existingItems.rows[bestMatchIndex];
+        
+        let newStatus = matchedItem.status;
+        if (update.statusChange === 'Done') {
+          newStatus = 'Done';
+        } else if (update.statusChange === 'In Progress') {
+          newStatus = 'In Progress';
+        } else if (update.statusChange === 'Blocked') {
+          newStatus = 'Blocked';
+        }
+        
+        const updateQuery = `
+          UPDATE ${table}
+          SET status = $1, updated_at = NOW()
+          WHERE id = $2
+          RETURNING *
+        `;
+        
+        await client.query(updateQuery, [newStatus, matchedItem.id]);
+        
+        const commentTable = itemType === 'issue' ? 'issue_comments' : 'action_item_comments';
+        const foreignKey = itemType === 'issue' ? 'issue_id' : 'action_item_id';
+        
+        await client.query(`
+          INSERT INTO ${commentTable} (${foreignKey}, user_id, comment, created_at)
+          VALUES ($1, $2, $3, NOW())
+        `, [
+          matchedItem.id,
+          userId,
+          `🤖 Status updated via AI Analysis (Transcript ID: ${transcriptId})\n\n` +
+          `**Evidence:** "${update.evidence}"\n\n` +
+          `**Status:** ${matchedItem.status} → ${newStatus}\n\n` +
+          (update.progressDetails ? `**Details:** ${update.progressDetails}\n\n` : '') +
+          `**Confidence:** ${update.confidence}%`
+        ]);
+        
+        results.matched.push({
+          itemId: matchedItem.id,
+          itemTitle: matchedItem.title,
+          itemType: itemType,
+          oldStatus: matchedItem.status,
+          newStatus: newStatus,
+          matchConfidence: matchConfidence.toFixed(0),
+          aiConfidence: update.confidence,
+          evidence: update.evidence
+        });
+        
+      } catch (error) {
+        console.error('Error processing status update:', error);
+        results.errors.push({
+          update: update,
+          error: error.message
+        });
+      }
+    }
+    
+    await client.query('COMMIT');
+    return results;
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // Helper function to find potential duplicate items using string similarity
 async function findPotentialDuplicate(newItem, projectId, itemType = 'action_item') {
   const similarityThreshold = 0.75; // 75% similarity threshold
@@ -1258,6 +1385,19 @@ IMPORTANT: Extract ALL action items, issues, and status updates. Be comprehensiv
       const totalTokens = completion.usage.total_tokens;
       const estimatedCost = (inputTokens * 0.0005 / 1000) + (outputTokens * 0.0015 / 1000);
 
+      // STEP 2.5: Process Status Updates (NEW)
+      let statusUpdateResults = null;
+      if (parsedResponse.statusUpdates && parsedResponse.statusUpdates.length > 0) {
+        console.log(`Processing ${parsedResponse.statusUpdates.length} status updates...`);
+        statusUpdateResults = await processStatusUpdates(
+          parsedResponse.statusUpdates, 
+          parseInt(projectId), 
+          req.user.id, 
+          transcriptId
+        );
+        console.log(`Status updates: ${statusUpdateResults.matched.length} matched, ${statusUpdateResults.unmatched.length} unmatched`);
+      }
+
       // STEP 3: Update transcript with analysis results
       await pool.query(`
         UPDATE meeting_transcripts
@@ -1283,12 +1423,13 @@ IMPORTANT: Extract ALL action items, issues, and status updates. Be comprehensiv
       console.log(`Analysis complete: ${parsedResponse.actionItems?.length || 0} action items, ${parsedResponse.issues?.length || 0} issues`);
       console.log(`Tokens used: ${totalTokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
 
-      // STEP 4: Return results with transcript ID
+      // STEP 4: Return results with transcript ID and status updates
       res.json({
         success: true,
         analysisId: analysisId,
         transcriptId: transcriptId,
         ...parsedResponse,
+        statusUpdateResults: statusUpdateResults,
         metadata: {
           projectId: parseInt(projectId),
           analyzedAt: new Date().toISOString(),
