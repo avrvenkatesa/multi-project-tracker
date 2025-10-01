@@ -1149,7 +1149,18 @@ async function processRelationships(relationships, projectId, userId, transcript
       alreadyExists: []
     };
     
+    // Server-side confidence threshold
+    const CONFIDENCE_THRESHOLD = 75;
+    
     for (const rel of relationships) {
+      // Skip low-confidence relationships
+      if (rel.confidence < CONFIDENCE_THRESHOLD) {
+        results.failed.push({
+          relationship: rel,
+          reason: `Confidence ${rel.confidence}% below threshold (${CONFIDENCE_THRESHOLD}%)`
+        });
+        continue;
+      }
       try {
         // Find source item
         const sourceMatch = await findItemByDescription(

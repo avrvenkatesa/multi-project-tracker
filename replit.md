@@ -15,6 +15,7 @@ The frontend is a single-page application (SPA) built with vanilla JavaScript an
 - **In-Modal Search**: Search for existing items directly within the AI analysis modal to manually match unmatched status updates
 - **Review Queue**: Persistent queue for status updates that couldn't be automatically matched; accessible from the kanban board for later processing
 - **Smart Matching**: Real-time search and match functionality with confidence scoring and evidence display
+- **AI Relationship Detection**: Automatically detects and creates relationships (blocking, parent-child, related) between work items from meeting transcripts with confidence scoring (75% threshold)
 
 ### Backend
 The backend is a RESTful API built with Express.js, using a PostgreSQL database via Drizzle ORM. It implements a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permission enforcement. All sensitive endpoints are protected by role-based middleware, and request validation is handled with Joi.
@@ -29,7 +30,7 @@ A PostgreSQL database, managed by Drizzle ORM, stores:
 - **Issues**: Issue tracking details.
 - **Action Items**: Granular action item tracking.
 - **Meeting Transcripts**: Metadata, text, analysis results, and cost.
-- **Issue Relationships**: Tracks dependencies and links between issues.
+- **Issue Relationships**: Tracks dependencies and links between issues and action items. Includes AI-generated relationships with confidence scores, transcript references, and evidence. Unique constraint prevents duplicate relationships.
 - **Status Update Review Queue**: Unmatched status updates from AI analysis awaiting manual review.
 - **Comments**: Audit trail for action items and issues (action_item_comments, issue_comments).
 Foreign key constraints ensure data integrity, and Drizzle manages schema migrations.
@@ -72,3 +73,17 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 ### CDN Services
 - **Tailwind CSS CDN**: CSS framework delivery.
 - **Unpkg CDN**: JavaScript library delivery.
+
+## Recent Changes (October 1, 2025)
+
+### AI Relationship Detection Feature
+Implemented comprehensive AI-powered relationship detection from meeting transcripts:
+- **Phase 3 AI Analysis**: Enhanced GPT-3.5 prompt to detect blocking dependencies, parent-child hierarchies, and related associations
+- **Backend Processing**: Item matching via string similarity (60% threshold), automatic inverse relationship creation, confidence-based filtering (75% threshold)
+- **Database Schema**: Added AI-specific fields (created_by_ai, ai_confidence, transcript_id, notes) with unique constraint
+- **Frontend Display**: Visual indicators for AI-generated relationships, confidence scores, transcript references in both relationship modal and AI analysis results
+- **Relationship Types**: blocks/blocked_by, parent_of/child_of, relates_to, depends_on/depended_by
+
+### Known Limitations
+- **Performance**: Relationship loading uses N+1 query pattern on Kanban board; consider batching in future updates
+- **Authorization**: Manual relationship creation endpoints lack project ownership validation (potential IDOR); AI-created relationships are project-scoped
