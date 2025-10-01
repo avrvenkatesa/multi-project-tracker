@@ -250,6 +250,9 @@ async function loadProjectData(projectId) {
         displayActiveFilters();
         displayResultsCount();
         populateAssigneeFilter();
+        
+        // Load review queue
+        await loadReviewQueue(projectId);
     } catch (error) {
         console.error("Error loading project data:", error);
     }
@@ -2004,6 +2007,191 @@ async function saveToReviewQueue(unmatchedIdx) {
     console.error('Error saving to queue:', error);
     alert(error.response?.data?.error || 'Failed to save to queue');
   }
+}
+
+// Review Queue Management Functions
+
+// Load review queue items
+async function loadReviewQueue(projectId) {
+  if (!projectId) return;
+  
+  try {
+    const response = await axios.get('/api/review-queue', {
+      params: { projectId },
+      withCredentials: true
+    });
+    
+    const queueItems = response.data;
+    displayReviewQueue(queueItems);
+    
+  } catch (error) {
+    console.error('Error loading review queue:', error);
+  }
+}
+
+// Display review queue items
+function displayReviewQueue(queueItems) {
+  const panel = document.getElementById('review-queue-panel');
+  const container = document.getElementById('review-queue-items');
+  const countBadge = document.getElementById('review-queue-count');
+  
+  if (!queueItems || queueItems.length === 0) {
+    panel.classList.add('hidden');
+    return;
+  }
+  
+  panel.classList.remove('hidden');
+  countBadge.textContent = queueItems.length;
+  
+  container.innerHTML = queueItems.map(item => `
+    <div class="bg-white border border-purple-300 rounded-lg p-3" data-queue-id="${item.id}">
+      <div class="mb-2">
+        <p class="font-medium text-sm text-gray-900">${escapeHtml(item.item_description)}</p>
+        <p class="text-xs text-gray-600 mt-1">"${escapeHtml(item.evidence)}"</p>
+        <div class="flex gap-3 text-xs text-gray-500 mt-1">
+          <span>→ ${item.status_change}</span>
+          ${item.ai_confidence ? `<span>🤖 ${item.ai_confidence}%</span>` : ''}
+        </div>
+      </div>
+      
+      <!-- Search and Match -->
+      <div class="mt-3 border-t pt-3">
+        <div class="flex gap-2 mb-2">
+          <input type="text" 
+                 placeholder="Search to match..." 
+                 class="flex-1 px-2 py-1 text-xs border rounded"
+                 id="queue-search-${item.id}">
+          <button onclick="searchForQueueItem(${item.id})" 
+                  class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+            Search
+          </button>
+        </div>
+        
+        <!-- Search Results -->
+        <div id="queue-search-results-${item.id}" class="hidden space-y-1 mb-2"></div>
+        
+        <!-- Actions -->
+        <div class="flex gap-2">
+          <button onclick="dismissQueueItem(${item.id})" 
+                  class="flex-1 px-2 py-1 bg-gray-400 text-white text-xs rounded hover:bg-gray-500">
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Search for items to match queue item
+async function searchForQueueItem(queueId) {
+  if (!currentProject) return;
+  
+  const searchInput = document.getElementById(`queue-search-${queueId}`);
+  const searchResults = document.getElementById(`queue-search-results-${queueId}`);
+  const query = searchInput.value.trim();
+  
+  if (!query) {
+    alert('Please enter a search term');
+    return;
+  }
+  
+  try {
+    const response = await axios.get('/api/search-items', {
+      params: {
+        projectId: currentProject.id,
+        query: query
+      },
+      withCredentials: true
+    });
+    
+    const items = response.data.items;
+    
+    if (items.length === 0) {
+      searchResults.innerHTML = '<p class="text-xs text-gray-500 italic p-2">No matching items found</p>';
+      searchResults.classList.remove('hidden');
+      return;
+    }
+    
+    searchResults.innerHTML = items.map(item => `
+      <div class="flex items-start justify-between p-2 bg-gray-50 rounded border border-gray-200 text-xs">
+        <div class="flex-1">
+          <p class="font-medium">${escapeHtml(item.title)}</p>
+          <p class="text-gray-500 mt-1">${escapeHtml(item.description?.substring(0, 50) || 'No description')}...</p>
+        </div>
+        <button onclick="matchQueueItem(${queueId}, ${item.id}, '${item.type}')" 
+                class="ml-2 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap">
+          Match
+        </button>
+      </div>
+    `).join('');
+    searchResults.classList.remove('hidden');
+    
+  } catch (error) {
+    console.error('Error searching items:', error);
+    alert('Failed to search items');
+  }
+}
+
+// Match queue item to existing item
+async function matchQueueItem(queueId, itemId, itemType) {
+  if (!confirm('Match this status update to the selected item?')) {
+    return;
+  }
+  
+  try {
+    await axios.post(`/api/review-queue/${queueId}/match`, {
+      itemId: itemId,
+      itemType: itemType
+    }, { withCredentials: true });
+    
+    alert('Item matched and status updated!');
+    
+    // Remove from queue display
+    const container = document.querySelector(`[data-queue-id="${queueId}"]`);
+    if (container) {
+      container.remove();
+    }
+    
+    // Reload data
+    await loadProjectData(currentProject.id);
+    await loadReviewQueue(currentProject.id);
+    
+  } catch (error) {
+    console.error('Error matching queue item:', error);
+    alert(error.response?.data?.error || 'Failed to match item');
+  }
+}
+
+// Dismiss queue item
+async function dismissQueueItem(queueId) {
+  if (!confirm('Dismiss this item from the review queue?')) {
+    return;
+  }
+  
+  try {
+    await axios.delete(`/api/review-queue/${queueId}`, {
+      withCredentials: true
+    });
+    
+    // Remove from queue display
+    const container = document.querySelector(`[data-queue-id="${queueId}"]`);
+    if (container) {
+      container.remove();
+    }
+    
+    // Reload queue
+    await loadReviewQueue(currentProject.id);
+    
+  } catch (error) {
+    console.error('Error dismissing queue item:', error);
+    alert('Failed to dismiss item');
+  }
+}
+
+// Toggle review queue visibility
+function toggleReviewQueue() {
+  const panel = document.getElementById('review-queue-panel');
+  panel.classList.toggle('hidden');
 }
 
 // Toggle all action items
