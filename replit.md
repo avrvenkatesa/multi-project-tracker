@@ -121,9 +121,12 @@ Implemented comprehensive comment system with real-time mentions for enhanced te
   - Notification bell in header with unread count badge and dropdown
   - Item detail modal with integrated comments section
   - Real-time comment count display
+  - **Kanban Board Integration**: Comment count badges on all cards, clickable cards open item detail modal, drag suppression prevents accidental modal opens
 - **Security Hardening**:
   - CORS configuration using exact-match allowlist (Set.has) to prevent subdomain hijacking
   - URL sanitization with URL() constructor, protocol validation (http/https only), XSS prevention
+  - **ALL inline JavaScript eliminated**: No onclick/onchange/onsubmit/oninput attributes; all event handlers use addEventListener with data attributes
+  - Username/email escaping with escapeHtml() in all rendering contexts
   - JWT secret warning when using default development secret
   - SameSite=lax cookies for CSRF protection
   - Link rendering with rel="noopener noreferrer" for security
@@ -131,4 +134,3 @@ Implemented comprehensive comment system with real-time mentions for enhanced te
 ### Known Limitations
 - **Performance**: Relationship loading uses N+1 query pattern on Kanban board; consider batching in future updates
 - **Authorization**: Manual relationship creation endpoints lack project ownership validation (potential IDOR); AI-created relationships are project-scoped
-- **Comments UI**: Comment count badges not yet displayed on Kanban cards; item detail modal needs clickable card handlers for full integration
