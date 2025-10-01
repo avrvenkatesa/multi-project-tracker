@@ -34,6 +34,29 @@
                             
                             <!-- Logged In State -->
                             <div id="loggedInState" class="hidden flex items-center space-x-4">
+                                <!-- Mention Notifications Bell -->
+                                <div class="relative">
+                                    <button 
+                                        onclick="toggleMentionNotifications()"
+                                        class="relative p-2 text-white hover:bg-blue-700 rounded-lg transition">
+                                        <span class="text-2xl">🔔</span>
+                                        <span id="mention-count-badge" class="hidden absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">0</span>
+                                    </button>
+                                    
+                                    <!-- Notifications Dropdown -->
+                                    <div id="mention-notifications-dropdown" class="hidden absolute right-0 mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
+                                        <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                                            <h3 class="font-semibold text-gray-900">Mentions</h3>
+                                            <button onclick="markAllMentionsRead()" class="text-sm text-indigo-600 hover:text-indigo-800">
+                                                Mark all read
+                                            </button>
+                                        </div>
+                                        <div id="mention-notifications-list">
+                                            <!-- Notifications will be populated here -->
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <div class="text-right">
                                     <div class="flex items-center space-x-2">
                                         <span id="userName" class="font-semibold"></span>
@@ -481,6 +504,60 @@
                 </div>
             </div>
 
+            <!-- Item Detail Modal (for Issues and Action Items) -->
+            <div id="item-detail-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-center justify-between p-6 border-b">
+                        <h3 id="item-detail-title" class="text-xl font-semibold text-gray-800"></h3>
+                        <button onclick="closeItemDetailModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                    </div>
+                    
+                    <div class="p-6">
+                        <!-- Item Info -->
+                        <div id="item-detail-info" class="bg-gray-50 rounded-lg p-4 mb-6">
+                            <!-- Item details will be displayed here -->
+                        </div>
+                        
+                        <!-- Comments Section -->
+                        <div class="border-t pt-6">
+                            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                                <span>💬</span>
+                                Comments
+                                <span id="item-detail-comment-count" class="text-sm text-gray-500">(0)</span>
+                            </h3>
+                            
+                            <!-- Comment Input -->
+                            <div class="mb-4">
+                                <textarea 
+                                    id="item-detail-new-comment"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
+                                    rows="3"
+                                    placeholder="Add a comment... Use @username to mention someone"></textarea>
+                                
+                                <!-- Mention Autocomplete Dropdown -->
+                                <div id="item-detail-mention-dropdown" class="hidden absolute bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto z-50"></div>
+                                
+                                <div class="flex justify-between items-center mt-2">
+                                    <div class="text-xs text-gray-500">
+                                        Supports <strong>@mentions</strong> and basic <strong>markdown</strong>
+                                    </div>
+                                    <button 
+                                        onclick="addItemDetailComment()"
+                                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
+                                        Add Comment
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Comments List -->
+                            <div id="item-detail-comments-list" class="space-y-3 max-h-96 overflow-y-auto">
+                                <!-- Comments will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Transcripts Viewer Modal -->
             <div id="transcripts-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
                 <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -536,6 +613,7 @@
         </div>
 
         <script src="auth.js?v=4"></script>
+        <script src="comments.js?v=1"></script>
         <script src="app.js?v=4"></script>
     </body>
 </html>
