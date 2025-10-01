@@ -143,6 +143,194 @@ function requireRole(minimumRole) {
   };
 }
 
+// ============= AI ANALYSIS PERMISSION FUNCTIONS =============
+
+/**
+ * Check if user can upload transcripts to a project
+ */
+async function canUploadTranscript(userId, projectId) {
+  const result = await pool.query(`
+    SELECT 
+      u.role,
+      pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, projectId]);
+  
+  if (result.rows.length === 0) return false;
+  
+  const user = result.rows[0];
+  
+  // System Administrators can always upload
+  if (user.role === 'System Administrator') return true;
+  
+  // Project Managers can upload to their projects
+  if (user.project_role === 'Project Manager' || user.project_role === 'System Administrator') return true;
+  
+  // Regular team members cannot upload
+  return false;
+}
+
+/**
+ * Check if user can view a transcript
+ */
+async function canViewTranscript(userId, transcript) {
+  const result = await pool.query(`
+    SELECT 
+      u.role,
+      pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, transcript.project_id]);
+  
+  if (result.rows.length === 0) return false;
+  
+  const user = result.rows[0];
+  
+  // System Administrators can view all transcripts
+  if (user.role === 'System Administrator') return true;
+  
+  // Check visibility settings
+  switch (transcript.visibility) {
+    case 'all':
+      // Anyone in the project can view
+      return user.project_role !== null;
+      
+    case 'project_managers':
+      // Only managers and admins
+      return user.project_role === 'Project Manager' || user.project_role === 'System Administrator';
+      
+    case 'specific_users':
+      // Check if user is in allowed list
+      return transcript.can_view_users && transcript.can_view_users.includes(userId);
+      
+    case 'uploader_only':
+      // Only the uploader
+      return transcript.uploaded_by === userId;
+      
+    default:
+      return false;
+  }
+}
+
+/**
+ * Check if user can create items from AI analysis
+ */
+async function canCreateItemsFromAI(userId, projectId) {
+  const result = await pool.query(`
+    SELECT 
+      u.role,
+      pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, projectId]);
+  
+  if (result.rows.length === 0) return false;
+  
+  const user = result.rows[0];
+  
+  // Must have same permissions as manual item creation
+  if (user.role === 'System Administrator') return true;
+  if (user.project_role === 'Project Manager' || user.project_role === 'System Administrator') return true;
+  
+  // Team members cannot create items from AI (prevents privilege escalation)
+  return false;
+}
+
+/**
+ * Check if user can assign tasks to a specific assignee
+ */
+async function canAssignTo(userId, assigneeName, projectId) {
+  const userResult = await pool.query(`
+    SELECT u.role, pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, projectId]);
+  
+  if (userResult.rows.length === 0) {
+    return { allowed: false, reason: 'User not in project' };
+  }
+  
+  const user = userResult.rows[0];
+  
+  // System Administrators and Project Managers can assign to anyone
+  if (user.role === 'System Administrator' || user.project_role === 'Project Manager' || user.project_role === 'System Administrator') {
+    return { allowed: true };
+  }
+  
+  // Team members can only assign to themselves
+  const selfResult = await pool.query(
+    'SELECT id, username FROM users WHERE id = $1 AND username ILIKE $2',
+    [userId, `%${assigneeName}%`]
+  );
+  
+  if (selfResult.rows.length > 0) {
+    return { allowed: true };
+  }
+  
+  return { 
+    allowed: false, 
+    reason: 'Insufficient permissions to assign to others',
+    suggestedAction: 'assign_to_self'
+  };
+}
+
+/**
+ * Check if user can update an existing item's status
+ */
+async function canUpdateItemStatus(userId, item) {
+  const result = await pool.query(`
+    SELECT 
+      u.role,
+      pm.role as project_role
+    FROM users u
+    LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $2
+    WHERE u.id = $1
+  `, [userId, item.project_id]);
+  
+  if (result.rows.length === 0) return false;
+  
+  const user = result.rows[0];
+  
+  // System Administrators and Project Managers can update any item
+  if (user.role === 'System Administrator') return true;
+  if (user.project_role === 'Project Manager' || user.project_role === 'System Administrator') return true;
+  
+  // Team members can update their own items
+  if (item.assignee && item.assignee.toLowerCase().includes(user.username?.toLowerCase())) return true;
+  if (item.created_by === userId) return true;
+  
+  return false;
+}
+
+/**
+ * Audit AI analysis action
+ */
+async function auditAIAction(transcriptId, userId, action, details = {}) {
+  try {
+    await pool.query(`
+      INSERT INTO ai_analysis_audit (
+        transcript_id, user_id, action, item_type, item_id, details
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [
+      transcriptId,
+      userId,
+      action,
+      details.itemType || null,
+      details.itemId || null,
+      JSON.stringify(details)
+    ]);
+  } catch (error) {
+    console.error('Audit logging failed:', error);
+    // Don't fail the operation if audit fails
+  }
+}
+
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({
