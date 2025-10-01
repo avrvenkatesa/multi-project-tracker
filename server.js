@@ -2703,6 +2703,556 @@ app.delete('/api/review-queue/:id',
     }
 });
 
+// ==================== COMMENT ENDPOINTS ====================
+
+app.get('/api/issues/:issueId/comments', authenticateToken, async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    
+    const issueCheck = await pool.query(`
+      SELECT i.project_id 
+      FROM issues i
+      JOIN project_members pm ON pm.project_id = i.project_id
+      WHERE i.id = $1 AND pm.user_id = $2
+    `, [issueId, req.user.id]);
+    
+    if (issueCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const result = await pool.query(`
+      SELECT 
+        ic.*,
+        u.username,
+        u.email,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', um.id, 'username', um.username))
+           FROM unnest(ic.mentions) AS mention_id
+           JOIN users um ON um.id = mention_id),
+          '[]'::json
+        ) as mentioned_users
+      FROM issue_comments ic
+      JOIN users u ON ic.user_id = u.id
+      WHERE ic.issue_id = $1
+      ORDER BY ic.created_at ASC
+    `, [issueId]);
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+app.post('/api/issues/:issueId/comments', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { issueId } = req.params;
+    const { comment, parentCommentId } = req.body;
+    
+    if (!comment || comment.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+    
+    const issueCheck = await client.query(`
+      SELECT i.*, pm.role as project_role
+      FROM issues i
+      JOIN project_members pm ON pm.project_id = i.project_id
+      WHERE i.id = $1 AND pm.user_id = $2
+    `, [issueId, req.user.id]);
+    
+    if (issueCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const issue = issueCheck.rows[0];
+    
+    await client.query('BEGIN');
+    
+    const mentionPattern = /@(\w+)/g;
+    const mentionMatches = [...comment.matchAll(mentionPattern)];
+    const mentionedUsernames = mentionMatches.map(m => m[1]);
+    
+    let mentionedUserIds = [];
+    if (mentionedUsernames.length > 0) {
+      const mentionResult = await client.query(`
+        SELECT id, username 
+        FROM users 
+        WHERE username = ANY($1::text[])
+        AND id IN (SELECT user_id FROM project_members WHERE project_id = $2)
+      `, [mentionedUsernames, issue.project_id]);
+      
+      mentionedUserIds = mentionResult.rows.map(u => u.id);
+    }
+    
+    const commentResult = await client.query(`
+      INSERT INTO issue_comments (
+        issue_id, user_id, comment, parent_comment_id, mentions
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [issueId, req.user.id, comment, parentCommentId || null, mentionedUserIds]);
+    
+    const newComment = commentResult.rows[0];
+    
+    for (const mentionedUserId of mentionedUserIds) {
+      if (mentionedUserId !== req.user.id) {
+        await client.query(`
+          INSERT INTO mention_notifications (
+            user_id, comment_type, comment_id, item_id, item_title,
+            mentioned_by
+          )
+          VALUES ($1, 'issue', $2, $3, $4, $5)
+        `, [mentionedUserId, newComment.id, issueId, issue.title, req.user.id]);
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    const fullComment = await client.query(`
+      SELECT 
+        ic.*,
+        u.username,
+        u.email
+      FROM issue_comments ic
+      JOIN users u ON ic.user_id = u.id
+      WHERE ic.id = $1
+    `, [newComment.id]);
+    
+    res.status(201).json(fullComment.rows[0]);
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating comment:', error);
+    res.status(500).json({ error: 'Failed to create comment' });
+  } finally {
+    client.release();
+  }
+});
+
+app.put('/api/issues/:issueId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { comment } = req.body;
+    
+    if (!comment || comment.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+    
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM issue_comments WHERE id = $1',
+      [commentId]
+    );
+    
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    
+    if (ownerCheck.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Can only edit your own comments' });
+    }
+    
+    const mentionPattern = /@(\w+)/g;
+    const mentionMatches = [...comment.matchAll(mentionPattern)];
+    const mentionedUsernames = mentionMatches.map(m => m[1]);
+    
+    let mentionedUserIds = [];
+    if (mentionedUsernames.length > 0) {
+      const mentionResult = await pool.query(`
+        SELECT id FROM users WHERE username = ANY($1::text[])
+      `, [mentionedUsernames]);
+      mentionedUserIds = mentionResult.rows.map(u => u.id);
+    }
+    
+    const result = await pool.query(`
+      UPDATE issue_comments
+      SET comment = $1, updated_at = NOW(), edited = TRUE, mentions = $2
+      WHERE id = $3
+      RETURNING *
+    `, [comment, mentionedUserIds, commentId]);
+    
+    res.json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Error updating comment:', error);
+    res.status(500).json({ error: 'Failed to update comment' });
+  }
+});
+
+app.delete('/api/issues/:issueId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { issueId, commentId } = req.params;
+    
+    const result = await pool.query(`
+      SELECT 
+        ic.user_id as comment_owner,
+        pm.role as project_role
+      FROM issue_comments ic
+      JOIN issues i ON ic.issue_id = i.id
+      JOIN project_members pm ON pm.project_id = i.project_id AND pm.user_id = $2
+      WHERE ic.id = $1 AND ic.issue_id = $3
+    `, [commentId, req.user.id, issueId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    
+    const { comment_owner, project_role } = result.rows[0];
+    
+    const canDelete = comment_owner === req.user.id || 
+                     project_role === 'Project Manager' || 
+                     project_role === 'System Administrator';
+    
+    if (!canDelete) {
+      return res.status(403).json({ 
+        error: 'Can only delete your own comments unless you are a manager' 
+      });
+    }
+    
+    await pool.query('DELETE FROM issue_comments WHERE id = $1', [commentId]);
+    
+    res.json({ success: true, message: 'Comment deleted' });
+    
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
+  }
+});
+
+app.get('/api/action-items/:itemId/comments', authenticateToken, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    
+    const issueCheck = await pool.query(`
+      SELECT ai.project_id 
+      FROM action_items ai
+      JOIN project_members pm ON pm.project_id = ai.project_id
+      WHERE ai.id = $1 AND pm.user_id = $2
+    `, [itemId, req.user.id]);
+    
+    if (issueCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const result = await pool.query(`
+      SELECT 
+        aic.*,
+        u.username,
+        u.email,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', um.id, 'username', um.username))
+           FROM unnest(aic.mentions) AS mention_id
+           JOIN users um ON um.id = mention_id),
+          '[]'::json
+        ) as mentioned_users
+      FROM action_item_comments aic
+      JOIN users u ON aic.user_id = u.id
+      WHERE aic.action_item_id = $1
+      ORDER BY aic.created_at ASC
+    `, [itemId]);
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+app.post('/api/action-items/:itemId/comments', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { itemId } = req.params;
+    const { comment, parentCommentId } = req.body;
+    
+    if (!comment || comment.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+    
+    const itemCheck = await client.query(`
+      SELECT ai.*, pm.role as project_role
+      FROM action_items ai
+      JOIN project_members pm ON pm.project_id = ai.project_id
+      WHERE ai.id = $1 AND pm.user_id = $2
+    `, [itemId, req.user.id]);
+    
+    if (itemCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const item = itemCheck.rows[0];
+    
+    await client.query('BEGIN');
+    
+    const mentionPattern = /@(\w+)/g;
+    const mentionMatches = [...comment.matchAll(mentionPattern)];
+    const mentionedUsernames = mentionMatches.map(m => m[1]);
+    
+    let mentionedUserIds = [];
+    if (mentionedUsernames.length > 0) {
+      const mentionResult = await client.query(`
+        SELECT id FROM users 
+        WHERE username = ANY($1::text[])
+        AND id IN (SELECT user_id FROM project_members WHERE project_id = $2)
+      `, [mentionedUsernames, item.project_id]);
+      mentionedUserIds = mentionResult.rows.map(u => u.id);
+    }
+    
+    const commentResult = await client.query(`
+      INSERT INTO action_item_comments (
+        action_item_id, user_id, comment, parent_comment_id, mentions
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [itemId, req.user.id, comment, parentCommentId || null, mentionedUserIds]);
+    
+    const newComment = commentResult.rows[0];
+    
+    for (const mentionedUserId of mentionedUserIds) {
+      if (mentionedUserId !== req.user.id) {
+        await client.query(`
+          INSERT INTO mention_notifications (
+            user_id, comment_type, comment_id, item_id, item_title,
+            mentioned_by
+          )
+          VALUES ($1, 'action_item', $2, $3, $4, $5)
+        `, [mentionedUserId, newComment.id, itemId, item.title, req.user.id]);
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    const fullComment = await client.query(`
+      SELECT 
+        aic.*,
+        u.username,
+        u.email
+      FROM action_item_comments aic
+      JOIN users u ON aic.user_id = u.id
+      WHERE aic.id = $1
+    `, [newComment.id]);
+    
+    res.status(201).json(fullComment.rows[0]);
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating comment:', error);
+    res.status(500).json({ error: 'Failed to create comment' });
+  } finally {
+    client.release();
+  }
+});
+
+app.put('/api/action-items/:itemId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { comment } = req.body;
+    
+    if (!comment || comment.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+    
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM action_item_comments WHERE id = $1',
+      [commentId]
+    );
+    
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    
+    if (ownerCheck.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Can only edit your own comments' });
+    }
+    
+    const mentionPattern = /@(\w+)/g;
+    const mentionMatches = [...comment.matchAll(mentionPattern)];
+    const mentionedUsernames = mentionMatches.map(m => m[1]);
+    
+    let mentionedUserIds = [];
+    if (mentionedUsernames.length > 0) {
+      const mentionResult = await pool.query(`
+        SELECT id FROM users WHERE username = ANY($1::text[])
+      `, [mentionedUsernames]);
+      mentionedUserIds = mentionResult.rows.map(u => u.id);
+    }
+    
+    const result = await pool.query(`
+      UPDATE action_item_comments
+      SET comment = $1, updated_at = NOW(), edited = TRUE, mentions = $2
+      WHERE id = $3
+      RETURNING *
+    `, [comment, mentionedUserIds, commentId]);
+    
+    res.json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Error updating comment:', error);
+    res.status(500).json({ error: 'Failed to update comment' });
+  }
+});
+
+app.delete('/api/action-items/:itemId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { itemId, commentId } = req.params;
+    
+    const result = await pool.query(`
+      SELECT 
+        aic.user_id as comment_owner,
+        pm.role as project_role
+      FROM action_item_comments aic
+      JOIN action_items ai ON aic.action_item_id = ai.id
+      JOIN project_members pm ON pm.project_id = ai.project_id AND pm.user_id = $2
+      WHERE aic.id = $1 AND aic.action_item_id = $3
+    `, [commentId, req.user.id, itemId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    
+    const { comment_owner, project_role } = result.rows[0];
+    
+    const canDelete = comment_owner === req.user.id || 
+                     project_role === 'Project Manager' || 
+                     project_role === 'System Administrator';
+    
+    if (!canDelete) {
+      return res.status(403).json({ 
+        error: 'Can only delete your own comments unless you are a manager' 
+      });
+    }
+    
+    await pool.query('DELETE FROM action_item_comments WHERE id = $1', [commentId]);
+    
+    res.json({ success: true, message: 'Comment deleted' });
+    
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
+  }
+});
+
+// ==================== MENTION NOTIFICATIONS ====================
+
+app.get('/api/mentions', authenticateToken, async (req, res) => {
+  try {
+    const { unreadOnly } = req.query;
+    
+    let query = `
+      SELECT 
+        mn.*,
+        u.username as mentioned_by_username
+      FROM mention_notifications mn
+      JOIN users u ON mn.mentioned_by = u.id
+      WHERE mn.user_id = $1
+    `;
+    
+    if (unreadOnly === 'true') {
+      query += ' AND mn.read = FALSE';
+    }
+    
+    query += ' ORDER BY mn.created_at DESC LIMIT 50';
+    
+    const result = await pool.query(query, [req.user.id]);
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching mentions:', error);
+    res.status(500).json({ error: 'Failed to fetch mentions' });
+  }
+});
+
+app.put('/api/mentions/:mentionId/read', authenticateToken, async (req, res) => {
+  try {
+    const { mentionId } = req.params;
+    
+    const result = await pool.query(`
+      UPDATE mention_notifications
+      SET read = TRUE, read_at = NOW()
+      WHERE id = $1 AND user_id = $2
+      RETURNING *
+    `, [mentionId, req.user.id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Mention not found' });
+    }
+    
+    res.json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Error marking mention as read:', error);
+    res.status(500).json({ error: 'Failed to mark as read' });
+  }
+});
+
+app.put('/api/mentions/read-all', authenticateToken, async (req, res) => {
+  try {
+    await pool.query(`
+      UPDATE mention_notifications
+      SET read = TRUE, read_at = NOW()
+      WHERE user_id = $1 AND read = FALSE
+    `, [req.user.id]);
+    
+    res.json({ success: true, message: 'All mentions marked as read' });
+    
+  } catch (error) {
+    console.error('Error marking all as read:', error);
+    res.status(500).json({ error: 'Failed to mark all as read' });
+  }
+});
+
+app.get('/api/mentions/unread-count', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM mention_notifications
+      WHERE user_id = $1 AND read = FALSE
+    `, [req.user.id]);
+    
+    res.json({ count: parseInt(result.rows[0].count) });
+    
+  } catch (error) {
+    console.error('Error getting unread count:', error);
+    res.status(500).json({ error: 'Failed to get count' });
+  }
+});
+
+app.get('/api/projects/:projectId/members', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, req.user.id]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const result = await pool.query(`
+      SELECT 
+        u.id,
+        u.username,
+        u.email,
+        pm.role
+      FROM project_members pm
+      JOIN users u ON pm.user_id = u.id
+      WHERE pm.project_id = $1
+      ORDER BY u.username ASC
+    `, [projectId]);
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching project members:', error);
+    res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
 // Serve frontend
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
