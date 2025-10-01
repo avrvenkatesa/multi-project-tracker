@@ -1,0 +1,1664 @@
+REPLIT PROMPT: Story 2.2.1 - Comments and @Mentions
+Story Overview
+As a Team Member
+I want to comment on issues and action items with @mention functionality
+So that I can discuss work items and notify specific team members
+Priority: High
+Estimated Time: 3-4 hours
+Complexity: Medium
+
+Acceptance Criteria
+
+ Users can add comments to any issue or action item
+ Comments support rich text (markdown) formatting
+ @mention autocomplete shows project team members
+ @mentioned users are notified (visual indicator for now, email in future)
+ Comments are threaded and timestamped
+ Users can edit their own comments
+ Users can delete their own comments (managers can delete any)
+ Comments show on item detail view
+ Real-time comment count displayed on Kanban cards
+
+
+Database Schema
+New Tables
+sql-- Comments for Issues
+CREATE TABLE issue_comments (
+  id SERIAL PRIMARY KEY,
+  issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+  comment TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  edited BOOLEAN DEFAULT FALSE,
+  parent_comment_id INTEGER REFERENCES issue_comments(id) ON DELETE CASCADE,
+  mentions INTEGER[], -- Array of user IDs mentioned in comment
+  
+  CONSTRAINT comment_not_empty CHECK (LENGTH(TRIM(comment)) > 0)
+);
+
+-- Comments for Action Items
+CREATE TABLE action_item_comments (
+  id SERIAL PRIMARY KEY,
+  action_item_id INTEGER NOT NULL REFERENCES action_items(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+  comment TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  edited BOOLEAN DEFAULT FALSE,
+  parent_comment_id INTEGER REFERENCES action_item_comments(id) ON DELETE CASCADE,
+  mentions INTEGER[], -- Array of user IDs mentioned in comment
+  
+  CONSTRAINT comment_not_empty CHECK (LENGTH(TRIM(comment)) > 0)
+);
+
+-- Mention Notifications
+CREATE TABLE mention_notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  comment_type VARCHAR(50) NOT NULL, -- 'issue' or 'action_item'
+  comment_id INTEGER NOT NULL,
+  item_id INTEGER NOT NULL, -- issue_id or action_item_id
+  item_title VARCHAR(255),
+  mentioned_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  read BOOLEAN DEFAULT FALSE,
+  read_at TIMESTAMP,
+  
+  CONSTRAINT valid_comment_type CHECK (comment_type IN ('issue', 'action_item'))
+);
+
+-- Indexes for performance
+CREATE INDEX idx_issue_comments_issue ON issue_comments(issue_id);
+CREATE INDEX idx_issue_comments_user ON issue_comments(user_id);
+CREATE INDEX idx_issue_comments_parent ON issue_comments(parent_comment_id);
+CREATE INDEX idx_issue_comments_created ON issue_comments(created_at DESC);
+
+CREATE INDEX idx_action_item_comments_item ON action_item_comments(action_item_id);
+CREATE INDEX idx_action_item_comments_user ON action_item_comments(user_id);
+CREATE INDEX idx_action_item_comments_parent ON action_item_comments(parent_comment_id);
+CREATE INDEX idx_action_item_comments_created ON action_item_comments(created_at DESC);
+
+CREATE INDEX idx_mentions_user ON mention_notifications(user_id);
+CREATE INDEX idx_mentions_read ON mention_notifications(read);
+CREATE INDEX idx_mentions_created ON mention_notifications(created_at DESC);
+
+-- Comments
+COMMENT ON TABLE issue_comments IS 'Comments on issues with markdown support and @mentions';
+COMMENT ON TABLE action_item_comments IS 'Comments on action items with markdown support and @mentions';
+COMMENT ON TABLE mention_notifications IS 'Tracks @mention notifications for users';
+COMMENT ON COLUMN issue_comments.mentions IS 'Array of user IDs mentioned in this comment';
+COMMENT ON COLUMN mention_notifications.read IS 'Whether the mentioned user has seen the notification';
+
+Backend Implementation
+File: server.js
+1. Comment API Endpoints
+javascript// ==================== COMMENT ENDPOINTS ====================
+
+/**
+ * Get comments for an issue
+ */
+app.get('/api/issues/:issueId/comments', authenticateToken, async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    
+    // Verify user has access to the issue
+    const issueCheck = await pool.query(`
+      SELECT i.project_id 
+      FROM issues i
+      JOIN project_members pm ON pm.project_id = i.project_id
+      WHERE i.id = $1 AND pm.user_id = $2
+    `, [issueId, req.user.id]);
+    
+    if (issueCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get comments with user info
+    const result = await pool.query(`
+      SELECT 
+        ic.*,
+        u.username,
+        u.email,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', um.id, 'username', um.username))
+           FROM unnest(ic.mentions) AS mention_id
+           JOIN users um ON um.id = mention_id),
+          '[]'::json
+        ) as mentioned_users
+      FROM issue_comments ic
+      JOIN users u ON ic.user_id = u.id
+      WHERE ic.issue_id = $1
+      ORDER BY ic.created_at ASC
+    `, [issueId]);
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+/**
+ * Add comment to issue
+ */
+app.post('/api/issues/:issueId/comments', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { issueId } = req.params;
+    const { comment, parentCommentId } = req.body;
+    
+    // Validate
+    if (!comment || comment.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+    
+    // Verify user has access
+    const issueCheck = await client.query(`
+      SELECT i.*, pm.role as project_role
+      FROM issues i
+      JOIN project_members pm ON pm.project_id = i.project_id
+      WHERE i.id = $1 AND pm.user_id = $2
+    `, [issueId, req.user.id]);
+    
+    if (issueCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const issue = issueCheck.rows[0];
+    
+    await client.query('BEGIN');
+    
+    // Extract @mentions from comment
+    const mentionPattern = /@(\w+)/g;
+    const mentionMatches = [...comment.matchAll(mentionPattern)];
+    const mentionedUsernames = mentionMatches.map(m => m[1]);
+    
+    // Get user IDs for mentioned users
+    let mentionedUserIds = [];
+    if (mentionedUsernames.length > 0) {
+      const mentionResult = await client.query(`
+        SELECT id, username 
+        FROM users 
+        WHERE username = ANY($1::text[])
+        AND id IN (SELECT user_id FROM project_members WHERE project_id = $2)
+      `, [mentionedUsernames, issue.project_id]);
+      
+      mentionedUserIds = mentionResult.rows.map(u => u.id);
+    }
+    
+    // Create comment
+    const commentResult = await client.query(`
+      INSERT INTO issue_comments (
+        issue_id, user_id, comment, parent_comment_id, mentions
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [issueId, req.user.id, comment, parentCommentId || null, mentionedUserIds]);
+    
+    const newComment = commentResult.rows[0];
+    
+    // Create mention notifications
+    for (const mentionedUserId of mentionedUserIds) {
+      // Don't notify yourself
+      if (mentionedUserId !== req.user.id) {
+        await client.query(`
+          INSERT INTO mention_notifications (
+            user_id, comment_type, comment_id, item_id, item_title,
+            mentioned_by
+          )
+          VALUES ($1, 'issue', $2, $3, $4, $5)
+        `, [mentionedUserId, newComment.id, issueId, issue.title, req.user.id]);
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    // Get full comment with user info
+    const fullComment = await client.query(`
+      SELECT 
+        ic.*,
+        u.username,
+        u.email
+      FROM issue_comments ic
+      JOIN users u ON ic.user_id = u.id
+      WHERE ic.id = $1
+    `, [newComment.id]);
+    
+    res.status(201).json(fullComment.rows[0]);
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating comment:', error);
+    res.status(500).json({ error: 'Failed to create comment' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Update comment (own comments only)
+ */
+app.put('/api/issues/:issueId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { comment } = req.body;
+    
+    if (!comment || comment.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+    
+    // Check ownership
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM issue_comments WHERE id = $1',
+      [commentId]
+    );
+    
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    
+    if (ownerCheck.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Can only edit your own comments' });
+    }
+    
+    // Extract new mentions
+    const mentionPattern = /@(\w+)/g;
+    const mentionMatches = [...comment.matchAll(mentionPattern)];
+    const mentionedUsernames = mentionMatches.map(m => m[1]);
+    
+    let mentionedUserIds = [];
+    if (mentionedUsernames.length > 0) {
+      const mentionResult = await pool.query(`
+        SELECT id FROM users WHERE username = ANY($1::text[])
+      `, [mentionedUsernames]);
+      mentionedUserIds = mentionResult.rows.map(u => u.id);
+    }
+    
+    // Update comment
+    const result = await pool.query(`
+      UPDATE issue_comments
+      SET comment = $1, updated_at = NOW(), edited = TRUE, mentions = $2
+      WHERE id = $3
+      RETURNING *
+    `, [comment, mentionedUserIds, commentId]);
+    
+    res.json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Error updating comment:', error);
+    res.status(500).json({ error: 'Failed to update comment' });
+  }
+});
+
+/**
+ * Delete comment (own comments or manager+)
+ */
+app.delete('/api/issues/:issueId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { issueId, commentId } = req.params;
+    
+    // Get comment and user's project role
+    const result = await pool.query(`
+      SELECT 
+        ic.user_id as comment_owner,
+        pm.role as project_role
+      FROM issue_comments ic
+      JOIN issues i ON ic.issue_id = i.id
+      JOIN project_members pm ON pm.project_id = i.project_id AND pm.user_id = $2
+      WHERE ic.id = $1 AND ic.issue_id = $3
+    `, [commentId, req.user.id, issueId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    
+    const { comment_owner, project_role } = result.rows[0];
+    
+    // Check permission: own comment OR manager/admin
+    const canDelete = comment_owner === req.user.id || 
+                     project_role === 'manager' || 
+                     project_role === 'admin';
+    
+    if (!canDelete) {
+      return res.status(403).json({ 
+        error: 'Can only delete your own comments unless you are a manager' 
+      });
+    }
+    
+    // Delete comment (cascades to replies and notifications)
+    await pool.query('DELETE FROM issue_comments WHERE id = $1', [commentId]);
+    
+    res.json({ success: true, message: 'Comment deleted' });
+    
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
+  }
+});
+
+// ==================== ACTION ITEM COMMENTS (Same pattern) ====================
+
+/**
+ * Get comments for action item
+ */
+app.get('/api/action-items/:itemId/comments', authenticateToken, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    
+    const issueCheck = await pool.query(`
+      SELECT ai.project_id 
+      FROM action_items ai
+      JOIN project_members pm ON pm.project_id = ai.project_id
+      WHERE ai.id = $1 AND pm.user_id = $2
+    `, [itemId, req.user.id]);
+    
+    if (issueCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const result = await pool.query(`
+      SELECT 
+        aic.*,
+        u.username,
+        u.email,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', um.id, 'username', um.username))
+           FROM unnest(aic.mentions) AS mention_id
+           JOIN users um ON um.id = mention_id),
+          '[]'::json
+        ) as mentioned_users
+      FROM action_item_comments aic
+      JOIN users u ON aic.user_id = u.id
+      WHERE aic.action_item_id = $1
+      ORDER BY aic.created_at ASC
+    `, [itemId]);
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+/**
+ * Add comment to action item
+ */
+app.post('/api/action-items/:itemId/comments', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { itemId } = req.params;
+    const { comment, parentCommentId } = req.body;
+    
+    if (!comment || comment.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+    
+    const itemCheck = await client.query(`
+      SELECT ai.*, pm.role as project_role
+      FROM action_items ai
+      JOIN project_members pm ON pm.project_id = ai.project_id
+      WHERE ai.id = $1 AND pm.user_id = $2
+    `, [itemId, req.user.id]);
+    
+    if (itemCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const item = itemCheck.rows[0];
+    
+    await client.query('BEGIN');
+    
+    // Extract @mentions
+    const mentionPattern = /@(\w+)/g;
+    const mentionMatches = [...comment.matchAll(mentionPattern)];
+    const mentionedUsernames = mentionMatches.map(m => m[1]);
+    
+    let mentionedUserIds = [];
+    if (mentionedUsernames.length > 0) {
+      const mentionResult = await client.query(`
+        SELECT id FROM users 
+        WHERE username = ANY($1::text[])
+        AND id IN (SELECT user_id FROM project_members WHERE project_id = $2)
+      `, [mentionedUsernames, item.project_id]);
+      mentionedUserIds = mentionResult.rows.map(u => u.id);
+    }
+    
+    // Create comment
+    const commentResult = await client.query(`
+      INSERT INTO action_item_comments (
+        action_item_id, user_id, comment, parent_comment_id, mentions
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [itemId, req.user.id, comment, parentCommentId || null, mentionedUserIds]);
+    
+    const newComment = commentResult.rows[0];
+    
+    // Create mention notifications
+    for (const mentionedUserId of mentionedUserIds) {
+      if (mentionedUserId !== req.user.id) {
+        await client.query(`
+          INSERT INTO mention_notifications (
+            user_id, comment_type, comment_id, item_id, item_title,
+            mentioned_by
+          )
+          VALUES ($1, 'action_item', $2, $3, $4, $5)
+        `, [mentionedUserId, newComment.id, itemId, item.title, req.user.id]);
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    const fullComment = await client.query(`
+      SELECT 
+        aic.*,
+        u.username,
+        u.email
+      FROM action_item_comments aic
+      JOIN users u ON aic.user_id = u.id
+      WHERE aic.id = $1
+    `, [newComment.id]);
+    
+    res.status(201).json(fullComment.rows[0]);
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating comment:', error);
+    res.status(500).json({ error: 'Failed to create comment' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Update action item comment
+ */
+app.put('/api/action-items/:itemId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { comment } = req.body;
+    
+    if (!comment || comment.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+    
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM action_item_comments WHERE id = $1',
+      [commentId]
+    );
+    
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    
+    if (ownerCheck.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Can only edit your own comments' });
+    }
+    
+    // Extract mentions
+    const mentionPattern = /@(\w+)/g;
+    const mentionMatches = [...comment.matchAll(mentionPattern)];
+    const mentionedUsernames = mentionMatches.map(m => m[1]);
+    
+    let mentionedUserIds = [];
+    if (mentionedUsernames.length > 0) {
+      const mentionResult = await pool.query(`
+        SELECT id FROM users WHERE username = ANY($1::text[])
+      `, [mentionedUsernames]);
+      mentionedUserIds = mentionResult.rows.map(u => u.id);
+    }
+    
+    const result = await pool.query(`
+      UPDATE action_item_comments
+      SET comment = $1, updated_at = NOW(), edited = TRUE, mentions = $2
+      WHERE id = $3
+      RETURNING *
+    `, [comment, mentionedUserIds, commentId]);
+    
+    res.json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Error updating comment:', error);
+    res.status(500).json({ error: 'Failed to update comment' });
+  }
+});
+
+/**
+ * Delete action item comment
+ */
+app.delete('/api/action-items/:itemId/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { itemId, commentId } = req.params;
+    
+    const result = await pool.query(`
+      SELECT 
+        aic.user_id as comment_owner,
+        pm.role as project_role
+      FROM action_item_comments aic
+      JOIN action_items ai ON aic.action_item_id = ai.id
+      JOIN project_members pm ON pm.project_id = ai.project_id AND pm.user_id = $2
+      WHERE aic.id = $1 AND aic.action_item_id = $3
+    `, [commentId, req.user.id, itemId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    
+    const { comment_owner, project_role } = result.rows[0];
+    
+    const canDelete = comment_owner === req.user.id || 
+                     project_role === 'manager' || 
+                     project_role === 'admin';
+    
+    if (!canDelete) {
+      return res.status(403).json({ 
+        error: 'Can only delete your own comments unless you are a manager' 
+      });
+    }
+    
+    await pool.query('DELETE FROM action_item_comments WHERE id = $1', [commentId]);
+    
+    res.json({ success: true, message: 'Comment deleted' });
+    
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
+  }
+});
+
+// ==================== MENTION NOTIFICATIONS ====================
+
+/**
+ * Get user's mention notifications
+ */
+app.get('/api/mentions', authenticateToken, async (req, res) => {
+  try {
+    const { unreadOnly } = req.query;
+    
+    let query = `
+      SELECT 
+        mn.*,
+        u.username as mentioned_by_username
+      FROM mention_notifications mn
+      JOIN users u ON mn.mentioned_by = u.id
+      WHERE mn.user_id = $1
+    `;
+    
+    if (unreadOnly === 'true') {
+      query += ' AND mn.read = FALSE';
+    }
+    
+    query += ' ORDER BY mn.created_at DESC LIMIT 50';
+    
+    const result = await pool.query(query, [req.user.id]);
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching mentions:', error);
+    res.status(500).json({ error: 'Failed to fetch mentions' });
+  }
+});
+
+/**
+ * Mark mention as read
+ */
+app.put('/api/mentions/:mentionId/read', authenticateToken, async (req, res) => {
+  try {
+    const { mentionId } = req.params;
+    
+    const result = await pool.query(`
+      UPDATE mention_notifications
+      SET read = TRUE, read_at = NOW()
+      WHERE id = $1 AND user_id = $2
+      RETURNING *
+    `, [mentionId, req.user.id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Mention not found' });
+    }
+    
+    res.json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Error marking mention as read:', error);
+    res.status(500).json({ error: 'Failed to mark as read' });
+  }
+});
+
+/**
+ * Mark all mentions as read
+ */
+app.put('/api/mentions/read-all', authenticateToken, async (req, res) => {
+  try {
+    await pool.query(`
+      UPDATE mention_notifications
+      SET read = TRUE, read_at = NOW()
+      WHERE user_id = $1 AND read = FALSE
+    `, [req.user.id]);
+    
+    res.json({ success: true, message: 'All mentions marked as read' });
+    
+  } catch (error) {
+    console.error('Error marking all as read:', error);
+    res.status(500).json({ error: 'Failed to mark all as read' });
+  }
+});
+
+/**
+ * Get unread mention count
+ */
+app.get('/api/mentions/unread-count', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM mention_notifications
+      WHERE user_id = $1 AND read = FALSE
+    `, [req.user.id]);
+    
+    res.json({ count: parseInt(result.rows[0].count) });
+    
+  } catch (error) {
+    console.error('Error getting unread count:', error);
+    res.status(500).json({ error: 'Failed to get count' });
+  }
+});
+
+/**
+ * Get project team members for @mention autocomplete
+ */
+app.get('/api/projects/:projectId/members', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    // Verify user is in project
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, req.user.id]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get all project members
+    const result = await pool.query(`
+      SELECT 
+        u.id,
+        u.username,
+        u.email,
+        pm.role
+      FROM project_members pm
+      JOIN users u ON pm.user_id = u.id
+      WHERE pm.project_id = $1
+      ORDER BY u.username ASC
+    `, [projectId]);
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching project members:', error);
+    res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
+Frontend Implementation
+File: public/index.html
+Add Comments Section to Item Detail Modal
+html<!-- Add this to issue modal after the existing content -->
+<div id="issue-modal" class="modal">
+  <div class="modal-content">
+    <!-- ... existing issue fields ... -->
+    
+    <!-- Comments Section -->
+    <div class="mt-6 border-t pt-6">
+      <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+        <span>💬</span>
+        Comments
+        <span id="issue-comment-count" class="text-sm text-gray-500">(0)</span>
+      </h3>
+      
+      <!-- Comment Input -->
+      <div class="mb-4">
+        <textarea 
+          id="issue-new-comment"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
+          rows="3"
+          placeholder="Add a comment... Use @username to mention someone"></textarea>
+        
+        <!-- Mention Autocomplete Dropdown -->
+        <div id="issue-mention-dropdown" class="hidden absolute bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto z-50"></div>
+        
+        <div class="flex justify-between items-center mt-2">
+          <div class="text-xs text-gray-500">
+            Supports <strong>@mentions</strong> and basic <strong>markdown</strong>
+          </div>
+          <button 
+            onclick="addComment('issue')"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
+            Add Comment
+          </button>
+        </div>
+      </div>
+      
+      <!-- Comments List -->
+      <div id="issue-comments-list" class="space-y-3 max-h-96 overflow-y-auto">
+        <!-- Comments will be populated here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add same structure to action item modal -->
+<div id="action-item-modal" class="modal">
+  <!-- ... existing action item fields ... -->
+  
+  <!-- Comments Section (same as above but with action-item prefix) -->
+  <div class="mt-6 border-t pt-6">
+    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+      <span>💬</span>
+      Comments
+      <span id="action-item-comment-count" class="text-sm text-gray-500">(0)</span>
+    </h3>
+    
+    <div class="mb-4">
+      <textarea 
+        id="action-item-new-comment"
+        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
+        rows="3"
+        placeholder="Add a comment... Use @username to mention someone"></textarea>
+      
+      <div id="action-item-mention-dropdown" class="hidden absolute bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto z-50"></div>
+      
+      <div class="flex justify-between items-center mt-2">
+        <div class="text-xs text-gray-500">
+          Supports <strong>@mentions</strong> and basic <strong>markdown</strong>
+        </div>
+        <button 
+          onclick="addComment('action_item')"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
+          Add Comment
+        </button>
+      </div>
+    </div>
+    
+    <div id="action-item-comments-list" class="space-y-3 max-h-96 overflow-y-auto">
+      <!-- Comments will be populated here -->
+    </div>
+  </div>
+</div>
+
+<!-- Notification Bell (add to header) -->
+<div class="flex items-center gap-4">
+  <!-- Mention Notifications -->
+  <div class="relative">
+    <button 
+      onclick="toggleMentionNotifications()"
+      class="relative p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100">
+      <span class="text-2xl">🔔</span>
+      <span id="mention-count-badge" class="hidden absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
+    </button>
+    
+    <!-- Notifications Dropdown -->
+    <div id="mention-notifications-dropdown" class="hidden absolute right-0 mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
+      <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+        <h3 class="font-semibold">Mentions</h3>
+        <button onclick="markAllMentionsRead()" class="text-sm text-indigo-600 hover:text-indigo-800">
+          Mark all read
+        </button>
+      </div>
+      <div id="mention-notifications-list">
+        <!-- Notifications will be populated here -->
+      </div>
+    </div>
+  </div>
+  
+  <!-- Existing user menu -->
+  <div class="user-menu">...</div>
+</div>
+
+File: public/app.js
+Add Comment Functions
+javascript// ==================== COMMENT FUNCTIONALITY ====================
+
+let currentItemId = null;
+let currentItemType = null;
+let projectMembers = [];
+let editingCommentId = null;
+
+/**
+ * Load comments for an item
+ */
+async function loadComments(itemId, itemType) {
+  try {
+    currentItemId = itemId;
+    currentItemType = itemType;
+    
+    const endpoint = itemType === 'issue' 
+      ? `/api/issues/${itemId}/comments`
+      : `/api/action-items/${itemId}/comments`;
+    
+    const response = await fetch(endpoint, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    const comments = await response.json();
+    
+    // Update comment count
+    const countElement = document.getElementById(`${itemType.replace('_', '-')}-comment-count`);
+    if (countElement) {
+      countElement.textContent = `(${comments.length})`;
+    }
+    
+    // Render comments
+    renderComments(comments, itemType);
+    
+  } catch (error) {
+    console.error('Error loading comments:', error);
+  }
+}
+
+/**
+ * Render comments list
+ */
+function renderComments(comments, itemType) {
+  const listId = `${itemType.replace('_', '-')}-comments-list`;
+  const container = document.getElementById(listId);
+  
+  if (!container) return;
+  
+  if (comments.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 text-gray-500">
+        <p>No comments yet. Be the first to comment!</p>
+      </div>
+    `;
+    return;
+  }
+  
+  // Sort by created_at
+  comments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  
+  container.innerHTML = comments.map(comment => renderComment(comment, itemType)).join('');
+}
+
+/**
+ * Render single comment
+ */
+function renderComment(comment, itemType) {
+  const isOwn = comment.user_id === parseInt(localStorage.getItem('userId'));
+  const canEdit = isOwn;
+  const canDelete = isOwn || isProjectManager(); // Simplified check
+  
+  const commentText = formatCommentText(comment.comment);
+  const timeAgo = getTimeAgo(comment.created_at);
+  
+  return `
+    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition" data-comment-id="${comment.id}">
+      <div class="flex justify-between items-start mb-2">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-gray-900">${comment.username}</span>
+          <span class="text-xs text-gray-500">${timeAgo}</span>
+          ${comment.edited ? '<span class="text-xs text-gray-400 italic">(edited)</span>' : ''}
+        </div>
+        
+        ${canEdit || canDelete ? `
+          <div class="flex gap-1">
+            ${canEdit ? `
+              <button 
+                onclick="editComment(${comment.id}, '${itemType}')"
+                class="text-gray-600 hover:text-indigo-600 p-1 rounded"
+                title="Edit">
+                ✏️
+              </button>
+            ` : ''}
+            ${canDelete ? `
+              <button 
+                onclick="deleteComment(${comment.id}, '${itemType}')"
+                class="text-gray-600 hover:text-red-600 p-1 rounded"
+                title="Delete">
+                🗑️
+              </button>
+            ` : ''}
+          </div>
+        ` : ''}
+      </div>
+      
+      <div class="text-gray-700 whitespace-pre-wrap comment-content" id="comment-text-${comment.id}">
+        ${commentText}
+      </div>
+      
+      ${comment.mentioned_users && comment.mentioned_users.length > 0 ? `
+        <div class="mt-2 flex flex-wrap gap-1">
+          ${comment.mentioned_users.map(u => `
+            <span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded">
+              @${u.username}
+            </span>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+/**
+ * Format comment text with markdown and @mentions
+ */
+function formatCommentText(text) {
+  // Escape HTML
+  text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  
+  // Bold: **text** or __text__
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  
+  // Italic: *text* or _text_
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  text = text.replace(/_(.+?)_/g, '<em>$1</em>');
+  
+  // Code: `code`
+  text = text.replace(/`(.+?)`/g, '<code class="bg-gray-200 px-1 py-0.5 rounded text-sm">$1</code>');
+  
+  // Links: [text](url)
+  text = text.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-indigo-600 hover:underline" target="_blank">$1</a>');
+  
+  // @mentions
+  text = text.replace(/@(\w+)/g, '<span class="text-indigo-600 font-medium">@$1</span>');
+  
+  return text;
+}
+
+/**
+ * Get time ago string
+ */
+function getTimeAgo(timestamp) {
+  const now = new Date();
+  const then = new Date(timestamp);
+  const diff = Math.floor((now - then) / 1000); // seconds
+  
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  
+  return then.toLocaleDateString();
+}
+
+/**
+ * Add new comment
+ */
+async function addComment(itemType) {
+  try {
+    const textareaId = `${itemType.replace('_', '-')}-new-comment`;
+    const textarea = document.getElementById(textareaId);
+    const comment = textarea.value.trim();
+    
+    if (!comment) {
+      alert('Please enter a comment');
+      return;
+    }
+    
+    const endpoint = itemType === 'issue'
+      ? `/api/issues/${currentItemId}/comments`
+      : `/api/action-items/${currentItemId}/comments`;
+    
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({ comment })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to add comment');
+    }
+    
+    // Clear textarea
+    textarea.value = '';
+    
+    // Reload comments
+    await loadComments(currentItemId, itemType);
+    
+    showNotification('Comment added successfully', 'success');
+    
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    showNotification('Failed to add comment', 'error');
+  }
+}
+
+/**
+ * Edit comment
+ */
+async function editComment(commentId, itemType) {
+  try {
+    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
+    const textElement = commentElement.querySelector(`#comment-text-${commentId}`);
+    const originalText = textElement.dataset.original || textElement.textContent;
+    
+    // Create textarea for editing
+    const textarea = document.createElement('textarea');
+    textarea.className = 'w-full px-3 py-2 border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none';
+    textarea.rows = 3;
+    textarea.value = originalText;
+    
+    // Save original text
+    textElement.dataset.original = originalText;
+    
+    // Replace text with textarea
+    textElement.innerHTML = '';
+    textElement.appendChild(textarea);
+    
+    // Add save/cancel buttons
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'flex gap-2 mt-2';
+    buttonContainer.innerHTML = `
+      <button 
+        onclick="saveCommentEdit(${commentId}, '${itemType}')"
+        class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm">
+        Save
+      </button>
+      <button 
+        onclick="cancelCommentEdit(${commentId})"
+        class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 rounded text-sm">
+        Cancel
+      </button>
+    `;
+    textElement.appendChild(buttonContainer);
+    
+    textarea.focus();
+    
+  } catch (error) {
+    console.error('Error editing comment:', error);
+  }
+}
+
+/**
+ * Save comment edit
+ */
+async function saveCommentEdit(commentId, itemType) {
+  try {
+    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
+    const textarea = commentElement.querySelector('textarea');
+    const newComment = textarea.value.trim();
+    
+    if (!newComment) {
+      alert('Comment cannot be empty');
+      return;
+    }
+    
+    const endpoint = itemType === 'issue'
+      ? `/api/issues/${currentItemId}/comments/${commentId}`
+      : `/api/action-items/${currentItemId}/comments/${commentId}`;
+    
+    const response = await fetch(endpoint, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({ comment: newComment })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update comment');
+    }
+    
+    // Reload comments
+    await loadComments(currentItemId, itemType);
+    
+    showNotification('Comment updated successfully', 'success');
+    
+  } catch (error) {
+    console.error('Error saving comment:', error);
+    showNotification('Failed to update comment', 'error');
+  }
+}
+
+/**
+ * Cancel comment edit
+ */
+function cancelCommentEdit(commentId) {
+  // Reload comments to restore original state
+  loadComments(currentItemId, currentItemType);
+}
+
+/**
+ * Delete comment
+ */
+async function deleteComment(commentId, itemType) {
+  if (!confirm('Are you sure you want to delete this comment?')) {
+    return;
+  }
+  
+  try {
+    const endpoint = itemType === 'issue'
+      ? `/api/issues/${currentItemId}/comments/${commentId}`
+      : `/api/action-items/${currentItemId}/comments/${commentId}`;
+    
+    const response = await fetch(endpoint, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete comment');
+    }
+    
+    // Reload comments
+    await loadComments(currentItemId, itemType);
+    
+    showNotification('Comment deleted successfully', 'success');
+    
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    showNotification('Failed to delete comment', 'error');
+  }
+}
+
+// ==================== @MENTION AUTOCOMPLETE ====================
+
+/**
+ * Initialize @mention autocomplete
+ */
+function initializeMentionAutocomplete(itemType) {
+  const textareaId = `${itemType.replace('_', '-')}-new-comment`;
+  const dropdownId = `${itemType.replace('_', '-')}-mention-dropdown`;
+  
+  const textarea = document.getElementById(textareaId);
+  const dropdown = document.getElementById(dropdownId);
+  
+  if (!textarea || !dropdown) return;
+  
+  // Load project members
+  loadProjectMembers(currentProjectId);
+  
+  textarea.addEventListener('input', (e) => {
+    const text = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    
+    // Find @mention being typed
+    const beforeCursor = text.substring(0, cursorPos);
+    const mentionMatch = beforeCursor.match(/@(\w*)$/);
+    
+    if (mentionMatch) {
+      const searchTerm = mentionMatch[1].toLowerCase();
+      showMentionDropdown(searchTerm, dropdown, textarea);
+    } else {
+      dropdown.classList.add('hidden');
+    }
+  });
+  
+  // Close dropdown on click outside
+  document.addEventListener('click', (e) => {
+    if (!textarea.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.classList.add('hidden');
+    }
+  });
+}
+
+/**
+ * Load project members for autocomplete
+ */
+async function loadProjectMembers(projectId) {
+  try {
+    const response = await fetch(`/api/projects/${projectId}/members`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    projectMembers = await response.json();
+    
+  } catch (error) {
+    console.error('Error loading project members:', error);
+  }
+}
+
+/**
+ * Show mention autocomplete dropdown
+ */
+function showMentionDropdown(searchTerm, dropdown, textarea) {
+  const filtered = projectMembers.filter(member => 
+    member.username.toLowerCase().includes(searchTerm)
+  );
+  
+  if (filtered.length === 0) {
+    dropdown.classList.add('hidden');
+    return;
+  }
+  
+  dropdown.innerHTML = filtered.map(member => `
+    <div 
+      class="px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-2"
+      onclick="insertMention('${member.username}', '${currentItemType}')">
+      <span class="font-medium">${member.username}</span>
+      <span class="text-xs text-gray-500">${member.role}</span>
+    </div>
+  `).join('');
+  
+  dropdown.classList.remove('hidden');
+  
+  // Position dropdown below textarea
+  const rect = textarea.getBoundingClientRect();
+  dropdown.style.top = `${rect.bottom + window.scrollY}px`;
+  dropdown.style.left = `${rect.left}px`;
+  dropdown.style.width = `${rect.width}px`;
+}
+
+/**
+ * Insert mention into textarea
+ */
+function insertMention(username, itemType) {
+  const textareaId = `${itemType.replace('_', '-')}-new-comment`;
+  const dropdownId = `${itemType.replace('_', '-')}-mention-dropdown`;
+  
+  const textarea = document.getElementById(textareaId);
+  const dropdown = document.getElementById(dropdownId);
+  
+  const text = textarea.value;
+  const cursorPos = textarea.selectionStart;
+  
+  // Find @mention being typed
+  const beforeCursor = text.substring(0, cursorPos);
+  const mentionMatch = beforeCursor.match(/@(\w*)$/);
+  
+  if (mentionMatch) {
+    const startPos = cursorPos - mentionMatch[0].length;
+    const newText = text.substring(0, startPos) + `@${username} ` + text.substring(cursorPos);
+    textarea.value = newText;
+    
+    // Move cursor after mention
+    const newCursorPos = startPos + username.length + 2;
+    textarea.setSelectionRange(newCursorPos, newCursorPos);
+  }
+  
+  dropdown.classList.add('hidden');
+  textarea.focus();
+}
+
+// ==================== MENTION NOTIFICATIONS ====================
+
+/**
+ * Load unread mention count
+ */
+async function loadUnreadMentionCount() {
+  try {
+    const response = await fetch('/api/mentions/unread-count', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    const data = await response.json();
+    const badge = document.getElementById('mention-count-badge');
+    
+    if (badge) {
+      if (data.count > 0) {
+        badge.textContent = data.count > 9 ? '9+' : data.count;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error loading mention count:', error);
+  }
+}
+
+/**
+ * Toggle mention notifications dropdown
+ */
+async function toggleMentionNotifications() {
+  const dropdown = document.getElementById('mention-notifications-dropdown');
+  
+  if (dropdown.classList.contains('hidden')) {
+    // Show dropdown and load mentions
+    dropdown.classList.remove('hidden');
+    await loadMentionNotifications();
+  } else {
+    dropdown.classList.add('hidden');
+  }
+}
+
+/**
+ * Load mention notifications
+ */
+async function loadMentionNotifications() {
+  try {
+    const response = await fetch('/api/mentions', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    const mentions = await response.json();
+    const container = document.getElementById('mention-notifications-list');
+    
+    if (mentions.length === 0) {
+      container.innerHTML = `
+        <div class="p-4 text-center text-gray-500">
+          <p>No mentions yet</p>
+        </div>
+      `;
+      return;
+    }
+    
+    container.innerHTML = mentions.map(mention => `
+      <div 
+        class="p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer ${mention.read ? 'opacity-60' : 'bg-indigo-50'}"
+        onclick="openMentionedItem(${mention.item_id}, '${mention.comment_type}', ${mention.id})">
+        <div class="flex justify-between items-start mb-1">
+          <span class="font-medium text-sm">${mention.mentioned_by_username}</span>
+          <span class="text-xs text-gray-500">${getTimeAgo(mention.created_at)}</span>
+        </div>
+        <p class="text-sm text-gray-700">mentioned you in <strong>${mention.item_title}</strong></p>
+        ${!mention.read ? '<div class="mt-1"><span class="text-xs bg-indigo-600 text-white px-2 py-0.5 rounded">New</span></div>' : ''}
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error loading mentions:', error);
+  }
+}
+
+/**
+ * Open mentioned item and mark as read
+ */
+async function openMentionedItem(itemId, itemType, mentionId) {
+  try {
+    // Mark as read
+    await fetch(`/api/mentions/${mentionId}/read`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    // Close notifications dropdown
+    document.getElementById('mention-notifications-dropdown').classList.add('hidden');
+    
+    // Open item modal
+    if (itemType === 'issue') {
+      await viewIssue(itemId);
+    } else {
+      await viewActionItem(itemId);
+    }
+    
+    // Reload mention count
+    await loadUnreadMentionCount();
+    
+  } catch (error) {
+    console.error('Error opening mentioned item:', error);
+  }
+}
+
+/**
+ * Mark all mentions as read
+ */
+async function markAllMentionsRead() {
+  try {
+    await fetch('/api/mentions/read-all', {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    
+    // Reload notifications and count
+    await loadMentionNotifications();
+    await loadUnreadMentionCount();
+    
+    showNotification('All mentions marked as read', 'success');
+    
+  } catch (error) {
+    console.error('Error marking all as read:', error);
+    showNotification('Failed to mark mentions as read', 'error');
+  }
+}
+
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Check if user is project manager (simplified)
+ */
+function isProjectManager() {
+  const role = localStorage.getItem('userRole');
+  return role === 'admin' || role === 'manager';
+}
+
+/**
+ * Show notification toast
+ */
+function showNotification(message, type = 'info') {
+  // Simple toast notification
+  const toast = document.createElement('div');
+  toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white ${
+    type === 'success' ? 'bg-green-500' :
+    type === 'error' ? 'bg-red-500' :
+    'bg-blue-500'
+  } z-50 animate-fade-in`;
+  toast.textContent = message;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
+
+// ==================== INITIALIZATION ====================
+
+// Initialize when opening issue/action item modal
+async function viewIssue(issueId) {
+  // ... existing code to load issue ...
+  
+  // Load comments
+  await loadComments(issueId, 'issue');
+  
+  // Initialize mention autocomplete
+  initializeMentionAutocomplete('issue');
+}
+
+async function viewActionItem(itemId) {
+  // ... existing code to load action item ...
+  
+  // Load comments
+  await loadComments(itemId, 'action_item');
+  
+  // Initialize mention autocomplete
+  'action_item');
+}
+
+// Load mention count on page load and periodically
+document.addEventListener('DOMContentLoaded', () => {
+  loadUnreadMentionCount();
+  
+  // Refresh mention count every 30 seconds
+  setInterval(loadUnreadMentionCount, 30000);
+});
+
+CSS Additions
+File: public/css/styles.css (or add to existing styles)
+css/* Comment Styles */
+.comment-content code {
+  background-color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.875rem;
+  font-family: 'Courier New', monospace;
+}
+
+.comment-content strong {
+  font-weight: 600;
+}
+
+.comment-content em {
+  font-style: italic;
+}
+
+.comment-content a {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+/* Mention Autocomplete */
+#issue-mention-dropdown,
+#action-item-mention-dropdown {
+  width: auto;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+/* Notification Badge Pulse */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+#mention-count-badge {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Toast Animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Comment Hover Effects */
+.comment-content:hover {
+  background-color: #f9fafb;
+}
+
+/* Scrollbar Styling for Comment Lists */
+#issue-comments-list::-webkit-scrollbar,
+#action-item-comments-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+#issue-comments-list::-webkit-scrollbar-track,
+#action-item-comments-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+#issue-comments-list::-webkit-scrollbar-thumb,
+#action-item-comments-list::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+#issue-comments-list::-webkit-scrollbar-thumb:hover,
+#action-item-comments-list::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+Testing Checklist
+Comment Functionality:
+
+ Can add comment to issue
+ Can add comment to action item
+ Comment appears immediately after posting
+ Comment count updates correctly
+ Can edit own comments
+ Cannot edit others' comments (unless manager)
+ Can delete own comments
+ Manager can delete any comment
+ Markdown formatting works (bold, italic, code, links)
+ Line breaks preserved
+
+@Mention Functionality:
+
+ Type @ shows autocomplete dropdown
+ Dropdown filters as you type
+ Clicking suggestion inserts @username
+ @mentions highlighted in comments
+ Notification created for mentioned user
+ Notification badge shows unread count
+ Can view mention notifications
+ Clicking notification opens item
+ Can mark mention as read
+ Can mark all mentions as read
+ Notification badge updates after marking read
+
+RBAC:
+
+ Only project members can comment
+ Only comment owner can edit
+ Manager can delete any comment
+ Team member can only delete own comments
+ Cannot @mention users outside project
+
+UI/UX:
+
+ Comments scroll independently
+ Textarea resizes appropriately
+ Loading states shown
+ Error messages clear
+ Success feedback provided
+ Mobile responsive
+
+
+Sample Test Data
+Add these test comments to verify functionality:
+javascript// Test comment 1: Basic text
+"This looks good to me!"
+
+// Test comment 2: With markdown
+"**Important:** Please review the _attached document_ before proceeding. See `config.js` for details."
+
+// Test comment 3: With @mention
+"@john can you take a look at this? @sarah might have context as well."
+
+// Test comment 4: With link
+"Reference: [Project Documentation](https://docs.example.com)"
+
+// Test comment 5: Multi-line
+"Here are the next steps:
+1. Review requirements
+2. Update timeline
+3. Notify stakeholders"
+
+Performance Considerations
+
+Lazy Loading: Comments only load when modal opens
+Autocomplete Caching: Project members cached per project
+Pagination: If comments exceed 100, implement pagination
+Debouncing: Mention autocomplete debounced (300ms)
+Indexes: Database indexes on foreign keys for fast queries
+
+
+Future Enhancements (Phase 3)
+
+ Rich text editor (WYSIWYG) instead of markdown
+ Comment reactions (👍, ❤️, etc.)
+ File attachments in comments
+ Threading/replies to comments
+ Comment search
+ Comment history/versions
+ Email notifications for mentions
+ Real-time updates (WebSockets)
+
+
+Summary
+This implementation provides:
+✅ Threaded comments on issues and action items
+✅ @mention autocomplete with project member filtering
+✅ Markdown support for rich formatting
+✅ Edit/delete permissions with RBAC
+✅ Mention notifications with unread badge
+✅ Real-time comment counts on cards
+✅ Full audit trail (created_at, updated_at, edited flag)
+✅ Mobile responsive design
