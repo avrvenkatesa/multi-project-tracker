@@ -1774,6 +1774,86 @@ function displayAIResults() {
       </div>
     `).join('');
   }
+  
+  // Display status updates (NEW)
+  const statusUpdateResults = currentAIAnalysis.statusUpdateResults;
+  if (statusUpdateResults && (statusUpdateResults.matched.length > 0 || statusUpdateResults.unmatched.length > 0)) {
+    const statusSection = document.getElementById('status-updates-section');
+    const countSpan = document.getElementById('status-updates-count');
+    const matchedContainer = document.getElementById('matched-updates');
+    const unmatchedContainer = document.getElementById('unmatched-updates');
+    
+    statusSection.classList.remove('hidden');
+    countSpan.textContent = statusUpdateResults.matched.length + statusUpdateResults.unmatched.length;
+    
+    // Display matched updates
+    if (statusUpdateResults.matched.length > 0) {
+      matchedContainer.innerHTML = `
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-3">
+          <h6 class="font-semibold text-green-900 mb-2 text-sm">
+            ✅ Successfully Updated (${statusUpdateResults.matched.length})
+          </h6>
+          <div class="space-y-3">
+            ${statusUpdateResults.matched.map(match => `
+              <div class="bg-white border border-green-300 rounded-lg p-3">
+                <div class="flex justify-between items-start mb-2">
+                  <h6 class="font-medium text-sm text-gray-900">${escapeHtml(match.itemTitle)}</h6>
+                  <span class="text-xs px-2 py-1 rounded ${getStatusBadgeClass(match.newStatus)}">
+                    ${match.oldStatus} → ${match.newStatus}
+                  </span>
+                </div>
+                <p class="text-xs text-gray-600 italic mb-2">"${escapeHtml(match.evidence)}"</p>
+                <div class="flex gap-3 text-xs text-gray-500">
+                  <span>🎯 Match: ${match.matchConfidence}%</span>
+                  <span>🤖 AI: ${match.aiConfidence}%</span>
+                  <span>📝 ${match.itemType === 'issue' ? 'Issue' : 'Action'} #${match.itemId}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      matchedContainer.innerHTML = '';
+    }
+    
+    // Display unmatched updates
+    if (statusUpdateResults.unmatched.length > 0) {
+      unmatchedContainer.innerHTML = `
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h6 class="font-semibold text-yellow-900 mb-2 text-sm">
+            ⚠️ Needs Manual Review (${statusUpdateResults.unmatched.length})
+          </h6>
+          <p class="text-xs text-yellow-800 mb-3">
+            These status updates couldn't be automatically matched. Please review and update manually.
+          </p>
+          <div class="space-y-2">
+            ${statusUpdateResults.unmatched.map(unmatched => `
+              <div class="bg-white border border-yellow-300 rounded-lg p-3">
+                <p class="font-medium text-sm text-gray-900 mb-1">${escapeHtml(unmatched.update.itemDescription)}</p>
+                <p class="text-xs text-gray-600 mb-2">"${escapeHtml(unmatched.update.evidence)}"</p>
+                <p class="text-xs text-yellow-700">Reason: ${escapeHtml(unmatched.reason)}</p>
+                ${unmatched.closestMatch ? `<p class="text-xs text-gray-500 mt-1">Closest match: ${escapeHtml(unmatched.closestMatch)}</p>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      unmatchedContainer.innerHTML = '';
+    }
+  }
+}
+
+// Get status badge styling
+function getStatusBadgeClass(status) {
+  const statusClasses = {
+    'To Do': 'bg-gray-100 text-gray-800',
+    'In Progress': 'bg-blue-100 text-blue-800',
+    'Done': 'bg-green-100 text-green-800',
+    'Blocked': 'bg-red-100 text-red-800'
+  };
+  return statusClasses[status] || 'bg-gray-100 text-gray-800';
 }
 
 // Toggle all action items
