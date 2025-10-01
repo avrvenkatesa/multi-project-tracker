@@ -1412,11 +1412,17 @@ async function loadRelationships() {
     
     listContainer.innerHTML = [
       ...outgoing.map(r => `
-        <div class="flex items-center justify-between p-3 bg-gray-50 rounded">
+        <div class="flex items-center justify-between p-3 ${r.created_by_ai ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'} rounded">
           <div class="flex-1">
-            <span class="text-xs font-semibold text-blue-600 uppercase">${r.relationship_type.replace(/_/g, ' ')}</span>
-            <p class="text-sm">${r.target_title}</p>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-blue-600 uppercase">${r.relationship_type.replace(/_/g, ' ')}</span>
+              ${r.created_by_ai ? '<span class="text-xs bg-purple-600 text-white px-2 py-0.5 rounded">🤖 AI</span>' : ''}
+            </div>
+            <p class="text-sm mt-1">${r.target_title}</p>
             <span class="text-xs text-gray-500">${r.target_type} - ${r.target_status}</span>
+            ${r.created_by_ai && r.ai_confidence ? `<div class="text-xs text-purple-600 mt-1">Confidence: ${r.ai_confidence}%</div>` : ''}
+            ${r.transcript_title ? `<div class="text-xs text-gray-400 mt-1">From: ${r.transcript_title}</div>` : ''}
+            ${r.notes ? `<div class="text-xs text-gray-500 mt-1 italic">${r.notes}</div>` : ''}
           </div>
           <button class="delete-relationship-btn text-red-600 hover:text-red-700" data-relationship-id="${r.id}">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1426,11 +1432,17 @@ async function loadRelationships() {
         </div>
       `),
       ...incoming.map(r => `
-        <div class="flex items-center justify-between p-3 bg-yellow-50 rounded">
+        <div class="flex items-center justify-between p-3 ${r.created_by_ai ? 'bg-purple-50 border border-purple-200' : 'bg-yellow-50'} rounded">
           <div class="flex-1">
-            <span class="text-xs font-semibold text-yellow-600 uppercase">${r.relationship_type.replace(/_/g, ' ')} (incoming)</span>
-            <p class="text-sm">${r.source_title}</p>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-yellow-600 uppercase">${r.relationship_type.replace(/_/g, ' ')} (incoming)</span>
+              ${r.created_by_ai ? '<span class="text-xs bg-purple-600 text-white px-2 py-0.5 rounded">🤖 AI</span>' : ''}
+            </div>
+            <p class="text-sm mt-1">${r.source_title}</p>
             <span class="text-xs text-gray-500">${r.source_type} - ${r.source_status}</span>
+            ${r.created_by_ai && r.ai_confidence ? `<div class="text-xs text-purple-600 mt-1">Confidence: ${r.ai_confidence}%</div>` : ''}
+            ${r.transcript_title ? `<div class="text-xs text-gray-400 mt-1">From: ${r.transcript_title}</div>` : ''}
+            ${r.notes ? `<div class="text-xs text-gray-500 mt-1 italic">${r.notes}</div>` : ''}
           </div>
           <span class="text-xs text-gray-400">Auto-managed</span>
         </div>
@@ -1900,6 +1912,81 @@ function displayAIResults() {
       }
     } else {
       unmatchedContainer.innerHTML = '';
+    }
+  }
+  
+  // Display relationships (NEW)
+  const relationshipResults = currentAIAnalysis.relationshipResults;
+  if (relationshipResults && (relationshipResults.created.length > 0 || relationshipResults.failed.length > 0)) {
+    const relationshipsSection = document.getElementById('relationships-section');
+    const countSpan = document.getElementById('relationships-count');
+    const createdContainer = document.getElementById('created-relationships');
+    const failedContainer = document.getElementById('failed-relationships');
+    
+    relationshipsSection.classList.remove('hidden');
+    countSpan.textContent = relationshipResults.created.length + relationshipResults.failed.length;
+    
+    // Display created relationships
+    if (relationshipResults.created.length > 0) {
+      createdContainer.innerHTML = `
+        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-3">
+          <h6 class="font-semibold text-purple-900 mb-2 text-sm">
+            ✅ Successfully Created (${relationshipResults.created.length})
+          </h6>
+          <div class="space-y-3">
+            ${relationshipResults.created.map(rel => `
+              <div class="bg-white border border-purple-300 rounded-lg p-3">
+                <div class="flex items-start gap-2 mb-2">
+                  <span class="text-xs font-semibold text-purple-700 uppercase px-2 py-1 bg-purple-100 rounded">
+                    ${rel.relationshipType.replace(/_/g, ' ')}
+                  </span>
+                  <span class="text-xs px-2 py-1 bg-purple-600 text-white rounded">🤖 AI</span>
+                </div>
+                <div class="flex items-center gap-2 text-sm">
+                  <span class="font-medium">${escapeHtml(rel.sourceItem)}</span>
+                  <span class="text-gray-400">→</span>
+                  <span class="font-medium">${escapeHtml(rel.targetItem)}</span>
+                </div>
+                <p class="text-xs text-gray-600 italic mt-2">"${escapeHtml(rel.evidence)}"</p>
+                <div class="flex gap-3 text-xs text-gray-500 mt-2">
+                  <span>🎯 Confidence: ${rel.confidence}%</span>
+                  <span>📝 ${rel.sourceType} → ${rel.targetType}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      createdContainer.innerHTML = '';
+    }
+    
+    // Display failed relationships
+    if (relationshipResults.failed.length > 0) {
+      failedContainer.innerHTML = `
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+          <h6 class="font-semibold text-red-900 mb-2 text-sm">
+            ⚠️ Could Not Create (${relationshipResults.failed.length})
+          </h6>
+          <p class="text-xs text-red-800 mb-3">
+            These relationships could not be matched to existing items.
+          </p>
+          <div class="space-y-2">
+            ${relationshipResults.failed.map(failed => `
+              <div class="bg-white border border-red-300 rounded-lg p-2">
+                <p class="text-xs font-medium text-gray-900">
+                  ${escapeHtml(failed.relationship.sourceItem)} 
+                  <span class="text-gray-500">${failed.relationship.relationshipType}</span>
+                  ${escapeHtml(failed.relationship.targetItem)}
+                </p>
+                <p class="text-xs text-red-700 mt-1">Reason: ${escapeHtml(failed.reason)}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      failedContainer.innerHTML = '';
     }
   }
 }

@@ -720,10 +720,16 @@ app.get('/api/:itemType/:id/relationships', authenticateToken, async (req, res) 
              CASE 
                WHEN r.target_type = 'issue' THEN i.status
                ELSE ai.status
-             END as target_status
+             END as target_status,
+             CASE 
+               WHEN r.target_type = 'issue' THEN i.assignee
+               ELSE ai.assignee
+             END as target_assignee,
+             mt.title as transcript_title
       FROM issue_relationships r
       LEFT JOIN issues i ON r.target_type = 'issue' AND r.target_id = i.id
       LEFT JOIN action_items ai ON r.target_type = 'action-item' AND r.target_id = ai.id
+      LEFT JOIN meeting_transcripts mt ON r.transcript_id = mt.id
       WHERE r.source_id = $1 AND r.source_type = $2
       ORDER BY r.created_at DESC
     `;
@@ -738,10 +744,16 @@ app.get('/api/:itemType/:id/relationships', authenticateToken, async (req, res) 
              CASE 
                WHEN r.source_type = 'issue' THEN i.status
                ELSE ai.status
-             END as source_status
+             END as source_status,
+             CASE 
+               WHEN r.source_type = 'issue' THEN i.assignee
+               ELSE ai.assignee
+             END as source_assignee,
+             mt.title as transcript_title
       FROM issue_relationships r
       LEFT JOIN issues i ON r.source_type = 'issue' AND r.source_id = i.id
       LEFT JOIN action_items ai ON r.source_type = 'action-item' AND r.source_id = ai.id
+      LEFT JOIN meeting_transcripts mt ON r.transcript_id = mt.id
       WHERE r.target_id = $1 AND r.target_type = $2
       ORDER BY r.created_at DESC
     `;
@@ -1022,6 +1034,247 @@ async function processStatusUpdates(statusUpdates, projectId, userId, transcript
         results.errors.push({
           update: update,
           error: error.message
+        });
+      }
+    }
+    
+    await client.query('COMMIT');
+    return results;
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Helper function to get inverse relationship type
+function getInverseRelationship(relationshipType) {
+  const inverseMap = {
+    'blocks': 'blocked_by',
+    'blocked_by': 'blocks',
+    'parent_of': 'child_of',
+    'child_of': 'parent_of',
+    'depends_on': 'depended_by',
+    'depended_by': 'depends_on',
+    'relates_to': 'relates_to' // symmetric relationship
+  };
+  return inverseMap[relationshipType] || null;
+}
+
+// Helper function to find items by description
+async function findItemByDescription(description, assignee, projectId, client) {
+  try {
+    // Try to match both action items and issues
+    const searchThreshold = 60; // 60% similarity threshold
+    
+    // Search action items
+    let searchQuery = `
+      SELECT id, title, description, assignee, 'action_item' as type
+      FROM action_items
+      WHERE project_id = $1
+      AND status != 'Done'
+      AND status != 'Cancelled'
+      ${assignee ? 'AND assignee ILIKE $2' : ''}
+      ORDER BY created_at DESC
+      LIMIT 20
+    `;
+    
+    let searchParams = assignee ? [projectId, `%${assignee}%`] : [projectId];
+    const actionItems = await client.query(searchQuery, searchParams);
+    
+    // Search issues
+    searchQuery = `
+      SELECT id, title, description, assignee, 'issue' as type
+      FROM issues
+      WHERE project_id = $1
+      AND status != 'Done'
+      AND status != 'Closed'
+      ${assignee ? 'AND assignee ILIKE $2' : ''}
+      ORDER BY created_at DESC
+      LIMIT 20
+    `;
+    
+    const issues = await client.query(searchQuery, searchParams);
+    
+    // Combine all items
+    const allItems = [...actionItems.rows, ...issues.rows];
+    
+    if (allItems.length === 0) {
+      return { found: false, reason: 'No items found in project' };
+    }
+    
+    // Find best match using string similarity
+    const itemTitles = allItems.map(item => item.title);
+    const matches = stringSimilarity.findBestMatch(description, itemTitles);
+    const bestMatchIndex = matches.bestMatchIndex;
+    const matchConfidence = matches.bestMatch.rating * 100;
+    
+    if (matchConfidence < searchThreshold) {
+      return { 
+        found: false, 
+        reason: `Low similarity: ${matchConfidence.toFixed(0)}%`,
+        closestMatch: allItems[bestMatchIndex].title
+      };
+    }
+    
+    const matchedItem = allItems[bestMatchIndex];
+    
+    return {
+      found: true,
+      id: matchedItem.id,
+      type: matchedItem.type,
+      title: matchedItem.title,
+      assignee: matchedItem.assignee,
+      matchConfidence: matchConfidence
+    };
+    
+  } catch (error) {
+    console.error('Error finding item by description:', error);
+    return { found: false, reason: error.message };
+  }
+}
+
+// Process relationships detected by AI
+async function processRelationships(relationships, projectId, userId, transcriptId) {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const results = {
+      created: [],
+      failed: [],
+      alreadyExists: []
+    };
+    
+    for (const rel of relationships) {
+      try {
+        // Find source item
+        const sourceMatch = await findItemByDescription(
+          rel.sourceItem, 
+          rel.sourceAssignee, 
+          projectId, 
+          client
+        );
+        
+        if (!sourceMatch.found) {
+          results.failed.push({
+            relationship: rel,
+            reason: `Source item not found: "${rel.sourceItem}" - ${sourceMatch.reason}`
+          });
+          continue;
+        }
+        
+        // Find target item
+        const targetMatch = await findItemByDescription(
+          rel.targetItem, 
+          rel.targetAssignee, 
+          projectId, 
+          client
+        );
+        
+        if (!targetMatch.found) {
+          results.failed.push({
+            relationship: rel,
+            reason: `Target item not found: "${rel.targetItem}" - ${targetMatch.reason}`
+          });
+          continue;
+        }
+        
+        // Prevent self-relationship
+        if (sourceMatch.id === targetMatch.id && sourceMatch.type === targetMatch.type) {
+          results.failed.push({
+            relationship: rel,
+            reason: 'Source and target are the same item'
+          });
+          continue;
+        }
+        
+        // Check if relationship already exists
+        const existingCheck = await client.query(`
+          SELECT id FROM issue_relationships
+          WHERE source_id = $1 
+            AND source_type = $2 
+            AND target_id = $3 
+            AND target_type = $4
+            AND relationship_type = $5
+        `, [sourceMatch.id, sourceMatch.type, targetMatch.id, targetMatch.type, rel.relationshipType]);
+        
+        if (existingCheck.rows.length > 0) {
+          results.alreadyExists.push({
+            relationship: rel,
+            existingId: existingCheck.rows[0].id
+          });
+          continue;
+        }
+        
+        // Create relationship
+        const insertResult = await client.query(`
+          INSERT INTO issue_relationships (
+            source_id, source_type, target_id, target_type, relationship_type,
+            created_by, created_by_ai, ai_confidence, transcript_id, notes
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9)
+          RETURNING id
+        `, [
+          sourceMatch.id,
+          sourceMatch.type,
+          targetMatch.id,
+          targetMatch.type,
+          rel.relationshipType,
+          userId,
+          rel.confidence,
+          transcriptId,
+          `Evidence: "${rel.evidence}"`
+        ]);
+        
+        const relationshipId = insertResult.rows[0].id;
+        
+        // Create inverse relationship if applicable
+        const inverseType = getInverseRelationship(rel.relationshipType);
+        if (inverseType && inverseType !== rel.relationshipType) {
+          await client.query(`
+            INSERT INTO issue_relationships (
+              source_id, source_type, target_id, target_type, relationship_type,
+              created_by, created_by_ai, ai_confidence, transcript_id, notes
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9)
+            ON CONFLICT DO NOTHING
+          `, [
+            targetMatch.id,
+            targetMatch.type,
+            sourceMatch.id,
+            sourceMatch.type,
+            inverseType,
+            userId,
+            rel.confidence,
+            transcriptId,
+            `Inverse of: "${rel.evidence}"`
+          ]);
+        }
+        
+        results.created.push({
+          relationshipId: relationshipId,
+          sourceItem: sourceMatch.title,
+          sourceType: sourceMatch.type,
+          targetItem: targetMatch.title,
+          targetType: targetMatch.type,
+          relationshipType: rel.relationshipType,
+          confidence: rel.confidence,
+          evidence: rel.evidence,
+          matchConfidence: {
+            source: sourceMatch.matchConfidence,
+            target: targetMatch.matchConfidence
+          }
+        });
+        
+      } catch (error) {
+        console.error('Error processing relationship:', error);
+        results.failed.push({
+          relationship: rel,
+          reason: error.message
         });
       }
     }
@@ -1323,6 +1576,68 @@ For each status update detected, provide:
 5. High confidence (90+) for explicit statements, lower for implied
 6. If work is mentioned but no status change indicated, don't include it
 
+# PHASE 3: RELATIONSHIP DETECTION
+
+Scan the transcript for statements indicating relationships between work items:
+
+## DEPENDENCY RELATIONSHIPS (BLOCKING):
+
+**Patterns to detect:**
+- "X is blocked by Y"
+- "can't start X until Y is done"
+- "X depends on Y"
+- "waiting for Y before X"
+- "Y needs to be completed before X"
+- "X is waiting on Y"
+
+**Example:**
+"We can't start the migration testing until the security audit is completed"
+→ Relationship: "Migration testing" BLOCKED_BY "Security audit"
+
+## PARENT-CHILD RELATIONSHIPS (HIERARCHY):
+
+**Patterns to detect:**
+- "X is part of Y"
+- "X is a subtask of Y"
+- "Y includes X"
+- "break down X into Y and Z"
+- "X consists of Y"
+- "Y is a component of X"
+
+**Example:**
+"The database migration is part of the overall Pathfinder migration project"
+→ Relationship: "Database migration" CHILD_OF "Pathfinder migration"
+
+## RELATED RELATIONSHIPS (ASSOCIATION):
+
+**Patterns to detect:**
+- "X relates to Y"
+- "X and Y are connected"
+- "similar to X"
+- "X impacts Y"
+- "coordinate X with Y"
+- "X and Y should be aligned"
+
+**Example:**
+"The network configuration should be coordinated with the security settings"
+→ Relationship: "Network configuration" RELATES_TO "Security settings"
+
+## RELATIONSHIP EXTRACTION RULES:
+
+1. **Be specific**: Extract actual work item titles/descriptions, not vague references
+2. **Directional**: Note the direction (A blocks B vs B blocked by A)
+3. **High confidence only**: Only extract relationships explicitly stated (confidence >75%)
+4. **Context matters**: Consider the full sentence context
+5. **Multiple relationships**: One item can have multiple relationships
+6. **Both items must be clear**: Only extract when both source and target items are identifiable
+
+## CONFIDENCE SCORING FOR RELATIONSHIPS:
+
+- 90-100%: Explicit blocking/dependency statement with clear items
+- 80-89%: Clear relationship but one item description is somewhat vague
+- 75-79%: Implied relationship with reasonable certainty
+- <75%: Don't extract (too ambiguous)
+
 PROJECT CONTEXT:
 - Name: ${project[0].name}
 - Type: ${project[0].template}
@@ -1360,10 +1675,29 @@ Respond with a JSON object in this exact format:
       "progressDetails": "47 VMs documented with full configurations",
       "confidence": 95
     }
+  ],
+  "relationships": [
+    {
+      "sourceItem": "Migration testing",
+      "targetItem": "Security audit",
+      "relationshipType": "blocked_by",
+      "evidence": "We can't start the migration testing until the security audit is completed",
+      "sourceAssignee": "Michael Rodriguez",
+      "targetAssignee": "Lisa Martinez",
+      "confidence": 95
+    }
   ]
 }
 
-IMPORTANT: Extract ALL action items, issues, and status updates. Be comprehensive.`
+RELATIONSHIP TYPES TO USE:
+- **blocked_by**: Source cannot proceed until target is complete
+- **blocks**: Source prevents target from proceeding (inverse of blocked_by)
+- **child_of**: Source is a subtask/component of target
+- **parent_of**: Source contains target as subtask (inverse of child_of)
+- **relates_to**: Source and target are associated/connected
+- **depends_on**: Source requires target (similar to blocked_by but softer)
+
+IMPORTANT: Extract ALL action items, issues, status updates, and relationships. Be comprehensive.`
           },
           {
             role: "user",
@@ -1385,7 +1719,7 @@ IMPORTANT: Extract ALL action items, issues, and status updates. Be comprehensiv
       const totalTokens = completion.usage.total_tokens;
       const estimatedCost = (inputTokens * 0.0005 / 1000) + (outputTokens * 0.0015 / 1000);
 
-      // STEP 2.5: Process Status Updates (NEW)
+      // STEP 2.5: Process Status Updates
       let statusUpdateResults = null;
       if (parsedResponse.statusUpdates && parsedResponse.statusUpdates.length > 0) {
         console.log(`Processing ${parsedResponse.statusUpdates.length} status updates...`);
@@ -1396,6 +1730,19 @@ IMPORTANT: Extract ALL action items, issues, and status updates. Be comprehensiv
           transcriptId
         );
         console.log(`Status updates: ${statusUpdateResults.matched.length} matched, ${statusUpdateResults.unmatched.length} unmatched`);
+      }
+
+      // STEP 2.6: Process Relationships (NEW)
+      let relationshipResults = null;
+      if (parsedResponse.relationships && parsedResponse.relationships.length > 0) {
+        console.log(`Processing ${parsedResponse.relationships.length} relationships...`);
+        relationshipResults = await processRelationships(
+          parsedResponse.relationships,
+          parseInt(projectId),
+          req.user.id,
+          transcriptId
+        );
+        console.log(`Relationships: ${relationshipResults.created.length} created, ${relationshipResults.failed.length} failed, ${relationshipResults.alreadyExists.length} already exist`);
       }
 
       // STEP 3: Update transcript with analysis results
@@ -1423,13 +1770,14 @@ IMPORTANT: Extract ALL action items, issues, and status updates. Be comprehensiv
       console.log(`Analysis complete: ${parsedResponse.actionItems?.length || 0} action items, ${parsedResponse.issues?.length || 0} issues`);
       console.log(`Tokens used: ${totalTokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
 
-      // STEP 4: Return results with transcript ID and status updates
+      // STEP 4: Return results with transcript ID, status updates, and relationships
       res.json({
         success: true,
         analysisId: analysisId,
         transcriptId: transcriptId,
         ...parsedResponse,
         statusUpdateResults: statusUpdateResults,
+        relationshipResults: relationshipResults,
         metadata: {
           projectId: parseInt(projectId),
           analyzedAt: new Date().toISOString(),

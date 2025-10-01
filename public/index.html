@@ -447,6 +447,21 @@
                                 <div id="unmatched-updates"></div>
                             </div>
 
+                            <!-- Relationships Section -->
+                            <div id="relationships-section" class="mb-6 hidden">
+                                <h5 class="font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                    <span class="text-xl">🔗</span>
+                                    Detected Relationships
+                                    <span id="relationships-count" class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">0</span>
+                                </h5>
+                                
+                                <!-- Created Relationships -->
+                                <div id="created-relationships" class="mb-3"></div>
+                                
+                                <!-- Failed Relationships -->
+                                <div id="failed-relationships"></div>
+                            </div>
+
                             <!-- Actions -->
                             <div class="flex justify-between items-center pt-4 border-t">
                                 <button id="reset-analysis-btn" class="text-sm text-gray-600 hover:text-gray-800">
@@ -520,7 +535,7 @@
             </div>
         </div>
 
-        <script src="auth.js?v=3"></script>
-        <script src="app.js?v=3"></script>
+        <script src="auth.js?v=4"></script>
+        <script src="app.js?v=4"></script>
     </body>
 </html>
