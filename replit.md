@@ -76,6 +76,9 @@ The application uses express-rate-limit for API protection and implements proper
 - **Joi** - Schema validation library for request data
 - **Multer** - Multipart/form-data middleware for file uploads
 
+### AI Integration
+- **OpenAI** - GPT-3.5-Turbo integration for AI-powered meeting transcript analysis
+
 ### Database & ORM
 - **@neondatabase/serverless** - Neon PostgreSQL serverless driver
 - **drizzle-orm** - TypeScript ORM for database operations
@@ -123,6 +126,16 @@ The application uses express-rate-limit for API protection and implements proper
   - Security: Prevents self-referencing relationships, checks for duplicate relationships, Team Member+ role required
   - UI: Relationship modal shows current relationships color-coded (blue for outgoing, yellow for incoming auto-managed)
   - Visual Indicators: Kanban cards display relationship count badges (e.g., "2") in blue when relationships exist, auto-update on add/delete
+- **AI Meeting Analysis (Story 2.1.1)**:
+  - AI Integration: GPT-3.5-Turbo powered transcript analysis to automatically extract action items and issues from meeting transcripts
+  - Backend: POST /api/meetings/analyze endpoint with multer file upload, OpenAI API integration, and cost tracking
+  - Backend: POST /api/meetings/create-items endpoint for batch creating selected items from AI suggestions
+  - Frontend: Two-step AI Analysis modal with file upload (Step 1) and review interface (Step 2)
+  - Features: Upload .txt transcripts up to 10MB, AI extracts action items with assignees/due dates and issues with categories/priorities
+  - Features: Review AI suggestions with confidence scores, selectively create items with checkboxes, displays token usage and cost per analysis
+  - Security: Team Member+ role required, file type validation, 10MB size limit, automatic file cleanup
+  - Cost: ~$0.001-0.01 per transcript analysis using GPT-3.5-Turbo (10-20x cheaper than GPT-4)
+  - UI: "AI Analysis" button in project toolbar with lightbulb icon, CSP-compliant event listeners
 
 ### Demo Credentials
 - Email: demo@multiproject.com
