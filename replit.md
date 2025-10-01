@@ -105,6 +105,30 @@ Implemented comprehensive authorization and security controls for AI-powered fea
   - Graceful permission error handling with clear user messaging
 - **Bug Fixed**: Team Members can no longer see or access AI Analysis upload functionality
 
+### Comments and @Mentions Feature (October 1, 2025)
+Implemented comprehensive comment system with real-time mentions for enhanced team collaboration:
+- **Database Schema**:
+  - `issue_comments` and `action_item_comments` tables with user_id FK, comment text, mentions array, created_at, updated_at, edited flag
+  - `mention_notifications` table for tracking @mentions with recipient_user_id, source_comment_id, unread status
+  - Indexes on issue_id/action_item_id, user_id, created_at, and recipient_user_id for performance
+- **Backend API Endpoints**:
+  - GET/POST/PUT/DELETE for both issue and action item comments
+  - GET /api/mentions for unread notifications, PUT /api/mentions/:id/read, PUT /api/mentions/read-all
+  - Proper RBAC enforcement: users can only edit their own comments; Project Managers+ can delete any comment
+- **Frontend Features**:
+  - Comment UI component in public/comments.js with markdown support (bold, italic, code, links)
+  - @mention autocomplete showing project team members in real-time dropdown
+  - Notification bell in header with unread count badge and dropdown
+  - Item detail modal with integrated comments section
+  - Real-time comment count display
+- **Security Hardening**:
+  - CORS configuration using exact-match allowlist (Set.has) to prevent subdomain hijacking
+  - URL sanitization with URL() constructor, protocol validation (http/https only), XSS prevention
+  - JWT secret warning when using default development secret
+  - SameSite=lax cookies for CSRF protection
+  - Link rendering with rel="noopener noreferrer" for security
+
 ### Known Limitations
 - **Performance**: Relationship loading uses N+1 query pattern on Kanban board; consider batching in future updates
 - **Authorization**: Manual relationship creation endpoints lack project ownership validation (potential IDOR); AI-created relationships are project-scoped
+- **Comments UI**: Comment count badges not yet displayed on Kanban cards; item detail modal needs clickable card handlers for full integration
