@@ -2833,15 +2833,30 @@ app.post('/api/issues/:issueId/comments', authenticateToken, async (req, res) =>
     
     let mentionedUserIds = [];
     if (mentionedUsernames.length > 0) {
-      const mentionResult = await client.query(`
-        SELECT id, username 
-        FROM users 
-        WHERE LOWER(REPLACE(username, ' ', '')) = ANY(
-          SELECT LOWER(REPLACE(unnest($1::text[]), ' ', ''))
-        )
-      `, [mentionedUsernames]);
+      const allUsers = await client.query(`SELECT id, username FROM users`);
+      const userMap = new Map(allUsers.rows.map(u => [
+        u.username.toLowerCase().replace(/\s+/g, ''), 
+        u
+      ]));
       
-      mentionedUserIds = mentionResult.rows.map(u => u.id);
+      for (const mentioned of mentionedUsernames) {
+        const words = mentioned.split(/\s+/);
+        let matchedUser = null;
+        
+        for (let i = words.length; i >= 1; i--) {
+          const candidate = words.slice(0, i).join(' ');
+          const normalized = candidate.toLowerCase().replace(/\s+/g, '');
+          
+          if (userMap.has(normalized)) {
+            matchedUser = userMap.get(normalized);
+            break;
+          }
+        }
+        
+        if (matchedUser && !mentionedUserIds.includes(matchedUser.id)) {
+          mentionedUserIds.push(matchedUser.id);
+        }
+      }
     }
     
     const commentResult = await client.query(`
@@ -2917,13 +2932,30 @@ app.put('/api/issues/:issueId/comments/:commentId', authenticateToken, async (re
     
     let mentionedUserIds = [];
     if (mentionedUsernames.length > 0) {
-      const mentionResult = await pool.query(`
-        SELECT id FROM users 
-        WHERE LOWER(REPLACE(username, ' ', '')) = ANY(
-          SELECT LOWER(unnest($1::text[]))
-        )
-      `, [mentionedUsernames]);
-      mentionedUserIds = mentionResult.rows.map(u => u.id);
+      const allUsers = await pool.query(`SELECT id, username FROM users`);
+      const userMap = new Map(allUsers.rows.map(u => [
+        u.username.toLowerCase().replace(/\s+/g, ''), 
+        u
+      ]));
+      
+      for (const mentioned of mentionedUsernames) {
+        const words = mentioned.split(/\s+/);
+        let matchedUser = null;
+        
+        for (let i = words.length; i >= 1; i--) {
+          const candidate = words.slice(0, i).join(' ');
+          const normalized = candidate.toLowerCase().replace(/\s+/g, '');
+          
+          if (userMap.has(normalized)) {
+            matchedUser = userMap.get(normalized);
+            break;
+          }
+        }
+        
+        if (matchedUser && !mentionedUserIds.includes(matchedUser.id)) {
+          mentionedUserIds.push(matchedUser.id);
+        }
+      }
     }
     
     const result = await pool.query(`
@@ -3047,13 +3079,30 @@ app.post('/api/action-items/:itemId/comments', authenticateToken, async (req, re
     
     let mentionedUserIds = [];
     if (mentionedUsernames.length > 0) {
-      const mentionResult = await client.query(`
-        SELECT id FROM users 
-        WHERE LOWER(REPLACE(username, ' ', '')) = ANY(
-          SELECT LOWER(unnest($1::text[]))
-        )
-      `, [mentionedUsernames]);
-      mentionedUserIds = mentionResult.rows.map(u => u.id);
+      const allUsers = await client.query(`SELECT id, username FROM users`);
+      const userMap = new Map(allUsers.rows.map(u => [
+        u.username.toLowerCase().replace(/\s+/g, ''), 
+        u
+      ]));
+      
+      for (const mentioned of mentionedUsernames) {
+        const words = mentioned.split(/\s+/);
+        let matchedUser = null;
+        
+        for (let i = words.length; i >= 1; i--) {
+          const candidate = words.slice(0, i).join(' ');
+          const normalized = candidate.toLowerCase().replace(/\s+/g, '');
+          
+          if (userMap.has(normalized)) {
+            matchedUser = userMap.get(normalized);
+            break;
+          }
+        }
+        
+        if (matchedUser && !mentionedUserIds.includes(matchedUser.id)) {
+          mentionedUserIds.push(matchedUser.id);
+        }
+      }
     }
     
     const commentResult = await client.query(`
@@ -3129,13 +3178,30 @@ app.put('/api/action-items/:itemId/comments/:commentId', authenticateToken, asyn
     
     let mentionedUserIds = [];
     if (mentionedUsernames.length > 0) {
-      const mentionResult = await pool.query(`
-        SELECT id FROM users 
-        WHERE LOWER(REPLACE(username, ' ', '')) = ANY(
-          SELECT LOWER(unnest($1::text[]))
-        )
-      `, [mentionedUsernames]);
-      mentionedUserIds = mentionResult.rows.map(u => u.id);
+      const allUsers = await pool.query(`SELECT id, username FROM users`);
+      const userMap = new Map(allUsers.rows.map(u => [
+        u.username.toLowerCase().replace(/\s+/g, ''), 
+        u
+      ]));
+      
+      for (const mentioned of mentionedUsernames) {
+        const words = mentioned.split(/\s+/);
+        let matchedUser = null;
+        
+        for (let i = words.length; i >= 1; i--) {
+          const candidate = words.slice(0, i).join(' ');
+          const normalized = candidate.toLowerCase().replace(/\s+/g, '');
+          
+          if (userMap.has(normalized)) {
+            matchedUser = userMap.get(normalized);
+            break;
+          }
+        }
+        
+        if (matchedUser && !mentionedUserIds.includes(matchedUser.id)) {
+          mentionedUserIds.push(matchedUser.id);
+        }
+      }
     }
     
     const result = await pool.query(`
