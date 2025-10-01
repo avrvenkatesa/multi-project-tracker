@@ -1,0 +1,21 @@
+Meeting Transcript - Q4 Planning Session
+Date: October 1, 2025
+Attendees: Sarah Chen (Project Manager), David Martinez (Lead Developer), Lisa Wang (QA Lead)
+
+Sarah: Good morning everyone. Let's discuss the Q4 roadmap. We need to finalize the mobile app release date.
+
+David: I'll review the remaining bugs by next Friday and send a status update.
+
+Lisa: I'm concerned about the API performance issues we found last week. This could delay the release.
+
+Sarah: Can you investigate that, David?
+
+David: Sure, I'll set up a meeting with the infrastructure team tomorrow to discuss solutions.
+
+Lisa: I'll send out weekly test reports every Monday starting next week.
+
+Sarah: Great. One more thing - we need to migrate the legacy authentication system before end of quarter.
+
+David: That's critical. I can start working on it next week after the bug fixes.
+
+Sarah: Perfect. Let's schedule a follow-up meeting next Wednesday to review progress.
