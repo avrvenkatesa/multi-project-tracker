@@ -14,6 +14,71 @@ let currentFilters = {
   category: ''
 };
 
+// ==================== AI BADGE HELPERS ====================
+
+/**
+ * Generate HTML for AI source badge
+ * @param {Object} item - Issue or action item object
+ * @returns {string} HTML for badge
+ */
+function getAISourceBadge(item) {
+  if (!item.created_by_ai) {
+    return `
+      <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-md">
+        <span class="mr-1">👤</span> Manual
+      </span>
+    `;
+  }
+  
+  const confidence = item.ai_confidence ? Math.round(item.ai_confidence) : 0;
+  const confidenceColor = getConfidenceColor(confidence);
+  
+  return `
+    <span class="inline-flex items-center px-2 py-1 text-xs font-medium ${confidenceColor} rounded-md gap-1">
+      <span>⚡</span>
+      <span>AI</span>
+      <span class="font-bold">${confidence}%</span>
+    </span>
+  `;
+}
+
+/**
+ * Get Tailwind color classes based on confidence score
+ * @param {number} confidence - Confidence score (0-100)
+ * @returns {string} Tailwind CSS classes
+ */
+function getConfidenceColor(confidence) {
+  if (confidence >= 90) return 'bg-green-100 text-green-800 border border-green-300';
+  if (confidence >= 75) return 'bg-blue-100 text-blue-800 border border-blue-300';
+  if (confidence >= 60) return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
+  return 'bg-orange-100 text-orange-800 border border-orange-300';
+}
+
+/**
+ * Get border styling for AI-generated cards
+ * @param {Object} item - Issue or action item object
+ * @returns {string} Tailwind CSS border classes
+ */
+function getAICardBorderClass(item) {
+  if (!item.created_by_ai) {
+    return 'border-gray-200';
+  }
+  
+  const confidence = item.ai_confidence ? Math.round(item.ai_confidence) : 0;
+  if (confidence >= 90) return 'border-l-4 border-l-indigo-500';
+  if (confidence >= 75) return 'border-l-4 border-l-indigo-400';
+  return 'border-l-4 border-l-indigo-300';
+}
+
+/**
+ * Get background styling for AI-generated cards
+ * @param {Object} item - Issue or action item object
+ * @returns {string} Tailwind CSS background classes
+ */
+function getAICardBackgroundClass(item) {
+  return item.created_by_ai ? 'bg-indigo-50' : 'bg-white';
+}
+
 // Debounce function for search
 function debounce(func, wait) {
   let timeout;
@@ -241,13 +306,17 @@ async function renderKanbanBoard() {
                         const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
                         
                         return `
-                    <div class="kanban-card bg-white rounded p-3 shadow-sm border-l-4 ${getBorderColor(item.priority || "medium")} cursor-move hover:shadow-md transition-shadow"
+                    <div class="kanban-card ${getAICardBackgroundClass(item)} rounded p-3 shadow-sm ${getAICardBorderClass(item)} border-l-4 ${!item.created_by_ai ? getBorderColor(item.priority || "medium") : ''} cursor-move hover:shadow-md transition-shadow"
                          draggable="true"
                          data-item-id="${item.id}"
                          data-item-type="${item.type || 'issue'}">
-                        <div class="flex justify-between items-start mb-2">
-                            <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
-                            <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
+                        <div class="flex justify-between items-start mb-2 gap-2">
+                            <div class="flex items-center gap-1">
+                                <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
+                                <span class="text-xs text-gray-500">·</span>
+                                <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
+                            </div>
+                            ${getAISourceBadge(item)}
                         </div>
                         <h5 class="font-medium text-sm mb-1">${item.title}</h5>
                         <p class="text-xs text-gray-600 mb-2">${(item.description || "").substring(0, 80)}...</p>
