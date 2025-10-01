@@ -46,6 +46,23 @@ function renderComments(comments, itemType) {
   
   comments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   container.innerHTML = comments.map(comment => renderComment(comment, itemType)).join('');
+  
+  // Add event listeners for edit/delete buttons
+  container.querySelectorAll('.edit-comment-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const commentId = parseInt(btn.dataset.commentId);
+      const itemType = btn.dataset.itemType;
+      editComment(commentId, itemType);
+    });
+  });
+  
+  container.querySelectorAll('.delete-comment-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const commentId = parseInt(btn.dataset.commentId);
+      const itemType = btn.dataset.itemType;
+      deleteComment(commentId, itemType);
+    });
+  });
 }
 
 function renderComment(comment, itemType) {
@@ -55,12 +72,13 @@ function renderComment(comment, itemType) {
   
   const commentText = formatCommentText(comment.comment);
   const timeAgo = getTimeAgo(comment.created_at);
+  const username = escapeHtml(comment.username);
   
   return `
     <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition" data-comment-id="${comment.id}">
       <div class="flex justify-between items-start mb-2">
         <div class="flex items-center gap-2">
-          <span class="font-semibold text-gray-900">${comment.username}</span>
+          <span class="font-semibold text-gray-900">${username}</span>
           <span class="text-xs text-gray-500">${timeAgo}</span>
           ${comment.edited ? '<span class="text-xs text-gray-400 italic">(edited)</span>' : ''}
         </div>
@@ -69,16 +87,18 @@ function renderComment(comment, itemType) {
           <div class="flex gap-1">
             ${canEdit ? `
               <button 
-                onclick="editComment(${comment.id}, '${itemType}')"
-                class="text-gray-600 hover:text-indigo-600 p-1 rounded"
+                class="edit-comment-btn text-gray-600 hover:text-indigo-600 p-1 rounded"
+                data-comment-id="${comment.id}"
+                data-item-type="${itemType}"
                 title="Edit">
                 ✏️
               </button>
             ` : ''}
             ${canDelete ? `
               <button 
-                onclick="deleteComment(${comment.id}, '${itemType}')"
-                class="text-gray-600 hover:text-red-600 p-1 rounded"
+                class="delete-comment-btn text-gray-600 hover:text-red-600 p-1 rounded"
+                data-comment-id="${comment.id}"
+                data-item-type="${itemType}"
                 title="Delete">
                 🗑️
               </button>
@@ -95,13 +115,23 @@ function renderComment(comment, itemType) {
         <div class="mt-2 flex flex-wrap gap-1">
           ${comment.mentioned_users.map(u => `
             <span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded">
-              @${u.username}
+              @${escapeHtml(u.username)}
             </span>
           `).join('')}
         </div>
       ` : ''}
     </div>
   `;
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function sanitizeUrl(url) {
@@ -191,18 +221,19 @@ async function editComment(commentId, itemType) {
     
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'flex gap-2 mt-2';
-    buttonContainer.innerHTML = `
-      <button 
-        onclick="saveCommentEdit(${commentId}, '${itemType}')"
-        class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm">
-        Save
-      </button>
-      <button 
-        onclick="cancelCommentEdit(${commentId})"
-        class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 rounded text-sm">
-        Cancel
-      </button>
-    `;
+    
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', () => saveCommentEdit(commentId, itemType));
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 rounded text-sm';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', () => cancelCommentEdit(commentId));
+    
+    buttonContainer.appendChild(saveBtn);
+    buttonContainer.appendChild(cancelBtn);
     textElement.appendChild(buttonContainer);
     textarea.focus();
     
@@ -311,14 +342,32 @@ function setupMentionAutocomplete(textareaId, dropdownId) {
 }
 
 function showMentionDropdown(dropdown, matches, textarea, atPosition) {
-  dropdown.innerHTML = matches.map(member => `
-    <div 
-      class="px-4 py-2 hover:bg-indigo-50 cursor-pointer"
-      onclick="insertMention('${member.username}', '${textarea.id}', '${dropdown.id}', ${atPosition})">
-      <div class="font-medium">${member.username}</div>
-      <div class="text-xs text-gray-500">${member.email}</div>
-    </div>
-  `).join('');
+  dropdown.innerHTML = matches.map(member => {
+    const username = escapeHtml(member.username);
+    const email = escapeHtml(member.email);
+    return `
+      <div 
+        class="mention-item px-4 py-2 hover:bg-indigo-50 cursor-pointer"
+        data-username="${username}"
+        data-textarea-id="${textarea.id}"
+        data-dropdown-id="${dropdown.id}"
+        data-at-position="${atPosition}">
+        <div class="font-medium">${username}</div>
+        <div class="text-xs text-gray-500">${email}</div>
+      </div>
+    `;
+  }).join('');
+  
+  // Add event listeners to mention items
+  dropdown.querySelectorAll('.mention-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const username = item.dataset.username;
+      const textareaId = item.dataset.textareaId;
+      const dropdownId = item.dataset.dropdownId;
+      const atPos = parseInt(item.dataset.atPosition);
+      insertMention(username, textareaId, dropdownId, atPos);
+    });
+  });
   
   dropdown.classList.remove('hidden');
 }
@@ -393,20 +442,32 @@ async function loadMentionNotifications() {
     }
     
     container.innerHTML = mentions.map(mention => `
-      <div class="p-4 border-b hover:bg-gray-50 ${mention.read ? 'opacity-60' : 'bg-indigo-50'}"
-           onclick="goToMention(${mention.item_id}, '${mention.comment_type}', ${mention.id})">
+      <div class="mention-item cursor-pointer p-4 border-b hover:bg-gray-50 ${mention.read ? 'opacity-60' : 'bg-indigo-50'}"
+           data-item-id="${mention.item_id}"
+           data-comment-type="${mention.comment_type}"
+           data-mention-id="${mention.id}">
         <div class="flex justify-between items-start">
           <div class="flex-1">
             <p class="text-sm font-medium text-gray-900">
-              @${mention.mentioned_by_username} mentioned you
+              @${escapeHtml(mention.mentioned_by_username)} mentioned you
             </p>
-            <p class="text-sm text-gray-600 mt-1">${mention.item_title}</p>
+            <p class="text-sm text-gray-600 mt-1">${escapeHtml(mention.item_title)}</p>
             <p class="text-xs text-gray-500 mt-1">${getTimeAgo(mention.created_at)}</p>
           </div>
           ${!mention.read ? '<div class="w-2 h-2 bg-indigo-600 rounded-full"></div>' : ''}
         </div>
       </div>
     `).join('');
+    
+    // Add event listeners for mention items
+    container.querySelectorAll('.mention-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const itemId = parseInt(item.dataset.itemId);
+        const commentType = item.dataset.commentType;
+        const mentionId = parseInt(item.dataset.mentionId);
+        goToMention(itemId, commentType, mentionId);
+      });
+    });
     
   } catch (error) {
     console.error('Error loading mentions:', error);
@@ -534,6 +595,23 @@ async function loadItemDetailComments() {
     comments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     container.innerHTML = comments.map(comment => renderComment(comment, currentItemType)).join('');
     
+    // Add event listeners for edit/delete buttons
+    container.querySelectorAll('.edit-comment-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const commentId = parseInt(btn.dataset.commentId);
+        const itemType = btn.dataset.itemType;
+        editComment(commentId, itemType);
+      });
+    });
+    
+    container.querySelectorAll('.delete-comment-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const commentId = parseInt(btn.dataset.commentId);
+        const itemType = btn.dataset.itemType;
+        deleteComment(commentId, itemType);
+      });
+    });
+    
   } catch (error) {
     console.error('Error loading comments:', error);
   }
@@ -568,6 +646,27 @@ async function addItemDetailComment() {
 
 if (typeof window !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
+    // Add event listeners for notification bell and modal buttons
+    const bellBtn = document.getElementById('mention-bell-btn');
+    if (bellBtn) {
+      bellBtn.addEventListener('click', toggleMentionNotifications);
+    }
+    
+    const markAllReadBtn = document.getElementById('mark-all-read-btn');
+    if (markAllReadBtn) {
+      markAllReadBtn.addEventListener('click', markAllMentionsRead);
+    }
+    
+    const closeModalBtn = document.getElementById('close-item-detail-btn');
+    if (closeModalBtn) {
+      closeModalBtn.addEventListener('click', closeItemDetailModal);
+    }
+    
+    const addCommentBtn = document.getElementById('add-item-detail-comment-btn');
+    if (addCommentBtn) {
+      addCommentBtn.addEventListener('click', addItemDetailComment);
+    }
+    
     if (AuthManager.isAuthenticated) {
       loadUnreadMentionCount();
       setInterval(loadUnreadMentionCount, 30000);

@@ -278,8 +278,10 @@ async function renderKanbanBoard() {
     
     const allItems = itemsToDisplay;
     
-    // Load relationship counts for ALL items first (BEFORE rendering)
+    // Load relationship counts and comment counts for ALL items first (BEFORE rendering)
     const relationshipCounts = {};
+    const commentCounts = {};
+    
     await Promise.all(allItems.map(async (item) => {
         try {
             const endpoint = item.type === 'issue' ? 'issues' : 'action-items';
@@ -294,6 +296,18 @@ async function renderKanbanBoard() {
         } catch (error) {
             console.error(`Error loading relationships for ${item.type} ${item.id}:`, error);
             relationshipCounts[`${item.type}-${item.id}`] = 0;
+        }
+        
+        try {
+            const endpoint = item.type === 'issue' ? 'issues' : 'action-items';
+            const commentResponse = await axios.get(
+                `/api/${endpoint}/${item.id}/comments`,
+                { withCredentials: true }
+            );
+            commentCounts[`${item.type}-${item.id}`] = commentResponse.data.length;
+        } catch (error) {
+            console.error(`Error loading comments for ${item.type} ${item.id}:`, error);
+            commentCounts[`${item.type}-${item.id}`] = 0;
         }
     }));
     
@@ -313,9 +327,10 @@ async function renderKanbanBoard() {
                 container.innerHTML = columnItems
                     .map((item) => {
                         const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
+                        const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
                         
                         return `
-                    <div class="kanban-card ${getAICardBackgroundClass(item)} rounded p-3 shadow-sm ${getAICardBorderClass(item)} border-l-4 ${!item.created_by_ai ? getBorderColor(item.priority || "medium") : ''} cursor-move hover:shadow-md transition-shadow"
+                    <div class="kanban-card ${getAICardBackgroundClass(item)} rounded p-3 shadow-sm ${getAICardBorderClass(item)} border-l-4 ${!item.created_by_ai ? getBorderColor(item.priority || "medium") : ''} cursor-pointer hover:shadow-md transition-shadow"
                          draggable="true"
                          data-item-id="${item.id}"
                          data-item-type="${item.type || 'issue'}">
@@ -340,7 +355,7 @@ async function renderKanbanBoard() {
                             <span>${item.assignee || "Unassigned"}</span>
                             <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
                         </div>
-                        <div class="mt-2 pt-2 border-t border-gray-100">
+                        <div class="mt-2 pt-2 border-t border-gray-100 space-y-1">
                             <button class="manage-relationships-btn flex items-center text-xs ${relCount > 0 ? 'text-blue-600 font-medium' : 'text-gray-600'} hover:text-blue-700 transition-colors w-full" 
                                     data-item-id="${item.id}" 
                                     data-item-type="${item.type || 'issue'}" 
@@ -350,6 +365,15 @@ async function renderKanbanBoard() {
                                 </svg>
                                 <span>Relationships</span>
                                 ${relCount > 0 ? `<span class="ml-auto px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">${relCount}</span>` : ''}
+                            </button>
+                            <button class="view-comments-btn flex items-center text-xs ${commentCount > 0 ? 'text-indigo-600 font-medium' : 'text-gray-600'} hover:text-indigo-700 transition-colors w-full" 
+                                    data-item-id="${item.id}" 
+                                    data-item-type="${item.type || 'issue'}">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                                </svg>
+                                <span>Comments</span>
+                                ${commentCount > 0 ? `<span class="ml-auto px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">${commentCount}</span>` : ''}
                             </button>
                         </div>
                     </div>
@@ -362,6 +386,20 @@ async function renderKanbanBoard() {
             // Add drag and drop event listeners to cards
             container.querySelectorAll('.kanban-card').forEach(card => {
                 card.addEventListener('dragstart', handleDragStart);
+                card.addEventListener('dragend', handleDragEnd);
+                
+                // Add click handler to open item detail modal
+                card.addEventListener('click', function(e) {
+                    // Don't open modal if we just finished dragging
+                    if (isDragging) return;
+                    
+                    // Only open modal if clicking on the card itself, not buttons
+                    if (!e.target.closest('button')) {
+                        const itemId = parseInt(this.getAttribute('data-item-id'));
+                        const itemType = this.getAttribute('data-item-type');
+                        openItemDetailModal(itemId, itemType);
+                    }
+                });
             });
             
             // Add relationship button listeners
@@ -375,6 +413,16 @@ async function renderKanbanBoard() {
                 });
             });
             
+            // Add comment button listeners
+            container.querySelectorAll('.view-comments-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent drag start
+                    const itemId = parseInt(this.getAttribute('data-item-id'));
+                    const itemType = this.getAttribute('data-item-type');
+                    openItemDetailModal(itemId, itemType);
+                });
+            });
+            
             // Add drop zone listeners to column (always, even if empty)
             container.addEventListener('dragover', handleDragOver);
             container.addEventListener('drop', handleDrop);
@@ -384,13 +432,33 @@ async function renderKanbanBoard() {
 
 // Drag and drop handlers
 let draggedItem = null;
+let isDragging = false;
 
 function handleDragStart(e) {
+    // Prevent drag from button regions
+    if (e.target.closest('button')) {
+        e.preventDefault();
+        return;
+    }
+    
+    isDragging = true;
+    const itemType = e.target.dataset.itemType;
+    // Normalize type: 'action' -> 'action-item' for consistency with API endpoints
+    const normalizedType = itemType === 'action' ? 'action-item' : itemType;
+    
     draggedItem = {
         id: e.target.dataset.itemId,
-        type: e.target.dataset.itemType
+        type: normalizedType
     };
     e.target.style.opacity = '0.5';
+}
+
+function handleDragEnd(e) {
+    e.target.style.opacity = '1';
+    // Reset dragging flag after a short delay to prevent immediate click
+    setTimeout(() => {
+        isDragging = false;
+    }, 50);
 }
 
 function handleDragOver(e) {

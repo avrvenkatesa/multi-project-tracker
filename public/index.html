@@ -37,7 +37,7 @@
                                 <!-- Mention Notifications Bell -->
                                 <div class="relative">
                                     <button 
-                                        onclick="toggleMentionNotifications()"
+                                        id="mention-bell-btn"
                                         class="relative p-2 text-white hover:bg-blue-700 rounded-lg transition">
                                         <span class="text-2xl">🔔</span>
                                         <span id="mention-count-badge" class="hidden absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">0</span>
@@ -47,7 +47,7 @@
                                     <div id="mention-notifications-dropdown" class="hidden absolute right-0 mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
                                         <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                                             <h3 class="font-semibold text-gray-900">Mentions</h3>
-                                            <button onclick="markAllMentionsRead()" class="text-sm text-indigo-600 hover:text-indigo-800">
+                                            <button id="mark-all-read-btn" class="text-sm text-indigo-600 hover:text-indigo-800">
                                                 Mark all read
                                             </button>
                                         </div>
@@ -509,7 +509,7 @@
                 <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
                     <div class="flex items-center justify-between p-6 border-b">
                         <h3 id="item-detail-title" class="text-xl font-semibold text-gray-800"></h3>
-                        <button onclick="closeItemDetailModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                        <button id="close-item-detail-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                     </div>
                     
                     <div class="p-6">
@@ -542,7 +542,7 @@
                                         Supports <strong>@mentions</strong> and basic <strong>markdown</strong>
                                     </div>
                                     <button 
-                                        onclick="addItemDetailComment()"
+                                        id="add-item-detail-comment-btn"
                                         class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
                                         Add Comment
                                     </button>
