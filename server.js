@@ -2836,7 +2836,9 @@ app.post('/api/issues/:issueId/comments', authenticateToken, async (req, res) =>
       const mentionResult = await client.query(`
         SELECT id, username 
         FROM users 
-        WHERE username = ANY($1::text[])
+        WHERE LOWER(REPLACE(username, ' ', '')) = ANY(
+          SELECT LOWER(unnest($1::text[]))
+        )
       `, [mentionedUsernames]);
       
       mentionedUserIds = mentionResult.rows.map(u => u.id);
@@ -2916,7 +2918,10 @@ app.put('/api/issues/:issueId/comments/:commentId', authenticateToken, async (re
     let mentionedUserIds = [];
     if (mentionedUsernames.length > 0) {
       const mentionResult = await pool.query(`
-        SELECT id FROM users WHERE username = ANY($1::text[])
+        SELECT id FROM users 
+        WHERE LOWER(REPLACE(username, ' ', '')) = ANY(
+          SELECT LOWER(unnest($1::text[]))
+        )
       `, [mentionedUsernames]);
       mentionedUserIds = mentionResult.rows.map(u => u.id);
     }
@@ -3044,7 +3049,9 @@ app.post('/api/action-items/:itemId/comments', authenticateToken, async (req, re
     if (mentionedUsernames.length > 0) {
       const mentionResult = await client.query(`
         SELECT id FROM users 
-        WHERE username = ANY($1::text[])
+        WHERE LOWER(REPLACE(username, ' ', '')) = ANY(
+          SELECT LOWER(unnest($1::text[]))
+        )
       `, [mentionedUsernames]);
       mentionedUserIds = mentionResult.rows.map(u => u.id);
     }
@@ -3123,7 +3130,10 @@ app.put('/api/action-items/:itemId/comments/:commentId', authenticateToken, asyn
     let mentionedUserIds = [];
     if (mentionedUsernames.length > 0) {
       const mentionResult = await pool.query(`
-        SELECT id FROM users WHERE username = ANY($1::text[])
+        SELECT id FROM users 
+        WHERE LOWER(REPLACE(username, ' ', '')) = ANY(
+          SELECT LOWER(unnest($1::text[]))
+        )
       `, [mentionedUsernames]);
       mentionedUserIds = mentionResult.rows.map(u => u.id);
     }
