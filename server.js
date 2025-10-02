@@ -13,6 +13,7 @@ const { OpenAI } = require('openai');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const stringSimilarity = require('string-similarity');
+const notificationService = require('./services/notificationService');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -3725,6 +3726,16 @@ app.post('/api/issues/:issueId/comments', authenticateToken, async (req, res) =>
           )
           VALUES ($1, 'issue', $2, $3, $4, $5)
         `, [mentionedUserId, newComment.id, issueId, issue.title, req.user.id]);
+        
+        notificationService.sendMentionNotification({
+          mentionedUserId,
+          mentionerName: req.user.username,
+          itemTitle: issue.title,
+          itemType: 'issue',
+          itemId: issueId,
+          projectId: issue.project_id,
+          commentPreview: comment
+        }).catch(err => console.error('Error sending mention email:', err));
       }
     }
     
@@ -3971,6 +3982,16 @@ app.post('/api/action-items/:itemId/comments', authenticateToken, async (req, re
           )
           VALUES ($1, 'action_item', $2, $3, $4, $5)
         `, [mentionedUserId, newComment.id, itemId, item.title, req.user.id]);
+        
+        notificationService.sendMentionNotification({
+          mentionedUserId,
+          mentionerName: req.user.username,
+          itemTitle: item.title,
+          itemType: 'action item',
+          itemId: itemId,
+          projectId: item.project_id,
+          commentPreview: comment
+        }).catch(err => console.error('Error sending mention email:', err));
       }
     }
     
