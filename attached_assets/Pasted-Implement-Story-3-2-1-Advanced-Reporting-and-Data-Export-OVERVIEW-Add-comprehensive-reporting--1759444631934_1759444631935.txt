@@ -1,0 +1,415 @@
+Implement Story 3.2.1: Advanced Reporting and Data Export
+
+OVERVIEW:
+Add comprehensive reporting system with PDF generation, CSV export, multiple report types, and data visualization for stakeholder insights.
+
+STEP 1: Install Dependencies (15 minutes)
+
+Install required packages:
+npm install puppeteer-core @sparticuz/chromium csv-writer
+
+Note: We use puppeteer-core with chromium binary for serverless environments like Replit
+
+STEP 2: Create Report Service (60 minutes)
+
+Create services/reportService.js:
+
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
+const fs = require('fs');
+const path = require('path');
+
+class ReportService {
+  
+  async generatePDF(html, options = {}) {
+    let browser;
+    try {
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless
+      });
+      
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '20mm', right: '15mm', bottom: '20mm', left: '15mm' }
+      });
+      
+      return pdfBuffer;
+    } finally {
+      if (browser) await browser.close();
+    }
+  }
+
+  async generateExecutiveSummary(projectId, dateRange) {
+    // Fetch project stats from dashboard
+    const stats = await this.getProjectStats(projectId, dateRange);
+    const trends = await this.getProjectTrends(projectId, dateRange);
+    const team = await this.getTeamMetrics(projectId, dateRange);
+    
+    const html = this.renderExecutiveSummaryTemplate({
+      stats,
+      trends,
+      team,
+      dateRange,
+      generatedAt: new Date().toISOString()
+    });
+    
+    return await this.generatePDF(html);
+  }
+
+  async generateDetailedReport(projectId, dateRange) {
+    const stats = await this.getProjectStats(projectId, dateRange);
+    const issues = await this.getIssues(projectId, dateRange);
+    const actionItems = await this.getActionItems(projectId, dateRange);
+    const activity = await this.getActivity(projectId, dateRange);
+    
+    const html = this.renderDetailedReportTemplate({
+      stats,
+      issues,
+      actionItems,
+      activity,
+      dateRange
+    });
+    
+    return await this.generatePDF(html);
+  }
+
+  async generateTeamPerformanceReport(projectId, dateRange) {
+    const teamMetrics = await this.getTeamMetrics(projectId, dateRange);
+    const memberDetails = await this.getMemberDetails(projectId, dateRange);
+    
+    const html = this.renderTeamPerformanceTemplate({
+      teamMetrics,
+      memberDetails,
+      dateRange
+    });
+    
+    return await this.generatePDF(html);
+  }
+
+  async generateTimeAnalysisReport(projectId, dateRange) {
+    const burndown = await this.calculateBurndown(projectId, dateRange);
+    const velocity = await this.calculateVelocity(projectId, dateRange);
+    const cycleTime = await this.calculateCycleTime(projectId, dateRange);
+    
+    const html = this.renderTimeAnalysisTemplate({
+      burndown,
+      velocity,
+      cycleTime,
+      dateRange
+    });
+    
+    return await this.generatePDF(html);
+  }
+
+  // Helper methods for data fetching
+  async getProjectStats(projectId, dateRange) {
+    // Reuse dashboard stats query with date filtering
+  }
+
+  async calculateBurndown(projectId, dateRange) {
+    // Query items created vs completed by date
+    // Return array of {date, remaining, completed}
+  }
+
+  async calculateVelocity(projectId, dateRange) {
+    // Calculate items completed per week
+    // Return array of {week, itemsCompleted}
+  }
+
+  async calculateCycleTime(projectId, dateRange) {
+    // Calculate time from "To Do" to "Done"
+    // Return average and distribution
+  }
+
+  // Template rendering methods
+  renderExecutiveSummaryTemplate(data) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+          .header { background: #2563eb; color: white; padding: 20px; margin: -20px -20px 20px -20px; }
+          .metric-card { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px; }
+          .metric-value { font-size: 36px; font-weight: bold; color: #2563eb; }
+          .chart { height: 200px; background: #f3f4f6; margin: 10px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Executive Summary</h1>
+          <p>Project Report - ${new Date(data.generatedAt).toLocaleDateString()}</p>
+        </div>
+        
+        <div class="metric-card">
+          <h3>Project Completion</h3>
+          <div class="metric-value">${data.stats.completionRate}%</div>
+        </div>
+        
+        <div class="metric-card">
+          <h3>Total Items</h3>
+          <p>Issues: ${data.stats.totalIssues} | Action Items: ${data.stats.totalActionItems}</p>
+        </div>
+        
+        <div class="metric-card">
+          <h3>Team Performance</h3>
+          <p>${data.team.length} team members | ${data.stats.totalComments} comments</p>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  // Additional template methods for other report types...
+}
+
+module.exports = new ReportService();
+
+STEP 3: CSV Export Service (30 minutes)
+
+Create services/csvExportService.js:
+
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const path = require('path');
+
+class CSVExportService {
+  
+  async exportIssues(projectId) {
+    const issues = await pool.query(`
+      SELECT 
+        i.id, i.title, i.description, i.status, i.priority,
+        i.category, i.phase, i.component,
+        u.username as assigned_to,
+        i.due_date, i.created_at, i.updated_at
+      FROM issues i
+      LEFT JOIN users u ON i.assigned_to = u.id
+      WHERE i.project_id = $1
+      ORDER BY i.created_at DESC
+    `, [projectId]);
+    
+    const filename = `issues-${projectId}-${Date.now()}.csv`;
+    const filepath = path.join('/tmp', filename);
+    
+    const csvWriter = createCsvWriter({
+      path: filepath,
+      header: [
+        { id: 'id', title: 'ID' },
+        { id: 'title', title: 'Title' },
+        { id: 'description', title: 'Description' },
+        { id: 'status', title: 'Status' },
+        { id: 'priority', title: 'Priority' },
+        { id: 'category', title: 'Category' },
+        { id: 'assigned_to', title: 'Assigned To' },
+        { id: 'due_date', title: 'Due Date' },
+        { id: 'created_at', title: 'Created At' }
+      ]
+    });
+    
+    await csvWriter.writeRecords(issues.rows);
+    return { filename, filepath };
+  }
+
+  async exportActionItems(projectId) {
+    // Similar to exportIssues
+  }
+
+  async exportFullProject(projectId) {
+    // Export issues, action items, and comments as separate CSV files
+    // Return as ZIP archive
+  }
+}
+
+module.exports = new CSVExportService();
+
+STEP 4: Backend API Endpoints (60 minutes)
+
+Add to server.js:
+
+const reportService = require('./services/reportService');
+const csvExportService = require('./services/csvExportService');
+
+// Generate PDF report
+app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { reportType, dateRange } = req.body;
+    
+    let pdfBuffer;
+    
+    switch (reportType) {
+      case 'executive':
+        pdfBuffer = await reportService.generateExecutiveSummary(projectId, dateRange);
+        break;
+      case 'detailed':
+        pdfBuffer = await reportService.generateDetailedReport(projectId, dateRange);
+        break;
+      case 'team':
+        pdfBuffer = await reportService.generateTeamPerformanceReport(projectId, dateRange);
+        break;
+      case 'time':
+        pdfBuffer = await reportService.generateTimeAnalysisReport(projectId, dateRange);
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid report type' });
+    }
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=report-${projectId}-${Date.now()}.pdf`);
+    res.send(pdfBuffer);
+    
+  } catch (error) {
+    console.error('Report generation error:', error);
+    res.status(500).json({ error: 'Failed to generate report' });
+  }
+});
+
+// Export CSV
+app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { type } = req.query; // 'issues' | 'actions' | 'full'
+    
+    let result;
+    
+    if (type === 'issues') {
+      result = await csvExportService.exportIssues(projectId);
+    } else if (type === 'actions') {
+      result = await csvExportService.exportActionItems(projectId);
+    } else {
+      result = await csvExportService.exportFullProject(projectId);
+    }
+    
+    res.download(result.filepath, result.filename, (err) => {
+      // Clean up file after download
+      fs.unlinkSync(result.filepath);
+    });
+    
+  } catch (error) {
+    console.error('CSV export error:', error);
+    res.status(500).json({ error: 'Failed to export CSV' });
+  }
+});
+
+STEP 5: Frontend Report Configuration (60 minutes)
+
+Create public/js/pages/reports.js:
+
+class ReportsPage {
+  
+  showReportModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-content max-w-2xl">
+        <div class="modal-header">
+          <h2 class="text-xl font-bold">Generate Report</h2>
+          <button onclick="this.closest('.modal-overlay').remove()" class="btn-icon">×</button>
+        </div>
+        
+        <form id="reportForm" class="modal-body space-y-4">
+          <!-- Report Type -->
+          <div>
+            <label class="block font-medium mb-2">Report Type</label>
+            <select name="reportType" class="input w-full" required>
+              <option value="executive">Executive Summary (1 page)</option>
+              <option value="detailed">Detailed Project Report</option>
+              <option value="team">Team Performance Report</option>
+              <option value="time">Time Analysis Report</option>
+            </select>
+          </div>
+          
+          <!-- Date Range -->
+          <div>
+            <label class="block font-medium mb-2">Date Range</label>
+            <div class="grid grid-cols-2 gap-4">
+              <input type="date" name="startDate" class="input" required>
+              <input type="date" name="endDate" class="input" required>
+            </div>
+          </div>
+          
+          <!-- Format -->
+          <div>
+            <label class="block font-medium mb-2">Export Format</label>
+            <select name="format" class="input w-full">
+              <option value="pdf">PDF Report</option>
+              <option value="csv">CSV Data Export</option>
+            </select>
+          </div>
+          
+          <div class="modal-footer">
+            <button type="button" onclick="this.closest('.modal-overlay').remove()" class="btn btn-outline">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">
+              Generate Report
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    document.getElementById('reportForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await this.generateReport(new FormData(e.target));
+      modal.remove();
+    });
+  }
+  
+  async generateReport(formData) {
+    const reportType = formData.get('reportType');
+    const format = formData.get('format');
+    const dateRange = {
+      start: formData.get('startDate'),
+      end: formData.get('endDate')
+    };
+    
+    try {
+      if (format === 'pdf') {
+        const response = await fetch(`/api/projects/${this.projectId}/reports/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ reportType, dateRange })
+        });
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `report-${reportType}-${Date.now()}.pdf`;
+        a.click();
+      } else {
+        window.location.href = `/api/projects/${this.projectId}/export/csv?type=full`;
+      }
+    } catch (error) {
+      console.error('Report generation error:', error);
+      alert('Failed to generate report');
+    }
+  }
+}
+
+STEP 6: Add Navigation (15 minutes)
+
+Add "Reports" button to project pages:
+- Dashboard page
+- Kanban board page
+- Project card menu
+
+DELIVERABLES:
+1. Report service with PDF generation
+2. CSV export service
+3. 5 report types (executive, detailed, team, time, CSV)
+4. 2 backend endpoints
+5. Frontend report configuration modal
+6. Download functionality
+
+Begin implementation.
