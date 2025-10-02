@@ -381,18 +381,11 @@ function initializeCharts() {
   const stats = dashboardData.stats;
   const trends = dashboardData.trends;
   
-  console.log('Initializing charts with data:', {
-    issuesByStatus: stats.issuesByStatus,
-    issuesByPriority: stats.issuesByPriority
-  });
-  
   // Status pie chart
   const statusCtx = document.getElementById('statusChart');
   if (statusCtx) {
     const statusLabels = Object.keys(stats.issuesByStatus);
     const statusData = Object.values(stats.issuesByStatus);
-    
-    console.log('Status chart - labels:', statusLabels, 'data:', statusData);
     
     if (statusLabels.length === 0) {
       statusCtx.parentElement.innerHTML = `
@@ -431,8 +424,6 @@ function initializeCharts() {
   if (priorityCtx) {
     const priorityLabels = Object.keys(stats.issuesByPriority);
     const priorityData = Object.values(stats.issuesByPriority);
-    
-    console.log('Priority chart - labels:', priorityLabels, 'data:', priorityData);
     
     if (priorityLabels.length === 0) {
       priorityCtx.parentElement.innerHTML = `
