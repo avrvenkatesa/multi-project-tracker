@@ -1,0 +1,228 @@
+Implement Story 3.1.1: Project Dashboard with Metrics and Analytics
+
+OVERVIEW:
+Create a comprehensive project dashboard showing key metrics, activity feed, team performance, and visual charts for project managers to assess project health at a glance.
+
+STEP 1: Backend API Endpoints (90 minutes)
+
+Add these endpoints to server.js after the team management endpoints:
+
+1. GET /api/projects/:projectId/dashboard/stats
+   Auth: authenticateToken (any project member)
+   Returns:
+   {
+     totalIssues: number,
+     totalActionItems: number,
+     issuesByStatus: { "To Do": 5, "In Progress": 3, "Done": 12 },
+     issuesByPriority: { "High": 4, "Medium": 8, "Low": 8 },
+     actionItemsByStatus: { "Not Started": 2, "In Progress": 5, "Completed": 10 },
+     completionRate: 0.65, // (Done + Completed) / Total
+     overdueCount: 3,
+     upcomingDeadlines: [ {id, title, dueDate, type} ], // Next 5 items
+     transcriptsAnalyzed: 8,
+     aiItemsCreated: 24,
+     totalComments: 156
+   }
+
+   SQL queries needed:
+   - COUNT issues by status, priority
+   - COUNT action_items by status
+   - COUNT overdue (due_date < NOW() AND status != 'Done')
+   - SELECT next 5 items with due_date > NOW() ORDER BY due_date
+   - COUNT meeting_transcripts
+   - COUNT items WHERE created_via_ai = true
+   - COUNT from issue_comments + action_item_comments
+
+2. GET /api/projects/:projectId/dashboard/activity
+   Auth: authenticateToken
+   Query params: ?limit=10 (default 10, max 50)
+   Returns array of recent activities:
+   [
+     {
+       id: number,
+       type: "issue_created" | "action_item_created" | "comment_added" | "status_changed" | "transcript_uploaded",
+       itemId: number,
+       itemTitle: string,
+       userName: string,
+       timestamp: ISO date,
+       details: string // "Changed status to Done", "Added comment", etc
+     }
+   ]
+
+   Implementation approach:
+   - Query audit logs or activity tables if they exist
+   - OR union queries from: issues (created_at, updated_at), action_items, comments, meeting_transcripts
+   - ORDER BY timestamp DESC LIMIT
+
+3. GET /api/projects/:projectId/dashboard/team-metrics
+   Auth: authenticateToken
+   Returns array of team member contributions:
+   [
+     {
+       userId: number,
+       userName: string,
+       userEmail: string,
+       role: string, // from project_members
+       issuesAssigned: number,
+       issuesCompleted: number,
+       actionItemsAssigned: number,
+       actionItemsCompleted: number,
+       commentsCount: number,
+       lastActive: ISO date
+     }
+   ]
+
+   SQL: JOIN project_members with users, aggregate counts from issues/action_items/comments
+
+4. GET /api/projects/:projectId/dashboard/trends
+   Auth: authenticateToken
+   Query params: ?days=30 (default 30, max 90)
+   Returns time-series data for charts:
+   {
+     issuesTrend: [ {date: "2025-10-01", created: 5, completed: 3} ],
+     actionItemsTrend: [ {date: "2025-10-01", created: 8, completed: 6} ],
+     activityTrend: [ {date: "2025-10-01", count: 23} ]
+   }
+
+   SQL: GROUP BY DATE(created_at) for last N days
+
+Error handling: Return 403 if user not project member, 404 if project not found
+
+STEP 2: Frontend Dashboard Page (90 minutes)
+
+Create public/dashboard.html:
+- Blue header with project name
+- Navigation: Back to Projects, Back to Kanban
+- Main container: <div id="dashboardContainer"></div>
+- Include Chart.js from CDN: https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js
+- Include teamManagement.js utilities for auth checking
+
+Create public/js/pages/dashboard.js:
+
+Class structure:
+class ProjectDashboard {
+  constructor(projectId)
+  async init() - Load all data and render
+  async loadStats() - Fetch statistics
+  async loadActivity() - Fetch activity feed
+  async loadTeamMetrics() - Fetch team metrics
+  async loadTrends() - Fetch trend data
+  render() - Build complete dashboard HTML
+  renderStatsCards() - Metric cards at top
+  renderCharts() - Pie charts and line charts
+  renderActivityFeed() - Recent activity list
+  renderTeamMetrics() - Team member table
+}
+
+Dashboard layout (grid):
+┌─────────────────────────────────────────┐
+│  Stats Cards (Issues, Actions, Complete)│
+├──────────────┬──────────────────────────┤
+│ Status Chart │ Priority Chart           │
+├──────────────┴──────────────────────────┤
+│ Activity Trend (Line Chart - 30 days)   │
+├──────────────────────────────────────────┤
+│ Recent Activity Feed │ Team Metrics     │
+└──────────────────────┴──────────────────┘
+
+Stats cards (top row):
+- Total Issues (with icon)
+- Total Action Items (with icon)
+- Completion Rate (percentage with progress bar)
+- Overdue Items (red if > 0)
+
+Charts using Chart.js:
+- Pie chart: Issues by status (colors: gray, yellow, green)
+- Pie chart: Issues by priority (colors: red, orange, blue)
+- Line chart: Activity trend over 30 days
+
+Activity feed:
+- List of last 10 activities
+- Format: "John Doe created issue #42: Fix login bug (2 hours ago)"
+- Icons for different activity types
+- Relative timestamps (moments ago, hours ago, days ago)
+
+Team metrics table:
+- Columns: Name, Role, Assigned, Completed, Comments, Last Active
+- Sort by completion rate (highest first)
+- Role badges matching team management page
+
+STEP 3: Navigation Integration (15 minutes)
+
+Update public/app.js:
+- Add "Dashboard" button to project cards
+- Position next to "Team" button
+- Format: <button class="btn-sm bg-purple-600">Dashboard</button>
+- Link: /dashboard.html?projectId={id}
+
+Update public/kanban.html (or project detail page):
+- Add "Dashboard" link to header navigation
+- Position between "Board" and "AI Analysis"
+
+STEP 4: Styling and Polish (15 minutes)
+
+Dashboard-specific CSS (inline or in dashboard.html):
+- Metric cards: white background, shadow, rounded corners, padding
+- Large numbers: 3xl font size, bold, colored
+- Charts: max-height 300px, responsive
+- Activity items: border-left colored bar, padding, hover effect
+- Team table: striped rows, sticky header
+
+Color scheme:
+- Issues: Blue (#3B82F6)
+- Action Items: Green (#10B981)
+- Completed: Purple (#8B5CF6)
+- Overdue: Red (#EF4444)
+
+STEP 5: Error Handling and Loading States (15 minutes)
+
+Add to dashboard.js:
+- Loading spinner while fetching data
+- Error messages if API calls fail
+- Empty states: "No activity yet", "No team members"
+- Retry button on errors
+- Skeleton loaders for charts before data loads
+
+STEP 6: Performance Optimization (15 minutes)
+
+Backend:
+- Add database indexes if queries slow:
+  - CREATE INDEX idx_issues_project_status ON issues(project_id, status);
+  - CREATE INDEX idx_action_items_project_status ON action_items(project_id, status);
+  
+- Use connection pooling (already configured)
+
+Frontend:
+- Cache dashboard data for 60 seconds
+- Debounce auto-refresh if implemented
+- Lazy load charts (render after data arrives)
+
+REQUIREMENTS:
+- Use existing cookie authentication (credentials: 'include')
+- Match existing blue header styling
+- Mobile responsive (stack on small screens)
+- No external dependencies except Chart.js
+- All fetch calls include error handling
+- Console.log all API responses for debugging
+
+TESTING CHECKLIST:
+- Load dashboard for project with data
+- Verify all statistics are accurate
+- Check charts render correctly
+- Test activity feed shows recent actions
+- Verify team metrics match actual data
+- Test on mobile viewport
+- Test with project having no data (empty states)
+- Test without Manager permissions (should still work)
+
+DELIVERABLES:
+1. 4 new API endpoints in server.js
+2. dashboard.html page
+3. dashboard.js script
+4. Navigation updates in app.js
+5. Chart.js integration
+6. Mobile responsive layout
+
+Estimated time: 3-4 hours
+
+Begin implementation.

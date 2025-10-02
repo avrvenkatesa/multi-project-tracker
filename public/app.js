@@ -120,6 +120,11 @@ function setupEventListeners() {
     document.getElementById('create-issue-btn')?.addEventListener('click', showCreateIssue);
     document.getElementById('create-action-item-btn')?.addEventListener('click', showCreateActionItem);
     document.getElementById('ai-analysis-btn')?.addEventListener('click', showAIAnalysisModal);
+    document.getElementById('dashboard-btn')?.addEventListener('click', () => {
+        if (currentProject) {
+            window.location.href = `dashboard.html?projectId=${currentProject.id}`;
+        }
+    });
     
     // Relationship modal buttons
     document.getElementById('close-relationship-modal-btn')?.addEventListener('click', closeRelationshipModal);
@@ -209,11 +214,16 @@ function renderProjects() {
                     </span>
                 </div>
             </div>
-            <div class="mt-4 pt-4 border-t border-gray-200">
+            <div class="mt-4 pt-4 border-t border-gray-200 flex space-x-2">
+                <a href="dashboard.html?projectId=${project.id}" 
+                   class="flex-1 text-center bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700"
+                   data-dashboard-link>
+                    Dashboard
+                </a>
                 <a href="team.html?projectId=${project.id}" 
-                   class="inline-block bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                   class="flex-1 text-center bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
                    data-team-link>
-                    Team →
+                    Team
                 </a>
             </div>
         </div>

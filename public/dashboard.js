@@ -1,0 +1,535 @@
+// Project Dashboard
+let currentProjectId = null;
+let currentUser = null;
+let dashboardData = {
+  stats: null,
+  activity: null,
+  teamMetrics: null,
+  trends: null
+};
+let charts = {};
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('Dashboard page initializing...');
+  
+  // Get project ID from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  currentProjectId = urlParams.get('projectId');
+  
+  if (!currentProjectId) {
+    showError('No project ID specified');
+    return;
+  }
+  
+  // Initialize auth
+  await AuthManager.init();
+  
+  if (!AuthManager.isAuthenticated) {
+    window.location.href = 'index.html';
+    return;
+  }
+  
+  currentUser = AuthManager.currentUser;
+  
+  // Setup navigation
+  document.getElementById('backToKanbanLink').href = `index.html?project=${currentProjectId}`;
+  
+  // Setup event listeners
+  setupEventListeners();
+  
+  // Load dashboard data
+  await loadDashboard();
+});
+
+// Setup event listeners
+function setupEventListeners() {
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => AuthManager.logout());
+  }
+  
+  const retryBtn = document.getElementById('retryBtn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => loadDashboard());
+  }
+}
+
+// Load all dashboard data
+async function loadDashboard() {
+  try {
+    showLoading();
+    
+    // Load project info first
+    await loadProjectInfo();
+    
+    // Load all dashboard data in parallel
+    await Promise.all([
+      loadStats(),
+      loadActivity(),
+      loadTeamMetrics(),
+      loadTrends()
+    ]);
+    
+    // Render the dashboard
+    renderDashboard();
+    
+  } catch (error) {
+    console.error('Error loading dashboard:', error);
+    showError(error.message || 'Failed to load dashboard');
+  }
+}
+
+// Load project information
+async function loadProjectInfo() {
+  try {
+    const response = await fetch('/api/projects', {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Failed to load project info');
+    
+    const projects = await response.json();
+    const project = projects.find(p => p.id === parseInt(currentProjectId));
+    
+    if (project) {
+      document.getElementById('projectNameHeader').textContent = project.name;
+    }
+  } catch (error) {
+    console.error('Error loading project info:', error);
+  }
+}
+
+// Load dashboard statistics
+async function loadStats() {
+  const response = await fetch(`/api/projects/${currentProjectId}/dashboard/stats`, {
+    credentials: 'include'
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to load statistics');
+  }
+  
+  dashboardData.stats = await response.json();
+  console.log('Stats loaded:', dashboardData.stats);
+}
+
+// Load activity feed
+async function loadActivity() {
+  const response = await fetch(`/api/projects/${currentProjectId}/dashboard/activity?limit=10`, {
+    credentials: 'include'
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to load activity');
+  }
+  
+  dashboardData.activity = await response.json();
+  console.log('Activity loaded:', dashboardData.activity.length, 'items');
+}
+
+// Load team metrics
+async function loadTeamMetrics() {
+  const response = await fetch(`/api/projects/${currentProjectId}/dashboard/team-metrics`, {
+    credentials: 'include'
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to load team metrics');
+  }
+  
+  dashboardData.teamMetrics = await response.json();
+  console.log('Team metrics loaded:', dashboardData.teamMetrics.length, 'members');
+}
+
+// Load trends data
+async function loadTrends() {
+  const response = await fetch(`/api/projects/${currentProjectId}/dashboard/trends?days=30`, {
+    credentials: 'include'
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to load trends');
+  }
+  
+  dashboardData.trends = await response.json();
+  console.log('Trends loaded:', dashboardData.trends);
+}
+
+// Render complete dashboard
+function renderDashboard() {
+  const container = document.getElementById('dashboardContent');
+  
+  container.innerHTML = `
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      ${renderStatsCards()}
+    </div>
+    
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      ${renderStatusChart()}
+      ${renderPriorityChart()}
+    </div>
+    
+    <!-- Trend Chart -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Activity Trend (30 Days)</h3>
+      <canvas id="activityTrendChart" class="w-full" style="max-height: 300px;"></canvas>
+    </div>
+    
+    <!-- Activity Feed and Team Metrics -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      ${renderActivityFeed()}
+      ${renderTeamMetrics()}
+    </div>
+  `;
+  
+  // Initialize charts after DOM is ready
+  setTimeout(() => {
+    initializeCharts();
+  }, 100);
+  
+  // Show content, hide loading
+  document.getElementById('loadingState').classList.add('hidden');
+  document.getElementById('dashboardContent').classList.remove('hidden');
+}
+
+// Render stats cards
+function renderStatsCards() {
+  const stats = dashboardData.stats;
+  
+  return `
+    <!-- Total Issues -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-gray-600">Total Issues</p>
+          <p class="text-3xl font-bold text-blue-600 mt-2">${stats.totalIssues}</p>
+        </div>
+        <div class="text-blue-600 text-4xl">📋</div>
+      </div>
+    </div>
+    
+    <!-- Total Action Items -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-gray-600">Action Items</p>
+          <p class="text-3xl font-bold text-green-600 mt-2">${stats.totalActionItems}</p>
+        </div>
+        <div class="text-green-600 text-4xl">✅</div>
+      </div>
+    </div>
+    
+    <!-- Completion Rate -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <div class="flex items-center justify-between">
+        <div class="flex-1">
+          <p class="text-sm font-medium text-gray-600">Completion Rate</p>
+          <p class="text-3xl font-bold text-purple-600 mt-2">${Math.round(stats.completionRate * 100)}%</p>
+          <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+            <div class="bg-purple-600 h-2 rounded-full" style="width: ${stats.completionRate * 100}%"></div>
+          </div>
+        </div>
+        <div class="text-purple-600 text-4xl">📊</div>
+      </div>
+    </div>
+    
+    <!-- Overdue Items -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-gray-600">Overdue Items</p>
+          <p class="text-3xl font-bold ${stats.overdueCount > 0 ? 'text-red-600' : 'text-gray-400'} mt-2">${stats.overdueCount}</p>
+        </div>
+        <div class="${stats.overdueCount > 0 ? 'text-red-600' : 'text-gray-400'} text-4xl">⚠️</div>
+      </div>
+    </div>
+  `;
+}
+
+// Render status chart
+function renderStatusChart() {
+  return `
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Issues by Status</h3>
+      <canvas id="statusChart" style="max-height: 300px;"></canvas>
+    </div>
+  `;
+}
+
+// Render priority chart
+function renderPriorityChart() {
+  return `
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Issues by Priority</h3>
+      <canvas id="priorityChart" style="max-height: 300px;"></canvas>
+    </div>
+  `;
+}
+
+// Render activity feed
+function renderActivityFeed() {
+  const activities = dashboardData.activity;
+  
+  const feedHtml = activities.length > 0 ? activities.map(activity => `
+    <div class="border-l-4 ${getActivityColor(activity.type)} bg-gray-50 p-3 mb-3 hover:bg-gray-100 transition">
+      <div class="flex items-start">
+        <span class="text-2xl mr-3">${getActivityIcon(activity.type)}</span>
+        <div class="flex-1">
+          <p class="text-sm text-gray-900">
+            <strong>${escapeHtml(activity.user_name)}</strong> ${activity.details}
+          </p>
+          <p class="text-xs text-gray-600 mt-1">${escapeHtml(activity.item_title)}</p>
+          <p class="text-xs text-gray-500 mt-1">${formatRelativeTime(activity.timestamp)}</p>
+        </div>
+      </div>
+    </div>
+  `).join('') : '<p class="text-gray-500 text-center py-8">No recent activity</p>';
+  
+  return `
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Recent Activity</h3>
+      <div class="space-y-2" style="max-height: 500px; overflow-y: auto;">
+        ${feedHtml}
+      </div>
+    </div>
+  `;
+}
+
+// Render team metrics table
+function renderTeamMetrics() {
+  const metrics = dashboardData.teamMetrics;
+  
+  const tableHtml = metrics.length > 0 ? `
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50 sticky top-0">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Member</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned</th>
+            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Completed</th>
+            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Comments</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          ${metrics.map((member, index) => `
+            <tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
+              <td class="px-4 py-3 whitespace-nowrap">
+                <div class="text-sm font-medium text-gray-900">${escapeHtml(member.user_name)}</div>
+                <div class="text-xs text-gray-500">${escapeHtml(member.user_email)}</div>
+              </td>
+              <td class="px-4 py-3 whitespace-nowrap">
+                <span class="px-2 py-1 text-xs font-semibold rounded ${getRoleColor(member.role)}">
+                  ${member.role}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-center text-sm text-gray-900">
+                ${parseInt(member.issues_assigned) + parseInt(member.action_items_assigned)}
+              </td>
+              <td class="px-4 py-3 text-center text-sm text-green-600 font-semibold">
+                ${parseInt(member.issues_completed) + parseInt(member.action_items_completed)}
+              </td>
+              <td class="px-4 py-3 text-center text-sm text-gray-900">
+                ${parseInt(member.comments_count)}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : '<p class="text-gray-500 text-center py-8">No team members</p>';
+  
+  return `
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Team Metrics</h3>
+      <div style="max-height: 500px; overflow-y: auto;">
+        ${tableHtml}
+      </div>
+    </div>
+  `;
+}
+
+// Initialize all charts
+function initializeCharts() {
+  const stats = dashboardData.stats;
+  const trends = dashboardData.trends;
+  
+  // Status pie chart
+  const statusCtx = document.getElementById('statusChart');
+  if (statusCtx) {
+    charts.status = new Chart(statusCtx, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(stats.issuesByStatus),
+        datasets: [{
+          data: Object.values(stats.issuesByStatus),
+          backgroundColor: ['#9CA3AF', '#FCD34D', '#34D399'],
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            position: 'bottom'
+          }
+        }
+      }
+    });
+  }
+  
+  // Priority pie chart
+  const priorityCtx = document.getElementById('priorityChart');
+  if (priorityCtx) {
+    charts.priority = new Chart(priorityCtx, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(stats.issuesByPriority),
+        datasets: [{
+          data: Object.values(stats.issuesByPriority),
+          backgroundColor: ['#EF4444', '#F97316', '#3B82F6'],
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            position: 'bottom'
+          }
+        }
+      }
+    });
+  }
+  
+  // Activity trend line chart
+  const trendCtx = document.getElementById('activityTrendChart');
+  if (trendCtx && trends.activityTrend) {
+    const dates = trends.activityTrend.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    const counts = trends.activityTrend.map(d => parseInt(d.count));
+    
+    charts.activityTrend = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: dates,
+        datasets: [{
+          label: 'Activity Count',
+          data: counts,
+          borderColor: '#8B5CF6',
+          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              precision: 0
+            }
+          }
+        }
+      }
+    });
+  }
+}
+
+// Helper: Get activity color
+function getActivityColor(type) {
+  const colors = {
+    'issue_created': 'border-blue-500',
+    'action_item_created': 'border-green-500',
+    'comment_added': 'border-purple-500',
+    'status_changed': 'border-yellow-500',
+    'transcript_uploaded': 'border-indigo-500'
+  };
+  return colors[type] || 'border-gray-500';
+}
+
+// Helper: Get activity icon
+function getActivityIcon(type) {
+  const icons = {
+    'issue_created': '📋',
+    'action_item_created': '✅',
+    'comment_added': '💬',
+    'status_changed': '🔄',
+    'transcript_uploaded': '📄'
+  };
+  return icons[type] || '•';
+}
+
+// Helper: Get role color
+function getRoleColor(role) {
+  switch (role) {
+    case 'Admin':
+      return 'bg-red-100 text-red-800';
+    case 'Manager':
+      return 'bg-blue-100 text-blue-800';
+    case 'Member':
+      return 'bg-green-100 text-green-800';
+    case 'Viewer':
+      return 'bg-gray-100 text-gray-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+}
+
+// Helper: Format relative time
+function formatRelativeTime(timestamp) {
+  const now = new Date();
+  const then = new Date(timestamp);
+  const diffMs = now - then;
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffSecs < 60) return 'Just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  
+  return then.toLocaleDateString();
+}
+
+// Helper: Escape HTML
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Show loading state
+function showLoading() {
+  document.getElementById('loadingState').classList.remove('hidden');
+  document.getElementById('dashboardContent').classList.add('hidden');
+  document.getElementById('errorState').classList.add('hidden');
+}
+
+// Show error state
+function showError(message) {
+  document.getElementById('loadingState').classList.add('hidden');
+  document.getElementById('dashboardContent').classList.add('hidden');
+  document.getElementById('errorState').classList.remove('hidden');
+  document.getElementById('errorMessage').textContent = message;
+}

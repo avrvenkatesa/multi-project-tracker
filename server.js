@@ -1011,6 +1011,452 @@ app.get('/api/projects/:projectId/invitations', authenticateToken, async (req, r
   }
 });
 
+// ============= DASHBOARD ROUTES =============
+
+// 1. GET /api/projects/:projectId/dashboard/stats - Get project statistics
+app.get('/api/projects/:projectId/dashboard/stats', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    console.log(`[DASHBOARD_STATS] User ${req.user.id} getting stats for project ${projectId}`);
+    
+    // Verify user is a project member
+    const memberCheck = await pool.query(`
+      SELECT * FROM project_members
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+    
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied. You are not a member of this project.' });
+    }
+    
+    // Get total counts
+    const totalIssuesResult = await pool.query(`
+      SELECT COUNT(*) as count FROM issues WHERE project_id = $1
+    `, [projectId]);
+    
+    const totalActionItemsResult = await pool.query(`
+      SELECT COUNT(*) as count FROM action_items WHERE project_id = $1
+    `, [projectId]);
+    
+    // Get issues by status
+    const issuesByStatusResult = await pool.query(`
+      SELECT status, COUNT(*) as count
+      FROM issues
+      WHERE project_id = $1
+      GROUP BY status
+    `, [projectId]);
+    
+    const issuesByStatus = {};
+    issuesByStatusResult.rows.forEach(row => {
+      issuesByStatus[row.status] = parseInt(row.count);
+    });
+    
+    // Get issues by priority
+    const issuesByPriorityResult = await pool.query(`
+      SELECT priority, COUNT(*) as count
+      FROM issues
+      WHERE project_id = $1
+      GROUP BY priority
+    `, [projectId]);
+    
+    const issuesByPriority = {};
+    issuesByPriorityResult.rows.forEach(row => {
+      issuesByPriority[row.priority] = parseInt(row.count);
+    });
+    
+    // Get action items by status
+    const actionItemsByStatusResult = await pool.query(`
+      SELECT status, COUNT(*) as count
+      FROM action_items
+      WHERE project_id = $1
+      GROUP BY status
+    `, [projectId]);
+    
+    const actionItemsByStatus = {};
+    actionItemsByStatusResult.rows.forEach(row => {
+      actionItemsByStatus[row.status] = parseInt(row.count);
+    });
+    
+    // Calculate completion rate
+    const completedIssues = issuesByStatus['Done'] || 0;
+    const completedActionItems = actionItemsByStatus['Completed'] || 0;
+    const totalIssues = parseInt(totalIssuesResult.rows[0].count);
+    const totalActionItems = parseInt(totalActionItemsResult.rows[0].count);
+    const totalItems = totalIssues + totalActionItems;
+    const completedItems = completedIssues + completedActionItems;
+    const completionRate = totalItems > 0 ? completedItems / totalItems : 0;
+    
+    // Get overdue count
+    const overdueResult = await pool.query(`
+      SELECT COUNT(*) as count FROM (
+        SELECT id FROM issues WHERE project_id = $1 AND due_date < NOW() AND status != 'Done'
+        UNION ALL
+        SELECT id FROM action_items WHERE project_id = $2 AND due_date < NOW() AND status != 'Completed'
+      ) as overdue_items
+    `, [projectId, projectId]);
+    
+    // Get upcoming deadlines (next 5)
+    const upcomingResult = await pool.query(`
+      SELECT id, title, due_date, 'issue' as type FROM issues
+      WHERE project_id = $1 AND due_date > NOW() AND status != 'Done'
+      UNION ALL
+      SELECT id, title, due_date, 'action_item' as type FROM action_items
+      WHERE project_id = $2 AND due_date > NOW() AND status != 'Completed'
+      ORDER BY due_date ASC
+      LIMIT 5
+    `, [projectId, projectId]);
+    
+    // Get AI statistics
+    const transcriptsResult = await pool.query(`
+      SELECT COUNT(*) as count FROM meeting_transcripts WHERE project_id = $1
+    `, [projectId]);
+    
+    const aiItemsResult = await pool.query(`
+      SELECT COUNT(*) as count FROM (
+        SELECT id FROM issues WHERE project_id = $1 AND created_via_ai_by IS NOT NULL
+        UNION ALL
+        SELECT id FROM action_items WHERE project_id = $2 AND created_via_ai_by IS NOT NULL
+      ) as ai_items
+    `, [projectId, projectId]);
+    
+    // Get total comments
+    const commentsResult = await pool.query(`
+      SELECT COUNT(*) as count FROM (
+        SELECT id FROM issue_comments ic
+        JOIN issues i ON ic.issue_id = i.id
+        WHERE i.project_id = $1
+        UNION ALL
+        SELECT id FROM action_item_comments aic
+        JOIN action_items ai ON aic.action_item_id = ai.id
+        WHERE ai.project_id = $2
+      ) as all_comments
+    `, [projectId, projectId]);
+    
+    const stats = {
+      totalIssues,
+      totalActionItems,
+      issuesByStatus,
+      issuesByPriority,
+      actionItemsByStatus,
+      completionRate: parseFloat(completionRate.toFixed(2)),
+      overdueCount: parseInt(overdueResult.rows[0].count),
+      upcomingDeadlines: upcomingResult.rows,
+      transcriptsAnalyzed: parseInt(transcriptsResult.rows[0].count),
+      aiItemsCreated: parseInt(aiItemsResult.rows[0].count),
+      totalComments: parseInt(commentsResult.rows[0].count)
+    };
+    
+    console.log(`[DASHBOARD_STATS] Stats retrieved for project ${projectId}`);
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('[DASHBOARD_STATS] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard statistics' });
+  }
+});
+
+// 2. GET /api/projects/:projectId/dashboard/activity - Get recent activity
+app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    
+    console.log(`[DASHBOARD_ACTIVITY] User ${req.user.id} getting activity for project ${projectId}`);
+    
+    // Verify user is a project member
+    const memberCheck = await pool.query(`
+      SELECT * FROM project_members
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+    
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied. You are not a member of this project.' });
+    }
+    
+    // Get recent activity from multiple sources
+    const activityResult = await pool.query(`
+      SELECT * FROM (
+        SELECT 
+          i.id,
+          'issue_created' as type,
+          i.id as item_id,
+          i.title as item_title,
+          u.username as user_name,
+          i.created_at as timestamp,
+          'Created issue' as details
+        FROM issues i
+        JOIN users u ON i.created_by = u.id
+        WHERE i.project_id = $1
+        
+        UNION ALL
+        
+        SELECT 
+          ai.id,
+          'action_item_created' as type,
+          ai.id as item_id,
+          ai.title as item_title,
+          u.username as user_name,
+          ai.created_at as timestamp,
+          'Created action item' as details
+        FROM action_items ai
+        JOIN users u ON ai.created_by = u.id
+        WHERE ai.project_id = $1
+        
+        UNION ALL
+        
+        SELECT 
+          ic.id,
+          'comment_added' as type,
+          i.id as item_id,
+          i.title as item_title,
+          u.username as user_name,
+          ic.created_at as timestamp,
+          'Added comment on issue' as details
+        FROM issue_comments ic
+        JOIN issues i ON ic.issue_id = i.id
+        JOIN users u ON ic.user_id = u.id
+        WHERE i.project_id = $1
+        
+        UNION ALL
+        
+        SELECT 
+          aic.id,
+          'comment_added' as type,
+          ai.id as item_id,
+          ai.title as item_title,
+          u.username as user_name,
+          aic.created_at as timestamp,
+          'Added comment on action item' as details
+        FROM action_item_comments aic
+        JOIN action_items ai ON aic.action_item_id = ai.id
+        JOIN users u ON aic.user_id = u.id
+        WHERE ai.project_id = $1
+        
+        UNION ALL
+        
+        SELECT 
+          mt.id,
+          'transcript_uploaded' as type,
+          mt.id as item_id,
+          mt.title as item_title,
+          u.username as user_name,
+          mt.uploaded_at as timestamp,
+          'Uploaded meeting transcript' as details
+        FROM meeting_transcripts mt
+        JOIN users u ON mt.uploaded_by = u.id
+        WHERE mt.project_id = $1
+      ) as all_activity
+      ORDER BY timestamp DESC
+      LIMIT $2
+    `, [projectId, limit]);
+    
+    console.log(`[DASHBOARD_ACTIVITY] Retrieved ${activityResult.rows.length} activities`);
+    
+    res.json(activityResult.rows);
+  } catch (error) {
+    console.error('[DASHBOARD_ACTIVITY] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard activity' });
+  }
+});
+
+// 3. GET /api/projects/:projectId/dashboard/team-metrics - Get team member metrics
+app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    console.log(`[DASHBOARD_TEAM] User ${req.user.id} getting team metrics for project ${projectId}`);
+    
+    // Verify user is a project member
+    const memberCheck = await pool.query(`
+      SELECT * FROM project_members
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+    
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied. You are not a member of this project.' });
+    }
+    
+    // Get team metrics
+    const teamResult = await pool.query(`
+      SELECT 
+        pm.user_id,
+        u.username as user_name,
+        u.email as user_email,
+        pm.role,
+        COALESCE(issues_assigned.count, 0) as issues_assigned,
+        COALESCE(issues_completed.count, 0) as issues_completed,
+        COALESCE(actions_assigned.count, 0) as action_items_assigned,
+        COALESCE(actions_completed.count, 0) as action_items_completed,
+        COALESCE(comments.count, 0) as comments_count,
+        GREATEST(
+          COALESCE(last_issue.last_created, pm.joined_at),
+          COALESCE(last_action.last_created, pm.joined_at),
+          COALESCE(last_comment.last_created, pm.joined_at)
+        ) as last_active
+      FROM project_members pm
+      JOIN users u ON pm.user_id = u.id
+      LEFT JOIN (
+        SELECT assignee, COUNT(*) as count
+        FROM issues
+        WHERE project_id = $1
+        GROUP BY assignee
+      ) issues_assigned ON issues_assigned.assignee = pm.user_id
+      LEFT JOIN (
+        SELECT assignee, COUNT(*) as count
+        FROM issues
+        WHERE project_id = $1 AND status = 'Done'
+        GROUP BY assignee
+      ) issues_completed ON issues_completed.assignee = pm.user_id
+      LEFT JOIN (
+        SELECT assignee, COUNT(*) as count
+        FROM action_items
+        WHERE project_id = $1
+        GROUP BY assignee
+      ) actions_assigned ON actions_assigned.assignee = pm.user_id
+      LEFT JOIN (
+        SELECT assignee, COUNT(*) as count
+        FROM action_items
+        WHERE project_id = $1 AND status = 'Completed'
+        GROUP BY assignee
+      ) actions_completed ON actions_completed.assignee = pm.user_id
+      LEFT JOIN (
+        SELECT user_id, COUNT(*) as count
+        FROM (
+          SELECT ic.user_id
+          FROM issue_comments ic
+          JOIN issues i ON ic.issue_id = i.id
+          WHERE i.project_id = $1
+          UNION ALL
+          SELECT aic.user_id
+          FROM action_item_comments aic
+          JOIN action_items ai ON aic.action_item_id = ai.id
+          WHERE ai.project_id = $1
+        ) all_comments
+        GROUP BY user_id
+      ) comments ON comments.user_id = pm.user_id
+      LEFT JOIN (
+        SELECT created_by, MAX(created_at) as last_created
+        FROM issues
+        WHERE project_id = $1
+        GROUP BY created_by
+      ) last_issue ON last_issue.created_by = pm.user_id
+      LEFT JOIN (
+        SELECT created_by, MAX(created_at) as last_created
+        FROM action_items
+        WHERE project_id = $1
+        GROUP BY created_by
+      ) last_action ON last_action.created_by = pm.user_id
+      LEFT JOIN (
+        SELECT user_id, MAX(created_at) as last_created
+        FROM (
+          SELECT ic.user_id, ic.created_at
+          FROM issue_comments ic
+          JOIN issues i ON ic.issue_id = i.id
+          WHERE i.project_id = $1
+          UNION ALL
+          SELECT aic.user_id, aic.created_at
+          FROM action_item_comments aic
+          JOIN action_items ai ON aic.action_item_id = ai.id
+          WHERE ai.project_id = $1
+        ) all_comments
+        GROUP BY user_id
+      ) last_comment ON last_comment.user_id = pm.user_id
+      WHERE pm.project_id = $1 AND pm.status = 'active'
+      ORDER BY (issues_completed + action_items_completed) DESC
+    `, [projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId]);
+    
+    console.log(`[DASHBOARD_TEAM] Retrieved metrics for ${teamResult.rows.length} team members`);
+    
+    res.json(teamResult.rows);
+  } catch (error) {
+    console.error('[DASHBOARD_TEAM] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch team metrics' });
+  }
+});
+
+// 4. GET /api/projects/:projectId/dashboard/trends - Get time-series trends
+app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const days = Math.min(parseInt(req.query.days) || 30, 90);
+    
+    console.log(`[DASHBOARD_TRENDS] User ${req.user.id} getting trends for project ${projectId} (${days} days)`);
+    
+    // Verify user is a project member
+    const memberCheck = await pool.query(`
+      SELECT * FROM project_members
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+    
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied. You are not a member of this project.' });
+    }
+    
+    // Get issues trend
+    const issuesTrendResult = await pool.query(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as created,
+        COUNT(CASE WHEN status = 'Done' THEN 1 END) as completed
+      FROM issues
+      WHERE project_id = $1 
+        AND created_at >= NOW() - INTERVAL '${days} days'
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `, [projectId]);
+    
+    // Get action items trend
+    const actionsTrendResult = await pool.query(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as created,
+        COUNT(CASE WHEN status = 'Completed' THEN 1 END) as completed
+      FROM action_items
+      WHERE project_id = $1 
+        AND created_at >= NOW() - INTERVAL '${days} days'
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `, [projectId]);
+    
+    // Get activity trend
+    const activityTrendResult = await pool.query(`
+      SELECT DATE(activity_date) as date, COUNT(*) as count
+      FROM (
+        SELECT created_at as activity_date FROM issues WHERE project_id = $1
+        UNION ALL
+        SELECT created_at FROM action_items WHERE project_id = $1
+        UNION ALL
+        SELECT ic.created_at
+        FROM issue_comments ic
+        JOIN issues i ON ic.issue_id = i.id
+        WHERE i.project_id = $1
+        UNION ALL
+        SELECT aic.created_at
+        FROM action_item_comments aic
+        JOIN action_items ai ON aic.action_item_id = ai.id
+        WHERE ai.project_id = $1
+      ) all_activity
+      WHERE activity_date >= NOW() - INTERVAL '${days} days'
+      GROUP BY DATE(activity_date)
+      ORDER BY date ASC
+    `, [projectId, projectId, projectId, projectId]);
+    
+    const trends = {
+      issuesTrend: issuesTrendResult.rows,
+      actionItemsTrend: actionsTrendResult.rows,
+      activityTrend: activityTrendResult.rows
+    };
+    
+    console.log(`[DASHBOARD_TRENDS] Retrieved trends for ${days} days`);
+    
+    res.json(trends);
+  } catch (error) {
+    console.error('[DASHBOARD_TRENDS] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard trends' });
+  }
+});
+
 // ============= ISSUES ROUTES =============
 
 // Get issues with filtering and search
