@@ -185,8 +185,12 @@ async function acceptInvitation(inv) {
       return;
     }
     
-    // Success - show message and redirect
-    showSuccess(`Invitation accepted! Redirecting to project...`);
+    // Check if already a member
+    if (data.alreadyMember) {
+      showSuccess(`You're already a member of this project! Redirecting...`);
+    } else {
+      showSuccess(`Invitation accepted! Redirecting to project...`);
+    }
     
     setTimeout(() => {
       window.location.href = `index.html?project=${data.projectId}`;

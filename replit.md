@@ -77,7 +77,8 @@ Enhanced email invitation acceptance with proper web-based handling and comprehe
 - **Smart Flow**: Checks authentication via cookie, redirects to login if needed, handles all edge cases gracefully
 - **User-Friendly Pages**: Beautiful HTML success/error pages for all scenarios (invalid invitation, wrong account, already member, success with auto-redirect)
 - **Security**: Comprehensive HTML escaping with `escapeHtml()` helper for all user-controlled values (prevents XSS), URL encoding for redirect parameters
-- **Graceful Handling**: "Already a member" case handled without errors, shows friendly confirmation message
+- **Graceful Handling**: Both GET and POST endpoints now handle "already a member" case gracefully - updates invitation status and shows friendly confirmation instead of error
+- **Bug Fix**: Fixed POST endpoint duplicate key error when accepting invitations for projects user is already a member of
 
 ### Cancel Pending Invitations Feature (October 2, 2025)
 Implemented invitation management for project managers to cancel pending invitations:

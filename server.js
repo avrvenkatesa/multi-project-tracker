@@ -1154,7 +1154,21 @@ app.post('/api/invitations/:token/accept', authenticateToken, async (req, res) =
     `, [invitation.project_id, req.user.id]);
     
     if (existingMember.rows.length > 0) {
-      return res.status(400).json({ error: 'You are already a member of this project' });
+      // Already a member - just update invitation status and return success
+      await pool.query(`
+        UPDATE project_invitations
+        SET status = 'accepted', responded_at = NOW()
+        WHERE id = $1
+      `, [invitation.id]);
+      
+      console.log(`[ACCEPT] User ${req.user.id} already a member of project ${invitation.project_id}, invitation marked as accepted`);
+      
+      return res.json({ 
+        message: 'You are already a member of this project',
+        projectId: invitation.project_id,
+        role: invitation.role,
+        alreadyMember: true
+      });
     }
     
     // Begin transaction
