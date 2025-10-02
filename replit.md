@@ -99,3 +99,12 @@ Implemented invitation management for project managers to cancel pending invitat
 - **Backend API**: `DELETE /api/projects/:projectId/invitations/:invitationId` with manager-only authorization
 - **Frontend**: Red "Cancel" button on pending invitation cards with confirmation dialog and automatic UI refresh
 - **Security**: Role-based authorization, project ownership validation, proper error handling
+
+### Fixed Assigned To Dropdown & Assignment Notifications (October 2, 2025)
+Resolved issues with the "Assigned To" dropdown and implemented assignment email notifications:
+- **Dynamic Team Members**: "Assigned To" dropdown now loads actual team members from the selected project instead of hardcoded values
+- **Team Member Loading**: Added `loadTeamMembers()` function that fetches team data when a project is selected
+- **Assignment Notifications**: Implemented email notifications when issues/action items are assigned to team members
+- **Non-Blocking Design**: Notification sending is fire-and-forget, ensuring issues/action items are created even if email delivery fails
+- **Error Handling**: Comprehensive logging for assignee lookup failures and notification errors without disrupting core functionality
+- **Both Forms Fixed**: Applied fixes to both "Create New Issue" and "Create New Action Item" forms

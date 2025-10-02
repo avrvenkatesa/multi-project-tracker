@@ -2093,6 +2093,36 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
       ) RETURNING *
     `;
     
+    // Send assignment notification if assignee is set (non-blocking)
+    if (assignee && assignee.trim() !== '') {
+      try {
+        const assigneeUser = await pool.query(
+          'SELECT id FROM users WHERE username = $1',
+          [assignee]
+        );
+        
+        if (assigneeUser.rows.length > 0) {
+          // Fire and forget - don't await to avoid blocking issue creation
+          notificationService.sendAssignmentNotification({
+            assignedUserId: assigneeUser.rows[0].id,
+            assignerName: req.user.username,
+            itemTitle: title,
+            itemType: 'issue',
+            itemId: newIssue.id,
+            projectId: parseInt(projectId),
+            dueDate: dueDate,
+            priority: priority || 'medium'
+          }).catch(err => {
+            console.error('Error sending assignment notification:', err);
+          });
+        } else {
+          console.warn(`Assignee not found: ${assignee}`);
+        }
+      } catch (err) {
+        console.error('Error looking up assignee for notification:', err);
+      }
+    }
+    
     res.status(201).json(newIssue);
   } catch (error) {
     console.error('Error creating issue:', error);
@@ -2269,6 +2299,36 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
         ${aiAnalysisId}
       ) RETURNING *
     `;
+    
+    // Send assignment notification if assignee is set (non-blocking)
+    if (assignee && assignee.trim() !== '') {
+      try {
+        const assigneeUser = await pool.query(
+          'SELECT id FROM users WHERE username = $1',
+          [assignee]
+        );
+        
+        if (assigneeUser.rows.length > 0) {
+          // Fire and forget - don't await to avoid blocking action item creation
+          notificationService.sendAssignmentNotification({
+            assignedUserId: assigneeUser.rows[0].id,
+            assignerName: req.user.username,
+            itemTitle: title,
+            itemType: 'action item',
+            itemId: newItem.id,
+            projectId: parseInt(projectId),
+            dueDate: dueDate,
+            priority: priority || 'medium'
+          }).catch(err => {
+            console.error('Error sending assignment notification:', err);
+          });
+        } else {
+          console.warn(`Assignee not found: ${assignee}`);
+        }
+      } catch (err) {
+        console.error('Error looking up assignee for notification:', err);
+      }
+    }
     
     res.status(201).json(newItem);
   } catch (error) {
