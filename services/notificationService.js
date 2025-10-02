@@ -114,7 +114,7 @@ class NotificationService {
         itemType,
         dueDate: formattedDueDate,
         priority: priority || 'normal',
-        itemLink: `${appUrl}/project.html?id=${projectId}`,
+        itemLink: `${appUrl}/index.html?project=${projectId}&itemId=${itemId}&itemType=${itemType}`,
         unsubscribeLink: `${appUrl}/api/notifications/unsubscribe/${unsubscribeToken}`
       });
       
