@@ -1215,7 +1215,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           'Added comment on issue' as details
         FROM issue_comments ic
         JOIN issues i ON ic.issue_id = i.id
-        JOIN users u ON ic.user_id = CAST(u.id AS TEXT)
+        JOIN users u ON ic.user_id = u.id
         WHERE i.project_id = $3
         
         UNION ALL
@@ -1230,7 +1230,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           'Added comment on action item' as details
         FROM action_item_comments aic
         JOIN action_items ai ON aic.action_item_id = ai.id
-        JOIN users u ON aic.user_id = CAST(u.id AS TEXT)
+        JOIN users u ON aic.user_id = u.id
         WHERE ai.project_id = $4
         
         UNION ALL
@@ -1244,7 +1244,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           mt.uploaded_at as timestamp,
           'Uploaded meeting transcript' as details
         FROM meeting_transcripts mt
-        JOIN users u ON mt.uploaded_by = CAST(u.id AS TEXT)
+        JOIN users u ON mt.uploaded_by = u.id
         WHERE mt.project_id = $5
       ) as all_activity
       ORDER BY timestamp DESC
