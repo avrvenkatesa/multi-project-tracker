@@ -1151,6 +1151,44 @@ app.get('/api/projects/:projectId/invitations', authenticateToken, async (req, r
   }
 });
 
+// 8. DELETE /api/projects/:projectId/invitations/:invitationId - Cancel pending invitation
+app.delete('/api/projects/:projectId/invitations/:invitationId', authenticateToken, async (req, res) => {
+  try {
+    const { projectId, invitationId } = req.params;
+    
+    console.log(`[CANCEL_INVITATION] User ${req.user.id} canceling invitation ${invitationId} for project ${projectId}`);
+    
+    // Check if user is Manager+ in this project
+    const isManager = await isProjectManager(req.user.id, projectId);
+    if (!isManager) {
+      return res.status(403).json({ error: 'Only project Managers and Admins can cancel invitations' });
+    }
+    
+    // Verify the invitation belongs to this project and is still pending
+    const invitationCheck = await pool.query(`
+      SELECT * FROM project_invitations
+      WHERE id = $1 AND project_id = $2 AND status = 'pending'
+    `, [invitationId, projectId]);
+    
+    if (invitationCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Invitation not found or already processed' });
+    }
+    
+    // Delete the invitation
+    await pool.query(`
+      DELETE FROM project_invitations
+      WHERE id = $1
+    `, [invitationId]);
+    
+    console.log(`[CANCEL_INVITATION] Invitation ${invitationId} canceled successfully`);
+    
+    res.json({ message: 'Invitation canceled successfully' });
+  } catch (error) {
+    console.error('[CANCEL_INVITATION] Error:', error);
+    res.status(500).json({ error: 'Failed to cancel invitation' });
+  }
+});
+
 // ============= DASHBOARD ROUTES =============
 
 // 1. GET /api/projects/:projectId/dashboard/stats - Get project statistics

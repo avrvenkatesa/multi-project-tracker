@@ -466,6 +466,36 @@ async function loadPendingInvitations() {
   }
 }
 
+// Cancel pending invitation
+async function cancelInvitation(invitationId, inviteeEmail) {
+  if (!confirm(`Are you sure you want to cancel the invitation to ${inviteeEmail}?`)) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/invitations/${invitationId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      showError(data.error || 'Failed to cancel invitation');
+      return;
+    }
+    
+    showSuccess(`Invitation to ${inviteeEmail} has been canceled`);
+    
+    // Reload both team members and pending invitations to refresh the UI
+    await loadTeamMembers();
+    await loadPendingInvitations();
+  } catch (error) {
+    console.error('Error canceling invitation:', error);
+    showError('Failed to cancel invitation');
+  }
+}
+
 // Render pending invitations
 function renderPendingInvitations(invitations) {
   const container = document.getElementById('teamManagementContainer');
@@ -477,7 +507,7 @@ function renderPendingInvitations(invitations) {
       <div class="space-y-3">
         ${invitations.map(inv => `
           <div class="border border-gray-200 rounded-lg p-4 flex justify-between items-center">
-            <div>
+            <div class="flex-1">
               <div class="font-medium text-gray-900">${escapeHtml(inv.invitee_email)}</div>
               <div class="text-sm text-gray-500">
                 Role: <span class="font-medium">${inv.role}</span> • 
@@ -485,9 +515,17 @@ function renderPendingInvitations(invitations) {
                 Expires ${formatDate(inv.expires_at)}
               </div>
             </div>
-            <span class="px-3 py-1 text-sm font-medium rounded ${getRoleColor(inv.role)}">
-              ${inv.role}
-            </span>
+            <div class="flex items-center gap-3">
+              <span class="px-3 py-1 text-sm font-medium rounded ${getRoleColor(inv.role)}">
+                ${inv.role}
+              </span>
+              <button 
+                class="cancel-invitation-btn px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                data-invitation-id="${inv.id}"
+                data-invitee-email="${escapeHtml(inv.invitee_email)}">
+                Cancel
+              </button>
+            </div>
           </div>
         `).join('')}
       </div>
@@ -495,6 +533,15 @@ function renderPendingInvitations(invitations) {
   `;
   
   container.insertAdjacentHTML('beforeend', invitationsHtml);
+  
+  // Attach event listeners to cancel buttons
+  document.querySelectorAll('.cancel-invitation-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const invitationId = btn.getAttribute('data-invitation-id');
+      const inviteeEmail = btn.getAttribute('data-invitee-email');
+      cancelInvitation(invitationId, inviteeEmail);
+    });
+  });
 }
 
 // Utility functions
