@@ -11,32 +11,26 @@ Preferred communication style: Simple, everyday language.
 ### Frontend
 The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS. It features a dynamic UI that adjusts based on user roles and authentication status, including conditional rendering of actions and a user management interface for administrators. HTTP communication uses the Fetch API with credentialed requests, and event handling is managed through delegation.
 
-**AI Analysis Features:**
-- **In-Modal Search**: Search for existing items directly within the AI analysis modal to manually match unmatched status updates
-- **Review Queue**: Persistent queue for status updates that couldn't be automatically matched; accessible from the kanban board for later processing
-- **Smart Matching**: Real-time search and match functionality with confidence scoring and evidence display
-- **AI Relationship Detection**: Automatically detects and creates relationships (blocking, parent-child, related) between work items from meeting transcripts with confidence scoring (75% threshold)
+**Key Features:**
+- **AI Analysis Features**: Includes in-modal search for matching items, a persistent review queue for unmatched status updates, smart matching with confidence scoring, and AI relationship detection (blocking, parent-child, related) from meeting transcripts.
+- **Comments and @Mentions**: A comprehensive comment system with markdown support, real-time @mention autocomplete, and a notification system for unread mentions.
+- **Project Dashboard**: Provides analytics with real-time statistics, Chart.js visualizations (status, priority, activity trends), an activity feed, and team performance metrics.
 
 ### Backend
-The backend is a RESTful API built with Express.js, using a PostgreSQL database via Drizzle ORM. It implements a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permission enforcement. All sensitive endpoints are protected by role-based middleware, and request validation is handled with Joi.
+The backend is a RESTful API built with Express.js, using a PostgreSQL database via Drizzle ORM. It implements a layered architecture with security middleware (Helmet, CORS, rate limiting) and JWT authentication with httpOnly cookie-based session management. A 6-tier RBAC system enforces granular permissions for all sensitive endpoints, and Joi handles request validation.
 
-### Security
-The application incorporates robust security measures including bcryptjs for password hashing, JWT tokens in httpOnly cookies, and a comprehensive 6-tier RBAC system (System Administrator, Project Manager, Team Lead, Team Member, Stakeholder, External Viewer). API protection includes Helmet.js, CORS, and rate limiting, with Joi for input validation and role-based authorization for all sensitive endpoints.
+**Security:** The application uses bcryptjs for password hashing, JWT tokens in httpOnly cookies, and a 6-tier RBAC system (System Administrator, Project Manager, Team Lead, Team Member, Stakeholder, External Viewer). API protection includes Helmet.js, CORS, rate limiting, and Joi for input validation. All inline JavaScript has been eliminated, and URL sanitization is in place to prevent XSS.
 
 ### Data Management
 A PostgreSQL database, managed by Drizzle ORM, stores:
-- **Users**: Authentication credentials, roles, hashed passwords.
-- **Projects**: Project metadata.
-- **Issues**: Issue tracking details.
-- **Action Items**: Granular action item tracking.
-- **Meeting Transcripts**: Metadata, text, analysis results, and cost.
-- **Issue Relationships**: Tracks dependencies and links between issues and action items. Includes AI-generated relationships with confidence scores, transcript references, and evidence. Unique constraint prevents duplicate relationships.
-- **Status Update Review Queue**: Unmatched status updates from AI analysis awaiting manual review.
-- **Comments**: Audit trail for action items and issues (action_item_comments, issue_comments).
-Foreign key constraints ensure data integrity, and Drizzle manages schema migrations.
+- **Core Entities**: Users, Projects, Issues, Action Items, Meeting Transcripts.
+- **Relationships**: Issue relationships, including AI-generated with confidence scores and evidence.
+- **AI-specific Data**: Status Update Review Queue, AI analysis audit trail.
+- **Collaboration**: Comments for issues and action items, mention notifications.
+- **User Preferences**: User notification preferences and unsubscribe tokens.
 
 ### Request Handling
-Express.js handles requests, utilizing `express-rate-limit` for API protection and comprehensive error handling middleware. Request body parsing supports JSON and URL-encoded data with a 10MB size limit.
+Express.js handles requests, utilizing `express-rate-limit` for API protection and comprehensive error handling. Request body parsing supports JSON and URL-encoded data.
 
 ## External Dependencies
 
@@ -55,8 +49,8 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 ### Validation & Utilities
 - **Joi**: Data validation.
 - **Multer**: File uploads.
-- **uuid**: Unique ID generation for analysis.
-- **string-similarity**: Duplicate detection for AI-generated items.
+- **uuid**: Unique ID generation.
+- **string-similarity**: Duplicate detection.
 
 ### AI Integration
 - **OpenAI**: GPT-3.5-Turbo for AI-powered meeting transcript analysis.
@@ -66,125 +60,10 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 - **drizzle-orm**: TypeScript ORM.
 - **drizzle-kit**: Schema migration tools.
 
-### Development Tools
-- **nodemon**: Development server.
-- **dotenv**: Environment variable management.
-
 ### Email & Notifications
 - **nodemailer**: SMTP email sending library.
 
 ### CDN Services
 - **Tailwind CSS CDN**: CSS framework delivery.
 - **Unpkg CDN**: JavaScript library delivery.
-- **Chart.js**: Data visualization charts for dashboard analytics (local copy in public/).
-
-## Recent Changes
-
-### Email Notifications System (October 2, 2025)
-Implemented comprehensive email notification system to keep users informed of important project events:
-- **Database Schema**:
-  - `user_notification_preferences` table for per-user email settings (mentions, assignments, status changes, invitations, frequency)
-  - `unsubscribe_tokens` table for one-click unsubscribe functionality
-- **Backend Services**:
-  - `config/email.js`: Nodemailer configuration supporting Gmail SMTP (requires GMAIL_USER and GMAIL_APP_PASSWORD env vars)
-  - `services/notificationService.js`: Centralized notification service with methods for mention, assignment, status change, and invitation emails
-  - `utils/emailTemplates.js`: Template rendering system with HTML and plain-text fallbacks
-- **Email Templates** (templates/emails/):
-  - `mention.html`: @mention notifications with comment preview
-  - `assignment.html`: New assignment notifications with due date and priority
-  - `status-change.html`: Status update notifications showing old vs new status
-  - `invitation.html`: Project invitation emails with accept/decline links
-  - All templates use blue branding, clear CTAs, and include unsubscribe links
-- **API Endpoints**:
-  - `GET /api/notifications/preferences`: Retrieve user notification settings
-  - `PUT /api/notifications/preferences`: Update notification preferences
-  - `GET /api/notifications/unsubscribe/:token`: One-click unsubscribe with HTML response
-- **Frontend**:
-  - `notification-settings.html` and `notification-settings.js`: Full preferences management UI
-  - Toggle controls for each notification type (mentions, assignments, status changes, invitations)
-  - Email frequency selector (immediate, daily digest, weekly digest) - digests not yet implemented
-  - Email service status indicator showing configuration state
-- **Integration Points**:
-  - Comments: Sends email when users are @mentioned in issue or action item comments
-  - Team Management: Sends invitation emails when users are invited to projects
-  - Status Changes & Assignments: Backend hooks ready (not yet fully integrated)
-- **Security**: All email sending is async (non-blocking), preferences enforced before sending, unsubscribe tokens single-use only
-
-### Project Dashboard with Analytics (October 2, 2025)
-Implemented comprehensive project analytics dashboard with real-time metrics and data visualization:
-- **Backend API Endpoints**:
-  - `/api/projects/:projectId/dashboard/stats` - Aggregate statistics (issues, action items, completion rates, overdue/upcoming deadlines, AI metrics, comments)
-  - `/api/projects/:projectId/dashboard/activity` - Recent activity feed aggregating issues, action items, comments, and transcripts
-  - `/api/projects/:projectId/dashboard/team-metrics` - Team member performance metrics (assigned items, completion rates, activity counts)
-  - `/api/projects/:projectId/dashboard/trends` - Time-series data for activity trends (last 30 days)
-  - All endpoints protected with project member authorization and proper SQL parameterization
-- **Frontend Dashboard** (dashboard.html, dashboard.js):
-  - Real-time statistics cards with icon indicators (issues, action items, completion rate, overdue count)
-  - **Chart.js Visualizations**: Status distribution pie chart, priority breakdown bar chart, activity trend line chart
-  - Activity feed with action icons, relative timestamps, and user attribution
-  - Team metrics table with sortable data and role badges
-  - Loading states, error handling, and empty state messages
-  - Mobile-responsive grid layout with Tailwind CSS
-- **Navigation Integration**:
-  - Dashboard buttons on project cards (app.js) and project detail header (index.html)
-  - Direct navigation with currentProject.id parameter
-- **Security**: All user-generated content (usernames, emails, item titles) properly escaped with escapeHtml() for XSS protection
-
-### AI Relationship Detection Feature (October 1, 2025)
-Implemented comprehensive AI-powered relationship detection from meeting transcripts:
-- **Phase 3 AI Analysis**: Enhanced GPT-3.5 prompt to detect blocking dependencies, parent-child hierarchies, and related associations
-- **Backend Processing**: Item matching via string similarity (60% threshold), automatic inverse relationship creation, confidence-based filtering (75% threshold)
-- **Database Schema**: Added AI-specific fields (created_by_ai, ai_confidence, transcript_id, notes) with unique constraint
-- **Frontend Display**: Visual indicators for AI-generated relationships, confidence scores, transcript references in both relationship modal and AI analysis results
-- **Relationship Types**: blocks/blocked_by, parent_of/child_of, relates_to, depends_on/depended_by
-
-### RBAC for AI Analysis (Latest Update - October 1, 2025)
-Implemented comprehensive authorization and security controls for AI-powered features:
-- **Database Schema**: 
-  - Added `visibility`, `can_view_users`, `project_sensitive`, `contains_confidential` to `meeting_transcripts`
-  - Created `ai_analysis_audit` table for complete audit trail
-  - Added `created_via_ai_by` to `issues` and `action_items` tables
-- **Permission Functions**:
-  - `canUploadTranscript`: Only Project Managers and System Administrators
-  - `canViewTranscript`: Role-based visibility (all, project_managers, specific_users, uploader_only)
-  - `canCreateItemsFromAI`: Team Member or higher (same as manual creation)
-  - `canAssignTo`: Managers/Team Leads can assign to anyone; Team Members can only self-assign
-  - `canUpdateItemStatus`: Managers can update any item; Team Members can update their own items
-- **Assignment Validation**: Automatic reassignment to self when permissions insufficient, with audit logging
-- **Audit Trail**: All AI operations logged (upload, analyze, create_items, update_status, modify)
-- **Frontend**: 
-  - UI elements properly hidden based on role permissions
-  - `AuthManager.canUploadTranscript()` method enforces visibility of AI Analysis and View Transcripts buttons
-  - Redundant permission check in modal prevents access even if UI hiding is bypassed
-  - Graceful permission error handling with clear user messaging
-- **Bug Fixed**: Team Members can no longer see or access AI Analysis upload functionality
-
-### Comments and @Mentions Feature (October 1, 2025)
-Implemented comprehensive comment system with real-time mentions for enhanced team collaboration:
-- **Database Schema**:
-  - `issue_comments` and `action_item_comments` tables with user_id FK, comment text, mentions array, created_at, updated_at, edited flag
-  - `mention_notifications` table for tracking @mentions with recipient_user_id, source_comment_id, unread status
-  - Indexes on issue_id/action_item_id, user_id, created_at, and recipient_user_id for performance
-- **Backend API Endpoints**:
-  - GET/POST/PUT/DELETE for both issue and action item comments
-  - GET /api/mentions for unread notifications, PUT /api/mentions/:id/read, PUT /api/mentions/read-all
-  - Proper RBAC enforcement: users can only edit their own comments; Project Managers+ can delete any comment
-- **Frontend Features**:
-  - Comment UI component in public/comments.js with markdown support (bold, italic, code, links)
-  - @mention autocomplete showing project team members in real-time dropdown
-  - Notification bell in header with unread count badge and dropdown
-  - Item detail modal with integrated comments section
-  - Real-time comment count display
-  - **Kanban Board Integration**: Comment count badges on all cards, clickable cards open item detail modal, drag suppression prevents accidental modal opens
-- **Security Hardening**:
-  - CORS configuration using exact-match allowlist (Set.has) to prevent subdomain hijacking
-  - URL sanitization with URL() constructor, protocol validation (http/https only), XSS prevention
-  - **ALL inline JavaScript eliminated**: No onclick/onchange/onsubmit/oninput attributes; all event handlers use addEventListener with data attributes
-  - Username/email escaping with escapeHtml() in all rendering contexts
-  - JWT secret warning when using default development secret
-  - SameSite=lax cookies for CSRF protection
-  - Link rendering with rel="noopener noreferrer" for security
-
-### Known Limitations
-- **Performance**: Relationship loading uses N+1 query pattern on Kanban board; consider batching in future updates
-- **Authorization**: Manual relationship creation endpoints lack project ownership validation (potential IDOR); AI-created relationships are project-scoped
+- **Chart.js**: Data visualization charts.
