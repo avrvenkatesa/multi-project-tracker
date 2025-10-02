@@ -65,7 +65,10 @@ class ReportService {
     return await this.createPDF('Detailed Project Report', projectId, (doc) => {
       // Header
       doc.fontSize(24).font('Helvetica-Bold').text('Detailed Project Report', 50, 50);
-      doc.fontSize(12).font('Helvetica').text(`Date Range: ${dateRange.start} to ${dateRange.end}`, 50, 80);
+      const dateRangeText = dateRange && dateRange.start && dateRange.end 
+        ? `Date Range: ${dateRange.start} to ${dateRange.end}`
+        : 'Date Range: All Time';
+      doc.fontSize(12).font('Helvetica').text(dateRangeText, 50, 80);
       doc.moveDown(2);
       
       // Summary Stats

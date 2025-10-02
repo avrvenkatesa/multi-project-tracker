@@ -63,12 +63,36 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 ### Email & Notifications
 - **nodemailer**: SMTP email sending library.
 
+### Reporting & Export
+- **pdfkit**: Server-side PDF generation for reports.
+- **csv-writer**: CSV file generation for data export.
+
 ### CDN Services
 - **Tailwind CSS CDN**: CSS framework delivery.
 - **Unpkg CDN**: JavaScript library delivery.
 - **Chart.js**: Data visualization charts for dashboard analytics (local copy in public/).
 
 ## Recent Changes
+
+### Advanced Reporting and Data Export (October 2, 2025)
+Implemented comprehensive reporting and data export capabilities:
+- **PDF Report Generation**: Three report types available from project dashboard:
+  - Executive Summary: High-level project overview with key metrics
+  - Detailed Report: Comprehensive listing of all issues and action items
+  - Team Performance: Team member workload and contribution analysis
+- **CSV Export**: Three export options for external analysis:
+  - Issues Export: All issues with full details
+  - Action Items Export: All action items with full details
+  - Full Project Export: Complete project data including both issues and action items
+- **Backend Services**: 
+  - `reportService.js`: Generates PDF reports using pdfkit with project statistics and formatted content
+  - `csvExportService.js`: Creates CSV exports with proper formatting and temporary file cleanup
+- **API Endpoints**:
+  - `POST /api/projects/:projectId/reports/generate`: Generate PDF reports with type selection
+  - `GET /api/projects/:projectId/export/csv?type={issues|actions|full}`: Export data in CSV format
+- **Dashboard Integration**: Reports & Export section added to dashboard.html with user-friendly buttons and status feedback
+- **Security**: All endpoints protected with authentication and project membership verification
+- **User Experience**: Real-time status messages, automatic file downloads, and error handling with user-friendly feedback
 
 ### Improved Invitation Acceptance Flow (October 2, 2025)
 Enhanced email invitation acceptance with proper web-based handling and comprehensive security:
