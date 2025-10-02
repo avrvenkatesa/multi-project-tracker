@@ -496,6 +496,132 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
   });
 });
 
+// ============= NOTIFICATION PREFERENCES ROUTES =============
+
+// Get user notification preferences
+app.get('/api/notifications/preferences', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM user_notification_preferences WHERE user_id = $1',
+      [req.user.id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.json({
+        mentions_enabled: true,
+        assignments_enabled: true,
+        status_changes_enabled: true,
+        invitations_enabled: true,
+        email_frequency: 'immediate'
+      });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching preferences:', error);
+    res.status(500).json({ error: 'Failed to fetch preferences' });
+  }
+});
+
+// Update notification preferences
+app.put('/api/notifications/preferences', authenticateToken, async (req, res) => {
+  try {
+    const { mentions_enabled, assignments_enabled, status_changes_enabled, invitations_enabled, email_frequency } = req.body;
+    
+    await pool.query(`
+      INSERT INTO user_notification_preferences 
+      (user_id, mentions_enabled, assignments_enabled, status_changes_enabled, invitations_enabled, email_frequency)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (user_id) 
+      DO UPDATE SET 
+        mentions_enabled = $2,
+        assignments_enabled = $3,
+        status_changes_enabled = $4,
+        invitations_enabled = $5,
+        email_frequency = $6,
+        updated_at = CURRENT_TIMESTAMP
+    `, [req.user.id, mentions_enabled, assignments_enabled, status_changes_enabled, invitations_enabled, email_frequency]);
+    
+    res.json({ success: true, message: 'Preferences updated' });
+  } catch (error) {
+    console.error('Error updating preferences:', error);
+    res.status(500).json({ error: 'Failed to update preferences' });
+  }
+});
+
+// Unsubscribe from all notifications
+app.get('/api/notifications/unsubscribe/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    const result = await pool.query(
+      'SELECT user_id FROM unsubscribe_tokens WHERE token = $1 AND used_at IS NULL',
+      [token]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Unsubscribe</title></head>
+        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+          <h1>Invalid Link</h1>
+          <p>This unsubscribe link is invalid or has already been used.</p>
+        </body>
+        </html>
+      `);
+    }
+    
+    const userId = result.rows[0].user_id;
+    
+    // Disable all notifications
+    await pool.query(`
+      INSERT INTO user_notification_preferences 
+      (user_id, mentions_enabled, assignments_enabled, status_changes_enabled, invitations_enabled)
+      VALUES ($1, false, false, false, false)
+      ON CONFLICT (user_id) 
+      DO UPDATE SET 
+        mentions_enabled = false,
+        assignments_enabled = false,
+        status_changes_enabled = false,
+        invitations_enabled = false,
+        updated_at = CURRENT_TIMESTAMP
+    `, [userId]);
+    
+    // Mark token as used
+    await pool.query(
+      'UPDATE unsubscribe_tokens SET used_at = CURRENT_TIMESTAMP WHERE token = $1',
+      [token]
+    );
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Unsubscribed</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f3f4f6; }
+          .container { background: white; max-width: 500px; margin: 0 auto; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          h1 { color: #2563eb; }
+          p { color: #4b5563; line-height: 1.6; }
+          a { color: #2563eb; text-decoration: none; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>✓ Unsubscribed Successfully</h1>
+          <p>You have been unsubscribed from all email notifications.</p>
+          <p>You can re-enable notifications anytime in your <a href="/notification-settings.html">notification settings</a>.</p>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Unsubscribe error:', error);
+    res.status(500).send('Failed to unsubscribe');
+  }
+});
+
 // ============= USER MANAGEMENT ROUTES (Admin Only) =============
 
 // Get all users
