@@ -871,7 +871,259 @@ app.post('/api/projects/:projectId/team/invite', authenticateToken, async (req, 
   }
 });
 
-// 2. POST /api/invitations/:token/accept - Accept team invitation
+// Helper function to escape HTML to prevent XSS
+function escapeHtml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe
+    .toString()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// 2a. GET /api/invitations/:token/accept - Accept invitation from email link
+app.get('/api/invitations/:token/accept', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    // Check if user is logged in
+    const authHeader = req.headers.authorization || req.cookies?.token;
+    if (!authHeader) {
+      // Not logged in - redirect to login page with return URL
+      return res.redirect(`/index.html?action=accept&token=${encodeURIComponent(token)}`);
+    }
+    
+    // Verify token
+    let user;
+    try {
+      user = jwt.verify(authHeader.replace('Bearer ', ''), JWT_SECRET);
+    } catch (err) {
+      return res.redirect(`/index.html?action=accept&token=${encodeURIComponent(token)}`);
+    }
+    
+    console.log(`[ACCEPT_GET] User ${user.id} accepting invitation with token ${token}`);
+    
+    // Get invitation
+    const invitationResult = await pool.query(`
+      SELECT pi.*, p.name as project_name
+      FROM project_invitations pi
+      JOIN projects p ON pi.project_id = p.id
+      WHERE pi.invitation_token = $1 AND pi.expires_at > NOW()
+    `, [token]);
+    
+    if (invitationResult.rows.length === 0) {
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Invalid Invitation - Multi-Project Tracker</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-gray-50">
+          <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+              <div class="text-red-500 text-5xl mb-4">⚠️</div>
+              <h1 class="text-2xl font-bold text-gray-800 mb-4">Invalid or Expired Invitation</h1>
+              <p class="text-gray-600 mb-6">This invitation link is invalid or has expired. Please contact the project manager for a new invitation.</p>
+              <a href="/index.html" class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                Go to Home
+              </a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    const invitation = invitationResult.rows[0];
+    
+    // Verify email matches logged-in user
+    if (invitation.invitee_email !== user.email) {
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Wrong Account - Multi-Project Tracker</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-gray-50">
+          <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+              <div class="text-yellow-500 text-5xl mb-4">⚠️</div>
+              <h1 class="text-2xl font-bold text-gray-800 mb-4">Wrong Account</h1>
+              <p class="text-gray-600 mb-2">This invitation is for <strong>${escapeHtml(invitation.invitee_email)}</strong></p>
+              <p class="text-gray-600 mb-6">You are logged in as <strong>${escapeHtml(user.email)}</strong></p>
+              <p class="text-gray-600 mb-6">Please log out and log in with the correct account to accept this invitation.</p>
+              <a href="/index.html" class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                Go to Home
+              </a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    // Check if already a member or invitation already processed
+    if (invitation.status !== 'pending') {
+      const statusMessage = invitation.status === 'accepted' 
+        ? 'You have already accepted this invitation.' 
+        : 'This invitation has been declined.';
+      
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Invitation Already Processed - Multi-Project Tracker</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-gray-50">
+          <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+              <div class="text-blue-500 text-5xl mb-4">ℹ️</div>
+              <h1 class="text-2xl font-bold text-gray-800 mb-4">Already Processed</h1>
+              <p class="text-gray-600 mb-6">${statusMessage}</p>
+              <a href="/index.html" class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                Go to Projects
+              </a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    const existingMember = await pool.query(`
+      SELECT id FROM project_members
+      WHERE project_id = $1 AND user_id = $2 AND status = 'active'
+    `, [invitation.project_id, user.id]);
+    
+    if (existingMember.rows.length > 0) {
+      // Already a member - mark invitation as accepted and redirect
+      await pool.query(`
+        UPDATE project_invitations
+        SET status = 'accepted', responded_at = NOW()
+        WHERE id = $1
+      `, [invitation.id]);
+      
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Already a Member - Multi-Project Tracker</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-gray-50">
+          <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+              <div class="text-green-500 text-5xl mb-4">✓</div>
+              <h1 class="text-2xl font-bold text-gray-800 mb-4">Already a Member!</h1>
+              <p class="text-gray-600 mb-2">You're already a member of</p>
+              <p class="text-xl font-semibold text-blue-600 mb-6">${escapeHtml(invitation.project_name)}</p>
+              <a href="/index.html" class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                View Your Projects
+              </a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    // Begin transaction
+    await pool.query('BEGIN');
+    
+    try {
+      // Insert into project_members
+      await pool.query(`
+        INSERT INTO project_members (
+          project_id, user_id, role, invited_by, status
+        )
+        VALUES ($1, $2, $3, $4, 'active')
+      `, [invitation.project_id, user.id, invitation.role, invitation.inviter_id]);
+      
+      // Update invitation status
+      await pool.query(`
+        UPDATE project_invitations
+        SET status = 'accepted', responded_at = NOW()
+        WHERE id = $1
+      `, [invitation.id]);
+      
+      await pool.query('COMMIT');
+      
+      console.log(`[ACCEPT_GET] User ${user.id} joined project ${invitation.project_id} as ${invitation.role}`);
+      
+      // Success page with redirect
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Invitation Accepted - Multi-Project Tracker</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script src="https://cdn.tailwindcss.com"></script>
+          <meta http-equiv="refresh" content="3;url=/index.html">
+        </head>
+        <body class="bg-gray-50">
+          <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+              <div class="text-green-500 text-5xl mb-4">🎉</div>
+              <h1 class="text-2xl font-bold text-gray-800 mb-4">Invitation Accepted!</h1>
+              <p class="text-gray-600 mb-2">You've successfully joined</p>
+              <p class="text-xl font-semibold text-blue-600 mb-2">${escapeHtml(invitation.project_name)}</p>
+              <p class="text-gray-600 mb-6">as a <span class="font-medium">${escapeHtml(invitation.role)}</span></p>
+              <p class="text-sm text-gray-500 mb-4">Redirecting to your projects...</p>
+              <a href="/index.html" class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                Go to Projects Now
+              </a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    } catch (txError) {
+      await pool.query('ROLLBACK');
+      throw txError;
+    }
+  } catch (error) {
+    console.error('[ACCEPT_GET] Error:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Error - Multi-Project Tracker</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      <body class="bg-gray-50">
+        <div class="min-h-screen flex items-center justify-center p-4">
+          <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+            <div class="text-red-500 text-5xl mb-4">❌</div>
+            <h1 class="text-2xl font-bold text-gray-800 mb-4">Something Went Wrong</h1>
+            <p class="text-gray-600 mb-6">We couldn't process your invitation. Please try again or contact support.</p>
+            <a href="/index.html" class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+              Go to Home
+            </a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
+
+// 2b. POST /api/invitations/:token/accept - Accept team invitation (API)
 app.post('/api/invitations/:token/accept', authenticateToken, async (req, res) => {
   try {
     const { token } = req.params;
