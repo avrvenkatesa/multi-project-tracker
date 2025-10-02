@@ -181,8 +181,8 @@ async function canUploadTranscript(userId, projectId) {
   // System Administrators can always upload
   if (user.role === 'System Administrator') return true;
   
-  // Project Managers can upload to their projects
-  if (user.project_role === 'Project Manager' || user.project_role === 'System Administrator') return true;
+  // Project Admins and Managers can upload to their projects
+  if (user.project_role === 'Admin' || user.project_role === 'Manager') return true;
   
   // Regular team members cannot upload
   return false;
@@ -216,7 +216,7 @@ async function canViewTranscript(userId, transcript) {
       
     case 'project_managers':
       // Only managers and admins
-      return user.project_role === 'Project Manager' || user.project_role === 'System Administrator';
+      return user.project_role === 'Manager' || user.project_role === 'Admin';
       
     case 'specific_users':
       // Check if user is in allowed list - ensure type compatibility
@@ -253,11 +253,10 @@ async function canCreateItemsFromAI(userId, projectId) {
   // System Administrators can always create
   if (user.role === 'System Administrator') return true;
   
-  // Project members with Team Member role or higher can create
-  if (user.project_role === 'Project Manager' || 
-      user.project_role === 'System Administrator' ||
-      user.project_role === 'Team Lead' ||
-      user.project_role === 'Team Member') {
+  // Project members with Member role or higher can create (not Viewer)
+  if (user.project_role === 'Admin' || 
+      user.project_role === 'Manager' ||
+      user.project_role === 'Member') {
     return true;
   }
   
@@ -281,11 +280,10 @@ async function canAssignTo(userId, assigneeName, projectId) {
   
   const user = userResult.rows[0];
   
-  // System Administrators and Project Managers can assign to anyone
+  // System Administrators, Project Admins and Managers can assign to anyone
   if (user.role === 'System Administrator' || 
-      user.project_role === 'Project Manager' || 
-      user.project_role === 'System Administrator' ||
-      user.project_role === 'Team Lead') {
+      user.project_role === 'Admin' || 
+      user.project_role === 'Manager') {
     return { allowed: true };
   }
   
@@ -321,9 +319,9 @@ async function canUpdateItemStatus(userId, item) {
   
   const user = result.rows[0];
   
-  // System Administrators and Project Managers can update any item
+  // System Administrators, Project Admins and Managers can update any item
   if (user.role === 'System Administrator') return true;
-  if (user.project_role === 'Project Manager' || user.project_role === 'System Administrator') return true;
+  if (user.project_role === 'Admin' || user.project_role === 'Manager') return true;
   
   // Team members can update their own items
   // Check by exact username match (case-insensitive) or created_by ID
