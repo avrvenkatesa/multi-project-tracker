@@ -1,8 +1,22 @@
 let currentPreferences = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-  const authManager = new AuthManager();
-  authManager.initialize();
+document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize AuthManager
+  await AuthManager.init();
+  
+  if (!AuthManager.isAuthenticated) {
+    window.location.href = '/index.html';
+    return;
+  }
+  
+  // Update user info in header
+  document.getElementById('userName').textContent = AuthManager.currentUser.username;
+  document.getElementById('userRole').textContent = AuthManager.currentUser.role;
+  document.getElementById('userEmail').textContent = AuthManager.currentUser.email;
+  document.getElementById('loggedInState').classList.remove('hidden');
+  
+  // Setup logout
+  document.getElementById('logout-btn').addEventListener('click', () => AuthManager.logout());
   
   loadPreferences();
   
