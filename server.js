@@ -5,6 +5,7 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const { neon, Pool, neonConfig } = require("@neondatabase/serverless");
 const ws = require("ws");
 const multer = require('multer');
@@ -640,6 +641,373 @@ app.get('/api/projects/:projectId/team', authenticateToken, async (req, res) => 
   } catch (error) {
     console.error('Team endpoint error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to check if user is Manager+ in a project
+async function isProjectManager(userId, projectId) {
+  const result = await pool.query(`
+    SELECT role FROM project_members 
+    WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+  `, [userId, projectId]);
+  
+  if (result.rows.length === 0) return false;
+  
+  const role = result.rows[0].role;
+  return role === 'Admin' || role === 'Manager';
+}
+
+// 1. POST /api/projects/:projectId/team/invite - Send team invitation
+app.post('/api/projects/:projectId/team/invite', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { email, role, message } = req.body;
+    
+    console.log(`[INVITE] User ${req.user.id} inviting ${email} to project ${projectId} as ${role}`);
+    
+    // Validate role
+    const validRoles = ['Admin', 'Manager', 'Member', 'Viewer'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be Admin, Manager, Member, or Viewer' });
+    }
+    
+    // Check if user is Manager+ in this project
+    const isManager = await isProjectManager(req.user.id, projectId);
+    if (!isManager) {
+      return res.status(403).json({ error: 'Only project Managers and Admins can invite members' });
+    }
+    
+    // Check if email is already a member
+    const existingMember = await pool.query(`
+      SELECT pm.id FROM project_members pm
+      JOIN users u ON pm.user_id = u.id
+      WHERE pm.project_id = $1 AND u.email = $2 AND pm.status = 'active'
+    `, [projectId, email]);
+    
+    if (existingMember.rows.length > 0) {
+      return res.status(400).json({ error: 'User is already a member of this project' });
+    }
+    
+    // Check if there's already a pending invitation
+    const existingInvitation = await pool.query(`
+      SELECT id FROM project_invitations
+      WHERE project_id = $1 AND invitee_email = $2 AND status = 'pending' AND expires_at > NOW()
+    `, [projectId, email]);
+    
+    if (existingInvitation.rows.length > 0) {
+      return res.status(400).json({ error: 'A pending invitation already exists for this email' });
+    }
+    
+    // Generate unique invitation token
+    const invitationToken = crypto.randomBytes(32).toString('hex');
+    
+    // Set expiry to 7 days from now
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    
+    // Check if user exists with this email
+    const userResult = await pool.query(`
+      SELECT id FROM users WHERE email = $1
+    `, [email]);
+    
+    const inviteeUserId = userResult.rows.length > 0 ? userResult.rows[0].id : null;
+    
+    // Insert invitation
+    const result = await pool.query(`
+      INSERT INTO project_invitations (
+        project_id, inviter_id, invitee_email, invitee_user_id, role, 
+        invitation_token, message, expires_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `, [projectId, req.user.id, email, inviteeUserId, role, invitationToken, message, expiresAt]);
+    
+    console.log(`[INVITE] Created invitation ${result.rows[0].id} with token ${invitationToken}`);
+    
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('[INVITE] Error:', error);
+    res.status(500).json({ error: 'Failed to send invitation' });
+  }
+});
+
+// 2. POST /api/invitations/:token/accept - Accept team invitation
+app.post('/api/invitations/:token/accept', authenticateToken, async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    console.log(`[ACCEPT] User ${req.user.id} accepting invitation with token ${token}`);
+    
+    // Get invitation
+    const invitationResult = await pool.query(`
+      SELECT * FROM project_invitations
+      WHERE invitation_token = $1 AND status = 'pending' AND expires_at > NOW()
+    `, [token]);
+    
+    if (invitationResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Invalid or expired invitation' });
+    }
+    
+    const invitation = invitationResult.rows[0];
+    
+    // Verify email matches logged-in user
+    if (invitation.invitee_email !== req.user.email) {
+      return res.status(403).json({ error: 'This invitation is for a different email address' });
+    }
+    
+    // Check if user is already a member
+    const existingMember = await pool.query(`
+      SELECT id FROM project_members
+      WHERE project_id = $1 AND user_id = $2 AND status = 'active'
+    `, [invitation.project_id, req.user.id]);
+    
+    if (existingMember.rows.length > 0) {
+      return res.status(400).json({ error: 'You are already a member of this project' });
+    }
+    
+    // Begin transaction
+    await pool.query('BEGIN');
+    
+    try {
+      // Insert into project_members
+      await pool.query(`
+        INSERT INTO project_members (
+          project_id, user_id, role, invited_by, status
+        )
+        VALUES ($1, $2, $3, $4, 'active')
+      `, [invitation.project_id, req.user.id, invitation.role, invitation.inviter_id]);
+      
+      // Update invitation status
+      await pool.query(`
+        UPDATE project_invitations
+        SET status = 'accepted', responded_at = NOW()
+        WHERE id = $1
+      `, [invitation.id]);
+      
+      await pool.query('COMMIT');
+      
+      console.log(`[ACCEPT] User ${req.user.id} joined project ${invitation.project_id} as ${invitation.role}`);
+      
+      res.json({ 
+        message: 'Invitation accepted successfully',
+        projectId: invitation.project_id,
+        role: invitation.role
+      });
+    } catch (txError) {
+      await pool.query('ROLLBACK');
+      throw txError;
+    }
+  } catch (error) {
+    console.error('[ACCEPT] Error:', error);
+    res.status(500).json({ error: 'Failed to accept invitation' });
+  }
+});
+
+// 3. POST /api/invitations/:token/decline - Decline team invitation
+app.post('/api/invitations/:token/decline', authenticateToken, async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    console.log(`[DECLINE] User ${req.user.id} declining invitation with token ${token}`);
+    
+    // Get invitation
+    const invitationResult = await pool.query(`
+      SELECT * FROM project_invitations
+      WHERE invitation_token = $1 AND status = 'pending' AND expires_at > NOW()
+    `, [token]);
+    
+    if (invitationResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Invalid or expired invitation' });
+    }
+    
+    // Update invitation status
+    await pool.query(`
+      UPDATE project_invitations
+      SET status = 'declined', responded_at = NOW()
+      WHERE invitation_token = $1
+    `, [token]);
+    
+    console.log(`[DECLINE] Invitation declined successfully`);
+    
+    res.json({ message: 'Invitation declined successfully' });
+  } catch (error) {
+    console.error('[DECLINE] Error:', error);
+    res.status(500).json({ error: 'Failed to decline invitation' });
+  }
+});
+
+// 4. PATCH /api/projects/:projectId/team/:memberId/role - Update member role
+app.patch('/api/projects/:projectId/team/:memberId/role', authenticateToken, async (req, res) => {
+  try {
+    const { projectId, memberId } = req.params;
+    const { role: newRole } = req.body;
+    
+    console.log(`[UPDATE_ROLE] User ${req.user.id} updating member ${memberId} in project ${projectId} to ${newRole}`);
+    
+    // Validate new role
+    const validRoles = ['Admin', 'Manager', 'Member', 'Viewer'];
+    if (!validRoles.includes(newRole)) {
+      return res.status(400).json({ error: 'Invalid role. Must be Admin, Manager, Member, or Viewer' });
+    }
+    
+    // Check if user is Manager+ in this project
+    const isManager = await isProjectManager(req.user.id, projectId);
+    if (!isManager) {
+      return res.status(403).json({ error: 'Only project Managers and Admins can update member roles' });
+    }
+    
+    // Get current user's project membership
+    const currentUserResult = await pool.query(`
+      SELECT id, role FROM project_members
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+    
+    // Prevent changing own role
+    if (currentUserResult.rows.length > 0 && currentUserResult.rows[0].id === parseInt(memberId)) {
+      return res.status(400).json({ error: 'Cannot change your own role' });
+    }
+    
+    // Get target member
+    const targetMemberResult = await pool.query(`
+      SELECT pm.*, u.username, u.email FROM project_members pm
+      JOIN users u ON pm.user_id = u.id
+      WHERE pm.id = $1 AND pm.project_id = $2 AND pm.status = 'active'
+    `, [memberId, projectId]);
+    
+    if (targetMemberResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found in this project' });
+    }
+    
+    const targetMember = targetMemberResult.rows[0];
+    
+    // Update role
+    const result = await pool.query(`
+      UPDATE project_members
+      SET role = $1
+      WHERE id = $2
+      RETURNING *
+    `, [newRole, memberId]);
+    
+    console.log(`[UPDATE_ROLE] Member ${memberId} role updated to ${newRole}`);
+    
+    res.json({
+      ...result.rows[0],
+      username: targetMember.username,
+      email: targetMember.email
+    });
+  } catch (error) {
+    console.error('[UPDATE_ROLE] Error:', error);
+    res.status(500).json({ error: 'Failed to update member role' });
+  }
+});
+
+// 5. DELETE /api/projects/:projectId/team/:memberId - Remove team member
+app.delete('/api/projects/:projectId/team/:memberId', authenticateToken, async (req, res) => {
+  try {
+    const { projectId, memberId } = req.params;
+    
+    console.log(`[REMOVE_MEMBER] User ${req.user.id} removing member ${memberId} from project ${projectId}`);
+    
+    // Check if user is Manager+ in this project
+    const isManager = await isProjectManager(req.user.id, projectId);
+    if (!isManager) {
+      return res.status(403).json({ error: 'Only project Managers and Admins can remove members' });
+    }
+    
+    // Get current user's project membership
+    const currentUserResult = await pool.query(`
+      SELECT id FROM project_members
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+    
+    // Prevent removing self
+    if (currentUserResult.rows.length > 0 && currentUserResult.rows[0].id === parseInt(memberId)) {
+      return res.status(400).json({ error: 'Cannot remove yourself from the project' });
+    }
+    
+    // Update member status to removed
+    const result = await pool.query(`
+      UPDATE project_members
+      SET status = 'removed', removed_at = NOW(), removed_by = $1
+      WHERE id = $2 AND project_id = $3 AND status = 'active'
+      RETURNING *
+    `, [req.user.id, memberId, projectId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found in this project' });
+    }
+    
+    console.log(`[REMOVE_MEMBER] Member ${memberId} removed from project ${projectId}`);
+    
+    res.json({ message: 'Member removed successfully' });
+  } catch (error) {
+    console.error('[REMOVE_MEMBER] Error:', error);
+    res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
+// 6. GET /api/invitations/me - Get current user's pending invitations
+app.get('/api/invitations/me', authenticateToken, async (req, res) => {
+  try {
+    console.log(`[MY_INVITATIONS] Getting invitations for user ${req.user.id} (${req.user.email})`);
+    
+    const result = await pool.query(`
+      SELECT 
+        pi.*,
+        p.name as project_name,
+        p.description as project_description,
+        u.username as inviter_name,
+        u.email as inviter_email
+      FROM project_invitations pi
+      JOIN projects p ON pi.project_id = p.id
+      JOIN users u ON pi.inviter_id = u.id
+      WHERE pi.invitee_email = $1 
+        AND pi.status = 'pending' 
+        AND pi.expires_at > NOW()
+      ORDER BY pi.created_at DESC
+    `, [req.user.email]);
+    
+    console.log(`[MY_INVITATIONS] Found ${result.rows.length} pending invitations`);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('[MY_INVITATIONS] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch invitations' });
+  }
+});
+
+// 7. GET /api/projects/:projectId/invitations - Get project's pending invitations
+app.get('/api/projects/:projectId/invitations', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    console.log(`[PROJECT_INVITATIONS] User ${req.user.id} getting invitations for project ${projectId}`);
+    
+    // Check if user is Manager+ in this project
+    const isManager = await isProjectManager(req.user.id, projectId);
+    if (!isManager) {
+      return res.status(403).json({ error: 'Only project Managers and Admins can view invitations' });
+    }
+    
+    const result = await pool.query(`
+      SELECT 
+        pi.*,
+        u.username as inviter_name,
+        u.email as inviter_email
+      FROM project_invitations pi
+      JOIN users u ON pi.inviter_id = u.id
+      WHERE pi.project_id = $1 
+        AND pi.status = 'pending' 
+        AND pi.expires_at > NOW()
+      ORDER BY pi.created_at DESC
+    `, [projectId]);
+    
+    console.log(`[PROJECT_INVITATIONS] Found ${result.rows.length} pending invitations`);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('[PROJECT_INVITATIONS] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch project invitations' });
   }
 });
 

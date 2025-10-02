@@ -1,0 +1,64 @@
+YES - Proceed with implementing the 7 API endpoints.
+
+Implementation requirements:
+
+CRITICAL: Use the existing authentication and database patterns from server.js:
+- Use pool.query() for database access (not Drizzle ORM)
+- Use authenticateToken middleware for all endpoints
+- Use req.cookies for authentication (cookie-based auth)
+- Return proper JSON responses with error handling
+- Use bcrypt for any password operations
+- Use crypto.randomBytes(32).toString('hex') for invitation tokens
+
+Endpoint specifications:
+
+1. POST /api/projects/:projectId/team/invite
+   - Auth: Manager+ only (check project_members role)
+   - Validate: email, role (Admin/Manager/Member/Viewer)
+   - Check: user not already member, no pending invitation
+   - Generate: unique token, expiry 7 days from now
+   - Insert into project_invitations
+   - Return: invitation object with token
+
+2. POST /api/invitations/:token/accept
+   - Auth: any authenticated user
+   - Verify: token exists, not expired, email matches logged-in user
+   - Insert: into project_members with invited role
+   - Update: invitation status to 'accepted', responded_at to now
+   - Return: success message with projectId
+
+3. POST /api/invitations/:token/decline
+   - Auth: any authenticated user
+   - Verify: token exists, not expired
+   - Update: invitation status to 'declined', responded_at to now
+   - Return: success message
+
+4. PATCH /api/projects/:projectId/team/:memberId/role
+   - Auth: Manager+ only, cannot change own role
+   - Validate: new role is valid (Admin/Manager/Member/Viewer)
+   - Check: updater has higher role than target AND new role
+   - Update: project_members set role where id = memberId
+   - Return: updated member object
+
+5. DELETE /api/projects/:projectId/team/:memberId
+   - Auth: Manager+ only, cannot remove self
+   - Update: project_members set status='removed', removed_at=now, removed_by=req.user.id
+   - Return: success message
+
+6. GET /api/invitations/me
+   - Auth: any authenticated user
+   - Query: invitations where invitee_email = req.user.email, status='pending', expires_at > now
+   - Join: with projects and inviters to get names
+   - Return: array of invitation objects
+
+7. GET /api/projects/:projectId/invitations
+   - Auth: Manager+ in that project only
+   - Query: invitations where project_id = projectId, status='pending', expires_at > now
+   - Join: with inviters to get names
+   - Return: array of invitation objects
+
+Add all endpoints to server.js after the existing GET /team endpoint.
+Include comprehensive error handling and SQL injection prevention.
+Log all operations for debugging.
+
+Proceed with implementation.
