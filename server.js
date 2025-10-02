@@ -1123,11 +1123,11 @@ app.get('/api/projects/:projectId/dashboard/stats', authenticateToken, async (re
     // Get total comments
     const commentsResult = await pool.query(`
       SELECT COUNT(*) as count FROM (
-        SELECT id FROM issue_comments ic
+        SELECT ic.id FROM issue_comments ic
         JOIN issues i ON ic.issue_id = i.id
         WHERE i.project_id = $1
         UNION ALL
-        SELECT id FROM action_item_comments aic
+        SELECT aic.id FROM action_item_comments aic
         JOIN action_items ai ON aic.action_item_id = ai.id
         WHERE ai.project_id = $2
       ) as all_comments
@@ -1201,7 +1201,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           'Created action item' as details
         FROM action_items ai
         JOIN users u ON ai.created_by = u.id
-        WHERE ai.project_id = $1
+        WHERE ai.project_id = $2
         
         UNION ALL
         
@@ -1216,7 +1216,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
         FROM issue_comments ic
         JOIN issues i ON ic.issue_id = i.id
         JOIN users u ON ic.user_id = u.id
-        WHERE i.project_id = $1
+        WHERE i.project_id = $3
         
         UNION ALL
         
@@ -1231,7 +1231,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
         FROM action_item_comments aic
         JOIN action_items ai ON aic.action_item_id = ai.id
         JOIN users u ON aic.user_id = u.id
-        WHERE ai.project_id = $1
+        WHERE ai.project_id = $4
         
         UNION ALL
         
@@ -1245,11 +1245,11 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           'Uploaded meeting transcript' as details
         FROM meeting_transcripts mt
         JOIN users u ON mt.uploaded_by = u.id
-        WHERE mt.project_id = $1
+        WHERE mt.project_id = $5
       ) as all_activity
       ORDER BY timestamp DESC
-      LIMIT $2
-    `, [projectId, limit]);
+      LIMIT $6
+    `, [projectId, projectId, projectId, projectId, projectId, limit]);
     
     console.log(`[DASHBOARD_ACTIVITY] Retrieved ${activityResult.rows.length} activities`);
     
@@ -1301,50 +1301,50 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
         FROM issues
         WHERE project_id = $1
         GROUP BY assignee
-      ) issues_assigned ON issues_assigned.assignee = pm.user_id
+      ) issues_assigned ON issues_assigned.assignee = CAST(pm.user_id AS TEXT)
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM issues
-        WHERE project_id = $1 AND status = 'Done'
+        WHERE project_id = $2 AND status = 'Done'
         GROUP BY assignee
-      ) issues_completed ON issues_completed.assignee = pm.user_id
+      ) issues_completed ON issues_completed.assignee = CAST(pm.user_id AS TEXT)
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM action_items
-        WHERE project_id = $1
+        WHERE project_id = $3
         GROUP BY assignee
-      ) actions_assigned ON actions_assigned.assignee = pm.user_id
+      ) actions_assigned ON actions_assigned.assignee = CAST(pm.user_id AS TEXT)
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM action_items
-        WHERE project_id = $1 AND status = 'Completed'
+        WHERE project_id = $4 AND status = 'Completed'
         GROUP BY assignee
-      ) actions_completed ON actions_completed.assignee = pm.user_id
+      ) actions_completed ON actions_completed.assignee = CAST(pm.user_id AS TEXT)
       LEFT JOIN (
         SELECT user_id, COUNT(*) as count
         FROM (
           SELECT ic.user_id
           FROM issue_comments ic
           JOIN issues i ON ic.issue_id = i.id
-          WHERE i.project_id = $1
+          WHERE i.project_id = $5
           UNION ALL
           SELECT aic.user_id
           FROM action_item_comments aic
           JOIN action_items ai ON aic.action_item_id = ai.id
-          WHERE ai.project_id = $1
+          WHERE ai.project_id = $6
         ) all_comments
         GROUP BY user_id
       ) comments ON comments.user_id = pm.user_id
       LEFT JOIN (
         SELECT created_by, MAX(created_at) as last_created
         FROM issues
-        WHERE project_id = $1
+        WHERE project_id = $7
         GROUP BY created_by
       ) last_issue ON last_issue.created_by = pm.user_id
       LEFT JOIN (
         SELECT created_by, MAX(created_at) as last_created
         FROM action_items
-        WHERE project_id = $1
+        WHERE project_id = $8
         GROUP BY created_by
       ) last_action ON last_action.created_by = pm.user_id
       LEFT JOIN (
@@ -1353,18 +1353,18 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
           SELECT ic.user_id, ic.created_at
           FROM issue_comments ic
           JOIN issues i ON ic.issue_id = i.id
-          WHERE i.project_id = $1
+          WHERE i.project_id = $9
           UNION ALL
           SELECT aic.user_id, aic.created_at
           FROM action_item_comments aic
           JOIN action_items ai ON aic.action_item_id = ai.id
-          WHERE ai.project_id = $1
+          WHERE ai.project_id = $10
         ) all_comments
         GROUP BY user_id
       ) last_comment ON last_comment.user_id = pm.user_id
-      WHERE pm.project_id = $1 AND pm.status = 'active'
+      WHERE pm.project_id = $11 AND pm.status = 'active'
       ORDER BY (issues_completed + action_items_completed) DESC
-    `, [projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId]);
+    `, [projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId]);
     
     console.log(`[DASHBOARD_TEAM] Retrieved metrics for ${teamResult.rows.length} team members`);
     
