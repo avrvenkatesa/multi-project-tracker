@@ -1215,7 +1215,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           'Added comment on issue' as details
         FROM issue_comments ic
         JOIN issues i ON ic.issue_id = i.id
-        JOIN users u ON ic.user_id = u.id
+        JOIN users u ON ic.user_id = CAST(u.id AS TEXT)
         WHERE i.project_id = $3
         
         UNION ALL
@@ -1230,7 +1230,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           'Added comment on action item' as details
         FROM action_item_comments aic
         JOIN action_items ai ON aic.action_item_id = ai.id
-        JOIN users u ON aic.user_id = u.id
+        JOIN users u ON aic.user_id = CAST(u.id AS TEXT)
         WHERE ai.project_id = $4
         
         UNION ALL
@@ -1256,6 +1256,9 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
     res.json(activityResult.rows);
   } catch (error) {
     console.error('[DASHBOARD_ACTIVITY] Error:', error);
+    console.error('[DASHBOARD_ACTIVITY] Error detail:', error.detail);
+    console.error('[DASHBOARD_ACTIVITY] Error hint:', error.hint);
+    console.error('[DASHBOARD_ACTIVITY] Error position:', error.position);
     res.status(500).json({ error: 'Failed to fetch dashboard activity' });
   }
 });
@@ -1363,7 +1366,7 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
         GROUP BY user_id
       ) last_comment ON last_comment.user_id = pm.user_id
       WHERE pm.project_id = $11 AND pm.status = 'active'
-      ORDER BY (issues_completed + action_items_completed) DESC
+      ORDER BY (COALESCE(issues_completed.count, 0) + COALESCE(actions_completed.count, 0)) DESC
     `, [projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId]);
     
     console.log(`[DASHBOARD_TEAM] Retrieved metrics for ${teamResult.rows.length} team members`);
@@ -1371,6 +1374,9 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
     res.json(teamResult.rows);
   } catch (error) {
     console.error('[DASHBOARD_TEAM] Error:', error);
+    console.error('[DASHBOARD_TEAM] Error detail:', error.detail);
+    console.error('[DASHBOARD_TEAM] Error hint:', error.hint);
+    console.error('[DASHBOARD_TEAM] Error position:', error.position);
     res.status(500).json({ error: 'Failed to fetch team metrics' });
   }
 });
