@@ -191,7 +191,27 @@ function renderDashboard() {
   
   // Initialize charts after DOM is ready
   setTimeout(() => {
-    initializeCharts();
+    if (typeof Chart !== 'undefined') {
+      initializeCharts();
+    } else {
+      console.error('Chart.js not loaded yet, retrying...');
+      setTimeout(() => {
+        if (typeof Chart !== 'undefined') {
+          initializeCharts();
+        } else {
+          console.error('Chart.js failed to load');
+          // Show error message in chart areas
+          const statusChart = document.getElementById('statusChart');
+          const priorityChart = document.getElementById('priorityChart');
+          if (statusChart) {
+            statusChart.parentElement.innerHTML = '<div class="bg-white rounded-lg shadow-md p-6"><h3 class="text-lg font-semibold text-gray-800 mb-4">Issues by Status</h3><p class="text-red-500 text-center py-8">Chart library failed to load</p></div>';
+          }
+          if (priorityChart) {
+            priorityChart.parentElement.innerHTML = '<div class="bg-white rounded-lg shadow-md p-6"><h3 class="text-lg font-semibold text-gray-800 mb-4">Issues by Priority</h3><p class="text-red-500 text-center py-8">Chart library failed to load</p></div>';
+          }
+        }
+      }, 500);
+    }
   }, 100);
   
   // Show content, hide loading
