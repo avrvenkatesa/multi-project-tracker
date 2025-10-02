@@ -1186,7 +1186,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           i.created_at as timestamp,
           'Created issue' as details
         FROM issues i
-        JOIN users u ON i.created_by = u.id
+        JOIN users u ON i.created_by = CAST(u.id AS TEXT)
         WHERE i.project_id = $1
         
         UNION ALL
@@ -1200,7 +1200,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           ai.created_at as timestamp,
           'Created action item' as details
         FROM action_items ai
-        JOIN users u ON ai.created_by = u.id
+        JOIN users u ON ai.created_by = CAST(u.id AS TEXT)
         WHERE ai.project_id = $2
         
         UNION ALL
@@ -1244,7 +1244,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
           mt.uploaded_at as timestamp,
           'Uploaded meeting transcript' as details
         FROM meeting_transcripts mt
-        JOIN users u ON mt.uploaded_by = u.id
+        JOIN users u ON mt.uploaded_by = CAST(u.id AS TEXT)
         WHERE mt.project_id = $5
       ) as all_activity
       ORDER BY timestamp DESC
@@ -1340,13 +1340,13 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
         FROM issues
         WHERE project_id = $7
         GROUP BY created_by
-      ) last_issue ON last_issue.created_by = pm.user_id
+      ) last_issue ON last_issue.created_by = CAST(pm.user_id AS TEXT)
       LEFT JOIN (
         SELECT created_by, MAX(created_at) as last_created
         FROM action_items
         WHERE project_id = $8
         GROUP BY created_by
-      ) last_action ON last_action.created_by = pm.user_id
+      ) last_action ON last_action.created_by = CAST(pm.user_id AS TEXT)
       LEFT JOIN (
         SELECT user_id, MAX(created_at) as last_created
         FROM (
