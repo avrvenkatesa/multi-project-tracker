@@ -80,6 +80,13 @@ Enhanced email invitation acceptance with proper web-based handling and comprehe
 - **Graceful Handling**: Both GET and POST endpoints now handle "already a member" case gracefully - updates invitation status and shows friendly confirmation instead of error
 - **Bug Fix**: Fixed POST endpoint duplicate key error when accepting invitations for projects user is already a member of
 
+### Fixed Comment Email Notification Deep-Linking (October 2, 2025)
+Fixed the "View Comment" link in @mention email notifications to navigate directly to the specific comment:
+- **Email Link**: Updated notification emails to include `itemId` and `itemType` parameters in URL
+- **Deep-Linking**: Added automatic project selection and modal opening from URL parameters
+- **Auto-Open Modal**: When clicking email link, automatically opens the specific issue/action item modal
+- **URL Cleanup**: After opening modal, cleans up URL parameters for cleaner navigation
+
 ### Cancel Pending Invitations Feature (October 2, 2025)
 Implemented invitation management for project managers to cancel pending invitations:
 - **Backend API**: `DELETE /api/projects/:projectId/invitations/:invitationId` with manager-only authorization

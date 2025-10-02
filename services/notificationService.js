@@ -71,7 +71,7 @@ class NotificationService {
         itemTitle,
         itemType,
         commentPreview: commentPreview.substring(0, 200) + (commentPreview.length > 200 ? '...' : ''),
-        itemLink: `${appUrl}/project.html?id=${projectId}`,
+        itemLink: `${appUrl}/index.html?project=${projectId}&itemId=${itemId}&itemType=${itemType}`,
         unsubscribeLink: `${appUrl}/api/notifications/unsubscribe/${unsubscribeToken}`
       });
       

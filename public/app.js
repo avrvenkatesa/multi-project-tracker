@@ -96,7 +96,14 @@ function debounce(func, wait) {
 document.addEventListener("DOMContentLoaded", async function () {
     console.log("Multi-Project Tracker initialized");
     await AuthManager.init();
-    loadProjects();
+    await loadProjects();
+    
+    // Check if there's a project parameter in URL (from email links)
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get('project');
+    if (projectId && projects.length > 0) {
+        await selectProject(parseInt(projectId));
+    }
     
     // Toggle review queue button
     const toggleQueueBtn = document.getElementById('toggle-review-queue-btn');
@@ -249,6 +256,24 @@ async function selectProject(projectId) {
     document.getElementById("project-view").classList.remove("hidden");
 
     await loadProjectData(projectId);
+    
+    // Check for deep-link parameters (itemId and itemType from email notifications)
+    const params = new URLSearchParams(window.location.search);
+    const itemId = params.get('itemId');
+    const itemType = params.get('itemType');
+    
+    if (itemId && itemType) {
+        // Auto-open the item detail modal
+        setTimeout(() => {
+            openItemDetailModal(parseInt(itemId), itemType);
+        }, 500); // Small delay to ensure kanban board is rendered
+        
+        // Clean up URL (remove itemId and itemType params)
+        params.delete('itemId');
+        params.delete('itemType');
+        const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+        window.history.replaceState({}, '', newURL);
+    }
 }
 
 // Load project data with filters
