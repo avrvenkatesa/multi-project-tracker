@@ -197,13 +197,13 @@ function renderDashboard() {
         <div class="border border-gray-200 rounded-lg p-4">
           <h4 class="font-medium text-gray-700 mb-3">PDF Reports</h4>
           <div class="space-y-2">
-            <button onclick="generateReport('executive')" class="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center">
+            <button data-report-type="executive" class="report-btn w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center">
               <span class="mr-2">📄</span> Executive Summary
             </button>
-            <button onclick="generateReport('detailed')" class="w-full bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 flex items-center justify-center">
+            <button data-report-type="detailed" class="report-btn w-full bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 flex items-center justify-center">
               <span class="mr-2">📋</span> Detailed Report
             </button>
-            <button onclick="generateReport('team')" class="w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center justify-center">
+            <button data-report-type="team" class="report-btn w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center justify-center">
               <span class="mr-2">👥</span> Team Performance
             </button>
           </div>
@@ -214,13 +214,13 @@ function renderDashboard() {
         <div class="border border-gray-200 rounded-lg p-4">
           <h4 class="font-medium text-gray-700 mb-3">CSV Export</h4>
           <div class="space-y-2">
-            <button onclick="exportCSV('issues')" class="w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 flex items-center justify-center">
+            <button data-export-type="issues" class="export-btn w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 flex items-center justify-center">
               <span class="mr-2">📝</span> Export Issues
             </button>
-            <button onclick="exportCSV('actions')" class="w-full bg-teal-600 text-white px-4 py-2 rounded hover:bg-teal-700 flex items-center justify-center">
+            <button data-export-type="actions" class="export-btn w-full bg-teal-600 text-white px-4 py-2 rounded hover:bg-teal-700 flex items-center justify-center">
               <span class="mr-2">✓</span> Export Action Items
             </button>
-            <button onclick="exportCSV('full')" class="w-full bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 flex items-center justify-center">
+            <button data-export-type="full" class="export-btn w-full bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 flex items-center justify-center">
               <span class="mr-2">📊</span> Full Project Export
             </button>
           </div>
@@ -633,8 +633,24 @@ function showError(message) {
 
 // Setup report handlers
 function setupReportHandlers() {
-  // Event handlers are set up via onclick attributes in the HTML
-  // This function is called to ensure any additional setup can be done
+  // Add event listeners to report buttons
+  const reportButtons = document.querySelectorAll('.report-btn');
+  reportButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const reportType = button.getAttribute('data-report-type');
+      generateReport(reportType);
+    });
+  });
+  
+  // Add event listeners to export buttons
+  const exportButtons = document.querySelectorAll('.export-btn');
+  exportButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const exportType = button.getAttribute('data-export-type');
+      exportCSV(exportType);
+    });
+  });
+  
   console.log('Report handlers initialized');
 }
 
