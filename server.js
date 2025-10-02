@@ -1147,41 +1147,64 @@ app.post('/api/invitations/:token/accept', authenticateToken, async (req, res) =
       return res.status(403).json({ error: 'This invitation is for a different email address' });
     }
     
-    // Check if user is already a member
+    // Check if user has any existing record (active or removed)
     const existingMember = await pool.query(`
-      SELECT id FROM project_members
-      WHERE project_id = $1 AND user_id = $2 AND status = 'active'
+      SELECT id, status FROM project_members
+      WHERE project_id = $1 AND user_id = $2
     `, [invitation.project_id, req.user.id]);
-    
-    if (existingMember.rows.length > 0) {
-      // Already a member - just update invitation status and return success
-      await pool.query(`
-        UPDATE project_invitations
-        SET status = 'accepted', responded_at = NOW()
-        WHERE id = $1
-      `, [invitation.id]);
-      
-      console.log(`[ACCEPT] User ${req.user.id} already a member of project ${invitation.project_id}, invitation marked as accepted`);
-      
-      return res.json({ 
-        message: 'You are already a member of this project',
-        projectId: invitation.project_id,
-        role: invitation.role,
-        alreadyMember: true
-      });
-    }
     
     // Begin transaction
     await pool.query('BEGIN');
     
     try {
-      // Insert into project_members
-      await pool.query(`
-        INSERT INTO project_members (
-          project_id, user_id, role, invited_by, status
-        )
-        VALUES ($1, $2, $3, $4, 'active')
-      `, [invitation.project_id, req.user.id, invitation.role, invitation.inviter_id]);
+      if (existingMember.rows.length > 0) {
+        const member = existingMember.rows[0];
+        
+        if (member.status === 'active') {
+          // Already an active member - just update invitation and return
+          await pool.query(`
+            UPDATE project_invitations
+            SET status = 'accepted', responded_at = NOW()
+            WHERE id = $1
+          `, [invitation.id]);
+          
+          await pool.query('COMMIT');
+          
+          console.log(`[ACCEPT] User ${req.user.id} already active member of project ${invitation.project_id}`);
+          
+          return res.json({ 
+            message: 'You are already a member of this project',
+            projectId: invitation.project_id,
+            role: invitation.role,
+            alreadyMember: true
+          });
+        } else {
+          // Was removed, now re-joining - update existing record
+          await pool.query(`
+            UPDATE project_members
+            SET status = 'active', 
+                role = $1, 
+                joined_at = NOW(), 
+                invited_by = $2,
+                removed_at = NULL,
+                removed_by = NULL,
+                last_active = NOW()
+            WHERE id = $3
+          `, [invitation.role, invitation.inviter_id, member.id]);
+          
+          console.log(`[ACCEPT] User ${req.user.id} re-joined project ${invitation.project_id} (was previously removed)`);
+        }
+      } else {
+        // New member - insert new record
+        await pool.query(`
+          INSERT INTO project_members (
+            project_id, user_id, role, invited_by, status
+          )
+          VALUES ($1, $2, $3, $4, 'active')
+        `, [invitation.project_id, req.user.id, invitation.role, invitation.inviter_id]);
+        
+        console.log(`[ACCEPT] User ${req.user.id} joined project ${invitation.project_id} as new member`);
+      }
       
       // Update invitation status
       await pool.query(`
