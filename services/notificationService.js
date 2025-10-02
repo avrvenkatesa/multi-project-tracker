@@ -129,7 +129,7 @@ class NotificationService {
     }
   }
   
-  async sendStatusChangeNotification({ assignedUserId, itemTitle, itemType, oldStatus, newStatus, changedByName, projectId }) {
+  async sendStatusChangeNotification({ assignedUserId, itemTitle, itemType, itemId, oldStatus, newStatus, changedByName, projectId }) {
     try {
       if (!await this.canSendNotification(assignedUserId, 'status_changes')) {
         console.log(`📧 Status change notification skipped for user ${assignedUserId} (disabled)`);
@@ -151,7 +151,7 @@ class NotificationService {
         itemType,
         oldStatus,
         newStatus,
-        itemLink: `${appUrl}/project.html?id=${projectId}`,
+        itemLink: `${appUrl}/index.html?project=${projectId}&itemId=${itemId}&itemType=${itemType}`,
         unsubscribeLink: `${appUrl}/api/notifications/unsubscribe/${unsubscribeToken}`
       });
       

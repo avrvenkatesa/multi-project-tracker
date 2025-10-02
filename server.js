@@ -2149,12 +2149,42 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       return res.status(403).json({ error: 'Can only edit your own issues' });
     }
     
+    const oldStatus = issue.status;
+    
     const [updatedIssue] = await sql`
       UPDATE issues 
       SET status = ${status}, updated_at = CURRENT_TIMESTAMP
       WHERE id = ${id}
       RETURNING *
     `;
+    
+    // Send status change notification to assignee (non-blocking)
+    if (updatedIssue.assignee && updatedIssue.assignee.trim() !== '' && oldStatus !== status) {
+      try {
+        const assigneeUser = await pool.query(
+          'SELECT id FROM users WHERE username = $1',
+          [updatedIssue.assignee]
+        );
+        
+        if (assigneeUser.rows.length > 0) {
+          // Fire and forget - don't await to avoid blocking issue update
+          notificationService.sendStatusChangeNotification({
+            assignedUserId: assigneeUser.rows[0].id,
+            itemTitle: updatedIssue.title,
+            itemType: 'issue',
+            itemId: updatedIssue.id,
+            oldStatus: oldStatus,
+            newStatus: status,
+            changedByName: req.user.username,
+            projectId: updatedIssue.project_id
+          }).catch(err => {
+            console.error('Error sending status change notification:', err);
+          });
+        }
+      } catch (err) {
+        console.error('Error looking up assignee for status change notification:', err);
+      }
+    }
     
     res.json(updatedIssue);
   } catch (error) {
