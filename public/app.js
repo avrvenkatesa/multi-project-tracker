@@ -847,7 +847,7 @@ function generateAssigneeOptions() {
     
     if (teamMembers && teamMembers.length > 0) {
         options += teamMembers.map(member => 
-            `<option value="${member.username}">${member.username} (${member.email})</option>`
+            `<option value="${member.name}">${member.name} (${member.email})</option>`
         ).join('');
     }
     
