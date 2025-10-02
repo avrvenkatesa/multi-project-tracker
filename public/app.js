@@ -3,6 +3,7 @@ let currentProject = null;
 let projects = [];
 let issues = [];
 let actionItems = [];
+let teamMembers = [];
 
 // Filter state
 let currentFilters = {
@@ -291,6 +292,7 @@ async function loadProjectData(projectId) {
         const [issuesResponse, actionItemsResponse] = await Promise.all([
             axios.get(`/api/issues?${params.toString()}`),
             axios.get(`/api/action-items?${params.toString()}`),
+            loadTeamMembers(projectId),
         ]);
 
         issues = issuesResponse.data;
@@ -305,6 +307,17 @@ async function loadProjectData(projectId) {
         await loadReviewQueue(projectId);
     } catch (error) {
         console.error("Error loading project data:", error);
+    }
+}
+
+// Load team members for the current project
+async function loadTeamMembers(projectId) {
+    try {
+        const response = await axios.get(`/api/projects/${projectId}/team`);
+        teamMembers = response.data;
+    } catch (error) {
+        console.error("Error loading team members:", error);
+        teamMembers = [];
     }
 }
 
@@ -768,10 +781,7 @@ function showCreateIssue() {
                 <label class="block text-sm font-medium mb-2">Assigned To</label>
                 <select id="issue-assignee" 
                         class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                    <option value="">Unassigned</option>
-                    <option value="Demo User">Demo User</option>
-                    <option value="Project Manager">Project Manager</option>
-                    <option value="Technical Lead">Technical Lead</option>
+                    ${generateAssigneeOptions()}
                 </select>
             </div>
             
@@ -830,6 +840,18 @@ function generateComponentOptions() {
     return currentProject.components.map(component => 
         `<option value="${component}">${component}</option>`
     ).join('');
+}
+
+function generateAssigneeOptions() {
+    let options = '<option value="">Unassigned</option>';
+    
+    if (teamMembers && teamMembers.length > 0) {
+        options += teamMembers.map(member => 
+            `<option value="${member.username}">${member.username} (${member.email})</option>`
+        ).join('');
+    }
+    
+    return options;
 }
 
 // Create issue function
@@ -938,10 +960,7 @@ function showCreateActionItem() {
                 <label class="block text-sm font-medium mb-2">Assigned To</label>
                 <select id="action-item-assignee" 
                         class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                    <option value="">Unassigned</option>
-                    <option value="Demo User">Demo User</option>
-                    <option value="Project Manager">Project Manager</option>
-                    <option value="Technical Lead">Technical Lead</option>
+                    ${generateAssigneeOptions()}
                 </select>
             </div>
             
