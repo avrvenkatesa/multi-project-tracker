@@ -5,6 +5,18 @@ const crypto = require('crypto');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+function getAppUrl() {
+  if (process.env.APP_URL) {
+    return process.env.APP_URL;
+  }
+  
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  
+  return 'http://localhost:5000';
+}
+
 class NotificationService {
   
   async canSendNotification(userId, notificationType) {
@@ -52,7 +64,7 @@ class NotificationService {
       }
       
       const unsubscribeToken = await this.generateUnsubscribeToken(mentionedUserId);
-      const appUrl = process.env.APP_URL || `http://localhost:5000`;
+      const appUrl = getAppUrl();
       
       const { html, text } = renderTemplate('mention', {
         mentionerName,
@@ -88,7 +100,7 @@ class NotificationService {
       }
       
       const unsubscribeToken = await this.generateUnsubscribeToken(assignedUserId);
-      const appUrl = process.env.APP_URL || `http://localhost:5000`;
+      const appUrl = getAppUrl();
       
       const formattedDueDate = dueDate ? new Date(dueDate).toLocaleDateString('en-US', { 
         year: 'numeric', 
@@ -131,7 +143,7 @@ class NotificationService {
       }
       
       const unsubscribeToken = await this.generateUnsubscribeToken(assignedUserId);
-      const appUrl = process.env.APP_URL || `http://localhost:5000`;
+      const appUrl = getAppUrl();
       
       const { html, text } = renderTemplate('status-change', {
         changedByName,
@@ -156,7 +168,7 @@ class NotificationService {
   
   async sendInvitationNotification({ inviteeEmail, inviterName, projectName, role, invitationToken }) {
     try {
-      const appUrl = process.env.APP_URL || `http://localhost:5000`;
+      const appUrl = getAppUrl();
       
       const { html, text } = renderTemplate('invitation', {
         inviterName,
