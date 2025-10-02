@@ -361,56 +361,89 @@ function initializeCharts() {
   const stats = dashboardData.stats;
   const trends = dashboardData.trends;
   
+  console.log('Initializing charts with data:', {
+    issuesByStatus: stats.issuesByStatus,
+    issuesByPriority: stats.issuesByPriority
+  });
+  
   // Status pie chart
   const statusCtx = document.getElementById('statusChart');
   if (statusCtx) {
-    charts.status = new Chart(statusCtx, {
-      type: 'doughnut',
-      data: {
-        labels: Object.keys(stats.issuesByStatus),
-        datasets: [{
-          data: Object.values(stats.issuesByStatus),
-          backgroundColor: ['#9CA3AF', '#FCD34D', '#34D399'],
-          borderWidth: 2,
-          borderColor: '#fff'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: {
-            position: 'bottom'
+    const statusLabels = Object.keys(stats.issuesByStatus);
+    const statusData = Object.values(stats.issuesByStatus);
+    
+    console.log('Status chart - labels:', statusLabels, 'data:', statusData);
+    
+    if (statusLabels.length === 0) {
+      statusCtx.parentElement.innerHTML = `
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Issues by Status</h3>
+          <p class="text-gray-500 text-center py-8">No issue data available</p>
+        </div>
+      `;
+    } else {
+      charts.status = new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+          labels: statusLabels,
+          datasets: [{
+            data: statusData,
+            backgroundColor: ['#9CA3AF', '#FCD34D', '#34D399'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
           }
         }
-      }
-    });
+      });
+    }
   }
   
   // Priority pie chart
   const priorityCtx = document.getElementById('priorityChart');
   if (priorityCtx) {
-    charts.priority = new Chart(priorityCtx, {
-      type: 'doughnut',
-      data: {
-        labels: Object.keys(stats.issuesByPriority),
-        datasets: [{
-          data: Object.values(stats.issuesByPriority),
-          backgroundColor: ['#EF4444', '#F97316', '#3B82F6'],
-          borderWidth: 2,
-          borderColor: '#fff'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: {
-            position: 'bottom'
+    const priorityLabels = Object.keys(stats.issuesByPriority);
+    const priorityData = Object.values(stats.issuesByPriority);
+    
+    console.log('Priority chart - labels:', priorityLabels, 'data:', priorityData);
+    
+    if (priorityLabels.length === 0) {
+      priorityCtx.parentElement.innerHTML = `
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Issues by Priority</h3>
+          <p class="text-gray-500 text-center py-8">No issue data available</p>
+        </div>
+      `;
+    } else {
+      charts.priority = new Chart(priorityCtx, {
+        type: 'doughnut',
+        data: {
+          labels: priorityLabels,
+          datasets: [{
+            data: priorityData,
+            backgroundColor: ['#EF4444', '#F97316', '#3B82F6'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
           }
         }
-      }
-    });
+      });
+    }
   }
   
   // Activity trend line chart
