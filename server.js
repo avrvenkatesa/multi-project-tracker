@@ -614,6 +614,35 @@ app.delete("/api/projects/:id", authenticateToken, requireRole('System Administr
   }
 });
 
+// Get project team members
+app.get('/api/projects/:projectId/team', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    console.log('Team endpoint called for project:', projectId);
+    console.log('User:', req.user);
+    
+    const result = await pool.query(`
+      SELECT 
+        pm.id,
+        pm.user_id,
+        u.username as name,
+        u.email,
+        pm.role,
+        pm.joined_at,
+        pm.status
+      FROM project_members pm
+      JOIN users u ON pm.user_id = u.id
+      WHERE pm.project_id = $1 AND pm.status = 'active'
+      ORDER BY pm.role, pm.joined_at
+    `, [projectId]);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Team endpoint error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============= ISSUES ROUTES =============
 
 // Get issues with filtering and search
