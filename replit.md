@@ -66,4 +66,21 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 ### CDN Services
 - **Tailwind CSS CDN**: CSS framework delivery.
 - **Unpkg CDN**: JavaScript library delivery.
-- **Chart.js**: Data visualization charts.
+- **Chart.js**: Data visualization charts for dashboard analytics (local copy in public/).
+
+## Recent Changes
+
+### Improved Invitation Acceptance Flow (October 2, 2025)
+Enhanced email invitation acceptance with proper web-based handling and comprehensive security:
+- **Email URL Fix**: All notification emails now use Replit domain instead of localhost (via `getAppUrl()` helper that auto-detects `REPLIT_DEV_DOMAIN`)
+- **GET Endpoint**: Added `GET /api/invitations/:token/accept` for email link clicks (previously only had POST endpoint)
+- **Smart Flow**: Checks authentication via cookie, redirects to login if needed, handles all edge cases gracefully
+- **User-Friendly Pages**: Beautiful HTML success/error pages for all scenarios (invalid invitation, wrong account, already member, success with auto-redirect)
+- **Security**: Comprehensive HTML escaping with `escapeHtml()` helper for all user-controlled values (prevents XSS), URL encoding for redirect parameters
+- **Graceful Handling**: "Already a member" case handled without errors, shows friendly confirmation message
+
+### Cancel Pending Invitations Feature (October 2, 2025)
+Implemented invitation management for project managers to cancel pending invitations:
+- **Backend API**: `DELETE /api/projects/:projectId/invitations/:invitationId` with manager-only authorization
+- **Frontend**: Red "Cancel" button on pending invitation cards with confirmation dialog and automatic UI refresh
+- **Security**: Role-based authorization, project ownership validation, proper error handling
