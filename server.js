@@ -1016,7 +1016,7 @@ app.get('/api/projects/:projectId/invitations', authenticateToken, async (req, r
 // 1. GET /api/projects/:projectId/dashboard/stats - Get project statistics
 app.get('/api/projects/:projectId/dashboard/stats', authenticateToken, async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const projectId = parseInt(req.params.projectId);
     
     console.log(`[DASHBOARD_STATS] User ${req.user.id} getting stats for project ${projectId}`);
     
@@ -1159,7 +1159,7 @@ app.get('/api/projects/:projectId/dashboard/stats', authenticateToken, async (re
 // 2. GET /api/projects/:projectId/dashboard/activity - Get recent activity
 app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const projectId = parseInt(req.params.projectId);
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
     
     console.log(`[DASHBOARD_ACTIVITY] User ${req.user.id} getting activity for project ${projectId}`);
@@ -1263,7 +1263,7 @@ app.get('/api/projects/:projectId/dashboard/activity', authenticateToken, async 
 // 3. GET /api/projects/:projectId/dashboard/team-metrics - Get team member metrics
 app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const projectId = parseInt(req.params.projectId);
     
     console.log(`[DASHBOARD_TEAM] User ${req.user.id} getting team metrics for project ${projectId}`);
     
@@ -1378,7 +1378,7 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
 // 4. GET /api/projects/:projectId/dashboard/trends - Get time-series trends
 app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const projectId = parseInt(req.params.projectId);
     const days = Math.min(parseInt(req.query.days) || 30, 90);
     
     console.log(`[DASHBOARD_TRENDS] User ${req.user.id} getting trends for project ${projectId} (${days} days)`);
@@ -1401,10 +1401,10 @@ app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (r
         COUNT(CASE WHEN status = 'Done' THEN 1 END) as completed
       FROM issues
       WHERE project_id = $1 
-        AND created_at >= NOW() - INTERVAL '${days} days'
+        AND created_at >= NOW() - ($2 || ' days')::INTERVAL
       GROUP BY DATE(created_at)
       ORDER BY date ASC
-    `, [projectId]);
+    `, [projectId, days]);
     
     // Get action items trend
     const actionsTrendResult = await pool.query(`
@@ -1414,10 +1414,10 @@ app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (r
         COUNT(CASE WHEN status = 'Completed' THEN 1 END) as completed
       FROM action_items
       WHERE project_id = $1 
-        AND created_at >= NOW() - INTERVAL '${days} days'
+        AND created_at >= NOW() - ($2 || ' days')::INTERVAL
       GROUP BY DATE(created_at)
       ORDER BY date ASC
-    `, [projectId]);
+    `, [projectId, days]);
     
     // Get activity trend
     const activityTrendResult = await pool.query(`
@@ -1425,22 +1425,22 @@ app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (r
       FROM (
         SELECT created_at as activity_date FROM issues WHERE project_id = $1
         UNION ALL
-        SELECT created_at FROM action_items WHERE project_id = $1
+        SELECT created_at FROM action_items WHERE project_id = $2
         UNION ALL
         SELECT ic.created_at
         FROM issue_comments ic
         JOIN issues i ON ic.issue_id = i.id
-        WHERE i.project_id = $1
+        WHERE i.project_id = $3
         UNION ALL
         SELECT aic.created_at
         FROM action_item_comments aic
         JOIN action_items ai ON aic.action_item_id = ai.id
-        WHERE ai.project_id = $1
+        WHERE ai.project_id = $4
       ) all_activity
-      WHERE activity_date >= NOW() - INTERVAL '${days} days'
+      WHERE activity_date >= NOW() - ($5 || ' days')::INTERVAL
       GROUP BY DATE(activity_date)
       ORDER BY date ASC
-    `, [projectId, projectId, projectId, projectId]);
+    `, [projectId, projectId, projectId, projectId, days]);
     
     const trends = {
       issuesTrend: issuesTrendResult.rows,
