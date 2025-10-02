@@ -70,12 +70,45 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 - **nodemon**: Development server.
 - **dotenv**: Environment variable management.
 
+### Email & Notifications
+- **nodemailer**: SMTP email sending library.
+
 ### CDN Services
 - **Tailwind CSS CDN**: CSS framework delivery.
 - **Unpkg CDN**: JavaScript library delivery.
-- **Chart.js CDN**: Data visualization charts for dashboard analytics.
+- **Chart.js**: Data visualization charts for dashboard analytics (local copy in public/).
 
 ## Recent Changes
+
+### Email Notifications System (October 2, 2025)
+Implemented comprehensive email notification system to keep users informed of important project events:
+- **Database Schema**:
+  - `user_notification_preferences` table for per-user email settings (mentions, assignments, status changes, invitations, frequency)
+  - `unsubscribe_tokens` table for one-click unsubscribe functionality
+- **Backend Services**:
+  - `config/email.js`: Nodemailer configuration supporting Gmail SMTP (requires GMAIL_USER and GMAIL_APP_PASSWORD env vars)
+  - `services/notificationService.js`: Centralized notification service with methods for mention, assignment, status change, and invitation emails
+  - `utils/emailTemplates.js`: Template rendering system with HTML and plain-text fallbacks
+- **Email Templates** (templates/emails/):
+  - `mention.html`: @mention notifications with comment preview
+  - `assignment.html`: New assignment notifications with due date and priority
+  - `status-change.html`: Status update notifications showing old vs new status
+  - `invitation.html`: Project invitation emails with accept/decline links
+  - All templates use blue branding, clear CTAs, and include unsubscribe links
+- **API Endpoints**:
+  - `GET /api/notifications/preferences`: Retrieve user notification settings
+  - `PUT /api/notifications/preferences`: Update notification preferences
+  - `GET /api/notifications/unsubscribe/:token`: One-click unsubscribe with HTML response
+- **Frontend**:
+  - `notification-settings.html` and `notification-settings.js`: Full preferences management UI
+  - Toggle controls for each notification type (mentions, assignments, status changes, invitations)
+  - Email frequency selector (immediate, daily digest, weekly digest) - digests not yet implemented
+  - Email service status indicator showing configuration state
+- **Integration Points**:
+  - Comments: Sends email when users are @mentioned in issue or action item comments
+  - Team Management: Sends invitation emails when users are invited to projects
+  - Status Changes & Assignments: Backend hooks ready (not yet fully integrated)
+- **Security**: All email sending is async (non-blocking), preferences enforced before sending, unsubscribe tokens single-use only
 
 ### Project Dashboard with Analytics (October 2, 2025)
 Implemented comprehensive project analytics dashboard with real-time metrics and data visualization:
