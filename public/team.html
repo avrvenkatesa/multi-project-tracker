@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Team Management - Multi-Project Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="app">
+        <!-- Header -->
+        <header class="bg-blue-600 text-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-3xl font-bold">Team Management</h1>
+                        <p class="text-blue-100 mt-2" id="projectNameHeader">
+                            Loading project...
+                        </p>
+                    </div>
+                    
+                    <!-- Auth Section -->
+                    <div class="flex items-center space-x-4">
+                        <div id="loggedInState" class="hidden flex items-center space-x-4">
+                            <div class="text-right">
+                                <div class="flex items-center space-x-2">
+                                    <span id="userName" class="font-semibold"></span>
+                                    <span id="userRole" class="px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-800"></span>
+                                </div>
+                                <div id="userEmail" class="text-xs text-blue-100"></div>
+                            </div>
+                            <button id="logout-btn" class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800">
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 py-8">
+            <!-- Navigation -->
+            <div class="mb-6">
+                <a href="index.html" class="text-blue-600 hover:text-blue-800 flex items-center">
+                    <span class="mr-2">←</span> Back to Projects
+                </a>
+            </div>
+
+            <!-- Team Management Container -->
+            <div id="teamManagementContainer">
+                <!-- Content will be loaded here by teamManagement.js -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="auth.js"></script>
+    <script src="teamManagement.js"></script>
+</body>
+</html>

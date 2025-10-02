@@ -195,27 +195,36 @@ function renderProjects() {
     container.innerHTML = projects
         .map(
             (project) => `
-        <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer"
+        <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
              data-project-id="${project.id}">
-            <h3 class="text-lg font-semibold mb-2">${project.name}</h3>
-            <p class="text-gray-600 text-sm mb-3">${project.description}</p>
-            <div class="flex items-center justify-between">
-                <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
-                    ${project.template}
-                </span>
-                <span class="text-xs text-gray-500">
-                    ${new Date(project.createdAt).toLocaleDateString()}
-                </span>
+            <div data-project-click="${project.id}" class="cursor-pointer">
+                <h3 class="text-lg font-semibold mb-2">${project.name}</h3>
+                <p class="text-gray-600 text-sm mb-3">${project.description}</p>
+                <div class="flex items-center justify-between">
+                    <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                        ${project.template}
+                    </span>
+                    <span class="text-xs text-gray-500">
+                        ${new Date(project.createdAt).toLocaleDateString()}
+                    </span>
+                </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-gray-200">
+                <a href="team.html?projectId=${project.id}" 
+                   class="inline-block bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                   data-team-link>
+                    Team →
+                </a>
             </div>
         </div>
     `,
         )
         .join("");
 
-    // Add click listeners to project cards
-    document.querySelectorAll("[data-project-id]").forEach((card) => {
+    // Add click listeners to project cards (not the team link)
+    document.querySelectorAll("[data-project-click]").forEach((card) => {
         card.addEventListener("click", function () {
-            selectProject(parseInt(this.dataset.projectId));
+            selectProject(parseInt(this.dataset.projectClick));
         });
     });
 }
