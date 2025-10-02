@@ -549,6 +549,38 @@ app.put('/api/notifications/preferences', authenticateToken, async (req, res) =>
   }
 });
 
+// Send test email
+app.post('/api/notifications/test-email', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const appUrl = getAppUrl();
+    
+    await sendEmail({
+      to: user.email,
+      subject: 'Test Email from Multi-Project Tracker',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2563eb;">Test Email Successful!</h2>
+          <p>Hello ${escapeHtml(user.username || user.email)},</p>
+          <p>This is a test email from the Multi-Project Tracker notification system.</p>
+          <p>If you're receiving this email, your notification settings are working correctly!</p>
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
+          <p style="color: #6b7280; font-size: 14px;">
+            <a href="${appUrl}/notification-settings.html" style="color: #2563eb;">Manage your notification settings</a>
+          </p>
+        </div>
+      `,
+      text: `Test Email Successful!\n\nHello ${user.username || user.email},\n\nThis is a test email from the Multi-Project Tracker notification system.\n\nIf you're receiving this email, your notification settings are working correctly!\n\nManage your notification settings: ${appUrl}/notification-settings.html`
+    });
+
+    console.log(`📧 Test email sent to ${user.email}`);
+    res.json({ success: true, message: 'Test email sent successfully' });
+  } catch (error) {
+    console.error('Test email error:', error);
+    res.status(500).json({ error: 'Failed to send test email' });
+  }
+});
+
 // Unsubscribe from all notifications
 app.get('/api/notifications/unsubscribe/:token', async (req, res) => {
   try {

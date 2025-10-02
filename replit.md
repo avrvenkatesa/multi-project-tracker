@@ -80,6 +80,13 @@ Enhanced email invitation acceptance with proper web-based handling and comprehe
 - **Graceful Handling**: Both GET and POST endpoints now handle "already a member" case gracefully - updates invitation status and shows friendly confirmation instead of error
 - **Bug Fix**: Fixed POST endpoint duplicate key error when accepting invitations for projects user is already a member of
 
+### Added Notification Settings Navigation & Test Email (October 2, 2025)
+Completed the notification settings feature with full user access:
+- **Navigation Link**: Added "⚙️ Settings" button in main navigation (next to My Invitations)
+- **Test Email Endpoint**: Added `POST /api/notifications/test-email` to send test notifications
+- **Accessible Settings**: Users can now easily access notification-settings.html to manage preferences
+- **Features Available**: Toggle mentions, assignments, status changes, and invitations; set email frequency
+
 ### Fixed Comment Email Notification Deep-Linking (October 2, 2025)
 Fixed the "View Comment" link in @mention email notifications to navigate directly to the specific comment:
 - **Email Link**: Updated notification emails to include `itemId` and `itemType` parameters in URL

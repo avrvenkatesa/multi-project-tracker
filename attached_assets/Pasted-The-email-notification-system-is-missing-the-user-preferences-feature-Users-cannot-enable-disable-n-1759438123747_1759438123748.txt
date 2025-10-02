@@ -1,0 +1,332 @@
+The email notification system is missing the user preferences feature. Users cannot enable/disable notification types or manage their email frequency settings.
+
+MISSING IMPLEMENTATION:
+
+1. Frontend preferences page does not exist
+2. No UI to toggle notification types
+3. No API endpoint integration for saving preferences
+
+REQUIRED FIX:
+
+STEP 1: Create Frontend Preferences Page
+
+Create public/notification-settings.html:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notification Settings - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  <!-- Header -->
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">Notification Settings</h1>
+        <p class="text-sm opacity-90">Manage your email preferences</p>
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="/index.html" class="hover:underline">← Back to Projects</a>
+        <button id="logoutBtn" class="bg-white text-blue-600 px-4 py-2 rounded">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="container mx-auto px-4 py-8 max-w-3xl">
+    <div id="notificationSettingsContainer"></div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script src="/js/pages/notificationSettings.js"></script>
+</body>
+</html>
+
+STEP 2: Create JavaScript for Preferences Management
+
+Create public/js/pages/notificationSettings.js:
+
+class NotificationSettings {
+  constructor() {
+    this.preferences = null;
+    this.saving = false;
+  }
+
+  async init() {
+    await this.loadPreferences();
+    this.render();
+    this.attachEventListeners();
+  }
+
+  async loadPreferences() {
+    try {
+      const response = await fetch('/api/notifications/preferences', {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load preferences');
+      }
+
+      this.preferences = await response.json();
+      console.log('Preferences loaded:', this.preferences);
+    } catch (error) {
+      console.error('Error loading preferences:', error);
+      // Set defaults if loading fails
+      this.preferences = {
+        mentions_enabled: true,
+        assignments_enabled: true,
+        status_changes_enabled: true,
+        invitations_enabled: true,
+        email_frequency: 'immediate'
+      };
+    }
+  }
+
+  render() {
+    const container = document.getElementById('notificationSettingsContainer');
+    
+    container.innerHTML = `
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold mb-6">Email Notifications</h2>
+        
+        <div class="space-y-6">
+          <!-- Mentions -->
+          <div class="flex items-center justify-between py-3 border-b">
+            <div>
+              <h3 class="font-semibold text-gray-900">@Mentions</h3>
+              <p class="text-sm text-gray-600">Receive emails when someone mentions you in a comment</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" 
+                     id="mentions_enabled" 
+                     ${this.preferences.mentions_enabled ? 'checked' : ''} 
+                     class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+
+          <!-- Assignments -->
+          <div class="flex items-center justify-between py-3 border-b">
+            <div>
+              <h3 class="font-semibold text-gray-900">Assignments</h3>
+              <p class="text-sm text-gray-600">Receive emails when an issue or action item is assigned to you</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" 
+                     id="assignments_enabled" 
+                     ${this.preferences.assignments_enabled ? 'checked' : ''} 
+                     class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+
+          <!-- Status Changes -->
+          <div class="flex items-center justify-between py-3 border-b">
+            <div>
+              <h3 class="font-semibold text-gray-900">Status Changes</h3>
+              <p class="text-sm text-gray-600">Receive emails when status changes on items assigned to you</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" 
+                     id="status_changes_enabled" 
+                     ${this.preferences.status_changes_enabled ? 'checked' : ''} 
+                     class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+
+          <!-- Invitations -->
+          <div class="flex items-center justify-between py-3 border-b">
+            <div>
+              <h3 class="font-semibold text-gray-900">Project Invitations</h3>
+              <p class="text-sm text-gray-600">Receive emails when invited to join a project</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" 
+                     id="invitations_enabled" 
+                     ${this.preferences.invitations_enabled ? 'checked' : ''} 
+                     class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+
+          <!-- Email Frequency -->
+          <div class="py-3">
+            <label class="block font-semibold text-gray-900 mb-2">Email Frequency</label>
+            <select id="email_frequency" 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+              <option value="immediate" ${this.preferences.email_frequency === 'immediate' ? 'selected' : ''}>
+                Immediate - Send emails as events occur
+              </option>
+              <option value="daily_digest" ${this.preferences.email_frequency === 'daily_digest' ? 'selected' : ''}>
+                Daily Digest - One email per day with all notifications
+              </option>
+              <option value="weekly_digest" ${this.preferences.email_frequency === 'weekly_digest' ? 'selected' : ''}>
+                Weekly Digest - One email per week with all notifications
+              </option>
+            </select>
+            <p class="text-sm text-gray-600 mt-2">Note: Daily and weekly digests not yet implemented, will default to immediate</p>
+          </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="mt-8 flex gap-4">
+          <button id="saveBtn" 
+                  class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            Save Preferences
+          </button>
+          <button id="testEmailBtn" 
+                  class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700">
+            Send Test Email
+          </button>
+        </div>
+
+        <!-- Success Message -->
+        <div id="successMessage" class="hidden mt-4 p-4 bg-green-100 text-green-800 rounded-lg">
+          Preferences saved successfully!
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="hidden mt-4 p-4 bg-red-100 text-red-800 rounded-lg">
+          Failed to save preferences. Please try again.
+        </div>
+      </div>
+    `;
+  }
+
+  attachEventListeners() {
+    const saveBtn = document.getElementById('saveBtn');
+    const testEmailBtn = document.getElementById('testEmailBtn');
+
+    saveBtn.addEventListener('click', () => this.savePreferences());
+    testEmailBtn.addEventListener('click', () => this.sendTestEmail());
+  }
+
+  async savePreferences() {
+    if (this.saving) return;
+    
+    this.saving = true;
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    const preferences = {
+      mentions_enabled: document.getElementById('mentions_enabled').checked,
+      assignments_enabled: document.getElementById('assignments_enabled').checked,
+      status_changes_enabled: document.getElementById('status_changes_enabled').checked,
+      invitations_enabled: document.getElementById('invitations_enabled').checked,
+      email_frequency: document.getElementById('email_frequency').value
+    };
+
+    try {
+      const response = await fetch('/api/notifications/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(preferences)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save preferences');
+      }
+
+      // Show success message
+      const successMsg = document.getElementById('successMessage');
+      successMsg.classList.remove('hidden');
+      setTimeout(() => successMsg.classList.add('hidden'), 3000);
+
+      this.preferences = preferences;
+    } catch (error) {
+      console.error('Error saving preferences:', error);
+      
+      // Show error message
+      const errorMsg = document.getElementById('errorMessage');
+      errorMsg.classList.remove('hidden');
+      setTimeout(() => errorMsg.classList.add('hidden'), 3000);
+    } finally {
+      this.saving = false;
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Preferences';
+    }
+  }
+
+  async sendTestEmail() {
+    const testEmailBtn = document.getElementById('testEmailBtn');
+    testEmailBtn.disabled = true;
+    testEmailBtn.textContent = 'Sending...';
+
+    try {
+      const response = await fetch('/api/notifications/test-email', {
+        method: 'POST',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        alert('Test email sent! Check your inbox.');
+      } else {
+        alert('Failed to send test email. Check server logs.');
+      }
+    } catch (error) {
+      console.error('Error sending test email:', error);
+      alert('Failed to send test email.');
+    } finally {
+      testEmailBtn.disabled = false;
+      testEmailBtn.textContent = 'Send Test Email';
+    }
+  }
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', async () => {
+  const settings = new NotificationSettings();
+  await settings.init();
+});
+
+STEP 3: Add Navigation Link
+
+Update public/index.html - Add link to user dropdown menu:
+<a href="/notification-settings.html" class="block px-4 py-2 hover:bg-gray-100">
+  <i class="fas fa-bell mr-2"></i>Notification Settings
+</a>
+
+STEP 4: Add Test Email Endpoint
+
+Add to server.js after the other notification endpoints:
+
+// Send test email
+app.post('/api/notifications/test-email', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    const { html, text } = renderTemplate('test', {
+      userName: user.username || user.email,
+      appUrl: process.env.APP_URL || 'http://localhost:5000'
+    });
+
+    await sendEmail({
+      to: user.email,
+      subject: 'Test Email from Multi-Project Tracker',
+      html: html || '<p>This is a test email. Your notification system is working!</p>',
+      text: text || 'This is a test email. Your notification system is working!'
+    });
+
+    res.json({ success: true, message: 'Test email sent' });
+  } catch (error) {
+    console.error('Test email error:', error);
+    res.status(500).json({ error: 'Failed to send test email' });
+  }
+});
+
+DELIVERABLES:
+1. notification-settings.html page
+2. notificationSettings.js script with toggle switches
+3. Navigation link in user menu
+4. Test email endpoint
+5. Working save/load preferences functionality
+
+Implement these missing components now.
