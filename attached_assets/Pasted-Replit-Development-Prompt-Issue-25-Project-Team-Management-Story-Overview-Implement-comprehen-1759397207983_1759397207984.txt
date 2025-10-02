@@ -1,0 +1,972 @@
+Replit Development Prompt: Issue #25 - Project Team Management
+🎯 Story Overview
+Implement comprehensive project team management system with invitation workflow, role-based access control, and team member administration for the Multi-Project Tracker.
+Target: v0.4.0
+Estimated Time: 4-5 hours
+Tech Stack: Node.js + Express.js + Vanilla JS + Tailwind CSS + Neon PostgreSQL
+
+📋 What We're Building
+A complete team management system that allows:
+
+Project Managers to invite users via email
+Role assignment (Admin, Manager, Member, Viewer)
+Invitation acceptance/decline workflow
+Team roster with member cards
+Role updates and member removal
+Full RBAC enforcement
+
+
+🏗️ PHASE 1: Database Setup (Start Here!)
+Step 1.1: Create Migration File
+Create new file: migrations/004_team_management.sql
+sql-- Migration: Team Management Feature
+-- Version: v0.4.0
+
+BEGIN;
+
+-- Table: project_invitations
+CREATE TABLE IF NOT EXISTS project_invitations (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  inviter_id INTEGER NOT NULL REFERENCES users(id),
+  invitee_email VARCHAR(255) NOT NULL,
+  invitee_user_id INTEGER REFERENCES users(id),
+  role VARCHAR(50) NOT NULL CHECK (role IN ('Admin', 'Manager', 'Member', 'Viewer')),
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' 
+    CHECK (status IN ('pending', 'accepted', 'declined', 'expired')),
+  invitation_token VARCHAR(255) UNIQUE NOT NULL,
+  message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NOT NULL,
+  responded_at TIMESTAMP,
+  UNIQUE(project_id, invitee_email, status)
+);
+
+-- Enhance project_members table
+ALTER TABLE project_members
+ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'Member' 
+  CHECK (role IN ('Admin', 'Manager', 'Member', 'Viewer')),
+ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN IF NOT EXISTS invited_by INTEGER REFERENCES users(id),
+ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active' 
+  CHECK (status IN ('active', 'inactive', 'removed')),
+ADD COLUMN IF NOT EXISTS last_active TIMESTAMP,
+ADD COLUMN IF NOT EXISTS removed_at TIMESTAMP,
+ADD COLUMN IF NOT EXISTS removed_by INTEGER REFERENCES users(id);
+
+-- Indexes for performance
+CREATE INDEX idx_invitations_project ON project_invitations(project_id);
+CREATE INDEX idx_invitations_email ON project_invitations(invitee_email);
+CREATE INDEX idx_invitations_token ON project_invitations(invitation_token);
+CREATE INDEX idx_invitations_status ON project_invitations(status);
+CREATE INDEX idx_project_members_role ON project_members(role);
+CREATE INDEX idx_project_members_status ON project_members(status);
+CREATE INDEX idx_project_members_user ON project_members(user_id);
+
+-- Update existing project_members
+UPDATE project_members 
+SET role = 'Manager' 
+WHERE role IS NULL;
+
+COMMIT;
+Step 1.2: Run Migration
+In Replit Shell:
+bash# Connect to your Neon database
+psql $DATABASE_URL -f migrations/004_team_management.sql
+
+# Verify tables created
+psql $DATABASE_URL -c "\dt"
+psql $DATABASE_URL -c "\d project_invitations"
+psql $DATABASE_URL -c "\d project_members"
+
+🔧 PHASE 2: Backend API Development
+Step 2.1: Create Team Controller
+Create file: controllers/teamController.js
+javascriptconst db = require('../config/database');
+const crypto = require('crypto');
+
+// Role hierarchy for permission checks
+const ROLE_HIERARCHY = {
+  'Admin': 4,
+  'Manager': 3,
+  'Member': 2,
+  'Viewer': 1
+};
+
+// Get team members for a project
+exports.getTeamMembers = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    const result = await db.query(`
+      SELECT 
+        pm.id,
+        pm.user_id,
+        u.name,
+        u.email,
+        u.avatar_url,
+        pm.role,
+        pm.joined_at,
+        pm.status,
+        pm.last_active,
+        inviter.name as invited_by_name
+      FROM project_members pm
+      JOIN users u ON pm.user_id = u.id
+      LEFT JOIN users inviter ON pm.invited_by = inviter.id
+      WHERE pm.project_id = $1 AND pm.status = 'active'
+      ORDER BY 
+        CASE pm.role 
+          WHEN 'Admin' THEN 1
+          WHEN 'Manager' THEN 2
+          WHEN 'Member' THEN 3
+          WHEN 'Viewer' THEN 4
+        END,
+        pm.joined_at ASC
+    `, [projectId]);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching team members:', error);
+    res.status(500).json({ error: 'Failed to fetch team members' });
+  }
+};
+
+// Invite user to project
+exports.inviteUser = async (req, res) => {
+  const client = await db.pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const { projectId } = req.params;
+    const { email, role, message } = req.body;
+    const inviterId = req.user.id;
+    
+    // Validate role
+    if (!['Admin', 'Manager', 'Member', 'Viewer'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    
+    // Check if inviter has permission
+    const inviterRole = await getUserProjectRole(client, inviterId, projectId);
+    if (ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[inviterRole]) {
+      return res.status(403).json({ 
+        error: 'Cannot assign role equal to or higher than your own' 
+      });
+    }
+    
+    // Check if user exists
+    const userResult = await client.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+    const inviteeUserId = userResult.rows[0]?.id || null;
+    
+    // Check if already a member
+    if (inviteeUserId) {
+      const memberCheck = await client.query(
+        'SELECT id FROM project_members WHERE project_id = $1 AND user_id = $2 AND status = $3',
+        [projectId, inviteeUserId, 'active']
+      );
+      
+      if (memberCheck.rows.length > 0) {
+        return res.status(400).json({ error: 'User is already a team member' });
+      }
+    }
+    
+    // Check for existing pending invitation
+    const existingInvite = await client.query(
+      'SELECT id FROM project_invitations WHERE project_id = $1 AND invitee_email = $2 AND status = $3',
+      [projectId, email, 'pending']
+    );
+    
+    if (existingInvite.rows.length > 0) {
+      return res.status(400).json({ error: 'Invitation already sent' });
+    }
+    
+    // Generate invitation token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    
+    // Create invitation
+    const inviteResult = await client.query(`
+      INSERT INTO project_invitations 
+      (project_id, inviter_id, invitee_email, invitee_user_id, role, invitation_token, message, expires_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `, [projectId, inviterId, email, inviteeUserId, role, token, message, expiresAt]);
+    
+    await client.query('COMMIT');
+    
+    res.status(201).json({
+      message: 'Invitation sent successfully',
+      invitation: inviteResult.rows[0],
+      invitationUrl: `/invitations/${token}`
+    });
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error inviting user:', error);
+    res.status(500).json({ error: 'Failed to send invitation' });
+  } finally {
+    client.release();
+  }
+};
+
+// Get pending invitations
+exports.getPendingInvitations = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    const result = await db.query(`
+      SELECT 
+        pi.*,
+        inviter.name as inviter_name,
+        inviter.email as inviter_email
+      FROM project_invitations pi
+      JOIN users inviter ON pi.inviter_id = inviter.id
+      WHERE pi.project_id = $1 AND pi.status = 'pending' AND pi.expires_at > NOW()
+      ORDER BY pi.created_at DESC
+    `, [projectId]);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching invitations:', error);
+    res.status(500).json({ error: 'Failed to fetch invitations' });
+  }
+};
+
+// Accept invitation
+exports.acceptInvitation = async (req, res) => {
+  const client = await db.pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const { token } = req.params;
+    const userId = req.user.id;
+    
+    // Get invitation
+    const inviteResult = await client.query(
+      'SELECT * FROM project_invitations WHERE invitation_token = $1 AND status = $2',
+      [token, 'pending']
+    );
+    
+    if (inviteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Invitation not found or already used' });
+    }
+    
+    const invitation = inviteResult.rows[0];
+    
+    // Check expiration
+    if (new Date(invitation.expires_at) < new Date()) {
+      await client.query(
+        'UPDATE project_invitations SET status = $1 WHERE id = $2',
+        ['expired', invitation.id]
+      );
+      await client.query('COMMIT');
+      return res.status(400).json({ error: 'Invitation has expired' });
+    }
+    
+    // Verify user email matches
+    const userResult = await client.query('SELECT email FROM users WHERE id = $1', [userId]);
+    if (userResult.rows[0].email !== invitation.invitee_email) {
+      return res.status(403).json({ error: 'Invitation was sent to a different email' });
+    }
+    
+    // Add to project members
+    await client.query(`
+      INSERT INTO project_members (project_id, user_id, role, invited_by, status)
+      VALUES ($1, $2, $3, $4, 'active')
+      ON CONFLICT (project_id, user_id) 
+      DO UPDATE SET status = 'active', role = $3, invited_by = $4
+    `, [invitation.project_id, userId, invitation.role, invitation.inviter_id]);
+    
+    // Update invitation status
+    await client.query(
+      'UPDATE project_invitations SET status = $1, responded_at = NOW() WHERE id = $2',
+      ['accepted', invitation.id]
+    );
+    
+    await client.query('COMMIT');
+    
+    res.json({ 
+      message: 'Invitation accepted successfully', 
+      projectId: invitation.project_id 
+    });
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error accepting invitation:', error);
+    res.status(500).json({ error: 'Failed to accept invitation' });
+  } finally {
+    client.release();
+  }
+};
+
+// Decline invitation
+exports.declineInvitation = async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    const result = await db.query(
+      `UPDATE project_invitations 
+       SET status = $1, responded_at = NOW() 
+       WHERE invitation_token = $2 AND status = $3
+       RETURNING *`,
+      ['declined', token, 'pending']
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Invitation not found' });
+    }
+    
+    res.json({ message: 'Invitation declined' });
+    
+  } catch (error) {
+    console.error('Error declining invitation:', error);
+    res.status(500).json({ error: 'Failed to decline invitation' });
+  }
+};
+
+// Update member role
+exports.updateMemberRole = async (req, res) => {
+  try {
+    const { projectId, userId } = req.params;
+    const { role } = req.body;
+    const updaterId = req.user.id;
+    
+    // Validate role
+    if (!['Admin', 'Manager', 'Member', 'Viewer'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    
+    // Cannot change own role
+    if (parseInt(userId) === updaterId) {
+      return res.status(400).json({ error: 'Cannot change your own role' });
+    }
+    
+    // Check updater's role
+    const updaterRole = await getUserProjectRole(db.pool, updaterId, projectId);
+    if (ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[updaterRole]) {
+      return res.status(403).json({ 
+        error: 'Cannot assign role equal to or higher than your own' 
+      });
+    }
+    
+    // Update role
+    const result = await db.query(
+      `UPDATE project_members 
+       SET role = $1 
+       WHERE project_id = $2 AND user_id = $3 AND status = 'active'
+       RETURNING *`,
+      [role, projectId, userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Team member not found' });
+    }
+    
+    res.json({ message: 'Role updated successfully', member: result.rows[0] });
+    
+  } catch (error) {
+    console.error('Error updating role:', error);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+};
+
+// Remove team member
+exports.removeMember = async (req, res) => {
+  try {
+    const { projectId, userId } = req.params;
+    const removerId = req.user.id;
+    
+    // Cannot remove yourself
+    if (parseInt(userId) === removerId) {
+      return res.status(400).json({ error: 'Cannot remove yourself from the project' });
+    }
+    
+    // Soft delete
+    const result = await db.query(
+      `UPDATE project_members 
+       SET status = 'removed', removed_at = NOW(), removed_by = $1
+       WHERE project_id = $2 AND user_id = $3 AND status = 'active'
+       RETURNING *`,
+      [removerId, projectId, userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Team member not found' });
+    }
+    
+    res.json({ message: 'Team member removed successfully' });
+    
+  } catch (error) {
+    console.error('Error removing member:', error);
+    res.status(500).json({ error: 'Failed to remove team member' });
+  }
+};
+
+// Get my invitations
+exports.getMyInvitations = async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    
+    const result = await db.query(`
+      SELECT 
+        pi.*,
+        p.name as project_name,
+        p.description as project_description,
+        inviter.name as inviter_name
+      FROM project_invitations pi
+      JOIN projects p ON pi.project_id = p.id
+      JOIN users inviter ON pi.inviter_id = inviter.id
+      WHERE pi.invitee_email = $1 AND pi.status = 'pending' AND pi.expires_at > NOW()
+      ORDER BY pi.created_at DESC
+    `, [userEmail]);
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching my invitations:', error);
+    res.status(500).json({ error: 'Failed to fetch invitations' });
+  }
+};
+
+// Helper function
+async function getUserProjectRole(client, userId, projectId) {
+  const result = await client.query(
+    'SELECT role FROM project_members WHERE user_id = $1 AND project_id = $2 AND status = $3',
+    [userId, projectId, 'active']
+  );
+  return result.rows[0]?.role || null;
+}
+
+module.exports = exports;
+Step 2.2: Create Routes
+Create file: routes/teamRoutes.js
+javascriptconst express = require('express');
+const router = express.Router();
+const { authenticateToken, checkProjectAccess, checkRole } = require('../middleware/auth');
+const teamController = require('../controllers/teamController');
+
+// Get team members
+router.get('/projects/:projectId/team', 
+  authenticateToken, 
+  checkProjectAccess,
+  teamController.getTeamMembers
+);
+
+// Invite user
+router.post('/projects/:projectId/team/invite', 
+  authenticateToken, 
+  checkProjectAccess, 
+  checkRole(['Admin', 'Manager']),
+  teamController.inviteUser
+);
+
+// Get pending invitations
+router.get('/projects/:projectId/team/invitations', 
+  authenticateToken, 
+  checkProjectAccess,
+  teamController.getPendingInvitations
+);
+
+// Accept invitation
+router.post('/invitations/:token/accept', 
+  authenticateToken,
+  teamController.acceptInvitation
+);
+
+// Decline invitation
+router.post('/invitations/:token/decline', 
+  authenticateToken,
+  teamController.declineInvitation
+);
+
+// Update member role
+router.put('/projects/:projectId/team/:userId/role', 
+  authenticateToken, 
+  checkProjectAccess, 
+  checkRole(['Admin', 'Manager']),
+  teamController.updateMemberRole
+);
+
+// Remove team member
+router.delete('/projects/:projectId/team/:userId', 
+  authenticateToken, 
+  checkProjectAccess, 
+  checkRole(['Admin', 'Manager']),
+  teamController.removeMember
+);
+
+// Get my invitations
+router.get('/my-invitations', 
+  authenticateToken,
+  teamController.getMyInvitations
+);
+
+module.exports = router;
+Step 2.3: Update Authentication Middleware
+Add to middleware/auth.js:
+javascript// Add this new middleware function
+exports.checkRole = (allowedRoles) => {
+  return async (req, res, next) => {
+    try {
+      const { projectId } = req.params;
+      const userId = req.user.id;
+      
+      const result = await db.query(
+        'SELECT role FROM project_members WHERE user_id = $1 AND project_id = $2 AND status = $3',
+        [userId, projectId, 'active']
+      );
+      
+      if (result.rows.length === 0) {
+        return res.status(403).json({ error: 'Not a member of this project' });
+      }
+      
+      const userRole = result.rows[0].role;
+      
+      if (!allowedRoles.includes(userRole)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      req.userRole = userRole;
+      next();
+    } catch (error) {
+      console.error('Role check error:', error);
+      res.status(500).json({ error: 'Authorization check failed' });
+    }
+  };
+};
+Step 2.4: Register Routes
+Update server.js:
+javascript// Add this line with other route imports
+const teamRoutes = require('./routes/teamRoutes');
+
+// Register routes
+app.use('/api', teamRoutes);
+Step 2.5: Test Backend
+In Replit Shell:
+bash# Start server (if not running)
+npm run dev
+
+# Test endpoints with curl
+curl -X GET http://localhost:3000/api/projects/1/team \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+🎨 PHASE 3: Frontend Development
+Step 3.1: Create Team Management Page
+Create file: public/js/pages/teamManagement.js
+javascriptclass TeamManagementPage {
+  constructor() {
+    this.projectId = null;
+    this.currentUser = null;
+    this.teamMembers = [];
+    this.pendingInvitations = [];
+  }
+  
+  async init(projectId) {
+    this.projectId = projectId;
+    this.currentUser = await this.getCurrentUser();
+    await this.loadTeamData();
+    this.render();
+    this.attachEventListeners();
+  }
+  
+  async getCurrentUser() {
+    const response = await fetch('/api/me', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    return await response.json();
+  }
+  
+  async loadTeamData() {
+    try {
+      const membersResponse = await fetch(`/api/projects/${this.projectId}/team`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      this.teamMembers = await membersResponse.json();
+      
+      if (this.canManageTeam()) {
+        const invitationsResponse = await fetch(
+          `/api/projects/${this.projectId}/team/invitations`,
+          { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+        );
+        this.pendingInvitations = await invitationsResponse.json();
+      }
+    } catch (error) {
+      console.error('Error loading team data:', error);
+      this.showNotification('Failed to load team data', 'error');
+    }
+  }
+  
+  canManageTeam() {
+    const userMember = this.teamMembers.find(m => m.user_id === this.currentUser.id);
+    return userMember && ['Admin', 'Manager'].includes(userMember.role);
+  }
+  
+  render() {
+    const container = document.getElementById('teamManagementContainer');
+    
+    container.innerHTML = `
+      <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-6">
+          <h1 class="text-3xl font-bold text-gray-900">Team Management</h1>
+          ${this.canManageTeam() ? `
+            <button id="inviteUserBtn" class="btn bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+              <i class="fas fa-user-plus mr-2"></i>Invite Team Member
+            </button>
+          ` : ''}
+        </div>
+        
+        ${this.pendingInvitations.length > 0 ? `
+          <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-4">Pending Invitations (${this.pendingInvitations.length})</h2>
+            <div class="grid gap-3">
+              ${this.pendingInvitations.map(inv => this.renderInvitationCard(inv)).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <div>
+          <h2 class="text-xl font-semibold mb-4">Team Members (${this.teamMembers.length})</h2>
+          <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            ${this.teamMembers.map(member => this.renderMemberCard(member)).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  renderMemberCard(member) {
+    const isCurrentUser = member.user_id === this.currentUser.id;
+    const canModify = this.canManageTeam() && !isCurrentUser;
+    
+    return `
+      <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold text-lg">
+              ${member.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h3 class="font-semibold text-lg">${member.name} ${isCurrentUser ? '(You)' : ''}</h3>
+              <p class="text-sm text-gray-500">${member.email}</p>
+            </div>
+          </div>
+          ${canModify ? `
+            <button class="text-gray-400 hover:text-gray-600" onclick="teamManagement.showMemberMenu(${member.user_id})">
+              <i class="fas fa-ellipsis-v"></i>
+            </button>
+          ` : ''}
+        </div>
+        
+        <div class="flex items-center justify-between">
+          <span class="px-3 py-1 rounded-full text-sm font-medium ${this.getRoleBadgeClass(member.role)}">
+            ${member.role}
+          </span>
+          <span class="text-xs text-gray-500">
+            Joined ${this.formatDate(member.joined_at)}
+          </span>
+        </div>
+      </div>
+    `;
+  }
+  
+  renderInvitationCard(invitation) {
+    return `
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="font-medium text-gray-900">${invitation.invitee_email}</p>
+            <p class="text-sm text-gray-600">
+              Invited by ${invitation.inviter_name} • ${this.formatDate(invitation.created_at)}
+            </p>
+            <span class="inline-block mt-2 px-2 py-1 bg-yellow-200 text-yellow-800 text-xs rounded">
+              ${invitation.role}
+            </span>
+          </div>
+          <button 
+            onclick="teamManagement.cancelInvitation(${invitation.id})"
+            class="text-red-600 hover:text-red-800 text-sm font-medium">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+  }
+  
+  getRoleBadgeClass(role) {
+    const classes = {
+      'Admin': 'bg-red-100 text-red-800',
+      'Manager': 'bg-blue-100 text-blue-800',
+      'Member': 'bg-green-100 text-green-800',
+      'Viewer': 'bg-gray-100 text-gray-800'
+    };
+    return classes[role] || 'bg-gray-100 text-gray-800';
+  }
+  
+  attachEventListeners() {
+    const inviteBtn = document.getElementById('inviteUserBtn');
+    if (inviteBtn) {
+      inviteBtn.addEventListener('click', () => this.showInviteModal());
+    }
+  }
+  
+  showInviteModal() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div class="px-6 py-4 border-b flex justify-between items-center">
+          <h2 class="text-xl font-bold">Invite Team Member</h2>
+          <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <form id="inviteForm" class="p-6 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
+            <input 
+              type="email" 
+              name="email" 
+              required 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="colleague@example.com">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+            <select name="role" required class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+              <option value="">Select role...</option>
+              <option value="Viewer">Viewer - Read-only access</option>
+              <option value="Member">Member - Can create and edit</option>
+              <option value="Manager">Manager - Can manage team</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Message (Optional)</label>
+            <textarea 
+              name="message" 
+              rows="3" 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              placeholder="Join our team!"></textarea>
+          </div>
+          
+          <div class="flex justify-end space-x-3 pt-4">
+            <button type="button" onclick="this.closest('.fixed').remove()" 
+              class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
+              Cancel
+            </button>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              Send Invitation
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const form = document.getElementById('inviteForm');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await this.sendInvitation(new FormData(form));
+      modal.remove();
+    });
+  }
+  
+  async sendInvitation(formData) {
+    try {
+      const response = await fetch(`/api/projects/${this.projectId}/team/invite`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: formData.get('email'),
+          role: formData.get('role'),
+          message: formData.get('message')
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send invitation');
+      }
+      
+      this.showNotification('Invitation sent successfully', 'success');
+      await this.loadTeamData();
+      this.render();
+      
+    } catch (error) {
+      console.error('Error sending invitation:', error);
+      this.showNotification(error.message, 'error');
+    }
+  }
+  
+  showNotification(message, type) {
+    // Use your existing notification system
+    console.log(`[${type.toUpperCase()}] ${message}`);
+  }
+  
+  formatDate(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  }
+}
+
+const teamManagement = new TeamManagementPage();
+Step 3.2: Create Team Management HTML Page
+Create file: public/team.html
+html<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Management - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  <div id="teamManagementContainer"></div>
+  
+  <script src="/js/pages/teamManagement.js"></script>
+  <script>
+    // Get project ID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectId = urlParams.get('projectId');
+    
+    if (!projectId) {
+      window.location.href = '/projects.html';
+    } else {
+      teamManagement.init(projectId);
+    }
+  </script>
+</body>
+</html>
+Step 3.3: Add Navigation Link
+Update your project navigation to include team management link.
+
+🧪 PHASE 4: Testing in Replit
+Manual Testing Checklist
+Test each feature in Replit's browser preview:
+bash# Open Replit preview URL
+# Test these scenarios:
+
+✅ Invitation Flow
+- [ ] Manager can open invite modal
+- [ ] Form validates email and role
+- [ ] Invitation appears in pending list
+- [ ] Duplicate invitations prevented
+- [ ] Invalid roles rejected
+
+✅ Team Display
+- [ ] Team members load correctly
+- [ ] Roles displayed with proper badges
+- [ ] Current user marked as "You"
+- [ ] Member cards responsive on mobile
+
+✅ RBAC Enforcement
+- [ ] Manager can invite Members/Viewers
+- [ ] Cannot invite Admin (if Manager)
+- [ ] Viewer cannot access team management
+- [ ] Cannot change own role
+
+✅ Error Handling
+- [ ] Network errors shown to user
+- [ ] Invalid tokens handled gracefully
+- [ ] Expired invitations handled
+Quick Backend Tests
+In Replit Shell:
+bash# Test database
+psql $DATABASE_URL -c "SELECT * FROM project_invitations LIMIT 5;"
+
+# Test API endpoints
+curl -X POST http://localhost:3000/api/projects/1/team/invite \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","role":"Member"}'
+
+📝 PHASE 5: Documentation & Commit
+Step 5.1: Update README
+Add to your project README:
+markdown## Team Management (v0.4.0)
+
+### Features
+- Invite users via email with role assignment
+- Accept/decline invitation workflow
+- Team roster with member cards
+- Role management (Admin, Manager, Member, Viewer)
+- RBAC enforcement throughout app
+
+### Usage
+1. Navigate to project settings
+2. Click "Team" tab
+3. Use "Invite Team Member" button
+4. User receives invitation and can accept/decline
+Step 5.2: Git Commit
+In Replit Shell:
+bash# Create feature branch
+git checkout -b feature/25-team-management
+
+# Add all changes
+git add .
+
+# Commit
+git commit -m "feat: implement project team management #25
+
+- Add project_invitations and enhance project_members tables
+- Implement 8 team management API endpoints
+- Create team management UI with member cards
+- Add invitation workflow (send/accept/decline)
+- Implement role-based permission checks
+- Add team roster display
+
+Closes #25"
+
+# Push to GitHub
+git push origin feature/25-team-management
+
+# Merge to main (after review)
+git checkout main
+git merge feature/25-team-management
+git push origin main
+
+# Tag release
+git tag -a v0.4.0 -m "Release v0.4.0: Team Management"
+git push origin v0.4.0
+
+✅ Verification Checklist
+Before closing Issue #25:
+
+ Database migration runs without errors
+ All 8 API endpoints functional
+ Team management UI loads correctly
+ Invitation flow works end-to-end
+ RBAC permissions enforced
+ Mobile responsive design works
+ No console errors in browser
+ Code committed and pushed
+ README updated
+ Tagged as v0.4.0
+
+
+🎯 Success Criteria Met
+✅ Managers can invite users via email
+✅ Roles assignable: Admin, Manager, Member, Viewer
+✅ Team members can be removed
+✅ Team list shows all members with roles
+✅ Member roles can be updated
+✅ Invitation system functional
+✅ Permissions enforced throughout
+✅ Member cards display properly
