@@ -725,6 +725,19 @@ app.post('/api/projects/:projectId/team/invite', authenticateToken, async (req, 
     
     console.log(`[INVITE] Created invitation ${result.rows[0].id} with token ${invitationToken}`);
     
+    // Get project name for email
+    const projectResult = await pool.query('SELECT name FROM projects WHERE id = $1', [projectId]);
+    const projectName = projectResult.rows[0]?.name || 'Project';
+    
+    // Send invitation email
+    notificationService.sendInvitationNotification({
+      inviteeEmail: email,
+      inviterName: req.user.username,
+      projectName,
+      role,
+      invitationToken
+    }).catch(err => console.error('Error sending invitation email:', err));
+    
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('[INVITE] Error:', error);
