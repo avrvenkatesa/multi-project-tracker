@@ -14,6 +14,8 @@ const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const stringSimilarity = require('string-similarity');
 const notificationService = require('./services/notificationService');
+const reportService = require('./services/reportService');
+const csvExportService = require('./services/csvExportService');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -1959,6 +1961,95 @@ app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (r
   } catch (error) {
     console.error('[DASHBOARD_TRENDS] Error:', error);
     res.status(500).json({ error: 'Failed to fetch dashboard trends' });
+  }
+});
+
+// ============= REPORTING ROUTES =============
+
+// Generate PDF report
+app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { reportType, dateRange } = req.body;
+    
+    // Check if user has access to this project
+    const memberCheck = await pool.query(`
+      SELECT * FROM project_members 
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+    
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied. You are not a member of this project.' });
+    }
+    
+    let pdfBuffer;
+    
+    switch (reportType) {
+      case 'executive':
+        pdfBuffer = await reportService.generateExecutiveSummary(projectId, dateRange);
+        break;
+      case 'detailed':
+        pdfBuffer = await reportService.generateDetailedReport(projectId, dateRange);
+        break;
+      case 'team':
+        pdfBuffer = await reportService.generateTeamPerformanceReport(projectId, dateRange);
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid report type' });
+    }
+    
+    const filename = `${reportType}-report-${projectId}-${Date.now()}.pdf`;
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+    
+  } catch (error) {
+    console.error('Report generation error:', error);
+    res.status(500).json({ error: 'Failed to generate report' });
+  }
+});
+
+// Export CSV
+app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { type } = req.query; // 'issues' | 'actions' | 'full'
+    
+    // Check if user has access to this project
+    const memberCheck = await pool.query(`
+      SELECT * FROM project_members 
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+    
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied. You are not a member of this project.' });
+    }
+    
+    let result;
+    
+    if (type === 'issues') {
+      result = await csvExportService.exportIssues(projectId);
+    } else if (type === 'actions') {
+      result = await csvExportService.exportActionItems(projectId);
+    } else {
+      result = await csvExportService.exportFullProject(projectId);
+    }
+    
+    res.download(result.filepath, result.filename, (err) => {
+      // Clean up file after download
+      const fsSync = require('fs');
+      if (fsSync.existsSync(result.filepath)) {
+        fsSync.unlinkSync(result.filepath);
+      }
+      if (err && !res.headersSent) {
+        res.status(500).json({ error: 'Failed to download file' });
+      }
+    });
+    
+  } catch (error) {
+    console.error('CSV export error:', error);
+    res.status(500).json({ error: 'Failed to export CSV' });
   }
 });
 

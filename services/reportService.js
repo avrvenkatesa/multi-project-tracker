@@ -1,5 +1,6 @@
 const PDFDocument = require('pdfkit');
-const pool = require('../db/pool');
+const { Pool } = require('@neondatabase/serverless');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const fs = require('fs');
 const path = require('path');
 
