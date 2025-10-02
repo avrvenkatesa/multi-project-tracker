@@ -40,6 +40,11 @@ const AuthManager = {
     }
     
     this.updateUI();
+    
+    // Load invitation count if authenticated
+    if (this.isAuthenticated) {
+      this.updateInvitationCount();
+    }
   },
 
   async register(username, email, password) {
@@ -57,6 +62,7 @@ const AuthManager = {
         this.currentUser = data.user;
         this.isAuthenticated = true;
         this.updateUI();
+        this.updateInvitationCount();
         this.showNotification('Registration successful!', 'success');
         return true;
       } else {
@@ -85,6 +91,7 @@ const AuthManager = {
         this.currentUser = data.user;
         this.isAuthenticated = true;
         this.updateUI();
+        this.updateInvitationCount();
         this.showNotification('Login successful!', 'success');
         return true;
       } else {
@@ -249,6 +256,33 @@ const AuthManager = {
       } else {
         userManagementLink.classList.add('hidden');
       }
+    }
+  },
+
+  async updateInvitationCount() {
+    try {
+      const response = await fetch('/api/invitations/me', {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const invitations = await response.json();
+        const count = invitations.length;
+        
+        const badge = document.getElementById('invitation-count-badge');
+        if (badge) {
+          if (count > 0) {
+            badge.textContent = count;
+            badge.classList.remove('hidden');
+            badge.classList.add('flex');
+          } else {
+            badge.classList.add('hidden');
+            badge.classList.remove('flex');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching invitation count:', error);
     }
   },
 
