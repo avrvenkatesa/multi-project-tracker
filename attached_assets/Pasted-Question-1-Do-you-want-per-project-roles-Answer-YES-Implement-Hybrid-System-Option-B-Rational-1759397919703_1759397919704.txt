@@ -1,0 +1,305 @@
+Question 1: Do you want per-project roles?
+Answer: YES - Implement Hybrid System (Option B)
+Rationale:
+
+Aligns with Project Goals: The Multi-Project Tracker is designed for managing MULTIPLE projects. Users naturally need different roles across different projects (e.g., Jane is Manager of Project A but just a Member of Project B).
+Already Partially Implemented: The codebase shows clear intent for project-level roles:
+
+Comments feature references "project team members"
+AI Analysis has project-specific visibility controls
+Code already checks project_members table (it just doesn't exist yet!)
+
+
+Best Practice: Industry-standard project management tools (Jira, Asana, Linear) all use per-project permissions.
+
+Implementation Details:
+
+Keep global roles in users table for system-wide permissions (System Administrator, etc.)
+Add project_members table for project-specific roles
+Use consistent naming: Map global roles to project roles 1:1
+
+Global "Project Manager" → Project "Manager"
+Global "Team Lead" → Project "Admin" (project-level admin)
+Global "Team Member" → Project "Member"
+Global "Stakeholder" → Project "Viewer"
+
+
+
+
+Question 2: Should we fix the broken permission system first?
+Answer: YES - Fix First, Then Enhance
+Two-Phase Approach:
+Phase 2A: Emergency Fix (30 minutes) - Do This IMMEDIATELY
+Goal: Restore working state before adding new features
+
+Create Missing project_members Table via Drizzle
+
+typescript   // In schema.ts
+   export const projectMembers = pgTable('project_members', {
+     id: serial('id').primaryKey(),
+     projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+     userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+     role: varchar('role', { length: 50 }).notNull().default('Member'),
+     joinedAt: timestamp('joined_at').defaultNow(),
+     status: varchar('status', { length: 20 }).default('active'),
+   });
+
+Run Drizzle Push (NOT manual SQL)
+
+bash   npm run db:push
+
+Seed Existing Projects
+
+Query all existing projects
+For each project, add creator as "Manager" in project_members
+Add all users with "Project Manager" global role as "Manager"
+
+
+Verify Permissions Work
+
+Test canUploadTranscript()
+Test AI Analysis access
+Test commenting on items
+
+
+
+Phase 2B: Add Team Management (4-5 hours) - AFTER Fix
+
+Implement the full Issue #25 features
+Invitation system
+Role management UI
+All 8 API endpoints
+
+Why This Order:
+
+Can't build on broken foundation
+Existing features need to work first
+30-minute fix prevents user frustration
+Clean slate for new features
+
+
+Question 3: What should happen to existing projects?
+Answer: Automatic Migration with Smart Defaults
+Migration Strategy:
+Step 1: Create Migration Script (Drizzle, not manual SQL)
+typescript// migrations/seed-project-members.ts
+import { db } from '../config/database';
+import { projects, users, projectMembers } from '../schema';
+
+export async function seedProjectMembers() {
+  // Get all existing projects
+  const allProjects = await db.select().from(projects);
+  
+  // Get all Project Manager+ users
+  const managers = await db.select()
+    .from(users)
+    .where(sql`${users.globalRole} IN ('System Administrator', 'Project Manager')`);
+  
+  for (const project of allProjects) {
+    // 1. Add project creator as Manager (if known)
+    if (project.createdBy) {
+      await db.insert(projectMembers).values({
+        projectId: project.id,
+        userId: project.createdBy,
+        role: 'Manager',
+        status: 'active'
+      }).onConflictDoNothing();
+    }
+    
+    // 2. Add all global Project Managers as Members (can be upgraded later)
+    for (const manager of managers) {
+      await db.insert(projectMembers).values({
+        projectId: project.id,
+        userId: manager.id,
+        role: 'Member',
+        status: 'active'
+      }).onConflictDoNothing();
+    }
+  }
+}
+Step 2: Migration Rules
+
+Project Creator → Automatic "Manager" role
+System Administrators → Automatic "Admin" role in ALL projects
+Other users with existing items → Automatic "Member" role
+Users who only commented → Automatic "Viewer" role
+
+Step 3: Granular Assignment Rules
+
+If user has issues/action items assigned → "Member"
+If user uploaded transcripts → "Manager"
+If user only viewed → "Viewer"
+
+Step 4: Post-Migration Notification
+
+Email all users: "Project roles have been assigned based on your activity"
+Project Managers can adjust roles via new Team Management UI
+
+
+🎯 Recommended Implementation Plan
+Here's what to tell Replit Agent:
+
+"Please implement the following in this EXACT order:
+PHASE 1: Emergency Fix (30 min) - START HERE
+1.1 Create Drizzle Schema for project_members
+typescript// Add to schema.ts
+export const projectMembers = pgTable('project_members', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: varchar('role', { length: 50 }).notNull().default('Member')
+    .check(sql`role IN ('Admin', 'Manager', 'Member', 'Viewer')`),
+  joinedAt: timestamp('joined_at').defaultNow(),
+  invitedBy: integer('invited_by').references(() => users.id),
+  status: varchar('status', { length: 20 }).default('active')
+    .check(sql`status IN ('active', 'inactive', 'removed')`),
+  lastActive: timestamp('last_active'),
+  removedAt: timestamp('removed_at'),
+  removedBy: integer('removed_by').references(() => users.id),
+}, (table) => ({
+  uniqueProjectUser: unique().on(table.projectId, table.userId),
+  projectIdIdx: index('idx_project_members_project').on(table.projectId),
+  userIdIdx: index('idx_project_members_user').on(table.userId),
+  roleIdx: index('idx_project_members_role').on(table.role),
+  statusIdx: index('idx_project_members_status').on(table.status),
+}));
+1.2 Run Drizzle Push
+bashnpm run db:push
+1.3 Seed Existing Projects
+Run this migration script to populate project_members for all existing projects using the rules from Question 3 above.
+1.4 Verify Permissions
+Test that AI Analysis, comments, and all existing features work correctly.
+
+PHASE 2: Team Management Enhancement (4-5 hours) - AFTER FIX
+2.1 Create project_invitations Table (Drizzle)
+typescriptexport const projectInvitations = pgTable('project_invitations', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  inviterId: integer('inviter_id').notNull().references(() => users.id),
+  inviteeEmail: varchar('invitee_email', { length: 255 }).notNull(),
+  inviteeUserId: integer('invitee_user_id').references(() => users.id),
+  role: varchar('role', { length: 50 }).notNull()
+    .check(sql`role IN ('Admin', 'Manager', 'Member', 'Viewer')`),
+  status: varchar('status', { length: 20 }).notNull().default('pending')
+    .check(sql`status IN ('pending', 'accepted', 'declined', 'expired')`),
+  invitationToken: varchar('invitation_token', { length: 255 }).notNull().unique(),
+  message: text('message'),
+  createdAt: timestamp('created_at').defaultNow(),
+  expiresAt: timestamp('expires_at').notNull(),
+  respondedAt: timestamp('responded_at'),
+}, (table) => ({
+  uniqueInvitation: unique().on(table.projectId, table.inviteeEmail, table.status),
+  projectIdIdx: index('idx_invitations_project').on(table.projectId),
+  emailIdx: index('idx_invitations_email').on(table.inviteeEmail),
+  tokenIdx: index('idx_invitations_token').on(table.invitationToken),
+  statusIdx: index('idx_invitations_status').on(table.status),
+}));
+2.2 Implement Backend (from Replit Prompt)
+
+Use the teamController.js code from the prompt
+Use Drizzle ORM queries instead of raw SQL
+Keep all 8 API endpoints
+
+2.3 Implement Frontend (from Replit Prompt)
+
+Team management page
+Invitation modal
+Member cards with role badges
+
+2.4 Update Existing Permission Checks
+
+Ensure all existing features (comments, AI, etc.) respect project_members roles
+Add project membership checks to all endpoints
+
+
+PHASE 3: Integration & Testing (1 hour)
+3.1 Update Comments System
+
+Modify @mention autocomplete to only show project members
+Update "delete any comment" permission to check project role (Manager+ in that project)
+
+3.2 Update AI Analysis
+
+Verify canUploadTranscript() works with project_members
+Verify transcript visibility respects project membership
+
+3.3 Create Unit Tests
+
+Test role hierarchy enforcement
+Test invitation workflow
+Test permission checks
+
+3.4 Update Documentation
+
+Add project_members table to schema docs
+Document role mapping (global → project)
+Update API documentation
+
+
+🔑 Key Architecture Decisions
+Tell Replit Agent:
+
+Use Drizzle, Not Manual SQL
+
+All schema changes via schema.ts
+All migrations via npm run db:push
+Follow existing database patterns
+
+
+Role Naming Consistency
+
+   Global Role → Project Role
+   System Administrator → Admin (in all projects)
+   Project Manager → Manager
+   Team Lead → Admin (project-level)
+   Team Member → Member
+   Stakeholder → Viewer
+   External Viewer → (cannot be added to projects)
+
+Permission Hierarchy
+
+   Admin > Manager > Member > Viewer
+   
+   Admins: Full project control, delete project
+   Managers: Invite users, upload transcripts, manage settings
+   Members: Create/edit items, comment, self-assign
+   Viewers: Read-only access
+
+Backward Compatibility
+
+Existing global role checks remain for system-wide permissions
+Add project role checks for project-specific actions
+Dual-check pattern: isSystemAdmin() OR isProjectManager(projectId)
+
+
+Auto-Membership Rules
+
+Project creator → automatic Manager
+System Administrators → automatic Admin in all projects
+First user to interact with project → automatic Member
+
+
+
+
+✅ Success Criteria
+After implementation, these must work:
+
+ Existing projects have auto-populated project_members
+ All users can access their existing projects
+ AI Analysis respects project membership
+ Comments system respects project membership
+ Managers can invite new team members
+ Invitation workflow (send/accept/decline) works
+ Role updates work with proper validation
+ Team removal works (soft delete)
+ No permission errors for existing functionality
+ All endpoints use Drizzle ORM (no raw SQL)
+
+
+🚨 Critical Warnings for Replit Agent
+
+DO NOT use manual SQL migrations - Use Drizzle schema + db:push
+DO NOT break existing functionality - Emergency fix FIRST
+DO NOT change global role names - Keep existing user roles
+DO seed existing projects - Don't leave orphaned data
+DO use consistent role naming - Map global → project clearly
