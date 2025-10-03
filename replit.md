@@ -74,6 +74,25 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 
 ## Recent Changes
 
+### Integrated Wiki-Style Help Center (October 3, 2025)
+Implemented a comprehensive wiki-style user guide accessible from the application:
+- **Main Help Center**: Searchable landing page with 11 help topics organized by feature area
+- **Individual Help Pages**: Detailed guides for each major feature:
+  - Getting Started: Login, first project, invitations workflow
+  - Managing Projects: Templates, settings, archiving
+  - Issues & Action Items: Creating, editing, relationships
+  - Kanban Board: Drag-drop, filtering, swimlanes
+  - Team Management: Invitations, roles, member management
+  - AI Meeting Analysis: Transcript upload, review queue, relationships
+  - Comments & @Mentions: Adding comments, mentions, notifications
+  - Email Notifications: Types, settings, frequency options
+  - Project Dashboard: Metrics, charts, activity feed, team performance
+  - Reports & Export: PDF generation (Executive, Detailed, Team Performance)
+  - Roles & Permissions: Complete RBAC documentation with comparison table
+- **Navigation Integration**: Help link in main navigation and floating help button (bottom-right corner)
+- **Consistent Structure**: Each page includes table of contents, numbered sections, examples, pro tips, and navigation footer
+- **Search Functionality**: Real-time filtering of help topics on main help center page
+
 ### Advanced PDF Reporting (October 2-3, 2025)
 Implemented comprehensive PDF reporting capabilities:
 - **PDF Report Generation**: Three report types available from project dashboard:
