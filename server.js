@@ -805,6 +805,12 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
     
   } catch (error) {
     console.error('Update project error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      stack: error.stack
+    });
     res.status(500).json({ error: 'Failed to update project' });
   }
 });
