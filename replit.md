@@ -74,6 +74,14 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 
 ## Recent Changes
 
+### Added "View Archived" Button (October 3, 2025)
+Completed the project archive feature with improved user interface:
+- **View Archived Button**: Added gray "View Archived" button next to "New Project" button on main projects page
+- **Button Visibility**: Shows for all authenticated users (handled by auth.js updateRoleBasedUI function)
+- **Event Handler**: Connected to existing viewArchivedProjects() function in project-management.js
+- **Cache Busting**: Updated script versions (auth.js v5, app.js v6) to ensure browser cache refresh
+- **Bug Fix**: Corrected isAuthenticated property access (was incorrectly called as a function)
+
 ### Integrated Wiki-Style Help Center (October 3, 2025)
 Implemented a comprehensive wiki-style user guide accessible from the application:
 - **Main Help Center**: Searchable landing page with 11 help topics organized by feature area
