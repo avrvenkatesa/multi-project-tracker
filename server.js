@@ -2036,6 +2036,19 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
       result = await csvExportService.exportFullProject(projectId);
     }
     
+    // Get file stats for Content-Length
+    const fsSync = require('fs');
+    const stats = fsSync.statSync(result.filepath);
+    
+    // Set explicit headers to help browser accept the download
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    
     // Send the file for download
     res.download(result.filepath, result.filename, (err) => {
       if (err) {
@@ -2052,7 +2065,7 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
           fsSync.unlinkSync(result.filepath);
           console.log(`Cleaned up CSV file: ${result.filename}`);
         }
-      }, 5000); // Wait 5 seconds after download starts to ensure it completes
+      }, 10000); // Wait 10 seconds to ensure download fully completes
     });
     
   } catch (error) {
