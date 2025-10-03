@@ -1,0 +1,72 @@
+CSV downloads are being blocked by Windows antivirus as potential threats. This is a common issue with dynamically generated files.
+
+Fix the CSV export endpoint in server.js:
+
+CURRENT PROBLEM:
+The file is being generated in /tmp and downloaded, which triggers security warnings.
+
+SOLUTION:
+Stream the CSV directly in the response instead of saving to disk first.
+
+Update the CSV export endpoint:
+
+const { Readable } = require('stream');
+
+app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { type } = req.query;
+    
+    // Fetch data
+    let data, filename, headers;
+    
+    if (type === 'issues') {
+      const result = await pool.query(`
+        SELECT 
+          i.id, i.title, i.description, i.status, i.priority,
+          i.category, i.phase, i.component,
+          u.username as assigned_to,
+          i.due_date, i.created_at, i.updated_at
+        FROM issues i
+        LEFT JOIN users u ON i.assigned_to = u.id
+        WHERE i.project_id = $1
+        ORDER BY i.created_at DESC
+      `, [projectId]);
+      
+      data = result.rows;
+      filename = `issues-${projectId}-${Date.now()}.csv`;
+      headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At'];
+    }
+    // Add similar blocks for 'actions' and 'full'
+    
+    // Generate CSV string in memory
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => 
+        Object.values(row).map(val => 
+          `"${String(val || '').replace(/"/g, '""')}"`
+        ).join(',')
+      )
+    ].join('\n');
+    
+    // Set proper headers for CSV
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    
+    // Send CSV directly without saving to disk
+    res.send(csvContent);
+    
+  } catch (error) {
+    console.error('CSV export error:', error);
+    res.status(500).json({ error: 'Failed to export CSV' });
+  }
+});
+
+KEY CHANGES:
+1. Generate CSV in memory (no /tmp files)
+2. Add X-Content-Type-Options: nosniff header
+3. Proper Content-Type for CSV
+4. Stream directly to response
+
+This eliminates the security warning by not touching the filesystem.

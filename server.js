@@ -15,7 +15,6 @@ const { v4: uuidv4 } = require('uuid');
 const stringSimilarity = require('string-similarity');
 const notificationService = require('./services/notificationService');
 const reportService = require('./services/reportService');
-const csvExportService = require('./services/csvExportService');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -2010,7 +2009,7 @@ app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (
   }
 });
 
-// Export CSV
+// Export CSV - Stream directly without saving to disk
 app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, res) => {
   try {
     const { projectId } = req.params;
@@ -2026,47 +2025,140 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
       return res.status(403).json({ error: 'Access denied. You are not a member of this project.' });
     }
     
-    let result;
+    let data, filename, headers;
     
     if (type === 'issues') {
-      result = await csvExportService.exportIssues(projectId);
+      const result = await pool.query(`
+        SELECT 
+          i.id, 
+          i.title, 
+          i.description, 
+          i.status, 
+          i.priority,
+          i.category, 
+          i.phase, 
+          i.component,
+          i.assignee,
+          i.due_date, 
+          i.created_at, 
+          i.updated_at,
+          u.username as created_by
+        FROM issues i
+        LEFT JOIN users u ON i.created_by::integer = u.id
+        WHERE i.project_id = $1
+        ORDER BY i.created_at DESC
+      `, [projectId]);
+      
+      data = result.rows;
+      filename = `issues-export-${projectId}-${Date.now()}.csv`;
+      headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
+      
     } else if (type === 'actions') {
-      result = await csvExportService.exportActionItems(projectId);
+      const result = await pool.query(`
+        SELECT 
+          ai.id, 
+          ai.title, 
+          ai.description, 
+          ai.status, 
+          ai.priority,
+          ai.assignee,
+          ai.due_date, 
+          ai.created_at, 
+          ai.updated_at,
+          u.username as created_by
+        FROM action_items ai
+        LEFT JOIN users u ON ai.created_by::integer = u.id
+        WHERE ai.project_id = $1
+        ORDER BY ai.created_at DESC
+      `, [projectId]);
+      
+      data = result.rows;
+      filename = `actions-export-${projectId}-${Date.now()}.csv`;
+      headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
+      
     } else {
-      result = await csvExportService.exportFullProject(projectId);
+      // Full export - combine issues and action items
+      const issuesQuery = await pool.query(`
+        SELECT 
+          i.id,
+          'Issue' as type,
+          i.title,
+          i.description,
+          i.status,
+          i.priority,
+          i.category,
+          i.phase,
+          i.component,
+          i.assignee,
+          i.due_date,
+          i.created_at,
+          i.updated_at,
+          u.username as created_by
+        FROM issues i
+        LEFT JOIN users u ON i.created_by::integer = u.id
+        WHERE i.project_id = $1
+      `, [projectId]);
+      
+      const actionItemsQuery = await pool.query(`
+        SELECT 
+          ai.id,
+          'Action Item' as type,
+          ai.title,
+          ai.description,
+          ai.status,
+          ai.priority,
+          '' as category,
+          '' as phase,
+          '' as component,
+          ai.assignee,
+          ai.due_date,
+          ai.created_at,
+          ai.updated_at,
+          u.username as created_by
+        FROM action_items ai
+        LEFT JOIN users u ON ai.created_by::integer = u.id
+        WHERE ai.project_id = $1
+      `, [projectId]);
+      
+      data = [
+        ...issuesQuery.rows,
+        ...actionItemsQuery.rows
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      filename = `full-export-${projectId}-${Date.now()}.csv`;
+      headers = ['ID', 'Type', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
     }
     
-    // Get file stats for Content-Length
-    const fsSync = require('fs');
-    const stats = fsSync.statSync(result.filepath);
-    
-    // Set explicit headers to help browser accept the download
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Length', stats.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    
-    // Send the file for download
-    res.download(result.filepath, result.filename, (err) => {
-      if (err) {
-        console.error('Download error:', err);
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'Failed to download file' });
-        }
+    // Helper function to escape CSV values
+    const escapeCSV = (val) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      // Escape quotes and wrap in quotes if contains comma, quote, or newline
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
       }
-      
-      // Clean up file after download completes (delayed to ensure download finishes)
-      const fsSync = require('fs');
-      setTimeout(() => {
-        if (fsSync.existsSync(result.filepath)) {
-          fsSync.unlinkSync(result.filepath);
-          console.log(`Cleaned up CSV file: ${result.filename}`);
-        }
-      }, 10000); // Wait 10 seconds to ensure download fully completes
+      return str;
+    };
+    
+    // Generate CSV content in memory
+    const csvRows = [headers.join(',')];
+    data.forEach(row => {
+      const values = headers.map((header, index) => {
+        const key = Object.keys(row)[index];
+        return escapeCSV(row[key]);
+      });
+      csvRows.push(values.join(','));
     });
+    const csvContent = csvRows.join('\n');
+    
+    // Set proper headers for CSV download
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    
+    // Send CSV directly without saving to disk
+    res.send('\ufeff' + csvContent); // UTF-8 BOM for Excel compatibility
     
   } catch (error) {
     console.error('CSV export error:', error);

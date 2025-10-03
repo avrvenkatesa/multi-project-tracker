@@ -74,7 +74,7 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 
 ## Recent Changes
 
-### Advanced Reporting and Data Export (October 2, 2025)
+### Advanced Reporting and Data Export (October 2-3, 2025)
 Implemented comprehensive reporting and data export capabilities:
 - **PDF Report Generation**: Three report types available from project dashboard:
   - Executive Summary: High-level project overview with key metrics
@@ -86,14 +86,15 @@ Implemented comprehensive reporting and data export capabilities:
   - Issues Export: All issues with full details
   - Action Items Export: All action items with full details
   - Full Project Export: Complete project data including both issues and action items
-  - Fixed file cleanup timing to ensure CSVs complete download before being deleted (5-second delay)
-  - Enhanced CSVs with UTF-8 BOM marker and comprehensive metadata headers to avoid antivirus false positives
+  - **Streaming Implementation**: CSV files are generated in-memory and streamed directly to the browser without touching the filesystem, completely eliminating antivirus false positives
+  - UTF-8 BOM marker for Excel compatibility
+  - Proper CSV escaping for special characters (quotes, commas, newlines)
 - **Backend Services**: 
   - `reportService.js`: Generates PDF reports using pdfkit with project statistics and formatted content
-  - `csvExportService.js`: Creates CSV exports with proper formatting and temporary file cleanup
+  - CSV generation is now handled directly in server.js endpoint (no separate service file needed)
 - **API Endpoints**:
   - `POST /api/projects/:projectId/reports/generate`: Generate PDF reports with type selection
-  - `GET /api/projects/:projectId/export/csv?type={issues|actions|full}`: Export data in CSV format
+  - `GET /api/projects/:projectId/export/csv?type={issues|actions|full}`: Stream CSV data directly without temporary files
 - **Dashboard Integration**: Reports & Export section added to dashboard.html with user-friendly buttons and status feedback
 - **Security**: All endpoints protected with authentication and project membership verification
 - **User Experience**: Real-time status messages, automatic file downloads, and error handling with user-friendly feedback
