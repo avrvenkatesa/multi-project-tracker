@@ -1,0 +1,197 @@
+Implement UI improvements to the header navigation for a cleaner, more modern interface.
+
+CHANGES REQUIRED:
+
+1. HAMBURGER MENU FOR SETTINGS AND HELP
+
+Create a new hamburger menu that contains Settings and Help links.
+
+In public/index.html (and all other main pages), replace the current header structure:
+
+CURRENT:
+<header class="bg-blue-600 text-white">
+  <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+    <div>
+      <h1>Multi-Project Tracker</h1>
+      <p>AI-powered issue and action item tracking</p>
+    </div>
+    <div class="flex items-center gap-4">
+      <button class="notification-bell">🔔</button>
+      <a href="/invitations.html">My Invitations</a>
+      <a href="/notification-settings.html">⚙️ Settings</a>
+      <a href="/help.html">Help</a>
+      <div class="user-info">
+        <span>Manager User</span>
+        <span class="badge">Project Manager</span>
+        <span>manager@test.com</span>
+      </div>
+      <button id="logoutBtn">Logout</button>
+    </div>
+  </div>
+</header>
+
+NEW STRUCTURE:
+<header class="bg-blue-600 text-white">
+  <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+    <div>
+      <h1>Multi-Project Tracker</h1>
+      <p>AI-powered issue and action item tracking</p>
+    </div>
+    <div class="flex items-center gap-4">
+      <!-- Notification Bell -->
+      <button class="notification-bell">🔔</button>
+      
+      <!-- My Invitations -->
+      <a href="/invitations.html">My Invitations</a>
+      
+      <!-- Hamburger Menu -->
+      <div class="relative" id="hamburgerMenu">
+        <button id="hamburgerBtn" class="p-2 hover:bg-blue-700 rounded">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+        
+        <!-- Dropdown Menu -->
+        <div id="hamburgerDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
+          <a href="/notification-settings.html" class="block px-4 py-2 text-gray-800 hover:bg-gray-100">
+            <i class="fas fa-cog mr-2"></i>Settings
+          </a>
+          <a href="/help.html" class="block px-4 py-2 text-gray-800 hover:bg-gray-100">
+            <i class="fas fa-question-circle mr-2"></i>Help
+          </a>
+        </div>
+      </div>
+      
+      <!-- User Info -->
+      <div class="user-info">
+        <span>Manager User</span>
+        <span class="badge bg-blue-800 px-2 py-1 rounded text-sm">Project Manager</span>
+        <span class="text-sm">manager@test.com</span>
+      </div>
+      
+      <!-- Login/Logout Toggle Icon -->
+      <button id="authToggleBtn" class="p-2 hover:bg-blue-700 rounded" title="Logout">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+2. ADD JAVASCRIPT FOR HAMBURGER MENU
+
+Add to public/js/app.js or create new public/js/header.js:
+
+// Hamburger menu toggle
+document.addEventListener('DOMContentLoaded', () => {
+  const hamburgerBtn = document.getElementById('hamburgerBtn');
+  const hamburgerDropdown = document.getElementById('hamburgerDropdown');
+  
+  if (hamburgerBtn && hamburgerDropdown) {
+    // Toggle dropdown
+    hamburgerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hamburgerDropdown.classList.toggle('hidden');
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!hamburgerBtn.contains(e.target) && !hamburgerDropdown.contains(e.target)) {
+        hamburgerDropdown.classList.add('hidden');
+      }
+    });
+    
+    // Close dropdown when clicking a menu item
+    hamburgerDropdown.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        hamburgerDropdown.classList.add('hidden');
+      });
+    });
+  }
+});
+
+3. UPDATE AUTH TOGGLE BUTTON
+
+Replace the existing logout button handler in public/js/auth.js:
+
+// Find and update the logout functionality
+const authToggleBtn = document.getElementById('authToggleBtn');
+if (authToggleBtn) {
+  authToggleBtn.addEventListener('click', async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      window.location.href = '/login.html';
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  });
+}
+
+4. APPLY TO ALL PAGES
+
+Update the header in these files with the new structure:
+- public/index.html (projects page)
+- public/dashboard.html
+- public/team.html
+- public/invitations.html
+- public/notification-settings.html
+- public/help.html
+
+5. ADD RESPONSIVE MOBILE BEHAVIOR
+
+Add CSS for mobile responsiveness:
+
+@media (max-width: 768px) {
+  .user-info {
+    display: none; /* Hide user info on mobile, accessible via hamburger */
+  }
+  
+  /* Add user info to hamburger dropdown on mobile */
+  #hamburgerDropdown {
+    width: 250px;
+  }
+}
+
+For mobile, add user info to hamburger dropdown:
+
+<div id="hamburgerDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
+  <!-- Mobile: Show user info first -->
+  <div class="md:hidden border-b px-4 py-3 mb-2">
+    <p class="font-semibold text-gray-800">Manager User</p>
+    <p class="text-xs text-gray-600">Project Manager</p>
+    <p class="text-xs text-gray-600">manager@test.com</p>
+  </div>
+  
+  <a href="/notification-settings.html" class="block px-4 py-2 text-gray-800 hover:bg-gray-100">
+    <i class="fas fa-cog mr-2"></i>Settings
+  </a>
+  <a href="/help.html" class="block px-4 py-2 text-gray-800 hover:bg-gray-100">
+    <i class="fas fa-question-circle mr-2"></i>Help
+  </a>
+</div>
+
+SUMMARY OF CHANGES:
+✅ Settings moved to hamburger menu
+✅ Help moved to hamburger menu
+✅ Logout button replaced with logout icon (arrow leaving door)
+✅ Hamburger menu toggles on click
+✅ Closes when clicking outside
+✅ Mobile responsive (user info in hamburger on small screens)
+✅ Clean, modern interface
+
+TESTING CHECKLIST:
+- [ ] Hamburger icon appears in header
+- [ ] Clicking hamburger opens dropdown menu
+- [ ] Settings and Help links work
+- [ ] Clicking outside closes dropdown
+- [ ] Logout icon appears and functions
+- [ ] Mobile view works correctly
+- [ ] All pages updated consistently
+
+Implement these changes now.
