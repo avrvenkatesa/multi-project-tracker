@@ -1,0 +1,472 @@
+Create an integrated wiki-style user guide for the Multi-Project Tracker application.
+
+STEP 1: Create User Guide Structure (30 minutes)
+
+Create public/help/ directory with these files:
+
+1. public/help.html - Main help center page
+2. public/help/getting-started.html
+3. public/help/projects.html
+4. public/help/issues-actions.html
+5. public/help/kanban-board.html
+6. public/help/team-management.html
+7. public/help/ai-analysis.html
+8. public/help/comments-mentions.html
+9. public/help/notifications.html
+10. public/help/dashboard.html
+11. public/help/reports.html
+12. public/help/roles-permissions.html
+
+STEP 2: Create Main Help Center (public/help.html)
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Help Center - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  <!-- Header -->
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold">Help Center</h1>
+          <p class="text-blue-100 mt-1">Complete guide to using Multi-Project Tracker</p>
+        </div>
+        <a href="/index.html" class="bg-white text-blue-600 px-4 py-2 rounded hover:bg-blue-50">
+          <i class="fas fa-arrow-left mr-2"></i>Back to App
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Search Bar -->
+  <div class="bg-white border-b py-6">
+    <div class="container mx-auto px-4">
+      <div class="max-w-2xl mx-auto">
+        <div class="relative">
+          <input 
+            type="text" 
+            id="helpSearch"
+            placeholder="Search help articles..." 
+            class="w-full px-4 py-3 pl-12 border rounded-lg focus:ring-2 focus:ring-blue-500">
+          <i class="fas fa-search absolute left-4 top-4 text-gray-400"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="container mx-auto px-4 py-8">
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      
+      <!-- Getting Started -->
+      <a href="/help/getting-started.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-blue-600 text-4xl mb-4">
+          <i class="fas fa-rocket"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Getting Started</h2>
+        <p class="text-gray-600">Learn the basics and set up your first project</p>
+      </a>
+
+      <!-- Projects -->
+      <a href="/help/projects.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-green-600 text-4xl mb-4">
+          <i class="fas fa-folder-open"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Managing Projects</h2>
+        <p class="text-gray-600">Create, configure, and organize projects</p>
+      </a>
+
+      <!-- Issues & Actions -->
+      <a href="/help/issues-actions.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-red-600 text-4xl mb-4">
+          <i class="fas fa-tasks"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Issues & Action Items</h2>
+        <p class="text-gray-600">Track problems and manage tasks</p>
+      </a>
+
+      <!-- Kanban Board -->
+      <a href="/help/kanban-board.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-purple-600 text-4xl mb-4">
+          <i class="fas fa-columns"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Kanban Board</h2>
+        <p class="text-gray-600">Visualize and manage work flow</p>
+      </a>
+
+      <!-- Team Management -->
+      <a href="/help/team-management.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-orange-600 text-4xl mb-4">
+          <i class="fas fa-users"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Team Management</h2>
+        <p class="text-gray-600">Invite members and manage permissions</p>
+      </a>
+
+      <!-- AI Analysis -->
+      <a href="/help/ai-analysis.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-indigo-600 text-4xl mb-4">
+          <i class="fas fa-brain"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">AI Meeting Analysis</h2>
+        <p class="text-gray-600">Extract action items from transcripts</p>
+      </a>
+
+      <!-- Comments & Mentions -->
+      <a href="/help/comments-mentions.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-teal-600 text-4xl mb-4">
+          <i class="fas fa-comments"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Comments & @Mentions</h2>
+        <p class="text-gray-600">Collaborate and notify team members</p>
+      </a>
+
+      <!-- Email Notifications -->
+      <a href="/help/notifications.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-yellow-600 text-4xl mb-4">
+          <i class="fas fa-bell"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Email Notifications</h2>
+        <p class="text-gray-600">Configure notification preferences</p>
+      </a>
+
+      <!-- Dashboard -->
+      <a href="/help/dashboard.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-pink-600 text-4xl mb-4">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Project Dashboard</h2>
+        <p class="text-gray-600">View metrics and project health</p>
+      </a>
+
+      <!-- Reports -->
+      <a href="/help/reports.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-gray-600 text-4xl mb-4">
+          <i class="fas fa-file-pdf"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Reports & Export</h2>
+        <p class="text-gray-600">Generate reports and export data</p>
+      </a>
+
+      <!-- Roles & Permissions -->
+      <a href="/help/roles-permissions.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-blue-800 text-4xl mb-4">
+          <i class="fas fa-shield-alt"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Roles & Permissions</h2>
+        <p class="text-gray-600">Understand access control and security</p>
+      </a>
+
+    </div>
+
+    <!-- Quick Links Section -->
+    <div class="mt-12 bg-blue-50 rounded-lg p-8">
+      <h2 class="text-2xl font-bold mb-4">Need More Help?</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div>
+          <h3 class="font-semibold mb-2"><i class="fas fa-video mr-2"></i>Video Tutorials</h3>
+          <p class="text-gray-600 text-sm">Watch step-by-step guides (coming soon)</p>
+        </div>
+        <div>
+          <h3 class="font-semibold mb-2"><i class="fas fa-question-circle mr-2"></i>FAQs</h3>
+          <p class="text-gray-600 text-sm">Common questions and answers</p>
+        </div>
+        <div>
+          <h3 class="font-semibold mb-2"><i class="fas fa-envelope mr-2"></i>Contact Support</h3>
+          <p class="text-gray-600 text-sm">Get help from our team</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Simple search functionality
+    document.getElementById('helpSearch').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const cards = document.querySelectorAll('a.bg-white');
+      
+      cards.forEach(card => {
+        const title = card.querySelector('h2').textContent.toLowerCase();
+        const desc = card.querySelector('p').textContent.toLowerCase();
+        
+        if (title.includes(query) || desc.includes(query)) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = query ? 'none' : 'block';
+        }
+      });
+    });
+  </script>
+</body>
+</html>
+
+STEP 3: Create Individual Help Pages
+
+For each topic, create a dedicated help page with this structure:
+
+Example: public/help/getting-started.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Getting Started - Help Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  
+  <!-- Header -->
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center gap-4">
+        <a href="/help.html" class="hover:underline">
+          <i class="fas fa-arrow-left mr-2"></i>Help Center
+        </a>
+        <span class="text-blue-200">|</span>
+        <h1 class="text-xl font-bold">Getting Started</h1>
+      </div>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+      
+      <!-- Sidebar Navigation -->
+      <div class="lg:grid lg:grid-cols-4 lg:gap-8">
+        
+        <!-- Table of Contents -->
+        <aside class="lg:col-span-1 mb-8">
+          <div class="bg-white rounded-lg shadow p-4 sticky top-4">
+            <h3 class="font-bold mb-3">On This Page</h3>
+            <nav class="space-y-2 text-sm">
+              <a href="#login" class="block text-blue-600 hover:underline">1. Logging In</a>
+              <a href="#first-project" class="block text-blue-600 hover:underline">2. Creating Your First Project</a>
+              <a href="#adding-items" class="block text-blue-600 hover:underline">3. Adding Issues</a>
+              <a href="#inviting-team" class="block text-blue-600 hover:underline">4. Inviting Team Members</a>
+              <a href="#next-steps" class="block text-blue-600 hover:underline">5. Next Steps</a>
+            </nav>
+          </div>
+        </aside>
+
+        <!-- Main Content -->
+        <article class="lg:col-span-3 bg-white rounded-lg shadow p-8">
+          
+          <h1 class="text-3xl font-bold mb-6">Getting Started with Multi-Project Tracker</h1>
+          
+          <p class="text-lg text-gray-700 mb-8">
+            Welcome to Multi-Project Tracker! This guide will help you get up and running in minutes.
+          </p>
+
+          <!-- Section 1 -->
+          <section id="login" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span>
+              Logging In
+            </h2>
+            
+            <p class="mb-4">To access Multi-Project Tracker, you'll need an account:</p>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Navigate to the login page</li>
+              <li>Enter your email and password</li>
+              <li>Click "Login"</li>
+            </ol>
+
+            <div class="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4">
+              <p class="font-semibold text-blue-900">First Time User?</p>
+              <p class="text-blue-800 text-sm mt-1">Contact your system administrator to create an account for you.</p>
+            </div>
+          </section>
+
+          <!-- Section 2 -->
+          <section id="first-project" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span>
+              Creating Your First Project
+            </h2>
+            
+            <p class="mb-4">Projects organize your work. Here's how to create one:</p>
+            
+            <ol class="list-decimal list-inside space-y-3 mb-4">
+              <li><strong>Click "+ New Project"</strong> button on the main page</li>
+              <li><strong>Enter project details:</strong>
+                <ul class="list-disc list-inside ml-6 mt-2 space-y-1">
+                  <li>Project Name (required)</li>
+                  <li>Description</li>
+                  <li>Template (Cloud Migration, Software Dev, Infrastructure, or Generic)</li>
+                </ul>
+              </li>
+              <li><strong>Click "Create Project"</strong></li>
+            </ol>
+
+            <div class="bg-gray-100 p-4 rounded mb-4">
+              <p class="font-semibold mb-2">Template Benefits:</p>
+              <ul class="list-disc list-inside text-sm space-y-1">
+                <li><strong>Cloud Migration:</strong> Pre-configured for infrastructure projects</li>
+                <li><strong>Software Development:</strong> Optimized for agile workflows</li>
+                <li><strong>Infrastructure:</strong> Designed for ops teams</li>
+                <li><strong>Generic:</strong> Flexible for any project type</li>
+              </ul>
+            </div>
+          </section>
+
+          <!-- Section 3 -->
+          <section id="adding-items" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">3</span>
+              Adding Your First Issue
+            </h2>
+            
+            <p class="mb-4">Issues track problems, bugs, or tasks that need attention:</p>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Open your project</li>
+              <li>Click "New Issue" or "Add Issue" button</li>
+              <li>Fill in the details:
+                <ul class="list-disc list-inside ml-6 mt-2">
+                  <li>Title (required)</li>
+                  <li>Description</li>
+                  <li>Priority (High/Medium/Low)</li>
+                  <li>Category (based on your template)</li>
+                  <li>Assign to team member (optional)</li>
+                </ul>
+              </li>
+              <li>Click "Create Issue"</li>
+            </ol>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-600 p-4">
+              <p class="font-semibold text-yellow-900">Pro Tip:</p>
+              <p class="text-yellow-800 text-sm mt-1">Use descriptive titles that clearly state the problem. Good: "Login page returns 500 error". Bad: "Fix bug".</p>
+            </div>
+          </section>
+
+          <!-- Section 4 -->
+          <section id="inviting-team" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">4</span>
+              Inviting Team Members
+            </h2>
+            
+            <p class="mb-4">Collaborate by inviting your team:</p>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Open your project</li>
+              <li>Click "Team" button</li>
+              <li>Click "Invite Team Member"</li>
+              <li>Enter their email address</li>
+              <li>Select their role:
+                <ul class="list-disc list-inside ml-6 mt-2">
+                  <li><strong>Admin:</strong> Full control</li>
+                  <li><strong>Manager:</strong> Can invite and manage</li>
+                  <li><strong>Member:</strong> Can create and edit</li>
+                  <li><strong>Viewer:</strong> Read-only access</li>
+                </ul>
+              </li>
+              <li>Add optional message</li>
+              <li>Click "Send Invitation"</li>
+            </ol>
+
+            <p class="text-sm text-gray-600">The invitee will receive an email and can accept/decline the invitation.</p>
+          </section>
+
+          <!-- Section 5 -->
+          <section id="next-steps" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">5</span>
+              Next Steps
+            </h2>
+            
+            <p class="mb-4">Now that you're set up, explore these features:</p>
+            
+            <div class="grid md:grid-cols-2 gap-4">
+              <a href="/help/kanban-board.html" class="border rounded p-4 hover:bg-gray-50">
+                <h3 class="font-semibold mb-2">Kanban Board</h3>
+                <p class="text-sm text-gray-600">Visualize your workflow</p>
+              </a>
+              <a href="/help/ai-analysis.html" class="border rounded p-4 hover:bg-gray-50">
+                <h3 class="font-semibold mb-2">AI Meeting Analysis</h3>
+                <p class="text-sm text-gray-600">Extract action items automatically</p>
+              </a>
+              <a href="/help/dashboard.html" class="border rounded p-4 hover:bg-gray-50">
+                <h3 class="font-semibold mb-2">Project Dashboard</h3>
+                <p class="text-sm text-gray-600">Track project health</p>
+              </a>
+              <a href="/help/reports.html" class="border rounded p-4 hover:bg-gray-50">
+                <h3 class="font-semibold mb-2">Generate Reports</h3>
+                <p class="text-sm text-gray-600">Export and share insights</p>
+              </a>
+            </div>
+          </section>
+
+          <!-- Footer Navigation -->
+          <div class="border-t pt-8 mt-12 flex justify-between">
+            <a href="/help.html" class="text-blue-600 hover:underline">
+              <i class="fas fa-arrow-left mr-2"></i>Back to Help Center
+            </a>
+            <a href="/help/projects.html" class="text-blue-600 hover:underline">
+              Managing Projects<i class="fas fa-arrow-right ml-2"></i>
+            </a>
+          </div>
+
+        </article>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+
+STEP 4: Add Help Link to Navigation
+
+Update all pages to include help link in the header:
+
+In the user menu dropdown or header, add:
+<a href="/help.html" class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100">
+  <i class="fas fa-question-circle"></i>
+  Help Center
+</a>
+
+Also add a floating help button (bottom-right corner):
+<a href="/help.html" 
+   class="fixed bottom-6 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center hover:bg-blue-700 z-50"
+   title="Help Center">
+  <i class="fas fa-question text-xl"></i>
+</a>
+
+STEP 5: Create Remaining Help Pages
+
+Create similar detailed guides for:
+- projects.html (templates, settings, deletion)
+- issues-actions.html (creating, editing, relationships)
+- kanban-board.html (drag-drop, filtering, search)
+- team-management.html (invitations, roles, removal)
+- ai-analysis.html (upload, review, accept items)
+- comments-mentions.html (@mentions, notifications)
+- notifications.html (preferences, unsubscribe)
+- dashboard.html (metrics, charts, activity)
+- reports.html (generation, export, formats)
+- roles-permissions.html (role hierarchy, capabilities)
+
+Each page should follow the same structure:
+- Clear section numbering
+- Step-by-step instructions
+- Screenshots or descriptions (text-based for now)
+- Pro tips and warnings
+- Related articles links
+- Previous/Next navigation
+
+DELIVERABLES:
+1. Main help center with search
+2. 11 detailed help pages
+3. Navigation integration
+4. Floating help button
+5. Consistent styling and structure
+
+Begin implementation.

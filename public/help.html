@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Help Center - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold">Help Center</h1>
+          <p class="text-blue-100 mt-1">Complete guide to using Multi-Project Tracker</p>
+        </div>
+        <a href="/index.html" class="bg-white text-blue-600 px-4 py-2 rounded hover:bg-blue-50">
+          <i class="fas fa-arrow-left mr-2"></i>Back to App
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="bg-white border-b py-6">
+    <div class="container mx-auto px-4">
+      <div class="max-w-2xl mx-auto">
+        <div class="relative">
+          <input 
+            type="text" 
+            id="helpSearch"
+            placeholder="Search help articles..." 
+            class="w-full px-4 py-3 pl-12 border rounded-lg focus:ring-2 focus:ring-blue-500">
+          <i class="fas fa-search absolute left-4 top-4 text-gray-400"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container mx-auto px-4 py-8">
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      
+      <a href="/help/getting-started.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-blue-600 text-4xl mb-4">
+          <i class="fas fa-rocket"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Getting Started</h2>
+        <p class="text-gray-600">Learn the basics and set up your first project</p>
+      </a>
+
+      <a href="/help/projects.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-green-600 text-4xl mb-4">
+          <i class="fas fa-folder-open"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Managing Projects</h2>
+        <p class="text-gray-600">Create, configure, and organize projects</p>
+      </a>
+
+      <a href="/help/issues-actions.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-red-600 text-4xl mb-4">
+          <i class="fas fa-tasks"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Issues & Action Items</h2>
+        <p class="text-gray-600">Track problems and manage tasks</p>
+      </a>
+
+      <a href="/help/kanban-board.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-purple-600 text-4xl mb-4">
+          <i class="fas fa-columns"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Kanban Board</h2>
+        <p class="text-gray-600">Visualize and manage work flow</p>
+      </a>
+
+      <a href="/help/team-management.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-orange-600 text-4xl mb-4">
+          <i class="fas fa-users"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Team Management</h2>
+        <p class="text-gray-600">Invite members and manage permissions</p>
+      </a>
+
+      <a href="/help/ai-analysis.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-indigo-600 text-4xl mb-4">
+          <i class="fas fa-brain"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">AI Meeting Analysis</h2>
+        <p class="text-gray-600">Extract action items from transcripts</p>
+      </a>
+
+      <a href="/help/comments-mentions.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-teal-600 text-4xl mb-4">
+          <i class="fas fa-comments"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Comments & @Mentions</h2>
+        <p class="text-gray-600">Collaborate and notify team members</p>
+      </a>
+
+      <a href="/help/notifications.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-yellow-600 text-4xl mb-4">
+          <i class="fas fa-bell"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Email Notifications</h2>
+        <p class="text-gray-600">Configure notification preferences</p>
+      </a>
+
+      <a href="/help/dashboard.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-pink-600 text-4xl mb-4">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Project Dashboard</h2>
+        <p class="text-gray-600">View metrics and project health</p>
+      </a>
+
+      <a href="/help/reports.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-gray-600 text-4xl mb-4">
+          <i class="fas fa-file-pdf"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Reports & Export</h2>
+        <p class="text-gray-600">Generate reports and export data</p>
+      </a>
+
+      <a href="/help/roles-permissions.html" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
+        <div class="text-blue-800 text-4xl mb-4">
+          <i class="fas fa-shield-alt"></i>
+        </div>
+        <h2 class="text-xl font-bold mb-2">Roles & Permissions</h2>
+        <p class="text-gray-600">Understand access control and security</p>
+      </a>
+
+    </div>
+
+    <div class="mt-12 bg-blue-50 rounded-lg p-8">
+      <h2 class="text-2xl font-bold mb-4">Need More Help?</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div>
+          <h3 class="font-semibold mb-2"><i class="fas fa-video mr-2"></i>Video Tutorials</h3>
+          <p class="text-gray-600 text-sm">Watch step-by-step guides (coming soon)</p>
+        </div>
+        <div>
+          <h3 class="font-semibold mb-2"><i class="fas fa-question-circle mr-2"></i>FAQs</h3>
+          <p class="text-gray-600 text-sm">Common questions and answers</p>
+        </div>
+        <div>
+          <h3 class="font-semibold mb-2"><i class="fas fa-envelope mr-2"></i>Contact Support</h3>
+          <p class="text-gray-600 text-sm">Get help from our team</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('helpSearch').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const cards = document.querySelectorAll('a.bg-white');
+      
+      cards.forEach(card => {
+        const title = card.querySelector('h2').textContent.toLowerCase();
+        const desc = card.querySelector('p').textContent.toLowerCase();
+        
+        if (title.includes(query) || desc.includes(query)) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = query ? 'none' : 'block';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

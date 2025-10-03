@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Comments & @Mentions - Help Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center gap-4">
+        <a href="/help.html" class="hover:underline">
+          <i class="fas fa-arrow-left mr-2"></i>Help Center
+        </a>
+        <span class="text-blue-200">|</span>
+        <h1 class="text-xl font-bold">Comments & @Mentions</h1>
+      </div>
+    </div>
+  </header>
+
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+      
+      <div class="lg:grid lg:grid-cols-4 lg:gap-8">
+        
+        <aside class="lg:col-span-1 mb-8">
+          <div class="bg-white rounded-lg shadow p-4 sticky top-4">
+            <h3 class="font-bold mb-3">On This Page</h3>
+            <nav class="space-y-2 text-sm">
+              <a href="#commenting" class="block text-blue-600 hover:underline">1. Adding Comments</a>
+              <a href="#mentions" class="block text-blue-600 hover:underline">2. @Mentions</a>
+              <a href="#notifications" class="block text-blue-600 hover:underline">3. Notifications</a>
+              <a href="#markdown" class="block text-blue-600 hover:underline">4. Markdown Support</a>
+              <a href="#editing" class="block text-blue-600 hover:underline">5. Editing & Deleting</a>
+            </nav>
+          </div>
+        </aside>
+
+        <article class="lg:col-span-3 bg-white rounded-lg shadow p-8">
+          
+          <h1 class="text-3xl font-bold mb-6">Comments & @Mentions</h1>
+          
+          <p class="text-lg text-gray-700 mb-8">
+            Collaborate with your team using comments and @mention notifications.
+          </p>
+
+          <section id="commenting" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span>
+              Adding Comments
+            </h2>
+            
+            <p class="mb-4">Add comments to issues or action items:</p>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Open an issue or action item</li>
+              <li>Scroll to the Comments section</li>
+              <li>Type your comment in the text area</li>
+              <li>Click <strong>"Add Comment"</strong></li>
+            </ol>
+
+            <p class="text-sm text-gray-600 mb-4">Comments appear in chronological order with timestamps and author names.</p>
+
+            <div class="bg-blue-50 border-l-4 border-blue-600 p-4">
+              <p class="font-semibold text-blue-900">Comment Best Practices:</p>
+              <p class="text-blue-800 text-sm mt-1">Be specific, constructive, and include relevant context. Use comments to provide updates, ask questions, or share findings.</p>
+            </div>
+          </section>
+
+          <section id="mentions" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span>
+              @Mentions
+            </h2>
+            
+            <p class="mb-4">Notify specific team members using @mentions:</p>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>While typing a comment, type <strong>@</strong></li>
+              <li>An autocomplete dropdown appears with team members</li>
+              <li>Type to filter or click to select a team member</li>
+              <li>The mention is highlighted in your comment</li>
+              <li>Submit the comment</li>
+            </ol>
+
+            <div class="bg-teal-50 border-l-4 border-teal-600 p-4 mb-4">
+              <p class="font-semibold text-teal-900">Real-Time Autocomplete:</p>
+              <p class="text-teal-800 text-sm mt-1">Start typing a name after @ and the list filters automatically. Press Enter or click to insert the mention.</p>
+            </div>
+
+            <p class="text-sm text-gray-600">Mentioned users receive email notifications (if enabled in their settings).</p>
+          </section>
+
+          <section id="notifications" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">3</span>
+              Mention Notifications
+            </h2>
+            
+            <p class="mb-4">When someone @mentions you:</p>
+            
+            <ul class="list-disc list-inside space-y-2 mb-4">
+              <li>You receive an email notification (if enabled)</li>
+              <li>The notification includes the comment text and context</li>
+              <li>Click the "View Comment" link to navigate directly to the item</li>
+              <li>The specific comment is highlighted when you arrive</li>
+            </ul>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-600 p-4">
+              <p class="font-semibold text-yellow-900">Configure Notifications:</p>
+              <p class="text-yellow-800 text-sm mt-1">Visit Settings → Notifications to customize your mention notification preferences. See <a href="/help/notifications.html" class="text-blue-600 hover:underline">Email Notifications</a> guide.</p>
+            </div>
+          </section>
+
+          <section id="markdown" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">4</span>
+              Markdown Support
+            </h2>
+            
+            <p class="mb-4">Format comments using Markdown syntax:</p>
+            
+            <div class="bg-gray-100 p-4 rounded mb-4 text-sm font-mono">
+              <p><strong>**Bold Text**</strong></p>
+              <p>*Italic Text*</p>
+              <p>`Code snippet`</p>
+              <p>- Bullet point</p>
+              <p>1. Numbered list</p>
+              <p>[Link text](url)</p>
+            </div>
+
+            <p class="text-sm text-gray-600">Markdown is rendered when the comment is displayed, making it easy to create structured, readable comments.</p>
+          </section>
+
+          <section id="editing" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">5</span>
+              Editing & Deleting Comments
+            </h2>
+            
+            <p class="mb-4">Modify or remove your own comments:</p>
+            
+            <div class="space-y-4 mb-4">
+              <div>
+                <p class="font-semibold mb-2">Editing:</p>
+                <ol class="list-decimal list-inside space-y-1 text-sm">
+                  <li>Find your comment</li>
+                  <li>Click the <strong>"Edit"</strong> button</li>
+                  <li>Modify the text</li>
+                  <li>Click <strong>"Save"</strong></li>
+                </ol>
+              </div>
+
+              <div>
+                <p class="font-semibold mb-2">Deleting:</p>
+                <ol class="list-decimal list-inside space-y-1 text-sm">
+                  <li>Find your comment</li>
+                  <li>Click the <strong>"Delete"</strong> button</li>
+                  <li>Confirm the deletion</li>
+                </ol>
+              </div>
+            </div>
+
+            <div class="bg-red-50 border-l-4 border-red-600 p-4">
+              <p class="font-semibold text-red-900">Permissions:</p>
+              <p class="text-red-800 text-sm mt-1">You can only edit/delete your own comments. Managers and Admins can delete any comment.</p>
+            </div>
+          </section>
+
+          <div class="border-t pt-8 mt-12 flex justify-between">
+            <a href="/help/ai-analysis.html" class="text-blue-600 hover:underline">
+              <i class="fas fa-arrow-left mr-2"></i>AI Meeting Analysis
+            </a>
+            <a href="/help/notifications.html" class="text-blue-600 hover:underline">
+              Email Notifications<i class="fas fa-arrow-right ml-2"></i>
+            </a>
+          </div>
+
+        </article>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

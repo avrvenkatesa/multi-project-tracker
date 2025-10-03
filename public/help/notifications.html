@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Email Notifications - Help Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center gap-4">
+        <a href="/help.html" class="hover:underline">
+          <i class="fas fa-arrow-left mr-2"></i>Help Center
+        </a>
+        <span class="text-blue-200">|</span>
+        <h1 class="text-xl font-bold">Email Notifications</h1>
+      </div>
+    </div>
+  </header>
+
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+      
+      <div class="lg:grid lg:grid-cols-4 lg:gap-8">
+        
+        <aside class="lg:col-span-1 mb-8">
+          <div class="bg-white rounded-lg shadow p-4 sticky top-4">
+            <h3 class="font-bold mb-3">On This Page</h3>
+            <nav class="space-y-2 text-sm">
+              <a href="#overview" class="block text-blue-600 hover:underline">1. Overview</a>
+              <a href="#types" class="block text-blue-600 hover:underline">2. Notification Types</a>
+              <a href="#settings" class="block text-blue-600 hover:underline">3. Configure Settings</a>
+              <a href="#frequency" class="block text-blue-600 hover:underline">4. Email Frequency</a>
+              <a href="#unsubscribe" class="block text-blue-600 hover:underline">5. Unsubscribe</a>
+            </nav>
+          </div>
+        </aside>
+
+        <article class="lg:col-span-3 bg-white rounded-lg shadow p-8">
+          
+          <h1 class="text-3xl font-bold mb-6">Email Notifications</h1>
+          
+          <p class="text-lg text-gray-700 mb-8">
+            Configure when and how you receive email notifications for project activity.
+          </p>
+
+          <section id="overview" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span>
+              Email Notifications Overview
+            </h2>
+            
+            <p class="mb-4">Stay informed about project activity with customizable email notifications:</p>
+            
+            <ul class="list-disc list-inside space-y-2 mb-4">
+              <li>Control which events trigger notifications</li>
+              <li>Set email delivery frequency (instant, daily digest, weekly digest)</li>
+              <li>Enable test emails to verify your settings</li>
+              <li>Unsubscribe from all notifications with one click</li>
+            </ul>
+
+            <div class="bg-blue-50 border-l-4 border-blue-600 p-4">
+              <p class="font-semibold text-blue-900">Access Settings:</p>
+              <p class="text-blue-800 text-sm mt-1">Click "Settings" in the main navigation to configure your notification preferences.</p>
+            </div>
+          </section>
+
+          <section id="types" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span>
+              Notification Types
+            </h2>
+            
+            <p class="mb-4">Choose which events trigger notifications:</p>
+            
+            <div class="space-y-3 mb-4">
+              <div class="border-l-4 border-teal-500 p-4 bg-teal-50">
+                <h3 class="font-bold mb-1">@Mentions</h3>
+                <p class="text-sm text-gray-700">Receive notifications when someone @mentions you in a comment</p>
+                <p class="text-xs text-gray-600 mt-1">Recommended: ✓ Enabled</p>
+              </div>
+
+              <div class="border-l-4 border-blue-500 p-4 bg-blue-50">
+                <h3 class="font-bold mb-1">Assignments</h3>
+                <p class="text-sm text-gray-700">Get notified when issues or action items are assigned to you</p>
+                <p class="text-xs text-gray-600 mt-1">Recommended: ✓ Enabled</p>
+              </div>
+
+              <div class="border-l-4 border-yellow-500 p-4 bg-yellow-50">
+                <h3 class="font-bold mb-1">Status Changes</h3>
+                <p class="text-sm text-gray-700">Be informed when items you created or are assigned to change status</p>
+                <p class="text-xs text-gray-600 mt-1">Recommended: ✓ Enabled</p>
+              </div>
+
+              <div class="border-l-4 border-purple-500 p-4 bg-purple-50">
+                <h3 class="font-bold mb-1">Project Invitations</h3>
+                <p class="text-sm text-gray-700">Receive emails when invited to join new projects</p>
+                <p class="text-xs text-gray-600 mt-1">Recommended: ✓ Enabled (cannot be disabled)</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="settings" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">3</span>
+              Configure Settings
+            </h2>
+            
+            <p class="mb-4">Customize your notification preferences:</p>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Click <strong>"Settings"</strong> in the main navigation</li>
+              <li>Toggle each notification type on or off</li>
+              <li>Select your preferred email frequency</li>
+              <li>Click <strong>"Send Test Email"</strong> to verify (optional)</li>
+              <li>Click <strong>"Save Preferences"</strong></li>
+            </ol>
+
+            <div class="bg-green-50 border-l-4 border-green-600 p-4">
+              <p class="font-semibold text-green-900">Test Email:</p>
+              <p class="text-green-800 text-sm mt-1">Send yourself a test notification to confirm your email address is correct and emails are being delivered.</p>
+            </div>
+          </section>
+
+          <section id="frequency" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">4</span>
+              Email Frequency Options
+            </h2>
+            
+            <p class="mb-4">Control how often you receive emails:</p>
+            
+            <div class="space-y-3 mb-4">
+              <div class="border p-3 rounded">
+                <p class="font-semibold">Instant</p>
+                <p class="text-sm text-gray-600">Receive emails immediately as events occur</p>
+                <p class="text-xs text-gray-500">Best for: Active projects, urgent notifications</p>
+              </div>
+
+              <div class="border p-3 rounded">
+                <p class="font-semibold">Daily Digest</p>
+                <p class="text-sm text-gray-600">Get one email per day summarizing all activity</p>
+                <p class="text-xs text-gray-500">Best for: Reducing email volume, regular updates</p>
+              </div>
+
+              <div class="border p-3 rounded">
+                <p class="font-semibold">Weekly Digest</p>
+                <p class="text-sm text-gray-600">Receive a weekly summary every Monday</p>
+                <p class="text-xs text-gray-500">Best for: Long-term projects, high-level oversight</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="unsubscribe" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">5</span>
+              Unsubscribe from Notifications
+            </h2>
+            
+            <p class="mb-4">Stop receiving all email notifications:</p>
+            
+            <div class="space-y-4 mb-4">
+              <div>
+                <p class="font-semibold mb-2">From Settings Page:</p>
+                <ol class="list-decimal list-inside space-y-1 text-sm">
+                  <li>Go to Settings → Notifications</li>
+                  <li>Click <strong>"Unsubscribe from All"</strong></li>
+                  <li>Confirm your choice</li>
+                </ol>
+              </div>
+
+              <div>
+                <p class="font-semibold mb-2">From Any Email:</p>
+                <ol class="list-decimal list-inside space-y-1 text-sm">
+                  <li>Scroll to the bottom of any notification email</li>
+                  <li>Click the <strong>"Unsubscribe"</strong> link</li>
+                  <li>Confirm on the web page</li>
+                </ol>
+              </div>
+            </div>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-600 p-4">
+              <p class="font-semibold text-yellow-900">Re-subscribe Anytime:</p>
+              <p class="text-yellow-800 text-sm mt-1">You can re-enable notifications at any time from your Settings page.</p>
+            </div>
+          </section>
+
+          <div class="border-t pt-8 mt-12 flex justify-between">
+            <a href="/help/comments-mentions.html" class="text-blue-600 hover:underline">
+              <i class="fas fa-arrow-left mr-2"></i>Comments & @Mentions
+            </a>
+            <a href="/help/dashboard.html" class="text-blue-600 hover:underline">
+              Project Dashboard<i class="fas fa-arrow-right ml-2"></i>
+            </a>
+          </div>
+
+        </article>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Issues & Action Items - Help Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center gap-4">
+        <a href="/help.html" class="hover:underline">
+          <i class="fas fa-arrow-left mr-2"></i>Help Center
+        </a>
+        <span class="text-blue-200">|</span>
+        <h1 class="text-xl font-bold">Issues & Action Items</h1>
+      </div>
+    </div>
+  </header>
+
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+      
+      <div class="lg:grid lg:grid-cols-4 lg:gap-8">
+        
+        <aside class="lg:col-span-1 mb-8">
+          <div class="bg-white rounded-lg shadow p-4 sticky top-4">
+            <h3 class="font-bold mb-3">On This Page</h3>
+            <nav class="space-y-2 text-sm">
+              <a href="#difference" class="block text-blue-600 hover:underline">1. Issues vs Actions</a>
+              <a href="#creating-issues" class="block text-blue-600 hover:underline">2. Creating Issues</a>
+              <a href="#creating-actions" class="block text-blue-600 hover:underline">3. Creating Actions</a>
+              <a href="#editing" class="block text-blue-600 hover:underline">4. Editing Items</a>
+              <a href="#relationships" class="block text-blue-600 hover:underline">5. Item Relationships</a>
+            </nav>
+          </div>
+        </aside>
+
+        <article class="lg:col-span-3 bg-white rounded-lg shadow p-8">
+          
+          <h1 class="text-3xl font-bold mb-6">Issues & Action Items</h1>
+          
+          <p class="text-lg text-gray-700 mb-8">
+            Track problems and manage tasks with Issues and Action Items.
+          </p>
+
+          <section id="difference" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span>
+              Issues vs Action Items
+            </h2>
+            
+            <div class="grid md:grid-cols-2 gap-4 mb-4">
+              <div class="border-l-4 border-red-500 p-4 bg-red-50">
+                <h3 class="font-bold text-lg mb-2">Issues</h3>
+                <p class="text-sm mb-2">Problems, bugs, or concerns that need resolution</p>
+                <ul class="text-xs space-y-1">
+                  <li>• Category-based organization</li>
+                  <li>• Phase tracking</li>
+                  <li>• Component assignment</li>
+                  <li>• Risk assessment</li>
+                </ul>
+              </div>
+
+              <div class="border-l-4 border-green-500 p-4 bg-green-50">
+                <h3 class="font-bold text-lg mb-2">Action Items</h3>
+                <p class="text-sm mb-2">Specific tasks or activities to complete</p>
+                <ul class="text-xs space-y-1">
+                  <li>• Simple task management</li>
+                  <li>• Quick creation</li>
+                  <li>• Owner assignment</li>
+                  <li>• Due date tracking</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section id="creating-issues" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span>
+              Creating Issues
+            </h2>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Open your project</li>
+              <li>Click <strong>"New Issue"</strong> button</li>
+              <li>Fill in the required fields:
+                <ul class="list-disc list-inside ml-6 mt-2 space-y-1">
+                  <li><strong>Title:</strong> Clear, concise description of the problem</li>
+                  <li><strong>Description:</strong> Detailed explanation with context</li>
+                  <li><strong>Status:</strong> To Do, In Progress, In Review, or Resolved</li>
+                  <li><strong>Priority:</strong> Critical, High, Medium, or Low</li>
+                  <li><strong>Category:</strong> Type based on project template</li>
+                  <li><strong>Phase:</strong> Current stage in workflow</li>
+                  <li><strong>Component:</strong> System or area affected</li>
+                  <li><strong>Assigned To:</strong> Team member responsible</li>
+                  <li><strong>Due Date:</strong> Target completion date</li>
+                </ul>
+              </li>
+              <li>Click <strong>"Create Issue"</strong></li>
+            </ol>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-600 p-4">
+              <p class="font-semibold text-yellow-900">Pro Tip:</p>
+              <p class="text-yellow-800 text-sm mt-1">Include relevant details like error messages, screenshots descriptions, or steps to reproduce in the description field.</p>
+            </div>
+          </section>
+
+          <section id="creating-actions" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">3</span>
+              Creating Action Items
+            </h2>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Open your project</li>
+              <li>Click <strong>"New Action Item"</strong> button</li>
+              <li>Fill in the details:
+                <ul class="list-disc list-inside ml-6 mt-2 space-y-1">
+                  <li><strong>Title:</strong> What needs to be done</li>
+                  <li><strong>Description:</strong> Additional context</li>
+                  <li><strong>Status:</strong> Pending, In Progress, Blocked, or Completed</li>
+                  <li><strong>Priority:</strong> Critical, High, Medium, or Low</li>
+                  <li><strong>Assigned To:</strong> Team member responsible</li>
+                  <li><strong>Due Date:</strong> Deadline</li>
+                </ul>
+              </li>
+              <li>Click <strong>"Create Action Item"</strong></li>
+            </ol>
+          </section>
+
+          <section id="editing" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">4</span>
+              Editing Items
+            </h2>
+            
+            <p class="mb-4">Update issues and action items as work progresses:</p>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Click on the item to view details</li>
+              <li>Click the <strong>"Edit"</strong> button</li>
+              <li>Modify any field as needed</li>
+              <li>Click <strong>"Save Changes"</strong></li>
+            </ol>
+
+            <p class="text-sm text-gray-600 mb-4"><strong>Status Updates:</strong> Keep status current to reflect actual progress. This helps team visibility and reporting accuracy.</p>
+
+            <div class="bg-blue-50 border-l-4 border-blue-600 p-4">
+              <p class="font-semibold text-blue-900">Quick Status Change:</p>
+              <p class="text-blue-800 text-sm mt-1">Use the Kanban board to drag and drop items between columns for quick status updates.</p>
+            </div>
+          </section>
+
+          <section id="relationships" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">5</span>
+              Item Relationships
+            </h2>
+            
+            <p class="mb-4">Link related items to track dependencies and connections:</p>
+            
+            <div class="space-y-3 mb-4">
+              <div class="border-l-4 border-red-500 p-3 bg-gray-50">
+                <p class="font-semibold">Blocks</p>
+                <p class="text-sm text-gray-600">Issue A blocks Issue B - B cannot proceed until A is resolved</p>
+              </div>
+
+              <div class="border-l-4 border-blue-500 p-3 bg-gray-50">
+                <p class="font-semibold">Parent/Child</p>
+                <p class="text-sm text-gray-600">Break down large issues into smaller sub-issues for better tracking</p>
+              </div>
+
+              <div class="border-l-4 border-green-500 p-3 bg-gray-50">
+                <p class="font-semibold">Related</p>
+                <p class="text-sm text-gray-600">Items that are connected but not dependent on each other</p>
+              </div>
+            </div>
+
+            <p class="text-sm text-gray-600">The AI Meeting Analysis feature can automatically detect and create these relationships from meeting transcripts!</p>
+          </section>
+
+          <div class="border-t pt-8 mt-12 flex justify-between">
+            <a href="/help/projects.html" class="text-blue-600 hover:underline">
+              <i class="fas fa-arrow-left mr-2"></i>Managing Projects
+            </a>
+            <a href="/help/kanban-board.html" class="text-blue-600 hover:underline">
+              Kanban Board<i class="fas fa-arrow-right ml-2"></i>
+            </a>
+          </div>
+
+        </article>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

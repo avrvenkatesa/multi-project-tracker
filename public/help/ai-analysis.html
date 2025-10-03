@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Meeting Analysis - Help Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+  
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center gap-4">
+        <a href="/help.html" class="hover:underline">
+          <i class="fas fa-arrow-left mr-2"></i>Help Center
+        </a>
+        <span class="text-blue-200">|</span>
+        <h1 class="text-xl font-bold">AI Meeting Analysis</h1>
+      </div>
+    </div>
+  </header>
+
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+      
+      <div class="lg:grid lg:grid-cols-4 lg:gap-8">
+        
+        <aside class="lg:col-span-1 mb-8">
+          <div class="bg-white rounded-lg shadow p-4 sticky top-4">
+            <h3 class="font-bold mb-3">On This Page</h3>
+            <nav class="space-y-2 text-sm">
+              <a href="#overview" class="block text-blue-600 hover:underline">1. Overview</a>
+              <a href="#uploading" class="block text-blue-600 hover:underline">2. Uploading Transcripts</a>
+              <a href="#review-queue" class="block text-blue-600 hover:underline">3. Review Queue</a>
+              <a href="#accepting" class="block text-blue-600 hover:underline">4. Accepting Items</a>
+              <a href="#relationships" class="block text-blue-600 hover:underline">5. AI Relationships</a>
+            </nav>
+          </div>
+        </aside>
+
+        <article class="lg:col-span-3 bg-white rounded-lg shadow p-8">
+          
+          <h1 class="text-3xl font-bold mb-6">AI Meeting Analysis</h1>
+          
+          <p class="text-lg text-gray-700 mb-8">
+            Automatically extract action items and issues from meeting transcripts using AI.
+          </p>
+
+          <section id="overview" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span>
+              AI Meeting Analysis Overview
+            </h2>
+            
+            <p class="mb-4">The AI Meeting Analysis feature uses GPT-3.5-Turbo to:</p>
+            
+            <ul class="list-disc list-inside space-y-2 mb-4">
+              <li><strong>Extract Issues:</strong> Identify problems, concerns, and risks discussed</li>
+              <li><strong>Extract Action Items:</strong> Find tasks, assignments, and follow-ups</li>
+              <li><strong>Detect Status Updates:</strong> Recognize updates to existing items</li>
+              <li><strong>Identify Relationships:</strong> Discover blocking, parent-child, and related connections</li>
+              <li><strong>Smart Matching:</strong> Match status updates to existing items with confidence scoring</li>
+            </ul>
+
+            <div class="bg-indigo-50 border-l-4 border-indigo-600 p-4">
+              <p class="font-semibold text-indigo-900">Two-Phase Processing:</p>
+              <p class="text-indigo-800 text-sm mt-1">Phase 1 extracts new items. Phase 2 detects status updates and matches them to existing work.</p>
+            </div>
+          </section>
+
+          <section id="uploading" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span>
+              Uploading Meeting Transcripts
+            </h2>
+            
+            <p class="mb-4">Upload and analyze meeting transcripts:</p>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Navigate to your project</li>
+              <li>Click <strong>"AI Analysis"</strong> button</li>
+              <li>Click <strong>"Upload Transcript"</strong></li>
+              <li>Paste or upload your meeting transcript text</li>
+              <li>Add a meeting title and date (optional)</li>
+              <li>Click <strong>"Analyze Transcript"</strong></li>
+              <li>Wait while the AI processes the content (usually 10-30 seconds)</li>
+            </ol>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-600 p-4">
+              <p class="font-semibold text-yellow-900">Transcript Quality Tips:</p>
+              <p class="text-yellow-800 text-sm mt-1">Better transcripts = better results. Include speaker names, timestamps, and full context for best AI extraction accuracy.</p>
+            </div>
+          </section>
+
+          <section id="review-queue" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">3</span>
+              Review Queue
+            </h2>
+            
+            <p class="mb-4">After analysis, review the extracted items:</p>
+            
+            <div class="space-y-3 mb-4">
+              <div class="border-l-4 border-green-500 p-3 bg-green-50">
+                <p class="font-semibold">New Items</p>
+                <p class="text-sm text-gray-600">Issues and action items ready to be added to your project</p>
+              </div>
+
+              <div class="border-l-4 border-blue-500 p-3 bg-blue-50">
+                <p class="font-semibold">Status Updates</p>
+                <p class="text-sm text-gray-600">Updates to existing items with confidence scores and suggested matches</p>
+              </div>
+
+              <div class="border-l-4 border-purple-500 p-3 bg-purple-50">
+                <p class="font-semibold">Relationships</p>
+                <p class="text-sm text-gray-600">Detected connections between items (blocking, parent-child, related)</p>
+              </div>
+            </div>
+
+            <p class="text-sm text-gray-600">Review each item carefully before accepting to ensure accuracy.</p>
+          </section>
+
+          <section id="accepting" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">4</span>
+              Accepting Items
+            </h2>
+            
+            <p class="mb-4">Add AI-extracted items to your project:</p>
+            
+            <ol class="list-decimal list-inside space-y-2 mb-4">
+              <li>Review the extracted item details</li>
+              <li>Edit title, description, or other fields as needed</li>
+              <li>For status updates, review the matched item and confidence score</li>
+              <li>Click <strong>"Accept"</strong> to add the item</li>
+              <li>Or click <strong>"Reject"</strong> to discard</li>
+            </ol>
+
+            <div class="bg-blue-50 border-l-4 border-blue-600 p-4">
+              <p class="font-semibold text-blue-900">Bulk Actions:</p>
+              <p class="text-blue-800 text-sm mt-1">Use "Accept All" for high-confidence extractions or review individually for quality control.</p>
+            </div>
+          </section>
+
+          <section id="relationships" class="mb-12">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+              <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">5</span>
+              AI-Detected Relationships
+            </h2>
+            
+            <p class="mb-4">The AI can detect relationships between items mentioned in transcripts:</p>
+            
+            <div class="space-y-3 mb-4">
+              <div class="border p-3 rounded">
+                <p class="font-semibold mb-1">Blocking Relationships</p>
+                <p class="text-sm text-gray-600 mb-2">Example: "We can't start the migration until the security audit is complete"</p>
+                <p class="text-xs text-gray-500">AI creates: Security Audit [blocks] Migration</p>
+              </div>
+
+              <div class="border p-3 rounded">
+                <p class="font-semibold mb-1">Parent-Child Relationships</p>
+                <p class="text-sm text-gray-600 mb-2">Example: "The API integration has three sub-tasks: auth, data sync, and error handling"</p>
+                <p class="text-xs text-gray-500">AI creates: API Integration (parent) → 3 child items</p>
+              </div>
+
+              <div class="border p-3 rounded">
+                <p class="font-semibold mb-1">Related Relationships</p>
+                <p class="text-sm text-gray-600 mb-2">Example: "The performance issue is related to the database upgrade"</p>
+                <p class="text-xs text-gray-500">AI creates: Performance Issue [related to] Database Upgrade</p>
+              </div>
+            </div>
+
+            <p class="text-sm text-gray-600">Relationships include evidence text showing where the AI detected the connection, with confidence scores.</p>
+          </section>
+
+          <div class="border-t pt-8 mt-12 flex justify-between">
+            <a href="/help/team-management.html" class="text-blue-600 hover:underline">
+              <i class="fas fa-arrow-left mr-2"></i>Team Management
+            </a>
+            <a href="/help/comments-mentions.html" class="text-blue-600 hover:underline">
+              Comments & @Mentions<i class="fas fa-arrow-right ml-2"></i>
+            </a>
+          </div>
+
+        </article>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
