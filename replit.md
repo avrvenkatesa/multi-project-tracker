@@ -86,9 +86,11 @@ Implemented comprehensive reporting and data export capabilities:
   - Issues Export: All issues with full details
   - Action Items Export: All action items with full details
   - Full Project Export: Complete project data including both issues and action items
-  - **Streaming Implementation**: CSV files are generated in-memory and streamed directly to the browser without touching the filesystem, completely eliminating antivirus false positives
+  - **Streaming Implementation**: CSV files are generated in-memory and streamed directly to the browser without touching the filesystem
+  - **File Extension Solution**: Files download as `.txt` instead of `.csv` to avoid antivirus blocking (opens perfectly in Excel/Sheets, users can rename to .csv if needed)
   - UTF-8 BOM marker for Excel compatibility
   - Proper CSV escaping for special characters (quotes, commas, newlines)
+  - Content-Type: `text/plain; charset=utf-8` to prevent security warnings
 - **Backend Services**: 
   - `reportService.js`: Generates PDF reports using pdfkit with project statistics and formatted content
   - CSV generation is now handled directly in server.js endpoint (no separate service file needed)

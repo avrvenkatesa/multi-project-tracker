@@ -2050,7 +2050,7 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
       `, [projectId]);
       
       data = result.rows;
-      filename = `issues-export-${projectId}-${Date.now()}.csv`;
+      filename = `issues-export-${projectId}-${Date.now()}.txt`;
       headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
       
     } else if (type === 'actions') {
@@ -2073,7 +2073,7 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
       `, [projectId]);
       
       data = result.rows;
-      filename = `actions-export-${projectId}-${Date.now()}.csv`;
+      filename = `actions-export-${projectId}-${Date.now()}.txt`;
       headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
       
     } else {
@@ -2125,7 +2125,7 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
         ...actionItemsQuery.rows
       ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       
-      filename = `full-export-${projectId}-${Date.now()}.csv`;
+      filename = `full-export-${projectId}-${Date.now()}.txt`;
       headers = ['ID', 'Type', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
     }
     
@@ -2151,8 +2151,8 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
     });
     const csvContent = csvRows.join('\n');
     
-    // Set proper headers for CSV download
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    // Set proper headers for text file download
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

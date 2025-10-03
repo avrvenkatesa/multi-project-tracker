@@ -224,7 +224,7 @@ function renderDashboard() {
               <span class="mr-2">📊</span> Full Project Export
             </button>
           </div>
-          <p class="text-xs text-gray-500 mt-3">Download data in CSV format for external analysis.</p>
+          <p class="text-xs text-gray-600 mt-3">Downloads as .txt file (opens in Excel or rename to .csv)</p>
         </div>
       </div>
       
@@ -725,7 +725,7 @@ async function exportCSV(type) {
     // Show loading status
     statusDiv.classList.remove('hidden');
     statusDiv.querySelector('div').className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded-lg';
-    statusMsg.textContent = 'Exporting to CSV...';
+    statusMsg.textContent = 'Exporting data...';
     
     const response = await fetch(`/api/projects/${currentProjectId}/export/csv?type=${type}`, {
       credentials: 'include'
@@ -743,7 +743,7 @@ async function exportCSV(type) {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${type}-export-${currentProjectId}-${Date.now()}.csv`;
+    a.download = `${type}-export-${currentProjectId}-${Date.now()}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -751,7 +751,7 @@ async function exportCSV(type) {
     
     // Show success
     statusDiv.querySelector('div').className = 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg';
-    statusMsg.textContent = '✓ CSV exported successfully!';
+    statusMsg.textContent = '✓ Data exported successfully!';
     
     // Hide status after 3 seconds
     setTimeout(() => {
