@@ -166,16 +166,24 @@ class NotificationService {
     }
   }
   
-  async sendInvitationNotification({ inviteeEmail, inviterName, projectName, role, invitationToken }) {
+  async sendInvitationNotification({ inviteeEmail, inviterName, projectName, role, invitationToken, message }) {
     try {
       const appUrl = getAppUrl();
+      
+      // Build message section HTML if message exists
+      const messageSection = message ? `
+        <div style="background-color: #eff6ff; border-left: 4px solid #2563eb; padding: 20px; margin: 20px 0; border-radius: 4px;">
+          <p style="color: #1f2937; margin: 0; white-space: pre-wrap; font-size: 15px; line-height: 1.6;">${message}</p>
+        </div>
+      ` : '';
       
       const { html, text } = renderTemplate('invitation', {
         inviterName,
         projectName,
         role,
         acceptLink: `${appUrl}/api/invitations/${invitationToken}/accept`,
-        declineLink: `${appUrl}/api/invitations/${invitationToken}/decline`
+        declineLink: `${appUrl}/api/invitations/${invitationToken}/decline`,
+        messageSection
       });
       
       await sendEmail({

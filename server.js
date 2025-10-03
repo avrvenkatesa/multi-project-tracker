@@ -1073,7 +1073,8 @@ app.post('/api/projects/:projectId/team/invite', authenticateToken, async (req, 
       inviterName: req.user.username,
       projectName,
       role,
-      invitationToken
+      invitationToken,
+      message
     }).catch(err => console.error('Error sending invitation email:', err));
     
     res.status(201).json(result.rows[0]);
