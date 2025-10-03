@@ -218,7 +218,7 @@ function renderProjects() {
                         ${project.template}
                     </span>
                     <span class="text-xs text-gray-500">
-                        ${new Date(project.createdAt).toLocaleDateString()}
+                        ${new Date(project.created_at).toLocaleDateString()}
                     </span>
                 </div>
             </div>
