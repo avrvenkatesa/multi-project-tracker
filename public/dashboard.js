@@ -188,44 +188,25 @@ function renderDashboard() {
       ${renderTeamMetrics()}
     </div>
     
-    <!-- Reports and Export Section -->
+    <!-- Reports Section -->
     <div class="bg-white rounded-lg shadow-md p-6">
-      <h3 class="text-lg font-semibold text-gray-800 mb-4">📊 Reports & Export</h3>
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">📊 Reports</h3>
       
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- PDF Reports -->
-        <div class="border border-gray-200 rounded-lg p-4">
-          <h4 class="font-medium text-gray-700 mb-3">PDF Reports</h4>
-          <div class="space-y-2">
-            <button data-report-type="executive" class="report-btn w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center">
-              <span class="mr-2">📄</span> Executive Summary
-            </button>
-            <button data-report-type="detailed" class="report-btn w-full bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 flex items-center justify-center">
-              <span class="mr-2">📋</span> Detailed Report
-            </button>
-            <button data-report-type="team" class="report-btn w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center justify-center">
-              <span class="mr-2">👥</span> Team Performance
-            </button>
-          </div>
-          <p class="text-xs text-gray-500 mt-3">Generate comprehensive PDF reports with charts and analytics.</p>
+      <!-- PDF Reports -->
+      <div class="border border-gray-200 rounded-lg p-4">
+        <h4 class="font-medium text-gray-700 mb-3">PDF Reports</h4>
+        <div class="space-y-2">
+          <button data-report-type="executive" class="report-btn w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center">
+            <span class="mr-2">📄</span> Executive Summary
+          </button>
+          <button data-report-type="detailed" class="report-btn w-full bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 flex items-center justify-center">
+            <span class="mr-2">📋</span> Detailed Report
+          </button>
+          <button data-report-type="team" class="report-btn w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center justify-center">
+            <span class="mr-2">👥</span> Team Performance
+          </button>
         </div>
-        
-        <!-- CSV Export -->
-        <div class="border border-gray-200 rounded-lg p-4">
-          <h4 class="font-medium text-gray-700 mb-3">CSV Export</h4>
-          <div class="space-y-2">
-            <button data-export-type="issues" class="export-btn w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 flex items-center justify-center">
-              <span class="mr-2">📝</span> Export Issues
-            </button>
-            <button data-export-type="actions" class="export-btn w-full bg-teal-600 text-white px-4 py-2 rounded hover:bg-teal-700 flex items-center justify-center">
-              <span class="mr-2">✓</span> Export Action Items
-            </button>
-            <button data-export-type="full" class="export-btn w-full bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 flex items-center justify-center">
-              <span class="mr-2">📊</span> Full Project Export
-            </button>
-          </div>
-          <p class="text-xs text-gray-600 mt-3">Generated in your browser for secure downloads</p>
-        </div>
+        <p class="text-xs text-gray-500 mt-3">Generate comprehensive PDF reports with charts and analytics.</p>
       </div>
       
       <!-- Status message for report generation -->
@@ -642,15 +623,6 @@ function setupReportHandlers() {
     });
   });
   
-  // Add event listeners to export buttons
-  const exportButtons = document.querySelectorAll('.export-btn');
-  exportButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      const exportType = button.getAttribute('data-export-type');
-      exportCSV(exportType);
-    });
-  });
-  
   console.log('Report handlers initialized');
 }
 
@@ -716,86 +688,3 @@ async function generateReport(reportType) {
   }
 }
 
-// Export to CSV - Client-side generation
-async function exportCSV(type) {
-  const statusDiv = document.getElementById('reportStatus');
-  const statusMsg = document.getElementById('reportStatusMessage');
-  
-  try {
-    // Show loading status
-    statusDiv.classList.remove('hidden');
-    statusDiv.querySelector('div').className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded-lg';
-    statusMsg.textContent = 'Exporting data...';
-    
-    // Fetch JSON data from server
-    const response = await fetch(`/api/projects/${currentProjectId}/export/data?type=${type}`, {
-      credentials: 'include'
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to fetch export data');
-    }
-    
-    const { data, type: exportType } = await response.json();
-    
-    // Define headers based on export type
-    let headers;
-    if (exportType === 'issues') {
-      headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
-    } else if (exportType === 'actions') {
-      headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
-    } else {
-      headers = ['ID', 'Type', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
-    }
-    
-    // Helper function to escape CSV values
-    const escapeCSV = (val) => {
-      if (val === null || val === undefined) return '';
-      const str = String(val);
-      // Wrap in quotes if contains comma, quote, or newline
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-    
-    // Generate CSV content in browser
-    const csvRows = [headers.join(',')];
-    data.forEach(row => {
-      const values = Object.values(row).map(val => escapeCSV(val));
-      csvRows.push(values.join(','));
-    });
-    const csvContent = '\ufeff' + csvRows.join('\n'); // UTF-8 BOM for Excel
-    
-    // Create blob and download IN BROWSER (not from server)
-    const blob = new Blob([csvContent], { type: 'text/csv; charset=utf-8' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${type}-export-${currentProjectId}-${Date.now()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
-    // Show success
-    statusDiv.querySelector('div').className = 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg';
-    statusMsg.textContent = '✓ Data exported successfully!';
-    
-    // Hide status after 3 seconds
-    setTimeout(() => {
-      statusDiv.classList.add('hidden');
-    }, 3000);
-    
-  } catch (error) {
-    console.error('Error exporting CSV:', error);
-    statusDiv.querySelector('div').className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg';
-    statusMsg.textContent = `Error: ${error.message}`;
-    
-    // Hide error after 5 seconds
-    setTimeout(() => {
-      statusDiv.classList.add('hidden');
-    }, 5000);
-  }
-}

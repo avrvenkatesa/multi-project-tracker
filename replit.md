@@ -74,30 +74,19 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 
 ## Recent Changes
 
-### Advanced Reporting and Data Export (October 2-3, 2025)
-Implemented comprehensive reporting and data export capabilities:
+### Advanced PDF Reporting (October 2-3, 2025)
+Implemented comprehensive PDF reporting capabilities:
 - **PDF Report Generation**: Three report types available from project dashboard:
   - Executive Summary: High-level project overview with key metrics
   - Detailed Report: Comprehensive listing of all issues and action items
   - Team Performance: Team member workload and contribution analysis
   - Enhanced PDFs with comprehensive metadata, cover pages, and professional structure to avoid antivirus false positives
   - Fixed PDF page numbering bug with proper bufferedPageRange handling
-- **CSV Export**: Three export options for external analysis:
-  - Issues Export: All issues with full details
-  - Action Items Export: All action items with full details
-  - Full Project Export: Complete project data including both issues and action items
-  - **Client-Side Generation**: CSV files are generated entirely in the browser using JavaScript - server only provides JSON data
-  - Files are created locally via Blob API, eliminating all antivirus/security warnings since Windows never sees it as a "download from untrusted site"
-  - UTF-8 BOM marker for Excel compatibility
-  - Proper CSV escaping for special characters (quotes, commas, newlines)
-  - Downloads with proper `.csv` extension that opens directly in Excel/Google Sheets
 - **Backend Services**: 
   - `reportService.js`: Generates PDF reports using pdfkit with project statistics and formatted content
-  - CSV generation is now handled directly in server.js endpoint (no separate service file needed)
 - **API Endpoints**:
   - `POST /api/projects/:projectId/reports/generate`: Generate PDF reports with type selection
-  - `GET /api/projects/:projectId/export/data?type={issues|actions|full}`: Return JSON data for client-side CSV generation
-- **Dashboard Integration**: Reports & Export section added to dashboard.html with user-friendly buttons and status feedback
+- **Dashboard Integration**: Reports section added to dashboard.html with user-friendly buttons and status feedback
 - **Security**: All endpoints protected with authentication and project membership verification
 - **User Experience**: Real-time status messages, automatic file downloads, and error handling with user-friendly feedback
 
