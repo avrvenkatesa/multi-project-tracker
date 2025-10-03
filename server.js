@@ -712,11 +712,12 @@ app.patch("/api/users/:id/role", authenticateToken, requireRole('System Administ
 
 // ============= PROJECTS ROUTES =============
 
-// Get all projects
+// Get all projects (exclude archived)
 app.get("/api/projects", authenticateToken, async (req, res) => {
   try {
     const projects = await sql`
       SELECT * FROM projects 
+      WHERE (archived = FALSE OR archived IS NULL)
       ORDER BY created_at DESC
     `;
     res.json(projects);
@@ -755,6 +756,182 @@ app.post("/api/projects", authenticateToken, requireRole('Project Manager'), asy
   } catch (error) {
     console.error('Error creating project:', error);
     res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// Update project details
+app.put("/api/projects/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, template, start_date, end_date } = req.body;
+    
+    const [membership] = await sql`
+      SELECT role FROM project_members 
+      WHERE project_id = ${id} AND user_id = ${req.user.id}
+    `;
+    
+    const isAdmin = req.user.role === 'System Administrator';
+    const isProjectAdmin = membership && (membership.role === 'Admin' || membership.role === 'Manager');
+    
+    if (!isAdmin && !isProjectAdmin) {
+      return res.status(403).json({ error: 'Only project admins can edit project details' });
+    }
+    
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+    
+    const [updatedProject] = await sql`
+      UPDATE projects 
+      SET 
+        name = ${name},
+        description = ${description || null},
+        template = ${template || 'generic'},
+        start_date = ${start_date || null},
+        end_date = ${end_date || null},
+        updated_at = NOW(),
+        updated_by = ${req.user.id}
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    if (!updatedProject) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    res.json({
+      message: 'Project updated successfully',
+      project: updatedProject
+    });
+    
+  } catch (error) {
+    console.error('Update project error:', error);
+    res.status(500).json({ error: 'Failed to update project' });
+  }
+});
+
+// Archive project
+app.post("/api/projects/:id/archive", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [membership] = await sql`
+      SELECT role FROM project_members 
+      WHERE project_id = ${id} AND user_id = ${req.user.id}
+    `;
+    
+    const isAdmin = req.user.role === 'System Administrator';
+    const isProjectAdmin = membership && membership.role === 'Admin';
+    
+    if (!isAdmin && !isProjectAdmin) {
+      return res.status(403).json({ error: 'Only project admins can archive projects' });
+    }
+    
+    const [archivedProject] = await sql`
+      UPDATE projects 
+      SET 
+        archived = TRUE,
+        archived_at = NOW(),
+        archived_by = ${req.user.id},
+        updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    if (!archivedProject) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    res.json({
+      message: 'Project archived successfully',
+      project: archivedProject
+    });
+    
+  } catch (error) {
+    console.error('Archive project error:', error);
+    res.status(500).json({ error: 'Failed to archive project' });
+  }
+});
+
+// Restore archived project
+app.post("/api/projects/:id/restore", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [membership] = await sql`
+      SELECT role FROM project_members 
+      WHERE project_id = ${id} AND user_id = ${req.user.id}
+    `;
+    
+    const isAdmin = req.user.role === 'System Administrator';
+    const isProjectAdmin = membership && membership.role === 'Admin';
+    
+    if (!isAdmin && !isProjectAdmin) {
+      return res.status(403).json({ error: 'Only project admins can restore projects' });
+    }
+    
+    const [restoredProject] = await sql`
+      UPDATE projects 
+      SET 
+        archived = FALSE,
+        archived_at = NULL,
+        archived_by = NULL,
+        updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    if (!restoredProject) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    res.json({
+      message: 'Project restored successfully',
+      project: restoredProject
+    });
+    
+  } catch (error) {
+    console.error('Restore project error:', error);
+    res.status(500).json({ error: 'Failed to restore project' });
+  }
+});
+
+// Get archived projects
+app.get("/api/projects/archived", authenticateToken, async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'System Administrator';
+    
+    let archivedProjects;
+    
+    if (isAdmin) {
+      archivedProjects = await sql`
+        SELECT 
+          p.*,
+          u.username as archived_by_username
+        FROM projects p
+        LEFT JOIN users u ON p.archived_by = u.id
+        WHERE p.archived = TRUE
+        ORDER BY p.archived_at DESC
+      `;
+    } else {
+      archivedProjects = await sql`
+        SELECT 
+          p.*,
+          u.username as archived_by_username,
+          pm.role as user_role
+        FROM projects p
+        INNER JOIN project_members pm ON p.id = pm.project_id
+        LEFT JOIN users u ON p.archived_by = u.id
+        WHERE p.archived = TRUE AND pm.user_id = ${req.user.id}
+        ORDER BY p.archived_at DESC
+      `;
+    }
+    
+    res.json({ projects: archivedProjects });
+    
+  } catch (error) {
+    console.error('Get archived projects error:', error);
+    res.status(500).json({ error: 'Failed to fetch archived projects' });
   }
 });
 
