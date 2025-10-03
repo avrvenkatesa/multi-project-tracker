@@ -87,6 +87,7 @@ Implemented comprehensive reporting and data export capabilities:
   - Action Items Export: All action items with full details
   - Full Project Export: Complete project data including both issues and action items
   - Fixed file cleanup timing to ensure CSVs complete download before being deleted (5-second delay)
+  - Enhanced CSVs with UTF-8 BOM marker and comprehensive metadata headers to avoid antivirus false positives
 - **Backend Services**: 
   - `reportService.js`: Generates PDF reports using pdfkit with project statistics and formatted content
   - `csvExportService.js`: Creates CSV exports with proper formatting and temporary file cleanup

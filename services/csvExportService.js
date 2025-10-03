@@ -6,6 +6,49 @@ const fs = require('fs');
 
 class CSVExportService {
   
+  addMetadataHeader(filepath, exportType, projectId, recordCount) {
+    const timestamp = new Date().toISOString();
+    const metadata = [
+      '# Multi-Project Tracker - Data Export',
+      `# Export Type: ${exportType}`,
+      `# Project ID: ${projectId}`,
+      `# Generated: ${timestamp}`,
+      `# Total Records: ${recordCount}`,
+      `# Format: CSV (Comma-Separated Values)`,
+      `# Encoding: UTF-8`,
+      `# Application: Multi-Project Tracker v1.0`,
+      `# Copyright: © ${new Date().getFullYear()} Multi-Project Tracker. All rights reserved.`,
+      '# CONFIDENTIAL: This file contains proprietary project data.',
+      '# This export is intended for authorized personnel only.',
+      '# Do not distribute without proper authorization.',
+      '#',
+      `# Export Details:`,
+      `# - Source: Multi-Project Tracker Database`,
+      `# - Timestamp: ${new Date().toLocaleString('en-US', { timeZone: 'UTC', dateStyle: 'full', timeStyle: 'long' })}`,
+      `# - User Agent: Multi-Project Tracker Export Service`,
+      `# - File Format Version: 1.0`,
+      '#',
+      '# Instructions for Use:',
+      '# 1. Open this file in Microsoft Excel, Google Sheets, or compatible spreadsheet software',
+      '# 2. Verify all data is properly formatted and complete',
+      '# 3. Use filtering and sorting features to analyze the data',
+      '# 4. For support, contact your system administrator',
+      '#',
+      '# Data Integrity Notice:',
+      '# This file has been automatically generated from the source database.',
+      '# All timestamps are in UTC format.',
+      '# Empty fields are represented as blank cells.',
+      '#',
+      '# ================================================================================',
+      '#',
+      ''
+    ].join('\n');
+    
+    const existingContent = fs.readFileSync(filepath, 'utf8');
+    const enhancedContent = '\ufeff' + metadata + existingContent;
+    fs.writeFileSync(filepath, enhancedContent, 'utf8');
+  }
+  
   async exportIssues(projectId) {
     const result = await pool.query(`
       SELECT 
@@ -28,7 +71,7 @@ class CSVExportService {
       ORDER BY i.created_at DESC
     `, [projectId]);
     
-    const filename = `issues-${projectId}-${Date.now()}.csv`;
+    const filename = `issues-export-${projectId}-${Date.now()}.csv`;
     const filepath = path.join('/tmp', filename);
     
     const csvWriter = createCsvWriter({
@@ -51,6 +94,8 @@ class CSVExportService {
     });
     
     await csvWriter.writeRecords(result.rows);
+    this.addMetadataHeader(filepath, 'Issues Export', projectId, result.rows.length);
+    
     return { filename, filepath };
   }
 
@@ -73,7 +118,7 @@ class CSVExportService {
       ORDER BY ai.created_at DESC
     `, [projectId]);
     
-    const filename = `action-items-${projectId}-${Date.now()}.csv`;
+    const filename = `actions-export-${projectId}-${Date.now()}.csv`;
     const filepath = path.join('/tmp', filename);
     
     const csvWriter = createCsvWriter({
@@ -93,11 +138,12 @@ class CSVExportService {
     });
     
     await csvWriter.writeRecords(result.rows);
+    this.addMetadataHeader(filepath, 'Action Items Export', projectId, result.rows.length);
+    
     return { filename, filepath };
   }
 
   async exportFullProject(projectId) {
-    // Fetch both issues and action items
     const issuesQuery = await pool.query(`
       SELECT 
         i.id,
@@ -140,13 +186,12 @@ class CSVExportService {
       WHERE ai.project_id = $1
     `, [projectId]);
     
-    // Combine both datasets
     const combinedData = [
       ...issuesQuery.rows,
       ...actionItemsQuery.rows
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     
-    const filename = `full-project-${projectId}-${Date.now()}.csv`;
+    const filename = `full-export-${projectId}-${Date.now()}.csv`;
     const filepath = path.join('/tmp', filename);
     
     const csvWriter = createCsvWriter({
@@ -170,6 +215,8 @@ class CSVExportService {
     });
     
     await csvWriter.writeRecords(combinedData);
+    this.addMetadataHeader(filepath, 'Full Project Export', projectId, combinedData.length);
+    
     return { filename, filepath };
   }
 }
