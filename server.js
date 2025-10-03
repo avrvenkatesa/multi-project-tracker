@@ -832,8 +832,7 @@ app.post("/api/projects/:id/archive", authenticateToken, async (req, res) => {
       SET 
         archived = TRUE,
         archived_at = NOW(),
-        archived_by = ${req.user.id},
-        updated_at = NOW()
+        archived_by = ${req.user.id}
       WHERE id = ${id}
       RETURNING *
     `;
@@ -875,8 +874,7 @@ app.post("/api/projects/:id/restore", authenticateToken, async (req, res) => {
       SET 
         archived = FALSE,
         archived_at = NULL,
-        archived_by = NULL,
-        updated_at = NOW()
+        archived_by = NULL
       WHERE id = ${id}
       RETURNING *
     `;
