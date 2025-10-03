@@ -224,7 +224,7 @@ function renderDashboard() {
               <span class="mr-2">📊</span> Full Project Export
             </button>
           </div>
-          <p class="text-xs text-gray-600 mt-3">Downloads as .txt file (opens in Excel or rename to .csv)</p>
+          <p class="text-xs text-gray-600 mt-3">Generated in your browser for secure downloads</p>
         </div>
       </div>
       
@@ -716,7 +716,7 @@ async function generateReport(reportType) {
   }
 }
 
-// Export to CSV
+// Export to CSV - Client-side generation
 async function exportCSV(type) {
   const statusDiv = document.getElementById('reportStatus');
   const statusMsg = document.getElementById('reportStatusMessage');
@@ -727,26 +727,56 @@ async function exportCSV(type) {
     statusDiv.querySelector('div').className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded-lg';
     statusMsg.textContent = 'Exporting data...';
     
-    const response = await fetch(`/api/projects/${currentProjectId}/export/csv?type=${type}`, {
+    // Fetch JSON data from server
+    const response = await fetch(`/api/projects/${currentProjectId}/export/data?type=${type}`, {
       credentials: 'include'
     });
     
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to export CSV');
+      throw new Error(error.error || 'Failed to fetch export data');
     }
     
-    // Get the CSV blob
-    const blob = await response.blob();
+    const { data, type: exportType } = await response.json();
     
-    // Create download link
+    // Define headers based on export type
+    let headers;
+    if (exportType === 'issues') {
+      headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
+    } else if (exportType === 'actions') {
+      headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
+    } else {
+      headers = ['ID', 'Type', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
+    }
+    
+    // Helper function to escape CSV values
+    const escapeCSV = (val) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      // Wrap in quotes if contains comma, quote, or newline
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    
+    // Generate CSV content in browser
+    const csvRows = [headers.join(',')];
+    data.forEach(row => {
+      const values = Object.values(row).map(val => escapeCSV(val));
+      csvRows.push(values.join(','));
+    });
+    const csvContent = '\ufeff' + csvRows.join('\n'); // UTF-8 BOM for Excel
+    
+    // Create blob and download IN BROWSER (not from server)
+    const blob = new Blob([csvContent], { type: 'text/csv; charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${type}-export-${currentProjectId}-${Date.now()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${type}-export-${currentProjectId}-${Date.now()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
     
     // Show success

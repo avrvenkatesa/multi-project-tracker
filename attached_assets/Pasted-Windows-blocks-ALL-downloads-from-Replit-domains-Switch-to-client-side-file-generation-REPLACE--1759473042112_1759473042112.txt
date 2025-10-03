@@ -1,0 +1,77 @@
+Windows blocks ALL downloads from Replit domains. Switch to client-side file generation.
+
+REPLACE server-side CSV export with client-side generation:
+
+1. Create new API endpoint that returns JSON data (not a file):
+
+app.get('/api/projects/:projectId/export/data', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { type } = req.query;
+    
+    let data;
+    
+    if (type === 'issues') {
+      const result = await pool.query(`
+        SELECT 
+          i.id, i.title, i.description, i.status, i.priority,
+          i.category, i.assigned_to, i.due_date, i.created_at
+        FROM issues i
+        WHERE i.project_id = $1
+        ORDER BY i.created_at DESC
+      `, [projectId]);
+      data = result.rows;
+    }
+    
+    // Return JSON, not a file
+    res.json(data);
+    
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch data' });
+  }
+});
+
+2. Update frontend to generate CSV in browser:
+
+In reports.js or wherever export button exists:
+
+async function exportToCSV() {
+  try {
+    // Fetch JSON data
+    const response = await fetch(`/api/projects/${projectId}/export/data?type=issues`, {
+      credentials: 'include'
+    });
+    const data = await response.json();
+    
+    // Convert to CSV in browser
+    const headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Assigned To', 'Due Date', 'Created At'];
+    const csvRows = [
+      headers.join(','),
+      ...data.map(row => 
+        [row.id, row.title, row.description, row.status, row.priority, row.category, row.assigned_to, row.due_date, row.created_at]
+          .map(val => `"${String(val || '').replace(/"/g, '""')}"`)
+          .join(',')
+      )
+    ];
+    const csvContent = csvRows.join('\n');
+    
+    // Create blob and download IN BROWSER (not from server)
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `export-${Date.now()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    console.log('Export successful');
+    
+  } catch (error) {
+    console.error('Export error:', error);
+    alert('Export failed');
+  }
+}
+
+This generates the file IN THE BROWSER, so Windows never sees it as a "download from untrusted site".

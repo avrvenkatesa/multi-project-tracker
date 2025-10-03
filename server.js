@@ -2009,8 +2009,8 @@ app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (
   }
 });
 
-// Export CSV - Stream directly without saving to disk
-app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, res) => {
+// Export data as JSON for client-side CSV generation
+app.get('/api/projects/:projectId/export/data', authenticateToken, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { type } = req.query; // 'issues' | 'actions' | 'full'
@@ -2025,7 +2025,7 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
       return res.status(403).json({ error: 'Access denied. You are not a member of this project.' });
     }
     
-    let data, filename, headers;
+    let data;
     
     if (type === 'issues') {
       const result = await pool.query(`
@@ -2050,8 +2050,6 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
       `, [projectId]);
       
       data = result.rows;
-      filename = `issues-export-${projectId}-${Date.now()}.txt`;
-      headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
       
     } else if (type === 'actions') {
       const result = await pool.query(`
@@ -2073,8 +2071,6 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
       `, [projectId]);
       
       data = result.rows;
-      filename = `actions-export-${projectId}-${Date.now()}.txt`;
-      headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
       
     } else {
       // Full export - combine issues and action items
@@ -2124,45 +2120,14 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
         ...issuesQuery.rows,
         ...actionItemsQuery.rows
       ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      
-      filename = `full-export-${projectId}-${Date.now()}.txt`;
-      headers = ['ID', 'Type', 'Title', 'Description', 'Status', 'Priority', 'Category', 'Phase', 'Component', 'Assigned To', 'Due Date', 'Created At', 'Updated At', 'Created By'];
     }
     
-    // Helper function to escape CSV values
-    const escapeCSV = (val) => {
-      if (val === null || val === undefined) return '';
-      const str = String(val);
-      // Escape quotes and wrap in quotes if contains comma, quote, or newline
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-    
-    // Generate CSV content in memory
-    const csvRows = [headers.join(',')];
-    data.forEach(row => {
-      const values = headers.map((header, index) => {
-        const key = Object.keys(row)[index];
-        return escapeCSV(row[key]);
-      });
-      csvRows.push(values.join(','));
-    });
-    const csvContent = csvRows.join('\n');
-    
-    // Set proper headers for text file download
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    
-    // Send CSV directly without saving to disk
-    res.send('\ufeff' + csvContent); // UTF-8 BOM for Excel compatibility
+    // Return JSON data for client-side CSV generation
+    res.json({ data, type });
     
   } catch (error) {
-    console.error('CSV export error:', error);
-    res.status(500).json({ error: 'Failed to export CSV' });
+    console.error('Export data error:', error);
+    res.status(500).json({ error: 'Failed to fetch export data' });
   }
 });
 

@@ -86,17 +86,17 @@ Implemented comprehensive reporting and data export capabilities:
   - Issues Export: All issues with full details
   - Action Items Export: All action items with full details
   - Full Project Export: Complete project data including both issues and action items
-  - **Streaming Implementation**: CSV files are generated in-memory and streamed directly to the browser without touching the filesystem
-  - **File Extension Solution**: Files download as `.txt` instead of `.csv` to avoid antivirus blocking (opens perfectly in Excel/Sheets, users can rename to .csv if needed)
+  - **Client-Side Generation**: CSV files are generated entirely in the browser using JavaScript - server only provides JSON data
+  - Files are created locally via Blob API, eliminating all antivirus/security warnings since Windows never sees it as a "download from untrusted site"
   - UTF-8 BOM marker for Excel compatibility
   - Proper CSV escaping for special characters (quotes, commas, newlines)
-  - Content-Type: `text/plain; charset=utf-8` to prevent security warnings
+  - Downloads with proper `.csv` extension that opens directly in Excel/Google Sheets
 - **Backend Services**: 
   - `reportService.js`: Generates PDF reports using pdfkit with project statistics and formatted content
   - CSV generation is now handled directly in server.js endpoint (no separate service file needed)
 - **API Endpoints**:
   - `POST /api/projects/:projectId/reports/generate`: Generate PDF reports with type selection
-  - `GET /api/projects/:projectId/export/csv?type={issues|actions|full}`: Stream CSV data directly without temporary files
+  - `GET /api/projects/:projectId/export/data?type={issues|actions|full}`: Return JSON data for client-side CSV generation
 - **Dashboard Integration**: Reports & Export section added to dashboard.html with user-friendly buttons and status feedback
 - **Security**: All endpoints protected with authentication and project membership verification
 - **User Experience**: Real-time status messages, automatic file downloads, and error handling with user-friendly feedback
