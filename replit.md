@@ -80,10 +80,13 @@ Implemented comprehensive reporting and data export capabilities:
   - Executive Summary: High-level project overview with key metrics
   - Detailed Report: Comprehensive listing of all issues and action items
   - Team Performance: Team member workload and contribution analysis
+  - Enhanced PDFs with comprehensive metadata, cover pages, and professional structure to avoid antivirus false positives
+  - Fixed PDF page numbering bug with proper bufferedPageRange handling
 - **CSV Export**: Three export options for external analysis:
   - Issues Export: All issues with full details
   - Action Items Export: All action items with full details
   - Full Project Export: Complete project data including both issues and action items
+  - Fixed file cleanup timing to ensure CSVs complete download before being deleted (5-second delay)
 - **Backend Services**: 
   - `reportService.js`: Generates PDF reports using pdfkit with project statistics and formatted content
   - `csvExportService.js`: Creates CSV exports with proper formatting and temporary file cleanup

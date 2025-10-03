@@ -2036,15 +2036,23 @@ app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, re
       result = await csvExportService.exportFullProject(projectId);
     }
     
+    // Send the file for download
     res.download(result.filepath, result.filename, (err) => {
-      // Clean up file after download
+      if (err) {
+        console.error('Download error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to download file' });
+        }
+      }
+      
+      // Clean up file after download completes (delayed to ensure download finishes)
       const fsSync = require('fs');
-      if (fsSync.existsSync(result.filepath)) {
-        fsSync.unlinkSync(result.filepath);
-      }
-      if (err && !res.headersSent) {
-        res.status(500).json({ error: 'Failed to download file' });
-      }
+      setTimeout(() => {
+        if (fsSync.existsSync(result.filepath)) {
+          fsSync.unlinkSync(result.filepath);
+          console.log(`Cleaned up CSV file: ${result.filename}`);
+        }
+      }, 5000); // Wait 5 seconds after download starts to ensure it completes
     });
     
   } catch (error) {
