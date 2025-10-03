@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  const observer = new MutationObserver(() => {
+  function syncUserInfo() {
     const userName = document.getElementById('userName')?.textContent;
     const userRole = document.getElementById('userRole')?.textContent;
     const userEmail = document.getElementById('userEmail')?.textContent;
@@ -31,11 +31,26 @@ document.addEventListener('DOMContentLoaded', () => {
       const mobileUserRole = document.getElementById('mobile-userRole');
       const mobileUserEmail = document.getElementById('mobile-userEmail');
       
-      if (mobileUserName) mobileUserName.textContent = userName;
-      if (mobileUserRole) mobileUserRole.textContent = userRole;
-      if (mobileUserEmail) mobileUserEmail.textContent = userEmail;
+      if (mobileUserName && mobileUserName.textContent !== userName) {
+        mobileUserName.textContent = userName;
+      }
+      if (mobileUserRole && mobileUserRole.textContent !== userRole) {
+        mobileUserRole.textContent = userRole;
+      }
+      if (mobileUserEmail && mobileUserEmail.textContent !== userEmail) {
+        mobileUserEmail.textContent = userEmail;
+      }
     }
-  });
+  }
   
-  observer.observe(document.body, { childList: true, subtree: true });
+  const userNameEl = document.getElementById('userName');
+  if (userNameEl) {
+    const observer = new MutationObserver(() => {
+      syncUserInfo();
+    });
+    
+    observer.observe(userNameEl.parentElement, { childList: true, subtree: true, characterData: true });
+  }
+  
+  syncUserInfo();
 });
