@@ -125,6 +125,7 @@ function setupEventListeners() {
     
     // Project and item creation buttons
     document.getElementById('create-project-btn')?.addEventListener('click', showCreateProject);
+    document.getElementById('viewArchivedBtn')?.addEventListener('click', () => window.viewArchivedProjects());
     document.getElementById('create-issue-btn')?.addEventListener('click', showCreateIssue);
     document.getElementById('create-action-item-btn')?.addEventListener('click', showCreateActionItem);
     document.getElementById('ai-analysis-btn')?.addEventListener('click', showAIAnalysisModal);

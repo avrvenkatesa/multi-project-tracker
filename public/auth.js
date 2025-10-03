@@ -220,6 +220,16 @@ const AuthManager = {
       }
     }
     
+    // Show View Archived button for all authenticated users
+    const viewArchivedBtn = document.getElementById('viewArchivedBtn');
+    if (viewArchivedBtn) {
+      if (this.isAuthenticated) {
+        viewArchivedBtn.classList.remove('hidden');
+      } else {
+        viewArchivedBtn.classList.add('hidden');
+      }
+    }
+    
     if (this.isReadOnly()) {
       const createButtons = document.querySelectorAll('[data-requires-write]');
       createButtons.forEach(btn => {
