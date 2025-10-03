@@ -210,8 +210,26 @@ function renderProjects() {
             (project) => `
         <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
              data-project-id="${project.id}">
+            <div class="flex justify-between items-start mb-2">
+                <div data-project-click="${project.id}" class="cursor-pointer flex-1">
+                    <h3 class="text-lg font-semibold mb-2">${project.name}</h3>
+                </div>
+                <div class="flex gap-2">
+                    <button class="edit-project-btn text-blue-600 hover:text-blue-800 p-1" data-project-id="${project.id}" title="Edit Project">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                    </button>
+                    <button class="archive-project-btn text-gray-600 hover:text-gray-800 p-1" data-project-id="${project.id}" title="Archive Project">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
             <div data-project-click="${project.id}" class="cursor-pointer">
-                <h3 class="text-lg font-semibold mb-2">${project.name}</h3>
                 <p class="text-gray-600 text-sm mb-3">${project.description}</p>
                 <div class="flex items-center justify-between">
                     <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
