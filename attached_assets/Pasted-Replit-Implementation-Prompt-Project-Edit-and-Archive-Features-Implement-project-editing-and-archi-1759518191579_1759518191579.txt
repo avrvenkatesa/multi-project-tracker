@@ -1,0 +1,548 @@
+Replit Implementation Prompt - Project Edit and Archive Features
+Implement project editing and archive/restore functionality for better project lifecycle management.
+OVERVIEW
+Add the ability to:
+
+Edit project details (name, description, template, dates)
+Archive projects (soft delete - hide from main view)
+Restore archived projects
+View archived projects list
+
+
+PART 1: DATABASE CHANGES
+1.1 Add Archive Column to Projects Table
+Create migration file: migrations/009_add_project_archive.sql
+sql-- Add archived column and archived_at timestamp
+ALTER TABLE projects 
+ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP,
+ADD COLUMN IF NOT EXISTS archived_by INTEGER REFERENCES users(id);
+
+-- Add index for faster queries on archived projects
+CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(archived);
+
+-- Add updated_by column to track who last edited
+ALTER TABLE projects
+ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES users(id);
+Run migration:
+bashpsql $DATABASE_URL -f migrations/009_add_project_archive.sql
+
+PART 2: BACKEND API ENDPOINTS
+2.1 Add to server.js
+Add these endpoints after the existing project routes:
+javascript// ========================================
+// PROJECT EDIT & ARCHIVE ENDPOINTS
+// ========================================
+
+// Update project details
+app.put("/api/projects/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, template, start_date, end_date } = req.body;
+    
+    // Check if user has permission to edit
+    const [membership] = await sql`
+      SELECT role FROM project_members 
+      WHERE project_id = ${id} AND user_id = ${req.user.id}
+    `;
+    
+    const isAdmin = req.user.role === 'System Administrator';
+    const isProjectAdmin = membership && (membership.role === 'Admin' || membership.role === 'Manager');
+    
+    if (!isAdmin && !isProjectAdmin) {
+      return res.status(403).json({ error: 'Only project admins can edit project details' });
+    }
+    
+    // Validate required fields
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+    
+    // Update project
+    const [updatedProject] = await sql`
+      UPDATE projects 
+      SET 
+        name = ${name},
+        description = ${description || null},
+        template = ${template || 'generic'},
+        start_date = ${start_date || null},
+        end_date = ${end_date || null},
+        updated_at = NOW(),
+        updated_by = ${req.user.id}
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    if (!updatedProject) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    res.json({
+      message: 'Project updated successfully',
+      project: updatedProject
+    });
+    
+  } catch (error) {
+    console.error('Update project error:', error);
+    res.status(500).json({ error: 'Failed to update project' });
+  }
+});
+
+// Archive project
+app.post("/api/projects/:id/archive", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if user has permission to archive
+    const [membership] = await sql`
+      SELECT role FROM project_members 
+      WHERE project_id = ${id} AND user_id = ${req.user.id}
+    `;
+    
+    const isAdmin = req.user.role === 'System Administrator';
+    const isProjectAdmin = membership && membership.role === 'Admin';
+    
+    if (!isAdmin && !isProjectAdmin) {
+      return res.status(403).json({ error: 'Only project admins can archive projects' });
+    }
+    
+    // Archive project
+    const [archivedProject] = await sql`
+      UPDATE projects 
+      SET 
+        archived = TRUE,
+        archived_at = NOW(),
+        archived_by = ${req.user.id},
+        updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    if (!archivedProject) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    res.json({
+      message: 'Project archived successfully',
+      project: archivedProject
+    });
+    
+  } catch (error) {
+    console.error('Archive project error:', error);
+    res.status(500).json({ error: 'Failed to archive project' });
+  }
+});
+
+// Restore archived project
+app.post("/api/projects/:id/restore", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if user has permission to restore
+    const [membership] = await sql`
+      SELECT role FROM project_members 
+      WHERE project_id = ${id} AND user_id = ${req.user.id}
+    `;
+    
+    const isAdmin = req.user.role === 'System Administrator';
+    const isProjectAdmin = membership && membership.role === 'Admin';
+    
+    if (!isAdmin && !isProjectAdmin) {
+      return res.status(403).json({ error: 'Only project admins can restore projects' });
+    }
+    
+    // Restore project
+    const [restoredProject] = await sql`
+      UPDATE projects 
+      SET 
+        archived = FALSE,
+        archived_at = NULL,
+        archived_by = NULL,
+        updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    if (!restoredProject) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    res.json({
+      message: 'Project restored successfully',
+      project: restoredProject
+    });
+    
+  } catch (error) {
+    console.error('Restore project error:', error);
+    res.status(500).json({ error: 'Failed to restore project' });
+  }
+});
+
+// Get archived projects
+app.get("/api/projects/archived", authenticateToken, async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'System Administrator';
+    
+    let archivedProjects;
+    
+    if (isAdmin) {
+      // Admin sees all archived projects
+      archivedProjects = await sql`
+        SELECT 
+          p.*,
+          u.username as archived_by_username
+        FROM projects p
+        LEFT JOIN users u ON p.archived_by = u.id
+        WHERE p.archived = TRUE
+        ORDER BY p.archived_at DESC
+      `;
+    } else {
+      // Regular users see only their archived projects
+      archivedProjects = await sql`
+        SELECT 
+          p.*,
+          u.username as archived_by_username,
+          pm.role as user_role
+        FROM projects p
+        INNER JOIN project_members pm ON p.id = pm.project_id
+        LEFT JOIN users u ON p.archived_by = u.id
+        WHERE p.archived = TRUE AND pm.user_id = ${req.user.id}
+        ORDER BY p.archived_at DESC
+      `;
+    }
+    
+    res.json({ projects: archivedProjects });
+    
+  } catch (error) {
+    console.error('Get archived projects error:', error);
+    res.status(500).json({ error: 'Failed to fetch archived projects' });
+  }
+});
+
+// Update existing GET /api/projects to exclude archived
+// Find and modify the existing endpoint to add WHERE clause:
+// WHERE p.archived = FALSE (or IS NULL for backwards compatibility)
+2.2 Update Existing Projects Endpoint
+Find the existing GET /api/projects endpoint and modify it to exclude archived projects:
+javascript// In the existing GET /api/projects endpoint, add to the WHERE clause:
+// Change from:
+WHERE pm.user_id = ${req.user.id}
+
+// To:
+WHERE pm.user_id = ${req.user.id} AND (p.archived = FALSE OR p.archived IS NULL)
+
+PART 3: FRONTEND IMPLEMENTATION
+3.1 Add Edit Project Modal to public/index.html
+Add before the closing </body> tag:
+html<!-- Edit Project Modal -->
+<div id="editProjectModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-2xl font-bold">Edit Project</h2>
+      <button id="closeEditProjectModal" class="text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    
+    <form id="editProjectForm">
+      <input type="hidden" id="editProjectId">
+      
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Project Name *</label>
+        <input type="text" id="editProjectName" required
+               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+        <textarea id="editProjectDescription" rows="3"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Template</label>
+        <select id="editProjectTemplate"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+          <option value="generic">Generic Project</option>
+          <option value="cloud_migration">Cloud Migration</option>
+          <option value="software_development">Software Development</option>
+          <option value="infrastructure">Infrastructure</option>
+        </select>
+      </div>
+      
+      <div class="grid grid-cols-2 gap-4 mb-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+          <input type="date" id="editProjectStartDate"
+                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+          <input type="date" id="editProjectEndDate"
+                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+      
+      <div class="flex justify-end gap-3">
+        <button type="button" id="cancelEditProject"
+                class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+          Cancel
+        </button>
+        <button type="submit"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Archived Projects Modal -->
+<div id="archivedProjectsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-2xl font-bold">Archived Projects</h2>
+      <button id="closeArchivedProjectsModal" class="text-gray-500 hover:text-gray-700">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    
+    <div id="archivedProjectsList" class="space-y-4">
+      <!-- Archived projects will be loaded here -->
+    </div>
+  </div>
+</div>
+3.2 Update Project Card Template
+In public/index.html, find the project cards section and add edit/archive buttons. Add this to each project card:
+html<!-- Add to project card header, after the project name -->
+<div class="flex gap-2">
+  <button class="edit-project-btn text-blue-600 hover:text-blue-800" data-project-id="${project.id}">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+    </svg>
+  </button>
+  <button class="archive-project-btn text-gray-600 hover:text-gray-800" data-project-id="${project.id}">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+            d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+    </svg>
+  </button>
+</div>
+3.3 Add "View Archived Projects" Button
+Add near the "+ New Project" button:
+html<button id="viewArchivedBtn" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700">
+  📦 View Archived
+</button>
+3.4 Create JavaScript File: public/js/project-management.js
+javascript// Project Edit and Archive Management
+
+// Edit Project
+document.addEventListener('click', async (e) => {
+  if (e.target.closest('.edit-project-btn')) {
+    const projectId = e.target.closest('.edit-project-btn').dataset.projectId;
+    await openEditProjectModal(projectId);
+  }
+  
+  if (e.target.closest('.archive-project-btn')) {
+    const projectId = e.target.closest('.archive-project-btn').dataset.projectId;
+    await archiveProject(projectId);
+  }
+});
+
+async function openEditProjectModal(projectId) {
+  try {
+    // Fetch project details
+    const response = await fetch(`/api/projects/${projectId}`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Failed to fetch project');
+    
+    const { project } = await response.json();
+    
+    // Populate form
+    document.getElementById('editProjectId').value = project.id;
+    document.getElementById('editProjectName').value = project.name;
+    document.getElementById('editProjectDescription').value = project.description || '';
+    document.getElementById('editProjectTemplate').value = project.template || 'generic';
+    document.getElementById('editProjectStartDate').value = project.start_date ? project.start_date.split('T')[0] : '';
+    document.getElementById('editProjectEndDate').value = project.end_date ? project.end_date.split('T')[0] : '';
+    
+    // Show modal
+    document.getElementById('editProjectModal').classList.remove('hidden');
+  } catch (error) {
+    console.error('Error opening edit modal:', error);
+    alert('Failed to load project details');
+  }
+}
+
+// Handle edit form submission
+document.getElementById('editProjectForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const projectId = document.getElementById('editProjectId').value;
+  const formData = {
+    name: document.getElementById('editProjectName').value,
+    description: document.getElementById('editProjectDescription').value,
+    template: document.getElementById('editProjectTemplate').value,
+    start_date: document.getElementById('editProjectStartDate').value || null,
+    end_date: document.getElementById('editProjectEndDate').value || null
+  };
+  
+  try {
+    const response = await fetch(`/api/projects/${projectId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(formData)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update project');
+    }
+    
+    alert('Project updated successfully');
+    document.getElementById('editProjectModal').classList.add('hidden');
+    location.reload(); // Reload to show updated project
+  } catch (error) {
+    console.error('Error updating project:', error);
+    alert(error.message);
+  }
+});
+
+// Close modals
+document.getElementById('closeEditProjectModal').addEventListener('click', () => {
+  document.getElementById('editProjectModal').classList.add('hidden');
+});
+
+document.getElementById('cancelEditProject').addEventListener('click', () => {
+  document.getElementById('editProjectModal').classList.add('hidden');
+});
+
+// Archive project
+async function archiveProject(projectId) {
+  if (!confirm('Are you sure you want to archive this project? It will be hidden from the main view but can be restored later.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/projects/${projectId}/archive`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to archive project');
+    }
+    
+    alert('Project archived successfully');
+    location.reload();
+  } catch (error) {
+    console.error('Error archiving project:', error);
+    alert(error.message);
+  }
+}
+
+// View archived projects
+document.getElementById('viewArchivedBtn')?.addEventListener('click', async () => {
+  try {
+    const response = await fetch('/api/projects/archived', {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Failed to fetch archived projects');
+    
+    const { projects } = await response.json();
+    
+    const listContainer = document.getElementById('archivedProjectsList');
+    
+    if (projects.length === 0) {
+      listContainer.innerHTML = '<p class="text-gray-500 text-center py-8">No archived projects</p>';
+    } else {
+      listContainer.innerHTML = projects.map(project => `
+        <div class="border rounded-lg p-4">
+          <div class="flex justify-between items-start">
+            <div>
+              <h3 class="font-bold text-lg">${project.name}</h3>
+              <p class="text-sm text-gray-600">${project.description || 'No description'}</p>
+              <p class="text-xs text-gray-500 mt-2">
+                Archived ${new Date(project.archived_at).toLocaleDateString()} 
+                by ${project.archived_by_username || 'Unknown'}
+              </p>
+            </div>
+            <button class="restore-project-btn bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                    data-project-id="${project.id}">
+              Restore
+            </button>
+          </div>
+        </div>
+      `).join('');
+      
+      // Add restore handlers
+      document.querySelectorAll('.restore-project-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const projectId = e.target.dataset.projectId;
+          await restoreProject(projectId);
+        });
+      });
+    }
+    
+    document.getElementById('archivedProjectsModal').classList.remove('hidden');
+  } catch (error) {
+    console.error('Error fetching archived projects:', error);
+    alert('Failed to load archived projects');
+  }
+});
+
+// Close archived projects modal
+document.getElementById('closeArchivedProjectsModal').addEventListener('click', () => {
+  document.getElementById('archivedProjectsModal').classList.add('hidden');
+});
+
+// Restore project
+async function restoreProject(projectId) {
+  if (!confirm('Restore this project?')) return;
+  
+  try {
+    const response = await fetch(`/api/projects/${projectId}/restore`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to restore project');
+    }
+    
+    alert('Project restored successfully');
+    document.getElementById('archivedProjectsModal').classList.add('hidden');
+    location.reload();
+  } catch (error) {
+    console.error('Error restoring project:', error);
+    alert(error.message);
+  }
+}
+3.5 Include the JavaScript File
+Add to public/index.html before closing </body>:
+html<script src="/js/project-management.js"></script>
+
+TESTING CHECKLIST
+
+ Database migration runs successfully
+ Can edit project name, description, template, dates
+ Only admins/managers can edit projects
+ Can archive a project
+ Archived projects don't show in main list
+ Can view archived projects list
+ Can restore archived project
+ Restored project appears in main list
+ Edit modal populates correctly
+ Form validation works
+ Permission checks work correctly
