@@ -789,7 +789,6 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
         template = ${template || 'generic'},
         start_date = ${start_date || null},
         end_date = ${end_date || null},
-        updated_at = NOW(),
         updated_by = ${req.user.id}
       WHERE id = ${id}
       RETURNING *
