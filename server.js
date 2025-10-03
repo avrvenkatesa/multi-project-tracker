@@ -765,6 +765,8 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { name, description, template, start_date, end_date } = req.body;
     
+    console.log('Update project request:', { id, name, description, template, start_date, end_date, userId: req.user.id });
+    
     const [membership] = await sql`
       SELECT role FROM project_members 
       WHERE project_id = ${id} AND user_id = ${req.user.id}
