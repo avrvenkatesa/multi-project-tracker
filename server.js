@@ -746,6 +746,11 @@ app.post("/api/projects", authenticateToken, requireRole('Project Manager'), asy
       RETURNING *
     `;
 
+    await sql`
+      INSERT INTO project_members (project_id, user_id, role)
+      VALUES (${newProject.id}, ${req.user.id}, 'Admin')
+    `;
+
     res.status(201).json(newProject);
   } catch (error) {
     console.error('Error creating project:', error);
