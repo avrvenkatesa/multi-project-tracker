@@ -30,10 +30,15 @@ const AuthManager = {
     
     // After auth check, try to auto-accept pending invitation
     if (this.isAuthenticated) {
+      console.log('[INVITATION] User authenticated, checking for pending invitation');
+      console.log('[INVITATION] URL token:', this.pendingInvitationToken);
+      
       const accepted = await this.checkAndAcceptPendingInvitation();
+      console.log('[INVITATION] Cookie-based acceptance:', accepted);
       
       // If no cookie-based invitation but we have a URL token, accept it directly
       if (!accepted && this.pendingInvitationToken) {
+        console.log('[INVITATION] Attempting direct acceptance with URL token');
         await this.acceptInvitation(this.pendingInvitationToken);
       }
     }
@@ -131,14 +136,19 @@ const AuthManager = {
 
   async acceptInvitation(token) {
     try {
+      console.log('[INVITATION] Accepting invitation with token:', token);
+      console.log('[INVITATION] Current user:', this.currentUser?.email);
+      
       const response = await fetch(`/api/invitations/${token}/accept`, {
         method: 'POST',
         credentials: 'include'
       });
       
       const data = await response.json();
+      console.log('[INVITATION] Accept response:', { status: response.status, data });
       
       if (response.ok) {
+        console.log('[INVITATION] Acceptance successful, projectId:', data.projectId);
         this.showNotification(
           `Successfully joined ${data.alreadyMember ? '' : 'the project!'}`, 
           'success'
@@ -157,10 +167,11 @@ const AuthManager = {
           window.location.href = `/index.html?project=${data.projectId}`;
         }, 1000);
       } else {
+        console.error('[INVITATION] Acceptance failed:', data.error);
         this.showNotification(data.error || 'Failed to accept invitation', 'error');
       }
     } catch (error) {
-      console.error('Error accepting invitation:', error);
+      console.error('[INVITATION] Error accepting invitation:', error);
       this.showNotification('Failed to accept invitation', 'error');
     }
   },
