@@ -74,6 +74,31 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 
 ## Recent Changes
 
+### Simplified Invitation Acceptance Flow (October 4, 2025)
+Dramatically improved the user experience for accepting team invitations by implementing auto-acceptance after authentication:
+- **Old Flow**: Email link → Register → Login → Find envelope icon → Click invitation → Accept (5+ steps)
+- **New Flow**: Email link → Register/Login → Auto-accept → Redirect to project (2 steps)
+- **Server Changes**:
+  - Added `GET /api/invitations/:token/preview` to show invitation details before authentication
+  - Added `GET /api/invitations/pending` to check for pending invitations stored in httpOnly cookie
+  - Updated register/login endpoints to accept `invitationToken` parameter and store in secure httpOnly cookie
+  - Updated accept endpoint to clear `pendingInvitation` cookie after successful acceptance
+- **Client Changes** (auth.js v7):
+  - Detects invitation token from URL parameters on page load
+  - Displays blue banner with invitation preview (inviter name, project name, role, custom message)
+  - Automatically passes token through register/login forms
+  - Auto-accepts invitation after successful authentication via cookie (new users) or URL token (existing logged-in users)
+  - Redirects user to the project immediately after acceptance
+- **Security**: Uses httpOnly cookies with 10-minute expiry, proper token validation, email verification, and handles all edge cases (expired tokens, wrong email, already member)
+- **UX Improvements**: Eliminates need to find envelope icon, eliminates manual acceptance step, provides clear visual feedback throughout the flow
+
+### Fixed Custom Invitation Messages in Emails (October 4, 2025)
+Fixed critical bug where custom messages in team invitations weren't appearing in invitation emails:
+- **Template Update**: Modified invitation email template to include `{{messageSection}}` placeholder
+- **Service Update**: Updated `notificationService.js` to build message section HTML when message exists
+- **Server Update**: Modified invitation endpoint to pass custom message to notification service
+- **Display**: Custom messages now appear in a blue-bordered box with proper line break formatting
+
 ### Added "View Archived" Button (October 3, 2025)
 Completed the project archive feature with improved user interface:
 - **View Archived Button**: Added gray "View Archived" button next to "New Project" button on main projects page
