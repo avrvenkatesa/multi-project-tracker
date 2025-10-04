@@ -96,7 +96,6 @@ const AuthManager = {
         <div>
           <strong>📧 Team Invitation:</strong> ${this.escapeHtml(this.invitationPreview.inviterName)} invited you to join 
           <strong>${this.escapeHtml(this.invitationPreview.projectName)}</strong> as ${this.escapeHtml(this.invitationPreview.role)}
-          ${this.invitationPreview.message ? `<div class="text-sm mt-1 opacity-90">${this.escapeHtml(this.invitationPreview.message)}</div>` : ''}
         </div>
         ${!this.isAuthenticated ? '<span class="text-sm">Please log in or register to accept</span>' : ''}
       </div>
