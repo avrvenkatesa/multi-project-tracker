@@ -193,6 +193,12 @@ async function loadProjects() {
     }
 }
 
+// Helper function to determine if description is long (more than ~5 lines of text)
+function isLongDescription(text) {
+    if (!text) return false;
+    return text.length > 280;
+}
+
 // Render projects
 function renderProjects() {
     const container = document.getElementById("projects-list");
@@ -208,7 +214,9 @@ function renderProjects() {
 
     container.innerHTML = projects
         .map(
-            (project) => `
+            (project) => {
+                const isLong = isLongDescription(project.description);
+                return `
         <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
              data-project-id="${project.id}">
             <div class="flex justify-between items-start mb-2">
@@ -231,7 +239,18 @@ function renderProjects() {
                 </div>
             </div>
             <div data-project-click="${project.id}" class="cursor-pointer">
-                <p class="text-gray-600 text-sm mb-3">${project.description}</p>
+                <div class="mb-3">
+                    <p class="text-gray-600 text-sm ${isLong ? 'line-clamp-5' : ''}" data-description-text="${project.id}">
+                        ${project.description}
+                    </p>
+                    ${isLong ? `
+                        <button class="text-blue-600 hover:text-blue-800 text-xs mt-1 font-medium" 
+                                data-toggle-description="${project.id}"
+                                onclick="event.stopPropagation();">
+                            More
+                        </button>
+                    ` : ''}
+                </div>
                 <div class="flex items-center justify-between">
                     <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
                         ${project.template}
@@ -254,7 +273,8 @@ function renderProjects() {
                 </a>
             </div>
         </div>
-    `,
+    `;
+            }
         )
         .join("");
 
@@ -262,6 +282,23 @@ function renderProjects() {
     document.querySelectorAll("[data-project-click]").forEach((card) => {
         card.addEventListener("click", function () {
             selectProject(parseInt(this.dataset.projectClick));
+        });
+    });
+
+    // Add toggle listeners for long descriptions
+    document.querySelectorAll("[data-toggle-description]").forEach((button) => {
+        button.addEventListener("click", function () {
+            const projectId = this.dataset.toggleDescription;
+            const descriptionEl = document.querySelector(`[data-description-text="${projectId}"]`);
+            const isExpanded = !descriptionEl.classList.contains('line-clamp-5');
+            
+            if (isExpanded) {
+                descriptionEl.classList.add('line-clamp-5');
+                this.textContent = 'More';
+            } else {
+                descriptionEl.classList.remove('line-clamp-5');
+                this.textContent = 'Less';
+            }
         });
     });
 }
