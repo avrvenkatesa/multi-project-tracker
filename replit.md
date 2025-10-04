@@ -77,13 +77,15 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 ### Simplified Invitation Acceptance Flow (October 4, 2025)
 Dramatically improved the user experience for accepting team invitations by implementing auto-acceptance after authentication:
 - **Old Flow**: Email link → Register → Login → Find envelope icon → Click invitation → Accept (5+ steps)
-- **New Flow**: Email link → Register/Login → Auto-accept → Redirect to project (2 steps)
+- **New Flow**: Email link → Auto-accept → Redirect to project (1 click!)
 - **Server Changes**:
   - Added `GET /api/invitations/:token/preview` to show invitation details before authentication
   - Added `GET /api/invitations/pending` to check for pending invitations stored in httpOnly cookie
   - Updated register/login endpoints to accept `invitationToken` parameter and store in secure httpOnly cookie
-  - Updated accept endpoint to clear `pendingInvitation` cookie after successful acceptance
-- **Client Changes** (auth.js v7):
+  - `GET /api/invitations/:token/accept` handles direct email link acceptance for already-logged-in users
+  - `POST /api/invitations/:token/accept` handles programmatic acceptance after new registration/login
+  - Both endpoints update invitation status to "accepted" and add user as active team member
+- **Client Changes** (auth.js v10):
   - Detects invitation token from URL parameters on page load
   - Displays blue banner with invitation preview (inviter name, project name, role, custom message)
   - Automatically passes token through register/login forms
@@ -91,6 +93,7 @@ Dramatically improved the user experience for accepting team invitations by impl
   - Redirects user to the project immediately after acceptance
 - **Security**: Uses httpOnly cookies with 10-minute expiry, proper token validation, email verification, and handles all edge cases (expired tokens, wrong email, already member)
 - **UX Improvements**: Eliminates need to find envelope icon, eliminates manual acceptance step, provides clear visual feedback throughout the flow
+- **Verified Working**: Fully tested end-to-end - invitations are accepted, users added as team members, status updated to "accepted", no pending invitations remain
 
 ### Fixed Custom Invitation Messages in Emails (October 4, 2025)
 Fixed critical bug where custom messages in team invitations weren't appearing in invitation emails:
