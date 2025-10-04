@@ -387,7 +387,7 @@ app.get("/api/health", (req, res) => {
 // Register new user
 app.post("/api/auth/register", async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, invitationToken } = req.body;
 
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -419,6 +419,16 @@ app.post("/api/auth/register", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
+    // If invitation token provided, store it in a separate cookie
+    if (invitationToken) {
+      res.cookie('pendingInvitation', invitationToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 10 * 60 * 1000 // 10 minutes
+      });
+    }
+
     res.status(201).json({
       message: 'Registration successful',
       user: {
@@ -426,7 +436,8 @@ app.post("/api/auth/register", async (req, res) => {
         username: newUser.username,
         email: newUser.email,
         role: newUser.role
-      }
+      },
+      hasPendingInvitation: !!invitationToken
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -437,7 +448,7 @@ app.post("/api/auth/register", async (req, res) => {
 // Login
 app.post("/api/auth/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, invitationToken } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -466,6 +477,16 @@ app.post("/api/auth/login", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
+    // If invitation token provided, store it in a separate cookie
+    if (invitationToken) {
+      res.cookie('pendingInvitation', invitationToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 10 * 60 * 1000 // 10 minutes
+      });
+    }
+
     res.json({
       message: 'Login successful',
       user: {
@@ -473,7 +494,8 @@ app.post("/api/auth/login", async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role
-      }
+      },
+      hasPendingInvitation: !!invitationToken
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -1096,6 +1118,81 @@ function escapeHtml(unsafe) {
     .replace(/'/g, "&#039;");
 }
 
+// GET /api/invitations/pending - Check for pending invitation in cookie
+app.get('/api/invitations/pending', authenticateToken, async (req, res) => {
+  try {
+    const pendingToken = req.cookies?.pendingInvitation;
+    
+    if (!pendingToken) {
+      return res.json({ hasPending: false });
+    }
+    
+    // Check if invitation is still valid
+    const result = await pool.query(`
+      SELECT pi.*, p.name as project_name
+      FROM project_invitations pi
+      JOIN projects p ON pi.project_id = p.id
+      WHERE pi.invitation_token = $1 AND pi.status = 'pending' AND pi.expires_at > NOW()
+    `, [pendingToken]);
+    
+    if (result.rows.length === 0) {
+      // Invalid or expired - clear the cookie
+      res.clearCookie('pendingInvitation');
+      return res.json({ hasPending: false });
+    }
+    
+    const invitation = result.rows[0];
+    
+    // Verify email matches
+    if (invitation.invitee_email !== req.user.email) {
+      res.clearCookie('pendingInvitation');
+      return res.json({ hasPending: false, error: 'Email mismatch' });
+    }
+    
+    res.json({
+      hasPending: true,
+      token: pendingToken,
+      projectName: invitation.project_name,
+      role: invitation.role
+    });
+  } catch (error) {
+    console.error('Check pending invitation error:', error);
+    res.status(500).json({ error: 'Failed to check pending invitation' });
+  }
+});
+
+// GET /api/invitations/:token/preview - Preview invitation details (before auth)
+app.get('/api/invitations/:token/preview', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    const result = await pool.query(`
+      SELECT pi.*, p.name as project_name, u.username as inviter_name
+      FROM project_invitations pi
+      JOIN projects p ON pi.project_id = p.id
+      JOIN users u ON pi.inviter_id = u.id
+      WHERE pi.invitation_token = $1 AND pi.status = 'pending' AND pi.expires_at > NOW()
+    `, [token]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Invalid or expired invitation' });
+    }
+    
+    const invitation = result.rows[0];
+    
+    res.json({
+      projectName: invitation.project_name,
+      inviterName: invitation.inviter_name,
+      role: invitation.role,
+      inviteeEmail: invitation.invitee_email,
+      message: invitation.message
+    });
+  } catch (error) {
+    console.error('Preview invitation error:', error);
+    res.status(500).json({ error: 'Failed to load invitation' });
+  }
+});
+
 // 2a. GET /api/invitations/:token/accept - Accept invitation from email link
 app.get('/api/invitations/:token/accept', async (req, res) => {
   try {
@@ -1429,6 +1526,9 @@ app.post('/api/invitations/:token/accept', authenticateToken, async (req, res) =
       await pool.query('COMMIT');
       
       console.log(`[ACCEPT] User ${req.user.id} joined project ${invitation.project_id} as ${invitation.role}`);
+      
+      // Clear the pending invitation cookie if it exists
+      res.clearCookie('pendingInvitation');
       
       res.json({ 
         message: 'Invitation accepted successfully',

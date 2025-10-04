@@ -11,9 +11,32 @@ const AuthManager = {
     'External Viewer': 0
   },
 
+  pendingInvitationToken: null,
+  invitationPreview: null,
+
   async init() {
     console.log('AuthManager initializing...');
+    
+    // Check for invitation token in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const invitationToken = urlParams.get('token');
+    
+    if (invitationToken) {
+      this.pendingInvitationToken = invitationToken;
+      await this.loadInvitationPreview(invitationToken);
+    }
+    
     await this.checkAuthStatus();
+    
+    // After auth check, try to auto-accept pending invitation
+    if (this.isAuthenticated) {
+      const accepted = await this.checkAndAcceptPendingInvitation();
+      
+      // If no cookie-based invitation but we have a URL token, accept it directly
+      if (!accepted && this.pendingInvitationToken) {
+        await this.acceptInvitation(this.pendingInvitationToken);
+      }
+    }
   },
 
   async checkAuthStatus() {
@@ -47,13 +70,121 @@ const AuthManager = {
     }
   },
 
+  async loadInvitationPreview(token) {
+    try {
+      const response = await fetch(`/api/invitations/${token}/preview`);
+      if (response.ok) {
+        this.invitationPreview = await response.json();
+        this.showInvitationBanner();
+      } else {
+        this.invitationPreview = null;
+        this.pendingInvitationToken = null;
+      }
+    } catch (error) {
+      console.error('Error loading invitation preview:', error);
+      this.invitationPreview = null;
+    }
+  },
+
+  showInvitationBanner() {
+    if (!this.invitationPreview) return;
+    
+    const banner = document.createElement('div');
+    banner.className = 'fixed top-0 left-0 right-0 bg-blue-600 text-white px-4 py-3 shadow-lg z-50';
+    banner.innerHTML = `
+      <div class="max-w-6xl mx-auto flex items-center justify-between">
+        <div>
+          <strong>📧 Team Invitation:</strong> ${this.escapeHtml(this.invitationPreview.inviterName)} invited you to join 
+          <strong>${this.escapeHtml(this.invitationPreview.projectName)}</strong> as ${this.escapeHtml(this.invitationPreview.role)}
+          ${this.invitationPreview.message ? `<div class="text-sm mt-1 opacity-90">${this.escapeHtml(this.invitationPreview.message)}</div>` : ''}
+        </div>
+        ${!this.isAuthenticated ? '<span class="text-sm">Please log in or register to accept</span>' : ''}
+      </div>
+    `;
+    document.body.prepend(banner);
+    
+    // Add padding to body to account for banner
+    document.body.style.paddingTop = '60px';
+  },
+
+  async checkAndAcceptPendingInvitation() {
+    try {
+      const response = await fetch('/api/invitations/pending', {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) return false;
+      
+      const data = await response.json();
+      
+      if (data.hasPending && data.token) {
+        // Auto-accept the invitation
+        await this.acceptInvitation(data.token);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking pending invitation:', error);
+      return false;
+    }
+  },
+
+  async acceptInvitation(token) {
+    try {
+      const response = await fetch(`/api/invitations/${token}/accept`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        this.showNotification(
+          `Successfully joined ${data.alreadyMember ? '' : 'the project!'}`, 
+          'success'
+        );
+        
+        // Clean up URL and reload to show the new project
+        const url = new URL(window.location);
+        url.searchParams.delete('token');
+        window.history.replaceState({}, '', url);
+        
+        // Remove banner if it exists
+        document.body.style.paddingTop = '';
+        
+        // Redirect to the project after a short delay
+        setTimeout(() => {
+          window.location.href = `/index.html?project=${data.projectId}`;
+        }, 1000);
+      } else {
+        this.showNotification(data.error || 'Failed to accept invitation', 'error');
+      }
+    } catch (error) {
+      console.error('Error accepting invitation:', error);
+      this.showNotification('Failed to accept invitation', 'error');
+    }
+  },
+
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  },
+
   async register(username, email, password) {
     try {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ username, email, password })
+        body: JSON.stringify({ 
+          username, 
+          email, 
+          password,
+          invitationToken: this.pendingInvitationToken 
+        })
       });
 
       const data = await response.json();
@@ -64,6 +195,12 @@ const AuthManager = {
         this.updateUI();
         this.updateInvitationCount();
         this.showNotification('Registration successful!', 'success');
+        
+        // Check and auto-accept pending invitation
+        if (data.hasPendingInvitation) {
+          await this.checkAndAcceptPendingInvitation();
+        }
+        
         return true;
       } else {
         this.showNotification(data.error || 'Registration failed', 'error');
@@ -82,7 +219,11 @@ const AuthManager = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ 
+          email, 
+          password,
+          invitationToken: this.pendingInvitationToken 
+        })
       });
 
       const data = await response.json();
@@ -93,6 +234,12 @@ const AuthManager = {
         this.updateUI();
         this.updateInvitationCount();
         this.showNotification('Login successful!', 'success');
+        
+        // Check and auto-accept pending invitation
+        if (data.hasPendingInvitation) {
+          await this.checkAndAcceptPendingInvitation();
+        }
+        
         return true;
       } else {
         this.showNotification(data.error || 'Login failed', 'error');
