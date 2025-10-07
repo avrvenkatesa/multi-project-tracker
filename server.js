@@ -716,7 +716,7 @@ app.patch("/api/users/:id/role", authenticateToken, requireRole('System Administ
     
     const [updatedUser] = await sql`
       UPDATE users 
-      SET role = ${role}, updated_at = CURRENT_TIMESTAMP
+      SET role = ${role}
       WHERE id = ${id}
       RETURNING id, username, email, role
     `;
