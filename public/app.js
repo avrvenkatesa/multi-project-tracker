@@ -442,6 +442,26 @@ async function renderKanbanBoard() {
                         const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
                         const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
                         
+                        // Check permissions for edit/delete
+                        const currentUser = AuthManager.currentUser;
+                        const isOwner = currentUser && parseInt(item.created_by, 10) === parseInt(currentUser.id, 10);
+                        const isAssignee = currentUser && item.assignee === currentUser.username;
+                        
+                        // Role hierarchy: System Administrator (5), Project Manager (4), Team Lead (3), Team Member (2), Stakeholder (1), External Viewer (0)
+                        const roleHierarchy = {
+                            'System Administrator': 5,
+                            'Project Manager': 4,
+                            'Team Lead': 3,
+                            'Team Member': 2,
+                            'Stakeholder': 1,
+                            'External Viewer': 0
+                        };
+                        const userRoleLevel = currentUser ? (roleHierarchy[currentUser.role] || 0) : 0;
+                        const isTeamLeadOrAbove = userRoleLevel >= roleHierarchy['Team Lead'];
+                        
+                        const canEdit = isOwner || isAssignee || isTeamLeadOrAbove;
+                        const canDelete = isTeamLeadOrAbove;
+                        
                         return `
                     <div class="kanban-card ${getAICardBackgroundClass(item)} rounded p-3 shadow-sm ${getAICardBorderClass(item)} border-l-4 ${!item.created_by_ai ? getBorderColor(item.priority || "medium") : ''} cursor-pointer hover:shadow-md transition-shadow"
                          draggable="true"
@@ -488,6 +508,30 @@ async function renderKanbanBoard() {
                                 <span>Comments</span>
                                 ${commentCount > 0 ? `<span class="ml-auto px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">${commentCount}</span>` : ''}
                             </button>
+                            ${canEdit || canDelete ? `
+                                <div class="flex gap-1 pt-1">
+                                    ${canEdit ? `
+                                        <button class="edit-item-btn flex-1 flex items-center justify-center text-xs text-gray-600 hover:text-green-600 transition-colors py-1 px-2 rounded hover:bg-green-50" 
+                                                data-item-id="${item.id}" 
+                                                data-item-type="${item.type || 'issue'}">
+                                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                            </svg>
+                                            <span>Edit</span>
+                                        </button>
+                                    ` : ''}
+                                    ${canDelete ? `
+                                        <button class="delete-item-btn flex-1 flex items-center justify-center text-xs text-gray-600 hover:text-red-600 transition-colors py-1 px-2 rounded hover:bg-red-50" 
+                                                data-item-id="${item.id}" 
+                                                data-item-type="${item.type || 'issue'}">
+                                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                            </svg>
+                                            <span>Delete</span>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -533,6 +577,26 @@ async function renderKanbanBoard() {
                     const itemId = parseInt(this.getAttribute('data-item-id'));
                     const itemType = this.getAttribute('data-item-type');
                     openItemDetailModal(itemId, itemType);
+                });
+            });
+            
+            // Add edit button listeners
+            container.querySelectorAll('.edit-item-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent drag start and card click
+                    const itemId = parseInt(this.getAttribute('data-item-id'));
+                    const itemType = this.getAttribute('data-item-type');
+                    openEditModal(itemId, itemType);
+                });
+            });
+            
+            // Add delete button listeners
+            container.querySelectorAll('.delete-item-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent drag start and card click
+                    const itemId = parseInt(this.getAttribute('data-item-id'));
+                    const itemType = this.getAttribute('data-item-type');
+                    confirmDeleteItem(itemId, itemType);
                 });
             });
             
@@ -2854,5 +2918,222 @@ async function viewTranscriptDetail(transcriptId) {
 function showTranscriptsList() {
   document.getElementById('transcript-detail-view').classList.add('hidden');
   document.getElementById('transcripts-list-view').classList.remove('hidden');
+}
+
+// ============= EDIT/DELETE FUNCTIONALITY =============
+
+// Open edit modal for issue or action item
+async function openEditModal(itemId, itemType) {
+  try {
+    const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${endpoint}/${itemId}`, {
+      withCredentials: true
+    });
+    
+    const item = response.data;
+    
+    if (itemType === 'issue') {
+      // Populate issue edit modal
+      document.getElementById('edit-issue-id').value = item.id;
+      document.getElementById('edit-issue-title').value = item.title;
+      document.getElementById('edit-issue-description').value = item.description || '';
+      document.getElementById('edit-issue-assignee').value = item.assignee || '';
+      document.getElementById('edit-issue-due-date').value = item.due_date ? item.due_date.split('T')[0] : '';
+      document.getElementById('edit-issue-priority').value = item.priority || 'medium';
+      document.getElementById('edit-issue-status').value = item.status || 'To Do';
+      document.getElementById('edit-issue-category').value = item.category || '';
+      
+      // Load team members for assignee dropdown
+      if (currentProject) {
+        await loadTeamMembersForEdit('issue');
+        document.getElementById('edit-issue-assignee').value = item.assignee || '';
+      }
+      
+      // Show modal
+      document.getElementById('editIssueModal').classList.remove('hidden');
+    } else {
+      // Populate action item edit modal
+      document.getElementById('edit-action-item-id').value = item.id;
+      document.getElementById('edit-action-item-title').value = item.title;
+      document.getElementById('edit-action-item-description').value = item.description || '';
+      document.getElementById('edit-action-item-assignee').value = item.assignee || '';
+      document.getElementById('edit-action-item-due-date').value = item.due_date ? item.due_date.split('T')[0] : '';
+      document.getElementById('edit-action-item-priority').value = item.priority || 'medium';
+      document.getElementById('edit-action-item-status').value = item.status || 'To Do';
+      document.getElementById('edit-action-item-progress').value = item.progress_percentage || 0;
+      
+      // Load team members for assignee dropdown
+      if (currentProject) {
+        await loadTeamMembersForEdit('action-item');
+        document.getElementById('edit-action-item-assignee').value = item.assignee || '';
+      }
+      
+      // Show modal
+      document.getElementById('editActionItemModal').classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('Error loading item for edit:', error);
+    alert('Failed to load item data. Please try again.');
+  }
+}
+
+// Load team members for edit modals
+async function loadTeamMembersForEdit(type) {
+  try {
+    const response = await axios.get(`/api/projects/${currentProject}/team`, {
+      withCredentials: true
+    });
+    
+    const members = response.data;
+    const selectId = type === 'issue' ? 'edit-issue-assignee' : 'edit-action-item-assignee';
+    const select = document.getElementById(selectId);
+    
+    // Keep the current selection
+    const currentValue = select.value;
+    
+    // Clear and populate
+    select.innerHTML = '<option value="">Select Assignee</option>';
+    members.forEach(member => {
+      const option = document.createElement('option');
+      option.value = member.username;
+      option.textContent = member.username;
+      select.appendChild(option);
+    });
+    
+    // Restore selection
+    select.value = currentValue;
+  } catch (error) {
+    console.error('Error loading team members:', error);
+  }
+}
+
+// Handle edit issue form submission
+document.getElementById('editIssueForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const itemId = document.getElementById('edit-issue-id').value;
+  const data = {
+    title: document.getElementById('edit-issue-title').value,
+    description: document.getElementById('edit-issue-description').value,
+    assignee: document.getElementById('edit-issue-assignee').value,
+    due_date: document.getElementById('edit-issue-due-date').value,
+    priority: document.getElementById('edit-issue-priority').value,
+    status: document.getElementById('edit-issue-status').value,
+    category: document.getElementById('edit-issue-category').value
+  };
+  
+  try {
+    await axios.patch(`/api/issues/${itemId}`, data, {
+      withCredentials: true
+    });
+    
+    // Close modal
+    document.getElementById('editIssueModal').classList.add('hidden');
+    
+    // Reload issues and refresh kanban board
+    await loadIssues(currentProject);
+    await renderKanbanBoard();
+    
+    showToast('Issue updated successfully!', 'success');
+  } catch (error) {
+    console.error('Error updating issue:', error);
+    alert(error.response?.data?.error || 'Failed to update issue');
+  }
+});
+
+// Handle edit action item form submission
+document.getElementById('editActionItemForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const itemId = document.getElementById('edit-action-item-id').value;
+  const data = {
+    title: document.getElementById('edit-action-item-title').value,
+    description: document.getElementById('edit-action-item-description').value,
+    assignee: document.getElementById('edit-action-item-assignee').value,
+    due_date: document.getElementById('edit-action-item-due-date').value,
+    priority: document.getElementById('edit-action-item-priority').value,
+    status: document.getElementById('edit-action-item-status').value,
+    progress_percentage: parseInt(document.getElementById('edit-action-item-progress').value) || 0
+  };
+  
+  try {
+    await axios.patch(`/api/action-items/${itemId}`, data, {
+      withCredentials: true
+    });
+    
+    // Close modal
+    document.getElementById('editActionItemModal').classList.add('hidden');
+    
+    // Reload action items and refresh kanban board
+    await loadActionItems(currentProject);
+    await renderKanbanBoard();
+    
+    showToast('Action item updated successfully!', 'success');
+  } catch (error) {
+    console.error('Error updating action item:', error);
+    alert(error.response?.data?.error || 'Failed to update action item');
+  }
+});
+
+// Close edit modals
+document.getElementById('closeEditIssueModal').addEventListener('click', function() {
+  document.getElementById('editIssueModal').classList.add('hidden');
+});
+
+document.getElementById('cancelEditIssue').addEventListener('click', function() {
+  document.getElementById('editIssueModal').classList.add('hidden');
+});
+
+document.getElementById('closeEditActionItemModal').addEventListener('click', function() {
+  document.getElementById('editActionItemModal').classList.add('hidden');
+});
+
+document.getElementById('cancelEditActionItem').addEventListener('click', function() {
+  document.getElementById('editActionItemModal').classList.add('hidden');
+});
+
+// Confirm and delete item
+async function confirmDeleteItem(itemId, itemType) {
+  const itemName = itemType === 'issue' ? 'issue' : 'action item';
+  
+  if (!confirm(`Are you sure you want to delete this ${itemName}? This action cannot be undone.`)) {
+    return;
+  }
+  
+  try {
+    const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+    await axios.delete(`/api/${endpoint}/${itemId}`, {
+      withCredentials: true
+    });
+    
+    // Reload items and refresh kanban board
+    if (itemType === 'issue') {
+      await loadIssues(currentProject);
+    } else {
+      await loadActionItems(currentProject);
+    }
+    await renderKanbanBoard();
+    
+    showToast(`${itemName.charAt(0).toUpperCase() + itemName.slice(1)} deleted successfully!`, 'success');
+  } catch (error) {
+    console.error(`Error deleting ${itemName}:`, error);
+    alert(error.response?.data?.error || `Failed to delete ${itemName}`);
+  }
+}
+
+// Toast notification helper
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 ${
+    type === 'success' ? 'bg-green-500' : 
+    type === 'error' ? 'bg-red-500' : 
+    'bg-blue-500'
+  }`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
 }
 

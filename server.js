@@ -2463,11 +2463,11 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
   }
 });
 
-// Update issue (Owner or Team Lead+)
+// Update issue (Owner or Team Lead+) - Full edit capability
 app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { title, description, assignee, due_date, priority, status, category } = req.body;
     
     const [issue] = await sql`SELECT * FROM issues WHERE id = ${id}`;
     
@@ -2477,22 +2477,65 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     
     const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
     const isOwner = issue.created_by === req.user.id.toString();
+    const isAssignee = issue.assignee === req.user.username;
     
-    if (userRoleLevel < ROLE_HIERARCHY['Team Lead'] && !isOwner) {
-      return res.status(403).json({ error: 'Can only edit your own issues' });
+    if (userRoleLevel < ROLE_HIERARCHY['Team Lead'] && !isOwner && !isAssignee) {
+      return res.status(403).json({ error: 'Only the owner, assignee, or Team Lead+ can edit this issue' });
     }
     
-    const oldStatus = issue.status;
+    // Build dynamic update query
+    const updates = [];
+    const values = [];
+    let valueIndex = 1;
     
-    const [updatedIssue] = await sql`
+    if (title !== undefined) {
+      updates.push(`title = $${valueIndex++}`);
+      values.push(title.trim());
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${valueIndex++}`);
+      values.push(description?.trim() || '');
+    }
+    if (assignee !== undefined) {
+      updates.push(`assignee = $${valueIndex++}`);
+      values.push(assignee || '');
+    }
+    if (due_date !== undefined) {
+      updates.push(`due_date = $${valueIndex++}`);
+      values.push(due_date || null);
+    }
+    if (priority !== undefined) {
+      updates.push(`priority = $${valueIndex++}`);
+      values.push(priority);
+    }
+    if (status !== undefined) {
+      updates.push(`status = $${valueIndex++}`);
+      values.push(status);
+    }
+    if (category !== undefined) {
+      updates.push(`category = $${valueIndex++}`);
+      values.push(category || '');
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(parseInt(id));
+    
+    const query = `
       UPDATE issues 
-      SET status = ${status}, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${id}
+      SET ${updates.join(', ')}
+      WHERE id = $${valueIndex}
       RETURNING *
     `;
     
-    // Send status change notification to assignee (non-blocking)
-    if (updatedIssue.assignee && updatedIssue.assignee.trim() !== '' && oldStatus !== status) {
+    const result = await pool.query(query, values);
+    const updatedIssue = result.rows[0];
+    
+    // Send status change notification if status changed
+    if (status !== undefined && issue.status !== status && updatedIssue.assignee && updatedIssue.assignee.trim() !== '') {
       try {
         const assigneeUser = await pool.query(
           'SELECT id FROM users WHERE username = $1',
@@ -2500,13 +2543,12 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
         );
         
         if (assigneeUser.rows.length > 0) {
-          // Fire and forget - don't await to avoid blocking issue update
           notificationService.sendStatusChangeNotification({
             assignedUserId: assigneeUser.rows[0].id,
             itemTitle: updatedIssue.title,
             itemType: 'issue',
             itemId: updatedIssue.id,
-            oldStatus: oldStatus,
+            oldStatus: issue.status,
             newStatus: status,
             changedByName: req.user.username,
             projectId: updatedIssue.project_id
@@ -2516,6 +2558,33 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
         }
       } catch (err) {
         console.error('Error looking up assignee for status change notification:', err);
+      }
+    }
+    
+    // Send assignment notification if assignee changed
+    if (assignee !== undefined && issue.assignee !== assignee && assignee && assignee.trim() !== '') {
+      try {
+        const assigneeUser = await pool.query(
+          'SELECT id FROM users WHERE username = $1',
+          [assignee]
+        );
+        
+        if (assigneeUser.rows.length > 0) {
+          notificationService.sendAssignmentNotification({
+            assignedUserId: assigneeUser.rows[0].id,
+            assignerName: req.user.username,
+            itemTitle: updatedIssue.title,
+            itemType: 'issue',
+            itemId: updatedIssue.id,
+            projectId: updatedIssue.project_id,
+            dueDate: updatedIssue.due_date,
+            priority: updatedIssue.priority
+          }).catch(err => {
+            console.error('Error sending assignment notification:', err);
+          });
+        }
+      } catch (err) {
+        console.error('Error looking up assignee for assignment notification:', err);
       }
     }
     
@@ -2700,11 +2769,11 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
   }
 });
 
-// Update action item status (Owner or Team Lead+)
+// Update action item (Owner or Team Lead+) - Full edit capability
 app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { title, description, assignee, due_date, priority, status, progress_percentage } = req.body;
     
     const [item] = await sql`SELECT * FROM action_items WHERE id = ${id}`;
     
@@ -2714,22 +2783,143 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     
     const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
     const isOwner = item.created_by === req.user.id.toString();
+    const isAssignee = item.assignee === req.user.username;
     
-    if (userRoleLevel < ROLE_HIERARCHY['Team Lead'] && !isOwner) {
-      return res.status(403).json({ error: 'Can only edit your own action items' });
+    if (userRoleLevel < ROLE_HIERARCHY['Team Lead'] && !isOwner && !isAssignee) {
+      return res.status(403).json({ error: 'Only the owner, assignee, or Team Lead+ can edit this action item' });
     }
     
-    const [updatedItem] = await sql`
+    // Build dynamic update query
+    const updates = [];
+    const values = [];
+    let valueIndex = 1;
+    
+    if (title !== undefined) {
+      updates.push(`title = $${valueIndex++}`);
+      values.push(title.trim());
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${valueIndex++}`);
+      values.push(description?.trim() || '');
+    }
+    if (assignee !== undefined) {
+      updates.push(`assignee = $${valueIndex++}`);
+      values.push(assignee || '');
+    }
+    if (due_date !== undefined) {
+      updates.push(`due_date = $${valueIndex++}`);
+      values.push(due_date || null);
+    }
+    if (priority !== undefined) {
+      updates.push(`priority = $${valueIndex++}`);
+      values.push(priority);
+    }
+    if (status !== undefined) {
+      updates.push(`status = $${valueIndex++}`);
+      values.push(status);
+    }
+    if (progress_percentage !== undefined) {
+      updates.push(`progress_percentage = $${valueIndex++}`);
+      values.push(progress_percentage || 0);
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(parseInt(id));
+    
+    const query = `
       UPDATE action_items 
-      SET status = ${status}, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${id}
+      SET ${updates.join(', ')}
+      WHERE id = $${valueIndex}
       RETURNING *
     `;
+    
+    const result = await pool.query(query, values);
+    const updatedItem = result.rows[0];
+    
+    // Send status change notification if status changed
+    if (status !== undefined && item.status !== status && updatedItem.assignee && updatedItem.assignee.trim() !== '') {
+      try {
+        const assigneeUser = await pool.query(
+          'SELECT id FROM users WHERE username = $1',
+          [updatedItem.assignee]
+        );
+        
+        if (assigneeUser.rows.length > 0) {
+          notificationService.sendStatusChangeNotification({
+            assignedUserId: assigneeUser.rows[0].id,
+            itemTitle: updatedItem.title,
+            itemType: 'action item',
+            itemId: updatedItem.id,
+            oldStatus: item.status,
+            newStatus: status,
+            changedByName: req.user.username,
+            projectId: updatedItem.project_id
+          }).catch(err => {
+            console.error('Error sending status change notification:', err);
+          });
+        }
+      } catch (err) {
+        console.error('Error looking up assignee for status change notification:', err);
+      }
+    }
+    
+    // Send assignment notification if assignee changed
+    if (assignee !== undefined && item.assignee !== assignee && assignee && assignee.trim() !== '') {
+      try {
+        const assigneeUser = await pool.query(
+          'SELECT id FROM users WHERE username = $1',
+          [assignee]
+        );
+        
+        if (assigneeUser.rows.length > 0) {
+          notificationService.sendAssignmentNotification({
+            assignedUserId: assigneeUser.rows[0].id,
+            assignerName: req.user.username,
+            itemTitle: updatedItem.title,
+            itemType: 'action item',
+            itemId: updatedItem.id,
+            projectId: updatedItem.project_id,
+            dueDate: updatedItem.due_date,
+            priority: updatedItem.priority
+          }).catch(err => {
+            console.error('Error sending assignment notification:', err);
+          });
+        }
+      } catch (err) {
+        console.error('Error looking up assignee for assignment notification:', err);
+      }
+    }
     
     res.json(updatedItem);
   } catch (error) {
     console.error('Error updating action item:', error);
     res.status(500).json({ error: 'Failed to update action item' });
+  }
+});
+
+// Delete action item (Team Lead or higher)
+app.delete('/api/action-items/:id', authenticateToken, requireRole('Team Lead'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [deleted] = await sql`
+      DELETE FROM action_items 
+      WHERE id = ${id}
+      RETURNING id
+    `;
+    
+    if (!deleted) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    res.json({ message: 'Action item deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting action item:', error);
+    res.status(500).json({ error: 'Failed to delete action item' });
   }
 });
 

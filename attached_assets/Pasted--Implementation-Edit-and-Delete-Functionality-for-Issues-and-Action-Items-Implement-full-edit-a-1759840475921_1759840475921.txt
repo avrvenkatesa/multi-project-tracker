@@ -1,0 +1,94 @@
+# Implementation: Edit and Delete Functionality for Issues and Action Items
+
+Implement full edit and delete capabilities for issues and action items in the multi-project tracker.
+
+## Context
+- Current Version: v0.7.1
+- Database: Neon PostgreSQL with raw SQL (NOT Drizzle ORM)
+- Authentication: Cookie-based JWT (httpOnly)
+- Frontend: Vanilla JavaScript with credentials: 'include'
+- Permission System: Hybrid (global roles + project roles)
+
+## Requirements
+
+### Backend Implementation
+
+#### 1. Edit Endpoints (server.js)
+
+**PATCH /api/issues/:id**
+- Update issue fields: title, description, assignee_id, due_date, priority, status, category
+- Validate user has permission (issue creator, assignee, PM, or Admin)
+- Use parameterized SQL query
+- Return updated issue with 200 status
+- Handle errors with appropriate status codes
+
+**PATCH /api/action-items/:id**
+- Update action item fields: title, description, assignee_id, due_date, priority, status, progress_percentage
+- Validate user has permission
+- Use parameterized SQL query
+- Return updated action item with 200 status
+- Handle errors appropriately
+
+#### 2. Delete Endpoints (server.js)
+
+**DELETE /api/issues/:id**
+- Validate user has permission (issue creator, PM, or Admin)
+- Consider soft delete (add deleted_at column) OR hard delete
+- Handle cascade: delete or mark associated comments as orphaned
+- Return 204 No Content on success
+- Handle errors with appropriate status codes
+
+**DELETE /api/action-items/:id**
+- Validate user has permission (action item creator, PM, or Admin)
+- Soft delete or hard delete
+- Handle cascade for associated data
+- Return 204 No Content on success
+- Handle errors appropriately
+
+### Frontend Implementation
+
+#### 3. Edit Modal (public/index.html or separate component)
+
+Create edit modal similar to creation modal:
+```html
+<div id="editIssueModal" class="modal">
+  <div class="modal-content">
+    <h2>Edit Issue</h2>
+    <form id="editIssueForm">
+      <input type="hidden" id="edit-issue-id">
+      <label>Title:</label>
+      <input type="text" id="edit-issue-title" required>
+      
+      <label>Description:</label>
+      <textarea id="edit-issue-description" required></textarea>
+      
+      <label>Assignee:</label>
+      <select id="edit-issue-assignee" required></select>
+      
+      <label>Due Date:</label>
+      <input type="date" id="edit-issue-due-date" required>
+      
+      <label>Priority:</label>
+      <select id="edit-issue-priority" required>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="critical">Critical</option>
+      </select>
+      
+      <label>Status:</label>
+      <select id="edit-issue-status" required>
+        <option value="open">Open</option>
+        <option value="in_progress">In Progress</option>
+        <option value="resolved">Resolved</option>
+        <option value="closed">Closed</option>
+      </select>
+      
+      <label>Category:</label>
+      <select id="edit-issue-category"></select>
+      
+      <button type="submit">Update Issue</button>
+      <button type="button" onclick="closeEditIssueModal()">Cancel</button>
+    </form>
+  </div>
+</div>
