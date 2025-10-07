@@ -1,7 +1,7 @@
 # Multi-Project Tracker
 
 ## Overview
-Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures.
+Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -9,28 +9,16 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Frontend
-The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS. It features a dynamic UI that adjusts based on user roles and authentication status, including conditional rendering of actions and a user management interface for administrators. HTTP communication uses the Fetch API with credentialed requests, and event handling is managed through delegation.
-
-**Key Features:**
-- **AI Analysis Features**: Includes in-modal search for matching items, a persistent review queue for unmatched status updates, smart matching with confidence scoring, and AI relationship detection (blocking, parent-child, related) from meeting transcripts.
-- **Comments and @Mentions**: A comprehensive comment system with markdown support, real-time @mention autocomplete, and a notification system for unread mentions.
-- **Project Dashboard**: Provides analytics with real-time statistics, Chart.js visualizations (status, priority, activity trends), an activity feed, and team performance metrics.
+The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles and authentication. Key features include AI analysis capabilities (in-modal search, review queue, smart matching, relationship detection), a comprehensive comment system with markdown support and real-time @mention autocomplete, and a Project Dashboard with analytics, Chart.js visualizations, activity feed, and team performance metrics.
 
 ### Backend
-The backend is a RESTful API built with Express.js, using a PostgreSQL database via Drizzle ORM. It implements a layered architecture with security middleware (Helmet, CORS, rate limiting) and JWT authentication with httpOnly cookie-based session management. A 6-tier RBAC system enforces granular permissions for all sensitive endpoints, and Joi handles request validation.
-
-**Security:** The application uses bcryptjs for password hashing, JWT tokens in httpOnly cookies, and a 6-tier RBAC system (System Administrator, Project Manager, Team Lead, Team Member, Stakeholder, External Viewer). API protection includes Helmet.js, CORS, rate limiting, and Joi for input validation. All inline JavaScript has been eliminated, and URL sanitization is in place to prevent XSS.
+The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing.
 
 ### Data Management
-A PostgreSQL database, managed by Drizzle ORM, stores:
-- **Core Entities**: Users, Projects, Issues, Action Items, Meeting Transcripts.
-- **Relationships**: Issue relationships, including AI-generated with confidence scores and evidence.
-- **AI-specific Data**: Status Update Review Queue, AI analysis audit trail.
-- **Collaboration**: Comments for issues and action items, mention notifications.
-- **User Preferences**: User notification preferences and unsubscribe tokens.
+A PostgreSQL database, managed by Drizzle ORM, stores core entities such as Users, Projects, Issues, Action Items, and Meeting Transcripts. It also handles relationships (including AI-generated), AI-specific data (Status Update Review Queue, AI analysis audit trail), collaboration data (comments, mention notifications), and user preferences.
 
 ### Request Handling
-Express.js handles requests, utilizing `express-rate-limit` for API protection and comprehensive error handling. Request body parsing supports JSON and URL-encoded data.
+Express.js handles requests, incorporating `express-rate-limit` for API protection and comprehensive error handling. It supports JSON and URL-encoded data parsing.
 
 ## External Dependencies
 
@@ -70,116 +58,4 @@ Express.js handles requests, utilizing `express-rate-limit` for API protection a
 ### CDN Services
 - **Tailwind CSS CDN**: CSS framework delivery.
 - **Unpkg CDN**: JavaScript library delivery.
-- **Chart.js**: Data visualization charts for dashboard analytics (local copy in public/).
-
-## Recent Changes
-
-### Simplified Invitation Acceptance Flow (October 4, 2025)
-Dramatically improved the user experience for accepting team invitations by implementing auto-acceptance after authentication:
-- **Old Flow**: Email link → Register → Login → Find envelope icon → Click invitation → Accept (5+ steps)
-- **New Flow**: Email link → Auto-accept → Redirect to project (1 click!)
-- **Server Changes**:
-  - Added `GET /api/invitations/:token/preview` to show invitation details before authentication
-  - Added `GET /api/invitations/pending` to check for pending invitations stored in httpOnly cookie
-  - Updated register/login endpoints to accept `invitationToken` parameter and store in secure httpOnly cookie
-  - `GET /api/invitations/:token/accept` handles direct email link acceptance for already-logged-in users
-  - `POST /api/invitations/:token/accept` handles programmatic acceptance after new registration/login
-  - Both endpoints update invitation status to "accepted" and add user as active team member
-- **Client Changes** (auth.js v10):
-  - Detects invitation token from URL parameters on page load
-  - Displays blue banner with invitation preview (inviter name, project name, role, custom message)
-  - Automatically passes token through register/login forms
-  - Auto-accepts invitation after successful authentication via cookie (new users) or URL token (existing logged-in users)
-  - Redirects user to the project immediately after acceptance
-- **Security**: Uses httpOnly cookies with 10-minute expiry, proper token validation, email verification, and handles all edge cases (expired tokens, wrong email, already member)
-- **UX Improvements**: Eliminates need to find envelope icon, eliminates manual acceptance step, provides clear visual feedback throughout the flow
-- **Verified Working**: Fully tested end-to-end - invitations are accepted, users added as team members, status updated to "accepted", no pending invitations remain
-
-### Fixed Custom Invitation Messages in Emails (October 4, 2025)
-Fixed critical bug where custom messages in team invitations weren't appearing in invitation emails:
-- **Template Update**: Modified invitation email template to include `{{messageSection}}` placeholder
-- **Service Update**: Updated `notificationService.js` to build message section HTML when message exists
-- **Server Update**: Modified invitation endpoint to pass custom message to notification service
-- **Display**: Custom messages now appear in a blue-bordered box with proper line break formatting
-
-### Added "View Archived" Button (October 3, 2025)
-Completed the project archive feature with improved user interface:
-- **View Archived Button**: Added gray "View Archived" button next to "New Project" button on main projects page
-- **Button Visibility**: Shows for all authenticated users (handled by auth.js updateRoleBasedUI function)
-- **Event Handler**: Connected to existing viewArchivedProjects() function in project-management.js
-- **Cache Busting**: Updated script versions (auth.js v5, app.js v6) to ensure browser cache refresh
-- **Bug Fix**: Corrected isAuthenticated property access (was incorrectly called as a function)
-
-### Integrated Wiki-Style Help Center (October 3, 2025)
-Implemented a comprehensive wiki-style user guide accessible from the application:
-- **Main Help Center**: Searchable landing page with 11 help topics organized by feature area
-- **Individual Help Pages**: Detailed guides for each major feature:
-  - Getting Started: Login, first project, invitations workflow
-  - Managing Projects: Templates, settings, archiving
-  - Issues & Action Items: Creating, editing, relationships
-  - Kanban Board: Drag-drop, filtering, swimlanes
-  - Team Management: Invitations, roles, member management
-  - AI Meeting Analysis: Transcript upload, review queue, relationships
-  - Comments & @Mentions: Adding comments, mentions, notifications
-  - Email Notifications: Types, settings, frequency options
-  - Project Dashboard: Metrics, charts, activity feed, team performance
-  - Reports & Export: PDF generation (Executive, Detailed, Team Performance)
-  - Roles & Permissions: Complete RBAC documentation with comparison table
-- **Navigation Integration**: Help link in main navigation and floating help button (bottom-right corner)
-- **Consistent Structure**: Each page includes table of contents, numbered sections, examples, pro tips, and navigation footer
-- **Search Functionality**: Real-time filtering of help topics on main help center page
-
-### Advanced PDF Reporting (October 2-3, 2025)
-Implemented comprehensive PDF reporting capabilities:
-- **PDF Report Generation**: Three report types available from project dashboard:
-  - Executive Summary: High-level project overview with key metrics
-  - Detailed Report: Comprehensive listing of all issues and action items
-  - Team Performance: Team member workload and contribution analysis
-  - Enhanced PDFs with comprehensive metadata, cover pages, and professional structure to avoid antivirus false positives
-  - Fixed PDF page numbering bug with proper bufferedPageRange handling
-- **Backend Services**: 
-  - `reportService.js`: Generates PDF reports using pdfkit with project statistics and formatted content
-- **API Endpoints**:
-  - `POST /api/projects/:projectId/reports/generate`: Generate PDF reports with type selection
-- **Dashboard Integration**: Reports section added to dashboard.html with user-friendly buttons and status feedback
-- **Security**: All endpoints protected with authentication and project membership verification
-- **User Experience**: Real-time status messages, automatic file downloads, and error handling with user-friendly feedback
-
-### Improved Invitation Acceptance Flow (October 2, 2025)
-Enhanced email invitation acceptance with proper web-based handling and comprehensive security:
-- **Email URL Fix**: All notification emails now use Replit domain instead of localhost (via `getAppUrl()` helper that auto-detects `REPLIT_DEV_DOMAIN`)
-- **GET Endpoint**: Added `GET /api/invitations/:token/accept` for email link clicks (previously only had POST endpoint)
-- **Smart Flow**: Checks authentication via cookie, redirects to login if needed, handles all edge cases gracefully
-- **User-Friendly Pages**: Beautiful HTML success/error pages for all scenarios (invalid invitation, wrong account, already member, success with auto-redirect)
-- **Security**: Comprehensive HTML escaping with `escapeHtml()` helper for all user-controlled values (prevents XSS), URL encoding for redirect parameters
-- **Graceful Handling**: Both GET and POST endpoints now handle "already a member" case gracefully - updates invitation status and shows friendly confirmation instead of error
-- **Bug Fix**: Fixed POST endpoint duplicate key error when accepting invitations for projects user is already a member of
-
-### Added Notification Settings Navigation & Test Email (October 2, 2025)
-Completed the notification settings feature with full user access:
-- **Navigation Link**: Added "⚙️ Settings" button in main navigation (next to My Invitations)
-- **Test Email Endpoint**: Added `POST /api/notifications/test-email` to send test notifications
-- **Accessible Settings**: Users can now easily access notification-settings.html to manage preferences
-- **Features Available**: Toggle mentions, assignments, status changes, and invitations; set email frequency
-
-### Fixed Comment Email Notification Deep-Linking (October 2, 2025)
-Fixed the "View Comment" link in @mention email notifications to navigate directly to the specific comment:
-- **Email Link**: Updated notification emails to include `itemId` and `itemType` parameters in URL
-- **Deep-Linking**: Added automatic project selection and modal opening from URL parameters
-- **Auto-Open Modal**: When clicking email link, automatically opens the specific issue/action item modal
-- **URL Cleanup**: After opening modal, cleans up URL parameters for cleaner navigation
-
-### Cancel Pending Invitations Feature (October 2, 2025)
-Implemented invitation management for project managers to cancel pending invitations:
-- **Backend API**: `DELETE /api/projects/:projectId/invitations/:invitationId` with manager-only authorization
-- **Frontend**: Red "Cancel" button on pending invitation cards with confirmation dialog and automatic UI refresh
-- **Security**: Role-based authorization, project ownership validation, proper error handling
-
-### Fixed Assigned To Dropdown & Assignment Notifications (October 2, 2025)
-Resolved issues with the "Assigned To" dropdown and implemented assignment email notifications:
-- **Dynamic Team Members**: "Assigned To" dropdown now loads actual team members from the selected project instead of hardcoded values
-- **Team Member Loading**: Added `loadTeamMembers()` function that fetches team data when a project is selected
-- **Assignment Notifications**: Implemented email notifications when issues/action items are assigned to team members
-- **Non-Blocking Design**: Notification sending is fire-and-forget, ensuring issues/action items are created even if email delivery fails
-- **Error Handling**: Comprehensive logging for assignee lookup failures and notification errors without disrupting core functionality
-- **Both Forms Fixed**: Applied fixes to both "Create New Issue" and "Create New Action Item" forms
+- **Chart.js**: Data visualization charts for dashboard analytics.
