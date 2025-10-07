@@ -1026,16 +1026,18 @@ app.post('/api/projects/:projectId/team/invite', authenticateToken, async (req, 
     
     console.log(`[INVITE] User ${req.user.id} inviting ${email} to project ${projectId} as ${role}`);
     
+    // Check if user is Manager+ in this project OR is a System Administrator
+    const isSystemAdmin = req.user.role === 'System Administrator';
+    const isManager = await isProjectManager(req.user.id, projectId);
+    
+    if (!isSystemAdmin && !isManager) {
+      return res.status(403).json({ error: 'Only project Managers, Admins, or System Administrators can invite members' });
+    }
+    
     // Validate role
     const validRoles = ['Admin', 'Manager', 'Member', 'Viewer'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: 'Invalid role. Must be Admin, Manager, Member, or Viewer' });
-    }
-    
-    // Check if user is Manager+ in this project
-    const isManager = await isProjectManager(req.user.id, projectId);
-    if (!isManager) {
-      return res.status(403).json({ error: 'Only project Managers and Admins can invite members' });
     }
     
     // Check if email is already a member
@@ -1592,10 +1594,12 @@ app.patch('/api/projects/:projectId/team/:memberId/role', authenticateToken, asy
       return res.status(400).json({ error: 'Invalid role. Must be Admin, Manager, Member, or Viewer' });
     }
     
-    // Check if user is Manager+ in this project
+    // Check if user is Manager+ in this project OR is a System Administrator
+    const isSystemAdmin = req.user.role === 'System Administrator';
     const isManager = await isProjectManager(req.user.id, projectId);
-    if (!isManager) {
-      return res.status(403).json({ error: 'Only project Managers and Admins can update member roles' });
+    
+    if (!isSystemAdmin && !isManager) {
+      return res.status(403).json({ error: 'Only project Managers, Admins, or System Administrators can update member roles' });
     }
     
     // Get current user's project membership
@@ -1650,10 +1654,12 @@ app.delete('/api/projects/:projectId/team/:memberId', authenticateToken, async (
     
     console.log(`[REMOVE_MEMBER] User ${req.user.id} removing member ${memberId} from project ${projectId}`);
     
-    // Check if user is Manager+ in this project
+    // Check if user is Manager+ in this project OR is a System Administrator
+    const isSystemAdmin = req.user.role === 'System Administrator';
     const isManager = await isProjectManager(req.user.id, projectId);
-    if (!isManager) {
-      return res.status(403).json({ error: 'Only project Managers and Admins can remove members' });
+    
+    if (!isSystemAdmin && !isManager) {
+      return res.status(403).json({ error: 'Only project Managers, Admins, or System Administrators can remove members' });
     }
     
     // Get current user's project membership
