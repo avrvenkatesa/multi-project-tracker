@@ -4300,6 +4300,34 @@ app.post('/api/meetings/create-items',
             ) RETURNING *
           `;
           created.actionItems.push(newItem[0]);
+          
+          // Send assignment notification if assignee is set (non-blocking)
+          if (item.assignee && item.assignee.trim() !== '') {
+            try {
+              const assigneeUser = await pool.query(
+                'SELECT id FROM users WHERE username = $1',
+                [item.assignee]
+              );
+              
+              if (assigneeUser.rows.length > 0) {
+                // Fire and forget - don't await to avoid blocking creation
+                notificationService.sendAssignmentNotification({
+                  assignedUserId: assigneeUser.rows[0].id,
+                  assignerName: req.user.username,
+                  itemTitle: item.title.substring(0, 200),
+                  itemType: 'action item',
+                  itemId: newItem[0].id,
+                  projectId: parseInt(projectId),
+                  dueDate: sanitizeDueDate(item.dueDate),
+                  priority: item.priority || 'medium'
+                }).catch(err => {
+                  console.error('Error sending AI assignment notification:', err);
+                });
+              }
+            } catch (err) {
+              console.error('Error looking up assignee for AI notification:', err);
+            }
+          }
         }
       }
 
@@ -4308,7 +4336,7 @@ app.post('/api/meetings/create-items',
         for (const issue of issues) {
           const newIssue = await sql`
             INSERT INTO issues (
-              title, description, project_id, priority, category,
+              title, description, project_id, priority, category, assignee,
               status, created_by,
               created_by_ai, ai_confidence, ai_analysis_id, transcript_id
             ) VALUES (
@@ -4317,6 +4345,7 @@ app.post('/api/meetings/create-items',
               ${parseInt(projectId)},
               ${issue.priority || 'medium'},
               ${issue.category || 'General'},
+              ${issue.assignee || ''},
               'To Do',
               ${req.user.id},
               ${true},
@@ -4326,10 +4355,45 @@ app.post('/api/meetings/create-items',
             ) RETURNING *
           `;
           created.issues.push(newIssue[0]);
+          
+          // Send assignment notification if assignee is set (non-blocking)
+          if (issue.assignee && issue.assignee.trim() !== '') {
+            try {
+              const assigneeUser = await pool.query(
+                'SELECT id FROM users WHERE username = $1',
+                [issue.assignee]
+              );
+              
+              if (assigneeUser.rows.length > 0) {
+                // Fire and forget - don't await to avoid blocking creation
+                notificationService.sendAssignmentNotification({
+                  assignedUserId: assigneeUser.rows[0].id,
+                  assignerName: req.user.username,
+                  itemTitle: issue.title.substring(0, 200),
+                  itemType: 'issue',
+                  itemId: newIssue[0].id,
+                  projectId: parseInt(projectId),
+                  dueDate: null,
+                  priority: issue.priority || 'medium'
+                }).catch(err => {
+                  console.error('Error sending AI assignment notification:', err);
+                });
+              }
+            } catch (err) {
+              console.error('Error looking up assignee for AI notification:', err);
+            }
+          }
         }
       }
 
-      console.log(`Created ${created.actionItems.length} action items and ${created.issues.length} issues from AI analysis`);
+      const totalNotifications = 
+        (actionItems?.filter(item => item.assignee && item.assignee.trim() !== '').length || 0) +
+        (issues?.filter(issue => issue.assignee && issue.assignee.trim() !== '').length || 0);
+        
+      console.log(`✅ Created ${created.actionItems.length} action items and ${created.issues.length} issues from AI analysis`);
+      if (totalNotifications > 0) {
+        console.log(`📧 Sent ${totalNotifications} assignment notifications`);
+      }
       res.json(created);
 
     } catch (error) {
