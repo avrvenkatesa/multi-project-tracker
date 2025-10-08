@@ -1,0 +1,1008 @@
+Step 3: Replit Implementation Prompt
+markdown# Feature Implementation: File Attachments for Issues and Action Items
+
+Add complete file attachment functionality to issues and action items.
+
+## Context
+- Current Version: v0.7.1
+- Database: Neon PostgreSQL with raw SQL
+- Authentication: Cookie-based JWT
+- Storage: Replit file system (persistent storage)
+- Frontend: Vanilla JavaScript
+
+## Implementation Overview
+
+You will implement:
+1. Database table for attachments
+2. File storage system
+3. Backend API endpoints (upload, download, delete)
+4. Frontend upload UI with file picker
+5. Frontend display UI in detail views
+6. Permission checks and validation
+
+---
+
+## PART 1: DATABASE SCHEMA
+
+### Step 1.1: Create Attachments Table
+
+Run this SQL migration:
+```sql
+-- =====================================================
+-- File Attachments Schema
+-- Version: 0.7.2
+-- =====================================================
+
+BEGIN;
+
+-- Create attachments table
+CREATE TABLE IF NOT EXISTS attachments (
+  id SERIAL PRIMARY KEY,
+  entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('issue', 'action_item')),
+  entity_id INTEGER NOT NULL,
+  
+  -- File information
+  file_name VARCHAR(255) NOT NULL,  -- Stored filename (unique)
+  original_name VARCHAR(255) NOT NULL,  -- Original upload name
+  file_path VARCHAR(500) NOT NULL,
+  file_size INTEGER NOT NULL,  -- Size in bytes
+  file_type VARCHAR(100),  -- MIME type
+  
+  -- Metadata
+  uploaded_by INTEGER REFERENCES users(id),
+  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  -- Indexes
+  CONSTRAINT fk_uploader FOREIGN KEY (uploaded_by) REFERENCES users(id)
+);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_uploader ON attachments(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_attachments_date ON attachments(uploaded_at DESC);
+
+-- Add attachment_count columns to existing tables
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS attachment_count INTEGER DEFAULT 0;
+ALTER TABLE action_items ADD COLUMN IF NOT EXISTS attachment_count INTEGER DEFAULT 0;
+
+-- Create function to update attachment count
+CREATE OR REPLACE FUNCTION update_attachment_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.entity_type = 'issue' THEN
+      UPDATE issues SET attachment_count = attachment_count + 1 WHERE id = NEW.entity_id;
+    ELSIF NEW.entity_type = 'action_item' THEN
+      UPDATE action_items SET attachment_count = attachment_count + 1 WHERE id = NEW.entity_id;
+    END IF;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD.entity_type = 'issue' THEN
+      UPDATE issues SET attachment_count = GREATEST(0, attachment_count - 1) WHERE id = OLD.entity_id;
+    ELSIF OLD.entity_type = 'action_item' THEN
+      UPDATE action_items SET attachment_count = GREATEST(0, attachment_count - 1) WHERE id = OLD.entity_id;
+    END IF;
+    RETURN OLD;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger
+DROP TRIGGER IF EXISTS trg_attachment_count ON attachments;
+CREATE TRIGGER trg_attachment_count
+  AFTER INSERT OR DELETE ON attachments
+  FOR EACH ROW
+  EXECUTE FUNCTION update_attachment_count();
+
+COMMIT;
+
+-- Verify
+SELECT table_name FROM information_schema.tables 
+WHERE table_schema = 'public' AND table_name = 'attachments';
+
+PART 2: BACKEND IMPLEMENTATION
+Step 2.1: Setup File Storage
+Add this configuration at the top of server.js:
+javascriptconst fs = require('fs').promises;
+const path = require('path');
+const crypto = require('crypto');
+const multer = require('multer');
+
+// Configure upload directory
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'text/plain',
+  'text/csv',
+  'application/zip'
+];
+
+// Ensure upload directory exists
+async function ensureUploadDir() {
+  try {
+    await fs.access(UPLOAD_DIR);
+  } catch {
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+  }
+}
+
+ensureUploadDir();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    await ensureUploadDir();
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    // Generate unique filename
+    const uniqueName = crypto.randomBytes(16).toString('hex') + path.extname(file.originalname);
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: 5 // Max 5 files per upload
+  },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} not allowed`));
+    }
+  }
+});
+Step 2.2: Add Utility Functions
+javascript// =====================================================
+// ATTACHMENT UTILITY FUNCTIONS
+// =====================================================
+
+/**
+ * Get human-readable file size
+ */
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+/**
+ * Sanitize filename for safe storage
+ */
+function sanitizeFilename(filename) {
+  return filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+/**
+ * Check if user can delete attachment
+ */
+function canDeleteAttachment(user, attachment) {
+  return user.id === attachment.uploaded_by ||
+         user.global_role === 'admin' ||
+         user.global_role === 'pm';
+}
+Step 2.3: Add Attachment API Endpoints
+javascript// =====================================================
+// ATTACHMENT API ENDPOINTS
+// =====================================================
+
+// -----------------------------------------------------
+// POST /api/:entityType/:entityId/attachments
+// Upload attachments to an issue or action item
+// -----------------------------------------------------
+app.post('/api/:entityType/:entityId/attachments', 
+  authenticateToken, 
+  upload.array('files', 5), 
+  async (req, res) => {
+    try {
+      const { entityType, entityId } = req.params;
+      
+      // Validate entity type
+      if (!['issues', 'action-items'].includes(entityType)) {
+        return res.status(400).json({ error: 'Invalid entity type' });
+      }
+      
+      // Normalize entity type for database
+      const dbEntityType = entityType === 'issues' ? 'issue' : 'action_item';
+      const tableName = entityType === 'issues' ? 'issues' : 'action_items';
+      
+      // Check if entity exists
+      const entityCheck = await pool.query(
+        `SELECT id FROM ${tableName} WHERE id = $1`,
+        [entityId]
+      );
+      
+      if (entityCheck.rows.length === 0) {
+        // Clean up uploaded files
+        if (req.files) {
+          for (const file of req.files) {
+            await fs.unlink(file.path).catch(() => {});
+          }
+        }
+        return res.status(404).json({ error: `${entityType} not found` });
+      }
+      
+      // Check if files were uploaded
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
+      }
+      
+      // Save attachment records to database
+      const attachments = [];
+      
+      for (const file of req.files) {
+        const result = await pool.query(
+          `INSERT INTO attachments 
+           (entity_type, entity_id, file_name, original_name, file_path, file_size, file_type, uploaded_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING *`,
+          [
+            dbEntityType,
+            entityId,
+            file.filename,
+            file.originalname,
+            file.path,
+            file.size,
+            file.mimetype,
+            req.user.id
+          ]
+        );
+        
+        attachments.push(result.rows[0]);
+      }
+      
+      res.status(201).json({
+        message: `${attachments.length} file(s) uploaded successfully`,
+        attachments: attachments
+      });
+    } catch (error) {
+      console.error('Error uploading attachments:', error);
+      
+      // Clean up uploaded files on error
+      if (req.files) {
+        for (const file of req.files) {
+          await fs.unlink(file.path).catch(() => {});
+        }
+      }
+      
+      res.status(500).json({ 
+        error: 'Failed to upload attachments',
+        details: error.message 
+      });
+    }
+  }
+);
+
+// -----------------------------------------------------
+// GET /api/:entityType/:entityId/attachments
+// Get all attachments for an issue or action item
+// -----------------------------------------------------
+app.get('/api/:entityType/:entityId/attachments', authenticateToken, async (req, res) => {
+  try {
+    const { entityType, entityId } = req.params;
+    
+    // Validate entity type
+    if (!['issues', 'action-items'].includes(entityType)) {
+      return res.status(400).json({ error: 'Invalid entity type' });
+    }
+    
+    // Normalize entity type for database
+    const dbEntityType = entityType === 'issues' ? 'issue' : 'action_item';
+    
+    // Get attachments with uploader information
+    const result = await pool.query(
+      `SELECT a.*, u.name as uploader_name, u.email as uploader_email
+       FROM attachments a
+       LEFT JOIN users u ON a.uploaded_by = u.id
+       WHERE a.entity_type = $1 AND a.entity_id = $2
+       ORDER BY a.uploaded_at DESC`,
+      [dbEntityType, entityId]
+    );
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching attachments:', error);
+    res.status(500).json({ error: 'Failed to fetch attachments' });
+  }
+});
+
+// -----------------------------------------------------
+// GET /api/attachments/:attachmentId/download
+// Download a specific attachment
+// -----------------------------------------------------
+app.get('/api/attachments/:attachmentId/download', authenticateToken, async (req, res) => {
+  try {
+    const { attachmentId } = req.params;
+    
+    // Get attachment info
+    const result = await pool.query(
+      'SELECT * FROM attachments WHERE id = $1',
+      [attachmentId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+    
+    const attachment = result.rows[0];
+    
+    // Check if file exists
+    try {
+      await fs.access(attachment.file_path);
+    } catch {
+      return res.status(404).json({ error: 'File not found on server' });
+    }
+    
+    // Set headers for download
+    res.setHeader('Content-Type', attachment.file_type);
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.original_name}"`);
+    res.setHeader('Content-Length', attachment.file_size);
+    
+    // Stream file to response
+    const fileStream = require('fs').createReadStream(attachment.file_path);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Error downloading attachment:', error);
+    res.status(500).json({ error: 'Failed to download attachment' });
+  }
+});
+
+// -----------------------------------------------------
+// DELETE /api/attachments/:attachmentId
+// Delete an attachment
+// -----------------------------------------------------
+app.delete('/api/attachments/:attachmentId', authenticateToken, async (req, res) => {
+  try {
+    const { attachmentId } = req.params;
+    
+    // Get attachment info
+    const result = await pool.query(
+      'SELECT * FROM attachments WHERE id = $1',
+      [attachmentId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+    
+    const attachment = result.rows[0];
+    
+    // Check permissions
+    if (!canDeleteAttachment(req.user, attachment)) {
+      return res.status(403).json({ error: 'Insufficient permissions to delete this attachment' });
+    }
+    
+    // Delete file from filesystem
+    try {
+      await fs.unlink(attachment.file_path);
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      // Continue even if file doesn't exist
+    }
+    
+    // Delete from database (trigger will update attachment_count)
+    await pool.query('DELETE FROM attachments WHERE id = $1', [attachmentId]);
+    
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting attachment:', error);
+    res.status(500).json({ error: 'Failed to delete attachment' });
+  }
+});
+
+PART 3: FRONTEND IMPLEMENTATION
+Step 3.1: Add File Upload UI to Create/Edit Modals
+Add this HTML to your issue and action item create/edit modals (in public/index.html or relevant pages):
+html<!-- Add this section in your create/edit modal form -->
+<div class="form-section">
+  <h3>Attachments</h3>
+  
+  <div class="file-upload-area">
+    <input 
+      type="file" 
+      id="file-input" 
+      multiple 
+      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip"
+      style="display: none;"
+    >
+    
+    <div class="file-upload-box" onclick="document.getElementById('file-input').click()">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      <p>Click to choose files or drag and drop</p>
+      <p class="file-upload-hint">PDF, DOC, XLS, Images, ZIP (Max 10MB per file)</p>
+    </div>
+    
+    <div id="selected-files-list" class="selected-files-list"></div>
+  </div>
+</div>
+Step 3.2: Add Attachment Display to Detail View
+Add this HTML to your issue/action item detail modals:
+html<!-- Add this section in your detail modal -->
+<div class="detail-section" id="attachments-section">
+  <label>Attachments (<span id="attachment-count">0</span>)</label>
+  <div id="attachments-list" class="attachments-list">
+    <!-- Attachments will be loaded here -->
+  </div>
+  <div id="attachments-empty" class="empty-message" style="display: none;">
+    No attachments
+  </div>
+</div>
+Step 3.3: Add JavaScript for File Upload
+Add this to your public/js/issues.js or public/js/actions.js:
+javascript// =====================================================
+// FILE ATTACHMENT HANDLING
+// =====================================================
+
+let selectedFiles = [];
+
+// Setup file input change handler
+function setupFileUpload() {
+  const fileInput = document.getElementById('file-input');
+  
+  if (fileInput) {
+    fileInput.addEventListener('change', handleFileSelect);
+    
+    // Setup drag and drop
+    const uploadBox = document.querySelector('.file-upload-box');
+    if (uploadBox) {
+      uploadBox.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadBox.classList.add('drag-over');
+      });
+      
+      uploadBox.addEventListener('dragleave', () => {
+        uploadBox.classList.remove('drag-over');
+      });
+      
+      uploadBox.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadBox.classList.remove('drag-over');
+        const files = Array.from(e.dataTransfer.files);
+        handleFiles(files);
+      });
+    }
+  }
+}
+
+function handleFileSelect(event) {
+  const files = Array.from(event.target.files);
+  handleFiles(files);
+}
+
+function handleFiles(files) {
+  // Validate file count
+  if (selectedFiles.length + files.length > 5) {
+    showNotification('Maximum 5 files allowed', 'error');
+    return;
+  }
+  
+  // Validate each file
+  for (const file of files) {
+    // Check file size
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification(`File ${file.name} is too large. Maximum size is 10MB.`, 'error');
+      continue;
+    }
+    
+    // Check file type
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/gif',
+      'text/plain',
+      'text/csv',
+      'application/zip'
+    ];
+    
+    if (!allowedTypes.includes(file.type)) {
+      showNotification(`File type ${file.type} not allowed`, 'error');
+      continue;
+    }
+    
+    selectedFiles.push(file);
+  }
+  
+  displaySelectedFiles();
+}
+
+function displaySelectedFiles() {
+  const container = document.getElementById('selected-files-list');
+  if (!container) return;
+  
+  if (selectedFiles.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  
+  container.innerHTML = selectedFiles.map((file, index) => `
+    <div class="selected-file-item">
+      <div class="file-info">
+        <span class="file-icon">${getFileIcon(file.type)}</span>
+        <div class="file-details">
+          <div class="file-name">${escapeHtml(file.name)}</div>
+          <div class="file-size">${formatFileSize(file.size)}</div>
+        </div>
+      </div>
+      <button type="button" class="btn-remove-file" onclick="removeSelectedFile(${index})">
+        ✕
+      </button>
+    </div>
+  `).join('');
+}
+
+function removeSelectedFile(index) {
+  selectedFiles.splice(index, 1);
+  displaySelectedFiles();
+}
+
+function getFileIcon(mimeType) {
+  if (mimeType.startsWith('image/')) return '🖼️';
+  if (mimeType.includes('pdf')) return '📄';
+  if (mimeType.includes('word')) return '📝';
+  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊';
+  if (mimeType.includes('zip')) return '📦';
+  return '📎';
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// Upload attachments after creating/updating issue/action item
+async function uploadAttachments(entityType, entityId) {
+  if (selectedFiles.length === 0) return;
+  
+  const formData = new FormData();
+  selectedFiles.forEach(file => {
+    formData.append('files', file);
+  });
+  
+  try {
+    const response = await fetch(`/api/${entityType}/${entityId}/attachments`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to upload attachments');
+    }
+    
+    const result = await response.json();
+    console.log('Attachments uploaded:', result);
+    
+    // Clear selected files
+    selectedFiles = [];
+    displaySelectedFiles();
+    
+    return result;
+  } catch (error) {
+    console.error('Error uploading attachments:', error);
+    showNotification('Some attachments failed to upload', 'warning');
+  }
+}
+
+// Load and display attachments in detail view
+async function loadAttachments(entityType, entityId) {
+  try {
+    const response = await fetch(`/api/${entityType}/${entityId}/attachments`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Failed to load attachments');
+    
+    const attachments = await response.json();
+    
+    displayAttachments(attachments);
+  } catch (error) {
+    console.error('Error loading attachments:', error);
+  }
+}
+
+function displayAttachments(attachments) {
+  const container = document.getElementById('attachments-list');
+  const emptyMessage = document.getElementById('attachments-empty');
+  const countElement = document.getElementById('attachment-count');
+  
+  if (!container) return;
+  
+  if (countElement) {
+    countElement.textContent = attachments.length;
+  }
+  
+  if (attachments.length === 0) {
+    container.innerHTML = '';
+    if (emptyMessage) emptyMessage.style.display = 'block';
+    return;
+  }
+  
+  if (emptyMessage) emptyMessage.style.display = 'none';
+  
+  container.innerHTML = attachments.map(attachment => `
+    <div class="attachment-item">
+      <div class="attachment-info">
+        <span class="file-icon">${getFileIcon(attachment.file_type)}</span>
+        <div class="attachment-details">
+          <div class="attachment-name">${escapeHtml(attachment.original_name)}</div>
+          <div class="attachment-meta">
+            ${formatFileSize(attachment.file_size)} • 
+            Uploaded by ${escapeHtml(attachment.uploader_name || 'Unknown')} • 
+            ${formatDate(attachment.uploaded_at)}
+          </div>
+        </div>
+      </div>
+      <div class="attachment-actions">
+        <button class="btn btn-sm btn-secondary" onclick="downloadAttachment(${attachment.id}, '${escapeHtml(attachment.original_name)}')">
+          📥 Download
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="deleteAttachment(${attachment.id})">
+          🗑️ Delete
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function downloadAttachment(attachmentId, filename) {
+  try {
+    const response = await fetch(`/api/attachments/${attachmentId}/download`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Failed to download attachment');
+    
+    // Create blob and download
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (error) {
+    console.error('Error downloading attachment:', error);
+    showNotification('Failed to download attachment', 'error');
+  }
+}
+
+async function deleteAttachment(attachmentId) {
+  if (!confirm('Are you sure you want to delete this attachment?')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/attachments/${attachmentId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete attachment');
+    }
+    
+    showNotification('Attachment deleted successfully', 'success');
+    
+    // Reload attachments
+    const entityType = getCurrentEntityType();
+    const entityId = getCurrentEntityId();
+    await loadAttachments(entityType, entityId);
+  } catch (error) {
+    console.error('Error deleting attachment:', error);
+    showNotification(error.message, 'error');
+  }
+}
+
+// Helper functions to get current context
+function getCurrentEntityType() {
+  // Determine if we're viewing an issue or action item
+  // Implement based on your modal structure
+  return 'issues'; // or 'action-items'
+}
+
+function getCurrentEntityId() {
+  // Get the current entity ID from modal or context
+  // Implement based on your modal structure
+  return document.getElementById('current-entity-id')?.value;
+}
+Step 3.4: Update Form Submit to Include Attachments
+Modify your create/edit form submit handlers:
+javascript// Update your existing handleIssueFormSubmit or handleActionFormSubmit
+
+async function handleIssueFormSubmit(event) {
+  event.preventDefault();
+  
+  const issueId = document.getElementById('issue-id').value;
+  const isEdit = !!issueId;
+  
+  // ... existing form data collection ...
+  
+  try {
+    let response;
+    
+    if (isEdit) {
+      response = await fetch(`/api/issues/${issueId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(formData)
+      });
+    } else {
+      response = await fetch(`/api/projects/${projectId}/issues`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(formData)
+      });
+    }
+    
+    if (!response.ok) throw new Error('Failed to save issue');
+    
+    const savedIssue = await response.json();
+    
+    // Upload attachments
+    if (selectedFiles.length > 0) {
+      await uploadAttachments('issues', savedIssue.id);
+    }
+    
+    showNotification(isEdit ? 'Issue updated successfully' : 'Issue created successfully', 'success');
+    closeIssueModal();
+    await loadIssues();
+  } catch (error) {
+    console.error('Error saving issue:', error);
+    showNotification(error.message, 'error');
+  }
+}
+Step 3.5: Add CSS Styles
+Add to public/css/style.css:
+css/* =====================================================
+   FILE ATTACHMENT STYLES
+   ===================================================== */
+
+/* File Upload Area */
+.file-upload-area {
+  margin: 16px 0;
+}
+
+.file-upload-box {
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: #f9fafb;
+}
+
+.file-upload-box:hover {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.file-upload-box.drag-over {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.file-upload-box svg {
+  color: #9ca3af;
+  margin-bottom: 12px;
+}
+
+.file-upload-box p {
+  margin: 8px 0;
+  color: #374151;
+  font-size: 14px;
+}
+
+.file-upload-hint {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+}
+
+/* Selected Files List */
+.selected-files-list {
+  margin-top: 16px;
+}
+
+.selected-file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: #f3f4f6;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.file-icon {
+  font-size: 24px;
+}
+
+.file-details {
+  flex: 1;
+}
+
+.file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  word-break: break-word;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.btn-remove-file {
+  padding: 6px 10px;
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.btn-remove-file:hover {
+  background-color: #dc2626;
+}
+
+/* Attachments Display */
+.attachments-list {
+  margin-top: 12px;
+}
+
+.attachment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.attachment-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.attachment-details {
+  flex: 1;
+}
+
+.attachment-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  word-break: break-word;
+}
+
+.attachment-meta {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.attachment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.empty-message {
+  padding: 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .attachment-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .attachment-actions {
+    width: 100%;
+  }
+  
+  .attachment-actions button {
+    flex: 1;
+  }
+}
+
+PART 4: IMPORTANT - Install Multer
+Add multer to your package.json dependencies:
+json{
+  "dependencies": {
+    "multer": "^1.4.5-lts.1",
+    // ... other dependencies
+  }
+}
+Then run in Replit shell:
+bashnpm install multer
+
+PART 5: TESTING CHECKLIST
+
+ Upload single file when creating issue
+ Upload multiple files (up to 5) when creating issue
+ Upload files when editing existing issue
+ Validate file size (reject >10MB)
+ Validate file type (reject invalid types)
+ Display attachments in detail view
+ Download attachment
+ Delete attachment (with permission check)
+ Attachment count updates correctly
+ Works for both issues and action items
+ Drag and drop file upload works
+ Mobile responsive
+ Error handling for failed uploads
+ Progress indication during upload
+
+
+IMPLEMENTATION NOTES
+
+Storage: Files are stored in /uploads directory in Replit
+Security: File types and sizes are validated on both frontend and backend
+Permissions: Only uploader, PM, or Admin can delete attachments
+Triggers: Database trigger automatically updates attachment_count
+Cleanup: Files are deleted from filesystem when attachment is deleted
+
+
+KNOWN LIMITATIONS
+
+Replit has storage limits - monitor usage
+No virus scanning (add in production)
+No image thumbnail generation (future enhancement)
+No file versioning (future enhancement)
+
+
+Implement this complete attachment system following all the code provided above. Test thoroughly before committing.
