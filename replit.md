@@ -62,6 +62,27 @@ Express.js handles requests, incorporating `express-rate-limit` for API protecti
 
 ## Recent Changes
 
+### Feature: File Attachment Support for Issues and Action Items (October 8, 2025)
+Implemented comprehensive file attachment functionality allowing users to upload, view, download, and delete files associated with issues and action items:
+- **Database Schema**: Created `attachments` table with automatic count maintenance via triggers on issues and action_items tables
+- **Backend Implementation**: 
+  - Multer file storage with 10MB per file limit, maximum 5 files per upload
+  - Supported file types: PDF, Word, Excel, images (PNG, JPG, JPEG, GIF), text, CSV, ZIP
+  - Crypto-based unique filename generation for security
+  - Four API endpoints: POST /upload, GET /list, GET /download/:id, DELETE /:id
+- **Permission System**: 
+  - Upload: Any authenticated user can upload to items they can view
+  - Delete: Original uploader, System Administrator, or Project Manager
+  - Download: Any user with access to the item
+- **Frontend Features**:
+  - File upload UI in issue/action item edit modals with drag-and-drop support
+  - Attachment display section in item detail modals with download/delete actions
+  - Attachment count badges on kanban cards (green, clickable to open detail modal)
+  - Real-time count updates after upload/delete operations
+  - File size formatting and validation feedback
+- **Security**: Unique filenames prevent overwrites, MIME type validation, permission checks on all operations
+- **Files Added/Updated**: `db/schema.js` (attachments table + triggers), `server.js` (multer config + endpoints), `public/app.js` (v19), `public/comments.js` (v3)
+
 ### Bug Fix: Action Item/Issue Edit - Permission Check for AI-Created Items (October 8, 2025)
 Fixed critical bug where users couldn't edit AI-generated items even when they were the owner:
 - **Root Cause**: Owner check used string comparison (`===`) but `created_by` field could have type inconsistencies between manual and AI-created items
