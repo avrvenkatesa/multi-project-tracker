@@ -62,6 +62,20 @@ Express.js handles requests, incorporating `express-rate-limit` for API protecti
 
 ## Recent Changes
 
+### Bug Fix: Dashboard Report Showing 0% Completion Rate (October 8, 2025)
+Fixed critical bug in PDF report generation where completion rate was incorrectly calculated as 0% despite having completed items:
+- **Root Cause**: ReportService only checked for status 'Done' when counting completed items, missing all completed action items which use status 'Completed'
+- **Impact**: Detailed Project Reports, Executive Summaries, and Team Performance Reports all showed incorrect completion statistics
+- **Fix**: Updated getProjectStats method to properly count both:
+  - Completed Issues: status === 'Done'
+  - Completed Action Items: status === 'Completed'
+- **Status Aggregation**: Fixed counting for all statuses to properly handle both entity types:
+  - To Do count: combines issues + action items with 'To Do' status
+  - In Progress count: combines issues + action items with 'In Progress' status
+  - Done/Completed count: combines issues with 'Done' + action items with 'Completed'
+- **Completion Rate Formula**: Now correctly calculates as (completed issues + completed action items) / total items
+- **Files Updated**: `services/reportService.js` - getProjectStats method
+
 ### Bug Fix: AI-Created Items Missing Assignment Notifications (October 8, 2025)
 Fixed critical bug where AI-created items from meeting transcript analysis didn't send assignment notifications to assignees:
 - **Root Cause**: AI batch creation endpoints (`/api/meetings/create-items` and `/api/meetings/create-items-smart`) were missing notification logic
