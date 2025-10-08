@@ -37,8 +37,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// Configure multer for file uploads
-const upload = multer({ 
+// Configure multer for transcript uploads
+const transcriptUpload = multer({ 
   dest: 'uploads/',
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
@@ -51,9 +51,62 @@ const upload = multer({
   }
 });
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'uploads');
-fs.mkdir(uploadsDir, { recursive: true }).catch(console.error);
+// Configure file attachment storage system
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_ATTACHMENT_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'text/plain',
+  'text/csv',
+  'application/zip'
+];
+
+// Ensure upload directory exists
+async function ensureUploadDir() {
+  try {
+    await fs.access(UPLOAD_DIR);
+  } catch {
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+  }
+}
+
+ensureUploadDir();
+
+// Configure multer for file attachments
+const attachmentStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    await ensureUploadDir();
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    // Generate unique filename
+    const uniqueName = crypto.randomBytes(16).toString('hex') + path.extname(file.originalname);
+    cb(null, uniqueName);
+  }
+});
+
+const attachmentUpload = multer({
+  storage: attachmentStorage,
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: 5 // Max 5 files per upload
+  },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_ATTACHMENT_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} not allowed`));
+    }
+  }
+});
 
 // Security middleware
 app.use(
@@ -3723,7 +3776,7 @@ async function updateExistingItem(existingItem, newItem, itemType = 'action_item
 app.post('/api/meetings/analyze', 
   authenticateToken, 
   requireRole('Team Member'),
-  upload.single('transcript'), 
+  transcriptUpload.single('transcript'), 
   async (req, res) => {
     const startTime = Date.now();
     const analysisId = uuidv4();
