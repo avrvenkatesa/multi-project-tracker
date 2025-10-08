@@ -554,6 +554,7 @@ async function openItemDetailModal(itemId, itemType) {
     setupMentionAutocomplete('item-detail-new-comment', 'item-detail-mention-dropdown');
     
     await loadItemDetailComments();
+    await loadItemDetailAttachments();
     
   } catch (error) {
     console.error('Error opening item detail:', error);
@@ -646,6 +647,160 @@ async function addItemDetailComment() {
   }
 }
 
+// ==================== ATTACHMENTS ====================
+
+async function loadItemDetailAttachments() {
+  try {
+    const entityType = currentItemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${entityType}/${currentItemId}/attachments`, {
+      withCredentials: true
+    });
+    
+    const attachments = response.data;
+    
+    const countElement = document.getElementById('item-detail-attachment-count');
+    if (countElement) {
+      countElement.textContent = `(${attachments.length})`;
+    }
+    
+    const container = document.getElementById('item-detail-attachments-list');
+    if (!container) return;
+    
+    if (attachments.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-8 text-gray-400">
+          <svg class="mx-auto h-12 w-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+          <p>No attachments yet</p>
+        </div>
+      `;
+      return;
+    }
+    
+    container.innerHTML = `
+      <div class="space-y-2">
+        ${attachments.map(att => renderAttachment(att)).join('')}
+      </div>
+    `;
+    
+    // Add event listeners for delete buttons
+    container.querySelectorAll('.delete-attachment-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const attachmentId = btn.dataset.attachmentId;
+        deleteAttachment(attachmentId);
+      });
+    });
+    
+  } catch (error) {
+    console.error('Error loading attachments:', error);
+  }
+}
+
+function renderAttachment(attachment) {
+  const uploadedAt = new Date(attachment.uploaded_at).toLocaleDateString();
+  const fileSize = formatFileSize(attachment.file_size);
+  const fileIcon = getFileIcon(attachment.file_type);
+  
+  return `
+    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <div class="text-2xl">${fileIcon}</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-sm truncate">${attachment.original_name}</div>
+          <div class="text-xs text-gray-500">
+            ${fileSize} • Uploaded by ${attachment.uploader_name || 'Unknown'} on ${uploadedAt}
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 ml-2">
+        <a href="/api/attachments/${attachment.id}/download" 
+           class="text-indigo-600 hover:text-indigo-700 p-2"
+           title="Download">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </a>
+        <button class="delete-attachment-btn text-red-600 hover:text-red-700 p-2"
+                data-attachment-id="${attachment.id}"
+                title="Delete">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function getFileIcon(mimeType) {
+  if (mimeType.startsWith('image/')) return '🖼️';
+  if (mimeType.includes('pdf')) return '📄';
+  if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
+  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊';
+  if (mimeType.includes('zip')) return '📦';
+  if (mimeType.includes('text')) return '📃';
+  return '📎';
+}
+
+async function deleteAttachment(attachmentId) {
+  if (!confirm('Are you sure you want to delete this attachment?')) {
+    return;
+  }
+  
+  try {
+    await axios.delete(`/api/attachments/${attachmentId}`, {
+      withCredentials: true
+    });
+    
+    AuthManager.showNotification('Attachment deleted successfully', 'success');
+    await loadItemDetailAttachments();
+    
+  } catch (error) {
+    console.error('Error deleting attachment:', error);
+    AuthManager.showNotification(error.response?.data?.error || 'Failed to delete attachment', 'error');
+  }
+}
+
+async function uploadItemDetailAttachment() {
+  const fileInput = document.getElementById('item-detail-attachment-upload');
+  
+  if (!fileInput.files || fileInput.files.length === 0) {
+    return;
+  }
+  
+  const formData = new FormData();
+  for (let i = 0; i < fileInput.files.length; i++) {
+    formData.append('files', fileInput.files[i]);
+  }
+  
+  try {
+    const entityType = currentItemType === 'issue' ? 'issues' : 'action-items';
+    await axios.post(`/api/${entityType}/${currentItemId}/attachments`, formData, {
+      withCredentials: true,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    AuthManager.showNotification(`${fileInput.files.length} file(s) uploaded successfully`, 'success');
+    fileInput.value = '';
+    await loadItemDetailAttachments();
+    
+  } catch (error) {
+    console.error('Error uploading attachments:', error);
+    AuthManager.showNotification(error.response?.data?.error || 'Failed to upload attachments', 'error');
+  }
+}
+
 if (typeof window !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
     // Add event listeners for notification bell and modal buttons
@@ -667,6 +822,11 @@ if (typeof window !== 'undefined') {
     const addCommentBtn = document.getElementById('add-item-detail-comment-btn');
     if (addCommentBtn) {
       addCommentBtn.addEventListener('click', addItemDetailComment);
+    }
+    
+    const attachmentUploadInput = document.getElementById('item-detail-attachment-upload');
+    if (attachmentUploadInput) {
+      attachmentUploadInput.addEventListener('change', uploadItemDetailAttachment);
     }
     
     if (AuthManager.isAuthenticated) {

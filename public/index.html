@@ -585,6 +585,32 @@
                             <!-- Item details will be displayed here -->
                         </div>
                         
+                        <!-- Attachments Section -->
+                        <div class="border-t pt-6 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold flex items-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                    </svg>
+                                    Attachments
+                                    <span id="item-detail-attachment-count" class="text-sm text-gray-500">(0)</span>
+                                </h3>
+                                <label for="item-detail-attachment-upload" class="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                    </svg>
+                                    Upload Files
+                                </label>
+                                <input type="file" id="item-detail-attachment-upload" multiple class="hidden"
+                                       accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip">
+                            </div>
+                            
+                            <!-- Attachments List -->
+                            <div id="item-detail-attachments-list">
+                                <!-- Attachments will be populated here -->
+                            </div>
+                        </div>
+                        
                         <!-- Comments Section -->
                         <div class="border-t pt-6">
                             <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -976,7 +1002,7 @@
                 overflow: hidden;
             }
         </style>
-        <script src="comments.js?v=1"></script>
+        <script src="comments.js?v=2"></script>
         <script src="app.js?v=17"></script>
         <script src="js/project-management.js"></script>
     </body>
