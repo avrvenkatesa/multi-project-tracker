@@ -3026,16 +3026,23 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
   };
   
   try {
-    await axios.patch(`/api/issues/${itemId}`, data, {
+    const response = await axios.patch(`/api/issues/${itemId}`, data, {
       withCredentials: true
     });
+    
+    const updatedIssue = response.data;
     
     // Close modal
     document.getElementById('editIssueModal').classList.add('hidden');
     
-    // Reload issues and refresh kanban board
-    await loadIssues(currentProject);
-    await renderKanbanBoard();
+    // Reload issues and refresh kanban board using the issue's project_id
+    if (updatedIssue.project_id) {
+      await loadIssues(updatedIssue.project_id);
+      await renderKanbanBoard();
+    } else if (currentProject) {
+      await loadIssues(currentProject);
+      await renderKanbanBoard();
+    }
     
     showToast('Issue updated successfully!', 'success');
   } catch (error) {
@@ -3060,16 +3067,23 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
   };
   
   try {
-    await axios.patch(`/api/action-items/${itemId}`, data, {
+    const response = await axios.patch(`/api/action-items/${itemId}`, data, {
       withCredentials: true
     });
+    
+    const updatedItem = response.data;
     
     // Close modal
     document.getElementById('editActionItemModal').classList.add('hidden');
     
-    // Reload action items and refresh kanban board
-    await loadActionItems(currentProject);
-    await renderKanbanBoard();
+    // Reload action items and refresh kanban board using the item's project_id
+    if (updatedItem.project_id) {
+      await loadActionItems(updatedItem.project_id);
+      await renderKanbanBoard();
+    } else if (currentProject) {
+      await loadActionItems(currentProject);
+      await renderKanbanBoard();
+    }
     
     showToast('Action item updated successfully!', 'success');
   } catch (error) {
