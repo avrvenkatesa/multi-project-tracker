@@ -108,6 +108,37 @@ const attachmentUpload = multer({
   }
 });
 
+// =====================================================
+// ATTACHMENT UTILITY FUNCTIONS
+// =====================================================
+
+/**
+ * Get human-readable file size
+ */
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+/**
+ * Sanitize filename for safe storage
+ */
+function sanitizeFilename(filename) {
+  return filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+/**
+ * Check if user can delete attachment
+ */
+function canDeleteAttachment(user, attachment) {
+  return parseInt(user.id, 10) === parseInt(attachment.uploaded_by, 10) ||
+         user.role === 'System Administrator' ||
+         user.role === 'Project Manager';
+}
+
 // Security middleware
 app.use(
   helmet({
