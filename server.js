@@ -2549,7 +2549,16 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     console.log('Expected parameter count: $' + valueIndex);
     
     const result = await pool.query(query, values);
+    console.log('Query executed successfully. Rows returned:', result.rows.length);
+    
     const updatedIssue = result.rows[0];
+    
+    if (!updatedIssue) {
+      console.error('No issue was updated - issue might not exist');
+      return res.status(404).json({ error: 'Issue not found or not updated' });
+    }
+    
+    console.log('Updated issue:', updatedIssue);
     
     // Send status change notification if status changed
     if (status !== undefined && issue.status !== status && updatedIssue.assignee && updatedIssue.assignee.trim() !== '') {
