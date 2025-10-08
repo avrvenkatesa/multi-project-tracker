@@ -508,6 +508,15 @@ async function renderKanbanBoard() {
                                 <span>Comments</span>
                                 ${commentCount > 0 ? `<span class="ml-auto px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">${commentCount}</span>` : ''}
                             </button>
+                            <button class="view-attachments-btn flex items-center text-xs ${(item.attachment_count || 0) > 0 ? 'text-green-600 font-medium' : 'text-gray-600'} hover:text-green-700 transition-colors w-full" 
+                                    data-item-id="${item.id}" 
+                                    data-item-type="${item.type || 'issue'}">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                </svg>
+                                <span>Attachments</span>
+                                ${(item.attachment_count || 0) > 0 ? `<span class="ml-auto px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">${item.attachment_count}</span>` : ''}
+                            </button>
                             ${canEdit || canDelete ? `
                                 <div class="flex gap-1 pt-1">
                                     ${canEdit ? `
@@ -572,6 +581,16 @@ async function renderKanbanBoard() {
             
             // Add comment button listeners
             container.querySelectorAll('.view-comments-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent drag start
+                    const itemId = parseInt(this.getAttribute('data-item-id'));
+                    const itemType = this.getAttribute('data-item-type');
+                    openItemDetailModal(itemId, itemType);
+                });
+            });
+            
+            // Add attachment button listeners
+            container.querySelectorAll('.view-attachments-btn').forEach(btn => {
                 btn.addEventListener('click', function(e) {
                     e.stopPropagation(); // Prevent drag start
                     const itemId = parseInt(this.getAttribute('data-item-id'));
