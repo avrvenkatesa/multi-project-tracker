@@ -3035,13 +3035,11 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     // Close modal
     document.getElementById('editIssueModal').classList.add('hidden');
     
-    // Reload issues and refresh kanban board using the issue's project_id
+    // Reload project data using the issue's project_id
     if (updatedIssue.project_id) {
-      await loadIssues(updatedIssue.project_id);
-      await renderKanbanBoard();
+      await loadProjectData(updatedIssue.project_id);
     } else if (currentProject) {
-      await loadIssues(currentProject);
-      await renderKanbanBoard();
+      await loadProjectData(currentProject);
     }
     
     showToast('Issue updated successfully!', 'success');
@@ -3076,13 +3074,11 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     // Close modal
     document.getElementById('editActionItemModal').classList.add('hidden');
     
-    // Reload action items and refresh kanban board using the item's project_id
+    // Reload project data using the item's project_id
     if (updatedItem.project_id) {
-      await loadActionItems(updatedItem.project_id);
-      await renderKanbanBoard();
+      await loadProjectData(updatedItem.project_id);
     } else if (currentProject) {
-      await loadActionItems(currentProject);
-      await renderKanbanBoard();
+      await loadProjectData(currentProject);
     }
     
     showToast('Action item updated successfully!', 'success');
