@@ -5361,6 +5361,214 @@ app.delete('/api/action-items/:itemId/comments/:commentId', authenticateToken, a
   }
 });
 
+// =====================================================
+// ATTACHMENT API ENDPOINTS
+// =====================================================
+
+// -----------------------------------------------------
+// POST /api/:entityType/:entityId/attachments
+// Upload attachments to an issue or action item
+// -----------------------------------------------------
+app.post('/api/:entityType/:entityId/attachments', 
+  authenticateToken, 
+  attachmentUpload.array('files', 5), 
+  async (req, res) => {
+    try {
+      const { entityType, entityId } = req.params;
+      
+      // Validate entity type
+      if (!['issues', 'action-items'].includes(entityType)) {
+        return res.status(400).json({ error: 'Invalid entity type' });
+      }
+      
+      // Normalize entity type for database
+      const dbEntityType = entityType === 'issues' ? 'issue' : 'action_item';
+      const tableName = entityType === 'issues' ? 'issues' : 'action_items';
+      
+      // Check if entity exists
+      const entityCheck = await pool.query(
+        `SELECT id FROM ${tableName} WHERE id = $1`,
+        [entityId]
+      );
+      
+      if (entityCheck.rows.length === 0) {
+        // Clean up uploaded files
+        if (req.files) {
+          for (const file of req.files) {
+            await fs.unlink(file.path).catch(() => {});
+          }
+        }
+        return res.status(404).json({ error: `${entityType} not found` });
+      }
+      
+      // Check if files were uploaded
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
+      }
+      
+      // Save attachment records to database
+      const attachments = [];
+      
+      for (const file of req.files) {
+        const result = await pool.query(
+          `INSERT INTO attachments 
+           (entity_type, entity_id, file_name, original_name, file_path, file_size, file_type, uploaded_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING *`,
+          [
+            dbEntityType,
+            entityId,
+            file.filename,
+            file.originalname,
+            file.path,
+            file.size,
+            file.mimetype,
+            req.user.id
+          ]
+        );
+        
+        attachments.push(result.rows[0]);
+      }
+      
+      res.status(201).json({
+        message: `${attachments.length} file(s) uploaded successfully`,
+        attachments: attachments
+      });
+    } catch (error) {
+      console.error('Error uploading attachments:', error);
+      
+      // Clean up uploaded files on error
+      if (req.files) {
+        for (const file of req.files) {
+          await fs.unlink(file.path).catch(() => {});
+        }
+      }
+      
+      res.status(500).json({ 
+        error: 'Failed to upload attachments',
+        details: error.message 
+      });
+    }
+  }
+);
+
+// -----------------------------------------------------
+// GET /api/:entityType/:entityId/attachments
+// Get all attachments for an issue or action item
+// -----------------------------------------------------
+app.get('/api/:entityType/:entityId/attachments', authenticateToken, async (req, res) => {
+  try {
+    const { entityType, entityId } = req.params;
+    
+    // Validate entity type
+    if (!['issues', 'action-items'].includes(entityType)) {
+      return res.status(400).json({ error: 'Invalid entity type' });
+    }
+    
+    // Normalize entity type for database
+    const dbEntityType = entityType === 'issues' ? 'issue' : 'action_item';
+    
+    // Get attachments with uploader information
+    const result = await pool.query(
+      `SELECT a.*, u.username as uploader_name, u.email as uploader_email
+       FROM attachments a
+       LEFT JOIN users u ON a.uploaded_by = u.id
+       WHERE a.entity_type = $1 AND a.entity_id = $2
+       ORDER BY a.uploaded_at DESC`,
+      [dbEntityType, entityId]
+    );
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching attachments:', error);
+    res.status(500).json({ error: 'Failed to fetch attachments' });
+  }
+});
+
+// -----------------------------------------------------
+// GET /api/attachments/:attachmentId/download
+// Download a specific attachment
+// -----------------------------------------------------
+app.get('/api/attachments/:attachmentId/download', authenticateToken, async (req, res) => {
+  try {
+    const { attachmentId } = req.params;
+    
+    // Get attachment info
+    const result = await pool.query(
+      'SELECT * FROM attachments WHERE id = $1',
+      [attachmentId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+    
+    const attachment = result.rows[0];
+    
+    // Check if file exists
+    try {
+      await fs.access(attachment.file_path);
+    } catch {
+      return res.status(404).json({ error: 'File not found on server' });
+    }
+    
+    // Set headers for download
+    res.setHeader('Content-Type', attachment.file_type);
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.original_name}"`);
+    res.setHeader('Content-Length', attachment.file_size);
+    
+    // Stream file to response
+    const fileStream = require('fs').createReadStream(attachment.file_path);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Error downloading attachment:', error);
+    res.status(500).json({ error: 'Failed to download attachment' });
+  }
+});
+
+// -----------------------------------------------------
+// DELETE /api/attachments/:attachmentId
+// Delete an attachment
+// -----------------------------------------------------
+app.delete('/api/attachments/:attachmentId', authenticateToken, async (req, res) => {
+  try {
+    const { attachmentId } = req.params;
+    
+    // Get attachment info
+    const result = await pool.query(
+      'SELECT * FROM attachments WHERE id = $1',
+      [attachmentId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+    
+    const attachment = result.rows[0];
+    
+    // Check permissions
+    if (!canDeleteAttachment(req.user, attachment)) {
+      return res.status(403).json({ error: 'Insufficient permissions to delete this attachment' });
+    }
+    
+    // Delete file from filesystem
+    try {
+      await fs.unlink(attachment.file_path);
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      // Continue even if file doesn't exist
+    }
+    
+    // Delete from database (trigger will update attachment_count)
+    await pool.query('DELETE FROM attachments WHERE id = $1', [attachmentId]);
+    
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting attachment:', error);
+    res.status(500).json({ error: 'Failed to delete attachment' });
+  }
+});
+
 // ==================== MENTION NOTIFICATIONS ====================
 
 app.get('/api/mentions', authenticateToken, async (req, res) => {
