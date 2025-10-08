@@ -2943,9 +2943,9 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-issue-status').value = item.status || 'To Do';
       document.getElementById('edit-issue-category').value = item.category || '';
       
-      // Load team members for assignee dropdown
-      if (currentProject) {
-        await loadTeamMembersForEdit('issue');
+      // Load team members for assignee dropdown using the item's project_id
+      if (item.project_id) {
+        await loadTeamMembersForEdit('issue', item.project_id);
         document.getElementById('edit-issue-assignee').value = item.assignee || '';
       }
       
@@ -2962,9 +2962,9 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-action-item-status').value = item.status || 'To Do';
       document.getElementById('edit-action-item-progress').value = item.progress_percentage || 0;
       
-      // Load team members for assignee dropdown
-      if (currentProject) {
-        await loadTeamMembersForEdit('action-item');
+      // Load team members for assignee dropdown using the item's project_id
+      if (item.project_id) {
+        await loadTeamMembersForEdit('action-item', item.project_id);
         document.getElementById('edit-action-item-assignee').value = item.assignee || '';
       }
       
@@ -2978,9 +2978,9 @@ async function openEditModal(itemId, itemType) {
 }
 
 // Load team members for edit modals
-async function loadTeamMembersForEdit(type) {
+async function loadTeamMembersForEdit(type, projectId) {
   try {
-    const response = await axios.get(`/api/projects/${currentProject}/team`, {
+    const response = await axios.get(`/api/projects/${projectId}/team`, {
       withCredentials: true
     });
     
