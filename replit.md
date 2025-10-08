@@ -62,6 +62,24 @@ Express.js handles requests, incorporating `express-rate-limit` for API protecti
 
 ## Recent Changes
 
+### Bug Fix: AI-Created Items Missing Assignment Notifications (October 8, 2025)
+Fixed critical bug where AI-created items from meeting transcript analysis didn't send assignment notifications to assignees:
+- **Root Cause**: AI batch creation endpoints (`/api/meetings/create-items` and `/api/meetings/create-items-smart`) were missing notification logic
+- **Issues Fixed**:
+  - Issues in AI batch creation didn't support assignee field (now added to both endpoints)
+  - No notifications sent when AI assigned items to users
+  - Smart creation endpoint lacked assignee permission checks for issues (now added)
+- **Implementation**:
+  - Added assignee field to issues INSERT statements in both AI endpoints
+  - Implemented notification logic matching manual creation pattern (username lookup → user ID → send notification)
+  - Added assignee permission validation for issues in smart creation endpoint
+  - Non-blocking fire-and-forget notification pattern to avoid slowing batch creation
+  - Comprehensive error handling - notification failures don't break item creation
+  - Enhanced logging to track notification activity
+- **Affected Endpoints**: `POST /api/meetings/create-items` and `POST /api/meetings/create-items-smart`
+- **Impact**: Users now receive email notifications when AI assigns them to issues or action items during meeting analysis
+- **Files Updated**: `server.js` - added notification logic to both AI batch creation endpoints
+
 ### Feature: File Attachment Support for Issues and Action Items (October 8, 2025)
 Implemented comprehensive file attachment functionality allowing users to upload, view, download, and delete files associated with issues and action items:
 - **Database Schema**: Created `attachments` table with automatic count maintenance via triggers on issues and action_items tables
