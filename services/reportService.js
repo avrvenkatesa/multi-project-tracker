@@ -304,16 +304,28 @@ class ReportService {
     
     const issues = issuesResult.rows;
     const actionItems = actionItemsResult.rows;
-    const allItems = [...issues, ...actionItems];
     
-    const totalItems = allItems.length;
-    const completedItems = allItems.filter(item => item.status === 'Done').length;
+    const totalItems = issues.length + actionItems.length;
+    
+    // Count completed items: Issues use 'Done', Action Items use 'Completed'
+    const completedIssues = issues.filter(item => item.status === 'Done').length;
+    const completedActionItems = actionItems.filter(item => item.status === 'Completed').length;
+    const completedItems = completedIssues + completedActionItems;
     const completionRate = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
     
-    const todoCount = allItems.filter(item => item.status === 'To Do').length;
-    const inProgressCount = allItems.filter(item => item.status === 'In Progress').length;
+    // Count by status (combining both types)
+    const todoIssues = issues.filter(item => item.status === 'To Do').length;
+    const todoActionItems = actionItems.filter(item => item.status === 'To Do').length;
+    const todoCount = todoIssues + todoActionItems;
+    
+    const inProgressIssues = issues.filter(item => item.status === 'In Progress').length;
+    const inProgressActionItems = actionItems.filter(item => item.status === 'In Progress').length;
+    const inProgressCount = inProgressIssues + inProgressActionItems;
+    
     const doneCount = completedItems;
     
+    // Count by priority (combining both types)
+    const allItems = [...issues, ...actionItems];
     const criticalCount = allItems.filter(item => item.priority === 'critical').length;
     const highCount = allItems.filter(item => item.priority === 'high').length;
     const mediumCount = allItems.filter(item => item.priority === 'medium').length;
