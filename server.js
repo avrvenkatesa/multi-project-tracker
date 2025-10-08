@@ -2469,6 +2469,9 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     const { id } = req.params;
     const { title, description, assignee, due_date, priority, status, category } = req.body;
     
+    console.log('PATCH /api/issues/:id - Request body:', req.body);
+    console.log('Issue ID:', id);
+    
     const [issue] = await sql`SELECT * FROM issues WHERE id = ${id}`;
     
     if (!issue) {
@@ -2476,8 +2479,18 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     }
     
     const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
-    const isOwner = issue.created_by === req.user.id.toString();
+    const isOwner = parseInt(issue.created_by, 10) === parseInt(req.user.id, 10);
     const isAssignee = issue.assignee === req.user.username;
+    
+    console.log('Permission check:', {
+      userRole: req.user.role,
+      userRoleLevel,
+      userId: req.user.id,
+      issueCreatedBy: issue.created_by,
+      isOwner,
+      isAssignee,
+      canEdit: userRoleLevel >= ROLE_HIERARCHY['Team Lead'] || isOwner || isAssignee
+    });
     
     if (userRoleLevel < ROLE_HIERARCHY['Team Lead'] && !isOwner && !isAssignee) {
       return res.status(403).json({ error: 'Only the owner, assignee, or Team Lead+ can edit this issue' });
@@ -2530,6 +2543,10 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       WHERE id = $${valueIndex}
       RETURNING *
     `;
+    
+    console.log('Update query:', query);
+    console.log('Values array:', values);
+    console.log('Expected parameter count: $' + valueIndex);
     
     const result = await pool.query(query, values);
     const updatedIssue = result.rows[0];
@@ -2775,6 +2792,9 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     const { id } = req.params;
     const { title, description, assignee, due_date, priority, status, progress_percentage } = req.body;
     
+    console.log('PATCH /api/action-items/:id - Request body:', req.body);
+    console.log('Action item ID:', id);
+    
     const [item] = await sql`SELECT * FROM action_items WHERE id = ${id}`;
     
     if (!item) {
@@ -2782,8 +2802,18 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     }
     
     const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
-    const isOwner = item.created_by === req.user.id.toString();
+    const isOwner = parseInt(item.created_by, 10) === parseInt(req.user.id, 10);
     const isAssignee = item.assignee === req.user.username;
+    
+    console.log('Permission check:', {
+      userRole: req.user.role,
+      userRoleLevel,
+      userId: req.user.id,
+      itemCreatedBy: item.created_by,
+      isOwner,
+      isAssignee,
+      canEdit: userRoleLevel >= ROLE_HIERARCHY['Team Lead'] || isOwner || isAssignee
+    });
     
     if (userRoleLevel < ROLE_HIERARCHY['Team Lead'] && !isOwner && !isAssignee) {
       return res.status(403).json({ error: 'Only the owner, assignee, or Team Lead+ can edit this action item' });
@@ -2836,6 +2866,10 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
       WHERE id = $${valueIndex}
       RETURNING *
     `;
+    
+    console.log('Update query:', query);
+    console.log('Values array:', values);
+    console.log('Expected parameter count: $' + valueIndex);
     
     const result = await pool.query(query, values);
     const updatedItem = result.rows[0];

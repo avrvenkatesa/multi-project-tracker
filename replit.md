@@ -59,3 +59,24 @@ Express.js handles requests, incorporating `express-rate-limit` for API protecti
 - **Tailwind CSS CDN**: CSS framework delivery.
 - **Unpkg CDN**: JavaScript library delivery.
 - **Chart.js**: Data visualization charts for dashboard analytics.
+
+## Recent Changes
+
+### Bug Fix: Action Item/Issue Edit - Permission Check for AI-Created Items (October 8, 2025)
+Fixed critical bug where users couldn't edit AI-generated items even when they were the owner:
+- **Root Cause**: Owner check used string comparison (`===`) but `created_by` field could have type inconsistencies between manual and AI-created items
+- **Fix**: Changed permission check to use numeric comparison with `parseInt()` on both sides for reliable owner identification
+- **Affected Endpoints**: `PATCH /api/issues/:id` and `PATCH /api/action-items/:id`
+- **Impact**: Users can now successfully edit all items they own, including those created by AI Meeting Analysis
+- **Added Logging**: Comprehensive debug logging for request bodies, permission checks, and SQL queries to aid future debugging
+- **Files Updated**: `server.js` - owner comparison logic in both PATCH endpoints
+
+### Bug Fix: Display Due Date and Capitalize Priority in Detail View (October 7, 2025)
+Fixed Issue #31 where due dates weren't displaying and priorities were showing in lowercase:
+- **Due Date Display**: Added due date field to item detail modal with proper formatting (MM/DD/YYYY)
+- **Overdue Highlighting**: Overdue items show due date in red/bold for visual emphasis
+- **Priority Capitalization**: Priority values now display properly capitalized (Low, Medium, High, Critical instead of lowercase)
+- **Null Handling**: Gracefully handles missing due dates with "No due date set" message in gray italics
+- **Utility Functions**: Added `formatPriority()` and `formatDate()` functions for consistent formatting
+- **Files Updated**: `public/comments.js` (v2) - openItemDetailModal function
+- **User Experience**: Detail modal now shows complete item information in a clean, professional format
