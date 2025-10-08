@@ -3032,8 +3032,35 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     
     const updatedIssue = response.data;
     
+    // Handle file uploads if any files are selected
+    const fileInput = document.getElementById('edit-issue-attachments');
+    if (fileInput && fileInput.files.length > 0) {
+      const formData = new FormData();
+      for (let i = 0; i < fileInput.files.length; i++) {
+        formData.append('files', fileInput.files[i]);
+      }
+      
+      try {
+        await axios.post(`/api/issues/${itemId}/attachments`, formData, {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        showToast(`Issue updated with ${fileInput.files.length} attachment(s)!`, 'success');
+      } catch (uploadError) {
+        console.error('Error uploading attachments:', uploadError);
+        showToast('Issue updated but attachment upload failed', 'warning');
+      }
+    } else {
+      showToast('Issue updated successfully!', 'success');
+    }
+    
     // Close modal
     document.getElementById('editIssueModal').classList.add('hidden');
+    
+    // Clear file input
+    if (fileInput) fileInput.value = '';
     
     // Reload project data using the issue's project_id
     if (updatedIssue.project_id) {
@@ -3042,7 +3069,6 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
       await loadProjectData(currentProject);
     }
     
-    showToast('Issue updated successfully!', 'success');
   } catch (error) {
     console.error('Error updating issue:', error);
     alert(error.response?.data?.error || 'Failed to update issue');
@@ -3071,8 +3097,35 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     
     const updatedItem = response.data;
     
+    // Handle file uploads if any files are selected
+    const fileInput = document.getElementById('edit-action-item-attachments');
+    if (fileInput && fileInput.files.length > 0) {
+      const formData = new FormData();
+      for (let i = 0; i < fileInput.files.length; i++) {
+        formData.append('files', fileInput.files[i]);
+      }
+      
+      try {
+        await axios.post(`/api/action-items/${itemId}/attachments`, formData, {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        showToast(`Action item updated with ${fileInput.files.length} attachment(s)!`, 'success');
+      } catch (uploadError) {
+        console.error('Error uploading attachments:', uploadError);
+        showToast('Action item updated but attachment upload failed', 'warning');
+      }
+    } else {
+      showToast('Action item updated successfully!', 'success');
+    }
+    
     // Close modal
     document.getElementById('editActionItemModal').classList.add('hidden');
+    
+    // Clear file input
+    if (fileInput) fileInput.value = '';
     
     // Reload project data using the item's project_id
     if (updatedItem.project_id) {
