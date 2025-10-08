@@ -2985,6 +2985,8 @@ async function loadTeamMembersForEdit(type, projectId) {
     });
     
     const members = response.data;
+    console.log('Team members loaded:', members); // Debug log
+    
     const selectId = type === 'issue' ? 'edit-issue-assignee' : 'edit-action-item-assignee';
     const select = document.getElementById(selectId);
     
@@ -2995,8 +2997,9 @@ async function loadTeamMembersForEdit(type, projectId) {
     select.innerHTML = '<option value="">Select Assignee</option>';
     members.forEach(member => {
       const option = document.createElement('option');
-      option.value = member.username;
-      option.textContent = member.username;
+      // The API returns 'name' not 'username'
+      option.value = member.name;
+      option.textContent = member.name;
       select.appendChild(option);
     });
     
