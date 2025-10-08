@@ -4530,6 +4530,34 @@ app.post('/api/meetings/create-items-smart',
             `;
             results.actionItems.created.push(newItem[0]);
             
+            // Send assignment notification if assignee is set (non-blocking)
+            if (finalAssignee && finalAssignee.trim() !== '') {
+              try {
+                const assigneeUser = await pool.query(
+                  'SELECT id FROM users WHERE username = $1',
+                  [finalAssignee]
+                );
+                
+                if (assigneeUser.rows.length > 0) {
+                  // Fire and forget - don't await to avoid blocking creation
+                  notificationService.sendAssignmentNotification({
+                    assignedUserId: assigneeUser.rows[0].id,
+                    assignerName: req.user.username,
+                    itemTitle: item.title.substring(0, 200),
+                    itemType: 'action item',
+                    itemId: newItem[0].id,
+                    projectId: parseInt(projectId),
+                    dueDate: sanitizeDueDate(item.dueDate),
+                    priority: item.priority || 'medium'
+                  }).catch(err => {
+                    console.error('Error sending AI assignment notification:', err);
+                  });
+                }
+              } catch (err) {
+                console.error('Error looking up assignee for AI notification:', err);
+              }
+            }
+            
             // Audit item creation
             await auditAIAction(transcriptId, req.user.id, 'create_items', {
               itemType: 'action_item',
@@ -4543,6 +4571,42 @@ app.post('/api/meetings/create-items-smart',
       // Process issues with duplicate detection
       if (issues && issues.length > 0) {
         for (const issue of issues) {
+          // PERMISSION CHECK: Validate assignment permissions
+          let finalAssignee = issue.assignee || '';
+          if (issue.assignee) {
+            const assignCheck = await canAssignTo(req.user.id, issue.assignee, parseInt(projectId));
+            if (!assignCheck.allowed) {
+              if (assignCheck.suggestedAction === 'assign_to_self' && assignCheck.selfUsername) {
+                // Reassign to self if user can't assign to others
+                finalAssignee = assignCheck.selfUsername;
+                results.issues.permissionDenied.push({
+                  title: issue.title,
+                  originalAssignee: issue.assignee,
+                  reassignedTo: finalAssignee,
+                  reason: 'Insufficient permissions to assign to others - reassigned to self'
+                });
+                
+                // Audit the permission override
+                await auditAIAction(transcriptId, req.user.id, 'modify', {
+                  itemType: 'issue',
+                  title: issue.title,
+                  action: 'assignment_override',
+                  originalAssignee: issue.assignee,
+                  newAssignee: finalAssignee
+                });
+              } else {
+                // Skip this item if can't assign
+                results.issues.permissionDenied.push({
+                  title: issue.title,
+                  originalAssignee: issue.assignee,
+                  reason: assignCheck.reason,
+                  action: 'skipped'
+                });
+                continue;
+              }
+            }
+          }
+          
           // Check for potential duplicate
           const duplicate = await findPotentialDuplicate(issue, parseInt(projectId), 'issue');
           
@@ -4562,7 +4626,7 @@ app.post('/api/meetings/create-items-smart',
             // Create new issue
             const newIssue = await sql`
               INSERT INTO issues (
-                title, description, project_id, priority, category,
+                title, description, project_id, priority, category, assignee,
                 status, created_by,
                 created_by_ai, ai_confidence, ai_analysis_id, transcript_id, created_via_ai_by
               ) VALUES (
@@ -4571,6 +4635,7 @@ app.post('/api/meetings/create-items-smart',
                 ${parseInt(projectId)},
                 ${issue.priority || 'medium'},
                 ${issue.category || 'General'},
+                ${finalAssignee},
                 'To Do',
                 ${req.user.id},
                 ${true},
@@ -4581,6 +4646,34 @@ app.post('/api/meetings/create-items-smart',
               ) RETURNING *
             `;
             results.issues.created.push(newIssue[0]);
+            
+            // Send assignment notification if assignee is set (non-blocking)
+            if (finalAssignee && finalAssignee.trim() !== '') {
+              try {
+                const assigneeUser = await pool.query(
+                  'SELECT id FROM users WHERE username = $1',
+                  [finalAssignee]
+                );
+                
+                if (assigneeUser.rows.length > 0) {
+                  // Fire and forget - don't await to avoid blocking creation
+                  notificationService.sendAssignmentNotification({
+                    assignedUserId: assigneeUser.rows[0].id,
+                    assignerName: req.user.username,
+                    itemTitle: issue.title.substring(0, 200),
+                    itemType: 'issue',
+                    itemId: newIssue[0].id,
+                    projectId: parseInt(projectId),
+                    dueDate: null,
+                    priority: issue.priority || 'medium'
+                  }).catch(err => {
+                    console.error('Error sending AI assignment notification:', err);
+                  });
+                }
+              } catch (err) {
+                console.error('Error looking up assignee for AI notification:', err);
+              }
+            }
             
             // Audit item creation
             await auditAIAction(transcriptId, req.user.id, 'create_items', {
@@ -4594,8 +4687,14 @@ app.post('/api/meetings/create-items-smart',
 
       const totalCreated = results.actionItems.created.length + results.issues.created.length;
       const totalUpdated = results.actionItems.updated.length + results.issues.updated.length;
+      const totalNotifications = 
+        results.actionItems.created.filter(item => item.assignee && item.assignee.trim() !== '').length +
+        results.issues.created.filter(issue => issue.assignee && issue.assignee.trim() !== '').length;
       
-      console.log(`Smart create: ${totalCreated} new items, ${totalUpdated} updated items`);
+      console.log(`✅ Smart create: ${totalCreated} new items, ${totalUpdated} updated items`);
+      if (totalNotifications > 0) {
+        console.log(`📧 Sent ${totalNotifications} assignment notifications`);
+      }
       res.json(results);
 
     } catch (error) {
