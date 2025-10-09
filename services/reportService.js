@@ -387,22 +387,55 @@ class ReportService {
   async getMemberDetails(projectId, dateRange) {
     const result = await pool.query(`
       SELECT 
-        u.id,
+        pm.user_id,
         u.username,
-        COUNT(CASE WHEN i.assignee = u.username THEN 1 END) as issue_assigned,
-        COUNT(CASE WHEN i.assignee = u.username AND i.status = 'Done' THEN 1 END) as issue_completed,
-        COUNT(CASE WHEN i.assignee = u.username AND i.status = 'In Progress' THEN 1 END) as issue_in_progress,
-        COUNT(CASE WHEN ai.assignee = u.username THEN 1 END) as action_assigned,
-        COUNT(CASE WHEN ai.assignee = u.username AND ai.status = 'Completed' THEN 1 END) as action_completed,
-        COUNT(CASE WHEN ai.assignee = u.username AND ai.status = 'In Progress' THEN 1 END) as action_in_progress
-      FROM users u
-      INNER JOIN project_members pm ON u.id = pm.user_id
-      LEFT JOIN issues i ON i.project_id = pm.project_id
-      LEFT JOIN action_items ai ON ai.project_id = pm.project_id
-      WHERE pm.project_id = $1 AND pm.status = 'active'
-      GROUP BY u.id, u.username
+        COALESCE(issues_assigned.count, 0) as issue_assigned,
+        COALESCE(issues_completed.count, 0) as issue_completed,
+        COALESCE(issues_in_progress.count, 0) as issue_in_progress,
+        COALESCE(actions_assigned.count, 0) as action_assigned,
+        COALESCE(actions_completed.count, 0) as action_completed,
+        COALESCE(actions_in_progress.count, 0) as action_in_progress
+      FROM project_members pm
+      JOIN users u ON pm.user_id = u.id
+      LEFT JOIN (
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
+        FROM issues
+        WHERE project_id = $1 AND assignee IS NOT NULL AND assignee <> ''
+        GROUP BY LOWER(TRIM(assignee))
+      ) issues_assigned ON issues_assigned.assignee_lower = LOWER(u.username)
+      LEFT JOIN (
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
+        FROM issues
+        WHERE project_id = $2 AND status = 'Done' AND assignee IS NOT NULL AND assignee <> ''
+        GROUP BY LOWER(TRIM(assignee))
+      ) issues_completed ON issues_completed.assignee_lower = LOWER(u.username)
+      LEFT JOIN (
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
+        FROM issues
+        WHERE project_id = $3 AND status = 'In Progress' AND assignee IS NOT NULL AND assignee <> ''
+        GROUP BY LOWER(TRIM(assignee))
+      ) issues_in_progress ON issues_in_progress.assignee_lower = LOWER(u.username)
+      LEFT JOIN (
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
+        FROM action_items
+        WHERE project_id = $4 AND assignee IS NOT NULL AND assignee <> ''
+        GROUP BY LOWER(TRIM(assignee))
+      ) actions_assigned ON actions_assigned.assignee_lower = LOWER(u.username)
+      LEFT JOIN (
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
+        FROM action_items
+        WHERE project_id = $5 AND status = 'Completed' AND assignee IS NOT NULL AND assignee <> ''
+        GROUP BY LOWER(TRIM(assignee))
+      ) actions_completed ON actions_completed.assignee_lower = LOWER(u.username)
+      LEFT JOIN (
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
+        FROM action_items
+        WHERE project_id = $6 AND status = 'In Progress' AND assignee IS NOT NULL AND assignee <> ''
+        GROUP BY LOWER(TRIM(assignee))
+      ) actions_in_progress ON actions_in_progress.assignee_lower = LOWER(u.username)
+      WHERE pm.project_id = $7 AND pm.status = 'active'
       ORDER BY u.username
-    `, [projectId]);
+    `, [projectId, projectId, projectId, projectId, projectId, projectId, projectId]);
     
     return result.rows.map(row => {
       const assignedCount = parseInt(row.issue_assigned) + parseInt(row.action_assigned);
