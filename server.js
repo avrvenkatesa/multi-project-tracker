@@ -2723,7 +2723,7 @@ app.delete('/api/issues/:id', authenticateToken, async (req, res) => {
     
     // Check permissions: creator OR Team Lead+
     const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
-    const isCreator = parseInt(issue.created_by) === parseInt(req.user.userId);
+    const isCreator = parseInt(issue.created_by) === parseInt(req.user.id);
     const hasRolePermission = userRoleLevel >= ROLE_HIERARCHY['Team Lead'];
     
     if (!isCreator && !hasRolePermission) {
@@ -3071,7 +3071,7 @@ app.delete('/api/action-items/:id', authenticateToken, async (req, res) => {
     
     // Check permissions: creator OR Team Lead+
     const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
-    const isCreator = parseInt(item.created_by) === parseInt(req.user.userId);
+    const isCreator = parseInt(item.created_by) === parseInt(req.user.id);
     const hasRolePermission = userRoleLevel >= ROLE_HIERARCHY['Team Lead'];
     
     if (!isCreator && !hasRolePermission) {
