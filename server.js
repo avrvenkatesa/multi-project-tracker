@@ -2450,7 +2450,6 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
       SELECT 
         i.*,
         u.username as creator_username,
-        u.name as creator_name,
         u.email as creator_email
       FROM issues i
       LEFT JOIN users u ON i.created_by = u.id::text
@@ -2705,7 +2704,7 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     if (status === 'Done' && issue.status !== 'Done') {
       try {
         const creatorUser = await pool.query(
-          'SELECT id, username, name, email FROM users WHERE id = $1',
+          'SELECT id, username, email FROM users WHERE id = $1',
           [parseInt(issue.created_by)]
         );
         
@@ -2714,7 +2713,7 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
           notificationService.sendCompletionNotification({
             creatorUserId: creator.id,
             creatorEmail: creator.email,
-            creatorName: creator.name,
+            creatorName: creator.username,
             itemType: 'issue',
             itemTitle: updatedIssue.title,
             itemId: updatedIssue.id,
@@ -2857,7 +2856,6 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
       SELECT 
         a.*,
         u.username as creator_username,
-        u.name as creator_name,
         u.email as creator_email
       FROM action_items a
       LEFT JOIN users u ON a.created_by = u.id::text
@@ -3092,7 +3090,7 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     if (status === 'Done' && item.status !== 'Done') {
       try {
         const creatorUser = await pool.query(
-          'SELECT id, username, name, email FROM users WHERE id = $1',
+          'SELECT id, username, email FROM users WHERE id = $1',
           [parseInt(item.created_by)]
         );
         
@@ -3101,7 +3099,7 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
           notificationService.sendCompletionNotification({
             creatorUserId: creator.id,
             creatorEmail: creator.email,
-            creatorName: creator.name,
+            creatorName: creator.username,
             itemType: 'action item',
             itemTitle: updatedItem.title,
             itemId: updatedItem.id,

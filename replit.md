@@ -70,3 +70,33 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 - **Tailwind CSS CDN**: CSS framework delivery.
 - **Unpkg CDN**: JavaScript library delivery.
 - **Chart.js**: Data visualization charts for dashboard analytics.
+
+## Recent Changes
+
+### Feature: Creator Display and Completion Email Notifications (October 9, 2025)
+Implemented creator username display on Kanban cards and email notifications when items are completed:
+- **API Enhancements**: Updated GET /api/issues and GET /api/action-items endpoints to include creator information via LEFT JOIN with users table
+  - Returns creator_username and creator_email for each item
+  - Maintains backward compatibility with existing frontend code
+- **Kanban Card Display**: Added creator information to all issue and action item cards
+  - Shows "Created by [Username]" below due date badge
+  - Displays user icon with creator username
+  - Falls back to 'Unknown' if creator information not available
+- **Completion Email Notifications**: New automated email sent to item creator when status changes to 'Done'
+  - Email includes item details (ID, title, priority, completion date, completed by)
+  - Only sent when status changes TO 'Done' (not from Done or between other statuses)
+  - Respects user notification preferences (uses status_changes preference)
+  - Includes direct link to view item details
+  - Professional HTML formatting with plain text fallback
+- **Implementation Details**:
+  - Added sendCompletionNotification() method to NotificationService following existing patterns
+  - Updated PATCH endpoints for both issues and action items to detect completion
+  - Completion email sent to creator (not assignee) with details of who completed the item
+  - Comprehensive error handling for missing creator email and database errors
+- **UI Styling**: Added card-creator CSS class with responsive design
+  - Separated by top border for visual clarity
+  - Includes user-circle icon and semi-bold text
+  - Mobile-responsive with smaller font sizes on narrow screens
+- **Files Modified**: server.js (GET and PATCH endpoints), services/notificationService.js (new method), public/app.js (v28 - card rendering), public/index.html (CSS styles)
+- **Impact**: Provides visibility into item ownership and automated recognition when work is completed, improving team communication and accountability
+- **Note**: Users table contains username field only (no separate name field), so creator display uses username
