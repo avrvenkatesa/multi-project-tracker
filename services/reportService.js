@@ -287,6 +287,9 @@ class ReportService {
 
   // Data fetching methods
   async getProjectStats(projectId, dateRange) {
+    console.log('[REPORT_STATS] Getting stats for project:', projectId, 'Type:', typeof projectId);
+    console.log('[REPORT_STATS] Date range:', dateRange);
+    
     const issuesQuery = dateRange ? 
       `SELECT * FROM issues WHERE project_id = $1 AND created_at BETWEEN $2 AND $3` :
       `SELECT * FROM issues WHERE project_id = $1`;
@@ -297,6 +300,9 @@ class ReportService {
     
     const params = dateRange ? [projectId, dateRange.start, dateRange.end] : [projectId];
     
+    console.log('[REPORT_STATS] Issues query:', issuesQuery);
+    console.log('[REPORT_STATS] Params:', params);
+    
     const [issuesResult, actionItemsResult] = await Promise.all([
       pool.query(issuesQuery, params),
       pool.query(actionItemsQuery, params)
@@ -304,6 +310,8 @@ class ReportService {
     
     const issues = issuesResult.rows;
     const actionItems = actionItemsResult.rows;
+    
+    console.log('[REPORT_STATS] Found', issues.length, 'issues and', actionItems.length, 'action items');
     
     const totalItems = issues.length + actionItems.length;
     
