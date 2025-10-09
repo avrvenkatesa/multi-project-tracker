@@ -2705,20 +2705,45 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
   }
 });
 
-// Delete issue (Team Lead or higher)
-app.delete('/api/issues/:id', authenticateToken, requireRole('Team Lead'), async (req, res) => {
+// Delete issue (creator OR Team Lead or higher)
+app.delete('/api/issues/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
+    // First, get the issue to check permissions
+    const [issue] = await sql`
+      SELECT created_by, project_id 
+      FROM issues 
+      WHERE id = ${id}
+    `;
+    
+    if (!issue) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    // Check permissions: creator OR Team Lead+
+    const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+    const isCreator = parseInt(issue.created_by) === parseInt(req.user.userId);
+    const hasRolePermission = userRoleLevel >= ROLE_HIERARCHY['Team Lead'];
+    
+    if (!isCreator && !hasRolePermission) {
+      return res.status(403).json({ 
+        error: 'Only the creator or Team Lead+ can delete this issue' 
+      });
+    }
+    
+    // Delete related attachments first (no FK constraint exists)
+    await sql`
+      DELETE FROM attachments 
+      WHERE entity_type = 'issue' AND entity_id = ${id}
+    `;
+    
+    // Delete the issue (comments will cascade automatically)
     const [deleted] = await sql`
       DELETE FROM issues 
       WHERE id = ${id}
       RETURNING id
     `;
-    
-    if (!deleted) {
-      return res.status(404).json({ error: 'Issue not found' });
-    }
     
     res.json({ message: 'Issue deleted successfully' });
   } catch (error) {
