@@ -73,6 +73,24 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 
 ## Recent Changes
 
+### Feature: Admin Assignee Name Correction Tool (October 9, 2025)
+Created a dedicated admin tool to fix mismatched assignee names that were causing Team Performance Reports to show incorrect data:
+- **Root Issue**: Items had assignee names like "Sri Hari" and "Sakthi S4" that didn't exactly match usernames like "Srihari S" and "Sakthi", causing report queries to fail matching
+- **Solution**: Admin tool with bulk update capability instead of complex fuzzy matching logic
+- **Backend APIs**: 
+  - GET /api/admin/assignee-mismatches - Detects all mismatches and provides statistics
+  - POST /api/admin/update-assignees - Bulk updates assignee names with proper validation
+  - GET /api/admin/valid-usernames - Returns all valid usernames for dropdown selection
+- **Frontend UI**: Clean admin page (admin-assignees.html) with:
+  - Visual highlighting of mismatched names (yellow background)
+  - Dropdown selection to pick correct username
+  - Bulk update with confirmation and success feedback
+  - Admin-only access (System Administrator role required)
+- **Navigation**: Added "Admin Tools" link to hamburger menu, visible only to System Administrators
+- **Implementation**: Uses exact username matching after updates, ensuring accurate Team Performance Reports
+- **Files Modified**: server.js (3 new admin endpoints), public/admin-assignees.html (new), public/index.html (admin link), public/auth.js (v10 - show admin link)
+- **Impact**: Provides clean solution to fix data at source rather than complex workaround matching logic
+
 ### Bug Fix: Dashboard Metrics and API Query Issues (October 9, 2025)
 Fixed multiple critical bugs preventing correct data display in dashboard and reports:
 - **Root Cause 1 - Incorrect Status Values**: Dashboard stats were checking for status 'Completed' for action items, but action items use status 'Done' (same as issues)
