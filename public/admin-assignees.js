@@ -57,7 +57,7 @@ function renderTable() {
       </td>
       <td class="px-6 py-4 whitespace-nowrap text-sm">
         ${item.is_mismatch 
-          ? `<select id="select-${index}" data-old-name="${escapeHtml(item.assignee_name)}" data-index="${index}"
+          ? `<select id="select-${index}" data-old-name="${item.assignee_name.replace(/"/g, '&quot;')}" data-index="${index}"
               class="assignee-select block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
               <option value="">-- Select Correct Username --</option>
               ${validUsernames.map(u => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.username)} (${escapeHtml(u.email)})</option>`).join('')}
@@ -158,6 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const oldName = e.target.dataset.oldName;
       const newName = e.target.value;
       const index = e.target.dataset.index;
+      console.log('Dropdown changed:', { oldName, newName, index });
       updateSelection(oldName, newName, index);
     }
   });
