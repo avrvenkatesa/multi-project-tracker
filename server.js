@@ -1950,7 +1950,7 @@ app.get('/api/projects/:projectId/dashboard/stats', authenticateToken, async (re
     
     // Calculate completion rate
     const completedIssues = issuesByStatus['Done'] || 0;
-    const completedActionItems = actionItemsByStatus['Completed'] || 0;
+    const completedActionItems = actionItemsByStatus['Done'] || 0;
     const totalIssues = parseInt(totalIssuesResult.rows[0].count);
     const totalActionItems = parseInt(totalActionItemsResult.rows[0].count);
     const totalItems = totalIssues + totalActionItems;
@@ -1962,7 +1962,7 @@ app.get('/api/projects/:projectId/dashboard/stats', authenticateToken, async (re
       SELECT COUNT(*) as count FROM (
         SELECT id FROM issues WHERE project_id = $1 AND due_date < NOW() AND status != 'Done'
         UNION ALL
-        SELECT id FROM action_items WHERE project_id = $2 AND due_date < NOW() AND status != 'Completed'
+        SELECT id FROM action_items WHERE project_id = $2 AND due_date < NOW() AND status != 'Done'
       ) as overdue_items
     `, [projectId, projectId]);
     
@@ -1972,7 +1972,7 @@ app.get('/api/projects/:projectId/dashboard/stats', authenticateToken, async (re
       WHERE project_id = $1 AND due_date > NOW() AND status != 'Done'
       UNION ALL
       SELECT id, title, due_date, 'action_item' as type FROM action_items
-      WHERE project_id = $2 AND due_date > NOW() AND status != 'Completed'
+      WHERE project_id = $2 AND due_date > NOW() AND status != 'Done'
       ORDER BY due_date ASC
       LIMIT 5
     `, [projectId, projectId]);
@@ -2411,32 +2411,32 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
     let params = [];
     
     if (projectId) {
-      conditions.push(`project_id = $${params.length + 1}`);
+      conditions.push(`i.project_id = $${params.length + 1}`);
       params.push(parseInt(projectId));
     }
     
     if (status) {
-      conditions.push(`status = $${params.length + 1}`);
+      conditions.push(`i.status = $${params.length + 1}`);
       params.push(status);
     }
     
     if (priority) {
-      conditions.push(`priority = $${params.length + 1}`);
+      conditions.push(`i.priority = $${params.length + 1}`);
       params.push(priority);
     }
     
     if (assignee) {
-      conditions.push(`assignee = $${params.length + 1}`);
+      conditions.push(`i.assignee = $${params.length + 1}`);
       params.push(assignee);
     }
     
     if (category) {
-      conditions.push(`category = $${params.length + 1}`);
+      conditions.push(`i.category = $${params.length + 1}`);
       params.push(category);
     }
     
     if (search) {
-      conditions.push(`(title ILIKE $${params.length + 1} OR description ILIKE $${params.length + 2})`);
+      conditions.push(`(i.title ILIKE $${params.length + 1} OR i.description ILIKE $${params.length + 2})`);
       params.push(`%${search}%`);
       params.push(`%${search}%`);
     }
@@ -2446,7 +2446,16 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
       ? 'WHERE ' + conditions.join(' AND ')
       : '';
     
-    const query = `SELECT * FROM issues ${whereClause} ORDER BY created_at DESC`;
+    const query = `
+      SELECT 
+        i.*,
+        u.username as creator_username,
+        u.email as creator_email
+      FROM issues i
+      LEFT JOIN users u ON i.created_by = u.id::text
+      ${whereClause} 
+      ORDER BY i.created_at DESC
+    `;
     
     // Execute using pool.query() for dynamic SQL
     const result = await pool.query(query, params);
@@ -2691,6 +2700,35 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       }
     }
     
+    // Send completion notification to creator if status changed to Done
+    if (status === 'Done' && issue.status !== 'Done') {
+      try {
+        const creatorUser = await pool.query(
+          'SELECT id, username, email FROM users WHERE id = $1',
+          [parseInt(issue.created_by)]
+        );
+        
+        if (creatorUser.rows.length > 0) {
+          const creator = creatorUser.rows[0];
+          notificationService.sendCompletionNotification({
+            creatorUserId: creator.id,
+            creatorEmail: creator.email,
+            creatorName: creator.username,
+            itemType: 'issue',
+            itemTitle: updatedIssue.title,
+            itemId: updatedIssue.id,
+            priority: updatedIssue.priority,
+            completedByName: req.user.username,
+            projectId: updatedIssue.project_id
+          }).catch(err => {
+            console.error('Error sending completion notification:', err);
+          });
+        }
+      } catch (err) {
+        console.error('Error looking up creator for completion notification:', err);
+      }
+    }
+    
     // Send assignment notification if assignee changed
     if (assignee !== undefined && issue.assignee !== assignee && assignee && assignee.trim() !== '') {
       try {
@@ -2784,27 +2822,27 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
     let params = [];
     
     if (projectId) {
-      conditions.push(`project_id = $${params.length + 1}`);
+      conditions.push(`a.project_id = $${params.length + 1}`);
       params.push(parseInt(projectId));
     }
     
     if (status) {
-      conditions.push(`status = $${params.length + 1}`);
+      conditions.push(`a.status = $${params.length + 1}`);
       params.push(status);
     }
     
     if (priority) {
-      conditions.push(`priority = $${params.length + 1}`);
+      conditions.push(`a.priority = $${params.length + 1}`);
       params.push(priority);
     }
     
     if (assignee) {
-      conditions.push(`assignee = $${params.length + 1}`);
+      conditions.push(`a.assignee = $${params.length + 1}`);
       params.push(assignee);
     }
     
     if (search) {
-      conditions.push(`(title ILIKE $${params.length + 1} OR description ILIKE $${params.length + 2})`);
+      conditions.push(`(a.title ILIKE $${params.length + 1} OR a.description ILIKE $${params.length + 2})`);
       params.push(`%${search}%`);
       params.push(`%${search}%`);
     }
@@ -2814,7 +2852,16 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
       ? 'WHERE ' + conditions.join(' AND ')
       : '';
     
-    const query = `SELECT * FROM action_items ${whereClause} ORDER BY created_at DESC`;
+    const query = `
+      SELECT 
+        a.*,
+        u.username as creator_username,
+        u.email as creator_email
+      FROM action_items a
+      LEFT JOIN users u ON a.created_by = u.id::text
+      ${whereClause} 
+      ORDER BY a.created_at DESC
+    `;
     
     // Execute using pool.query() for dynamic SQL
     const result = await pool.query(query, params);
@@ -3036,6 +3083,35 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
         }
       } catch (err) {
         console.error('Error looking up assignee for status change notification:', err);
+      }
+    }
+    
+    // Send completion notification to creator if status changed to Done
+    if (status === 'Done' && item.status !== 'Done') {
+      try {
+        const creatorUser = await pool.query(
+          'SELECT id, username, email FROM users WHERE id = $1',
+          [parseInt(item.created_by)]
+        );
+        
+        if (creatorUser.rows.length > 0) {
+          const creator = creatorUser.rows[0];
+          notificationService.sendCompletionNotification({
+            creatorUserId: creator.id,
+            creatorEmail: creator.email,
+            creatorName: creator.username,
+            itemType: 'action item',
+            itemTitle: updatedItem.title,
+            itemId: updatedItem.id,
+            priority: updatedItem.priority,
+            completedByName: req.user.username,
+            projectId: updatedItem.project_id
+          }).catch(err => {
+            console.error('Error sending completion notification:', err);
+          });
+        }
+      } catch (err) {
+        console.error('Error looking up creator for completion notification:', err);
       }
     }
     
