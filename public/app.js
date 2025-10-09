@@ -1117,6 +1117,14 @@ function showCreateActionItem() {
                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
             </div>
             
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Attachments (Optional)</label>
+                <input type="file" id="create-action-item-attachments" multiple 
+                       accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip"
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-500 mt-1">PDF, DOC, XLS, Images, ZIP (Max 10MB per file, 5 files max)</p>
+            </div>
+            
             <div class="flex justify-end space-x-3">
                 <button type="button" id="cancel-action-item-btn" 
                         class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
