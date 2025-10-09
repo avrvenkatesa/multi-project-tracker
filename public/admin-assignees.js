@@ -96,8 +96,8 @@ async function applyUpdates() {
   }
 
   const updates = Object.entries(selectedUpdates).map(([oldName, newName]) => ({
-    oldName,
-    newName
+    oldName: oldName.trim(),
+    newName: newName.trim()
   }));
 
   console.log('Sending updates:', updates);
