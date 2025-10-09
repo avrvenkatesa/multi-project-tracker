@@ -393,7 +393,7 @@ class ReportService {
         COUNT(CASE WHEN i.assignee = u.username AND i.status = 'Done' THEN 1 END) as issue_completed,
         COUNT(CASE WHEN i.assignee = u.username AND i.status = 'In Progress' THEN 1 END) as issue_in_progress,
         COUNT(CASE WHEN ai.assignee = u.username THEN 1 END) as action_assigned,
-        COUNT(CASE WHEN ai.assignee = u.username AND ai.status = 'Done' THEN 1 END) as action_completed,
+        COUNT(CASE WHEN ai.assignee = u.username AND ai.status = 'Completed' THEN 1 END) as action_completed,
         COUNT(CASE WHEN ai.assignee = u.username AND ai.status = 'In Progress' THEN 1 END) as action_in_progress
       FROM users u
       INNER JOIN project_members pm ON u.id = pm.user_id
