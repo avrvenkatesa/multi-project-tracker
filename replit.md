@@ -62,6 +62,14 @@ Express.js handles requests, incorporating `express-rate-limit` for API protecti
 
 ## Recent Changes
 
+### Bug Fix: Modal Scrolling for Create Issue/Action Item Forms (October 9, 2025)
+Fixed accessibility issue where create issue and action item modals were too tall and lacked scrollbars, making the attachments field unreachable:
+- **Root Cause**: Main modal-content div was missing `max-h-[90vh] overflow-y-auto` classes that all other modals in the system already had
+- **Fix**: Added scrolling classes to match the pattern used by edit modals, AI analysis modal, and all other modals
+- **Result**: Modal height now capped at 90% viewport height with vertical scrolling enabled
+- **Impact**: Users can now scroll to access all fields including the attachments input at the bottom
+- **Files Updated**: `public/index.html` (v21) - added max-h-[90vh] overflow-y-auto to modal-content
+
 ### Enhancement: File Attachment Upload in Create/Edit Modals (October 9, 2025)
 Added file attachment upload functionality directly to issue and action item create/edit modals, allowing users to attach files during item creation instead of only after:
 - **Create Modals**: Added file upload input fields to both issue and action item creation modals
