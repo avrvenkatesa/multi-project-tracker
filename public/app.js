@@ -563,6 +563,8 @@ function sortItems(items, sortMode, columnId) {
       });
       
     case 'manual':
+      // TODO: Full drag-drop reordering within column - future enhancement (Phase 3)
+      // Currently preserves order when switching modes and moving between columns
       return loadManualOrder(itemsCopy, columnId);
       
     default:
@@ -589,7 +591,6 @@ function saveManualOrderFromDOM(columnId) {
     return `${itemType}-${itemId}`;
   });
   
-  console.log(`Saving manual order for column "${columnId}":`, itemKeys);
   saveManualOrder(columnId, itemKeys);
 }
 
