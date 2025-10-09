@@ -3259,13 +3259,8 @@ async function confirmDeleteItem(itemId, itemType) {
       withCredentials: true
     });
     
-    // Reload items and refresh kanban board
-    if (itemType === 'issue') {
-      await loadIssues(currentProject);
-    } else {
-      await loadActionItems(currentProject);
-    }
-    await renderKanbanBoard();
+    // Reload project data (includes both issues and action items)
+    await loadProjectData(currentProject.id);
     
     showToast(`${itemName.charAt(0).toUpperCase() + itemName.slice(1)} deleted successfully!`, 'success');
   } catch (error) {
