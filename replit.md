@@ -72,6 +72,30 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 
 ## Recent Changes
 
+### Feature: Phase 3 - Multi-Criteria Sorting and Automated Features (October 9, 2025)
+Implemented advanced multi-criteria sorting modes and automated daily refresh functionality:
+- **3 New Multi-Criteria Sort Modes**:
+  - 🔥📅 **Priority + Due Date**: Primary sort by priority (Critical > High > Medium > Low), secondary by due date (earliest first)
+  - ⚠️🔥 **Overdue + Priority**: Primary sort by overdue status (overdue items first), secondary by priority within each group
+  - 🎯 **Smart Sort**: Weighted algorithm combining priority and due date urgency with calculated scores (priority: 0-8 points, overdue: up to 30 points, due today: +5 bonus)
+- **Organized Dropdown Structure**: Sort options grouped into "Single Criteria" and "Multi-Criteria" sections with optgroup labels
+- **Automated Daily Refresh**: Automatically refreshes Kanban board at midnight to update due date urgency
+  - Defaults to enabled with localStorage persistence
+  - Schedules next refresh after each midnight trigger
+  - User preference persists across sessions
+- **Manual Refresh Controls**: Added to project header for on-demand refresh
+  - "Refresh Sort" button with sync icon
+  - "Auto-refresh daily" toggle checkbox
+  - Controls appear dynamically when project is selected
+- **Toast Notification System**: User-friendly feedback messages
+  - Success notifications (green) for feature enablement
+  - Info notifications (blue) for status updates
+  - Smooth fade-in/out animations
+  - Auto-dismiss after 3 seconds
+- **Complete Mobile Responsiveness**: All Phase 3 features fully responsive with mobile breakpoints
+- **Files Updated**: `public/app.js` (v27) - added 3 multi-criteria sort functions, auto-refresh system, toast notifications; `public/index.html` - updated dropdowns with optgroup structure, added CSS for refresh controls and toasts
+- **Impact**: Users now have 10 total sort modes (7 single + 3 multi-criteria), automatic daily refresh for time-sensitive sorting, and immediate visual feedback through toast notifications
+
 ### Feature: Phase 2 - User-Controlled Sort Options (October 9, 2025)
 Implemented user-controlled sort dropdown with 7 sort modes and localStorage persistence:
 - **Sort Modes Available**: Each Kanban column header now includes a dropdown with 7 sorting options:

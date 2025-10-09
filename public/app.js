@@ -93,6 +93,102 @@ function debounce(func, wait) {
   };
 }
 
+// ============= PHASE 3: AUTO-REFRESH & TOAST NOTIFICATIONS =============
+
+const AUTO_REFRESH_KEY = 'kanban-auto-refresh-enabled';
+
+// Toast notification system
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => toast.classList.add('show'), 10);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// Refresh all sorts (re-render Kanban board)
+function refreshAllSorts() {
+  if (currentProject) {
+    renderKanbanBoard();
+    showToast('Kanban board refreshed', 'info');
+  }
+}
+
+// Toggle auto-refresh feature
+function toggleAutoRefresh() {
+  const checkbox = document.getElementById('autoRefreshToggle');
+  const enabled = checkbox.checked;
+  
+  localStorage.setItem(AUTO_REFRESH_KEY, enabled.toString());
+  
+  if (enabled) {
+    scheduleNextMidnightRefresh();
+    showToast('Auto-refresh enabled - board will refresh daily at midnight', 'success');
+  } else {
+    showToast('Auto-refresh disabled', 'info');
+  }
+}
+
+// Schedule next midnight refresh
+function scheduleNextMidnightRefresh() {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  
+  const msUntilMidnight = tomorrow - now;
+  
+  setTimeout(() => {
+    console.log('Auto-refreshing Kanban sort at midnight...');
+    refreshAllSorts();
+    scheduleNextMidnightRefresh(); // Schedule next day
+  }, msUntilMidnight);
+}
+
+// Initialize auto-refresh on page load
+function initializeAutoRefresh() {
+  const enabled = localStorage.getItem(AUTO_REFRESH_KEY) !== 'false'; // Default true
+  
+  if (enabled) {
+    scheduleNextMidnightRefresh();
+  }
+}
+
+// Add refresh controls to page header
+function addRefreshControls() {
+  const projectHeader = document.querySelector('#current-project-section h2');
+  if (!projectHeader || document.getElementById('sort-controls-container')) {
+    return; // Already added or header not found
+  }
+  
+  const controlsHTML = `
+    <div id="sort-controls-container" class="sort-controls">
+      <button class="btn-refresh" onclick="refreshAllSorts()" title="Refresh all sorts now">
+        <i class="fas fa-sync-alt"></i> Refresh Sort
+      </button>
+      <div class="auto-refresh-toggle">
+        <label>
+          <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh()">
+          <span>Auto-refresh daily</span>
+        </label>
+      </div>
+    </div>
+  `;
+  
+  projectHeader.insertAdjacentHTML('afterend', controlsHTML);
+  
+  // Set initial checkbox state
+  const checkbox = document.getElementById('autoRefreshToggle');
+  if (checkbox) {
+    checkbox.checked = localStorage.getItem(AUTO_REFRESH_KEY) !== 'false';
+  }
+}
+
 // Initialize app
 document.addEventListener("DOMContentLoaded", async function () {
     console.log("Multi-Project Tracker initialized");
@@ -113,6 +209,10 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
     setupEventListeners();
     initializeFilters();
+    
+    // Initialize Phase 3 features
+    initializeAutoRefresh();
+    addRefreshControls();
 });
 
 // Setup event listeners (replaces inline onclick handlers)
@@ -519,6 +619,91 @@ function loadManualOrder(items, columnId) {
   return orderedItems;
 }
 
+// ============= PHASE 3: MULTI-CRITERIA SORT FUNCTIONS =============
+
+// Sort by Priority + Due Date (primary: priority, secondary: due date earliest)
+function sortByPriorityAndDueDate(items) {
+  const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+  
+  return items.sort((a, b) => {
+    // Primary: Priority
+    const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+    const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+    
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+    
+    // Secondary: Due Date (earliest first)
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date) - new Date(b.due_date);
+  });
+}
+
+// Sort by Overdue + Priority (primary: overdue status, secondary: priority)
+function sortByOverdueAndPriority(items) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+  
+  return items.sort((a, b) => {
+    const dueDateA = a.due_date ? new Date(a.due_date) : null;
+    const dueDateB = b.due_date ? new Date(b.due_date) : null;
+    
+    const isOverdueA = dueDateA && dueDateA < today;
+    const isOverdueB = dueDateB && dueDateB < today;
+    
+    // Primary: Overdue status (overdue items first)
+    if (isOverdueA && !isOverdueB) return -1;
+    if (!isOverdueA && isOverdueB) return 1;
+    
+    // Secondary: Priority within overdue/not overdue groups
+    const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+    const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+    
+    return priorityA - priorityB;
+  });
+}
+
+// Calculate smart score for weighted sorting
+function calculateSmartScore(item, today, priorityWeight) {
+  let score = 0;
+  
+  // Priority component (0-8 points)
+  score += priorityWeight[item.priority?.toLowerCase()] || 0;
+  
+  // Overdue component (up to 30 points)
+  if (item.due_date) {
+    const dueDate = new Date(item.due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    const daysOverdue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysOverdue > 0) {
+      score += Math.min(daysOverdue * 3, 30); // 3 points per day overdue, max 30
+    } else if (daysOverdue === 0) {
+      score += 5; // Bonus for due today
+    }
+  }
+  
+  return score;
+}
+
+// Sort by Smart Score (weighted algorithm combining priority and due date urgency)
+function sortBySmartScore(items) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const priorityWeight = { 'critical': 8, 'high': 6, 'medium': 4, 'low': 2 };
+  
+  return items.sort((a, b) => {
+    const scoreA = calculateSmartScore(a, today, priorityWeight);
+    const scoreB = calculateSmartScore(b, today, priorityWeight);
+    
+    return scoreB - scoreA; // Higher scores first
+  });
+}
+
 // Comprehensive sort function with multiple modes
 function sortItems(items, sortMode, columnId) {
   // Make a copy to avoid mutating original array
@@ -563,9 +748,19 @@ function sortItems(items, sortMode, columnId) {
       });
       
     case 'manual':
-      // TODO: Full drag-drop reordering within column - future enhancement (Phase 3)
+      // TODO: Full drag-drop reordering within column - future enhancement
       // Currently preserves order when switching modes and moving between columns
       return loadManualOrder(itemsCopy, columnId);
+      
+    // PHASE 3: Multi-criteria modes
+    case 'priority-due-date':
+      return sortByPriorityAndDueDate(itemsCopy);
+      
+    case 'overdue-priority':
+      return sortByOverdueAndPriority(itemsCopy);
+      
+    case 'smart-sort':
+      return sortBySmartScore(itemsCopy);
       
     default:
       return sortByDueDate(itemsCopy);

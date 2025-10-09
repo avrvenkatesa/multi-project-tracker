@@ -318,13 +318,20 @@
                                         To Do <span id="todo-count" class="text-sm font-normal">(0)</span>
                                     </h4>
                                     <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="todo" onchange="handleSortChange(this)">
-                                        <option value="due-overdue-first">⚠️ Overdue First</option>
-                                        <option value="due-earliest">📅 Earliest</option>
-                                        <option value="due-latest">📅 Latest</option>
-                                        <option value="priority">🔥 Priority</option>
-                                        <option value="created-desc">🆕 Recent</option>
-                                        <option value="updated-desc">🕐 Updated</option>
-                                        <option value="manual">✋ Manual</option>
+                                        <optgroup label="Single Criteria">
+                                            <option value="due-overdue-first">⚠️ Overdue First</option>
+                                            <option value="due-earliest">📅 Earliest</option>
+                                            <option value="due-latest">📅 Latest</option>
+                                            <option value="priority">🔥 Priority</option>
+                                            <option value="created-desc">🆕 Recent</option>
+                                            <option value="updated-desc">🕐 Updated</option>
+                                            <option value="manual">✋ Manual</option>
+                                        </optgroup>
+                                        <optgroup label="Multi-Criteria">
+                                            <option value="priority-due-date">🔥📅 Priority + Due Date</option>
+                                            <option value="overdue-priority">⚠️🔥 Overdue + Priority</option>
+                                            <option value="smart-sort">🎯 Smart Sort</option>
+                                        </optgroup>
                                     </select>
                                 </div>
                                 <div id="todo-column" class="space-y-2">
@@ -337,13 +344,20 @@
                                         In Progress <span id="inprogress-count" class="text-sm font-normal">(0)</span>
                                     </h4>
                                     <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="inprogress" onchange="handleSortChange(this)">
-                                        <option value="due-overdue-first">⚠️ Overdue First</option>
-                                        <option value="due-earliest">📅 Earliest</option>
-                                        <option value="due-latest">📅 Latest</option>
-                                        <option value="priority">🔥 Priority</option>
-                                        <option value="created-desc">🆕 Recent</option>
-                                        <option value="updated-desc">🕐 Updated</option>
-                                        <option value="manual">✋ Manual</option>
+                                        <optgroup label="Single Criteria">
+                                            <option value="due-overdue-first">⚠️ Overdue First</option>
+                                            <option value="due-earliest">📅 Earliest</option>
+                                            <option value="due-latest">📅 Latest</option>
+                                            <option value="priority">🔥 Priority</option>
+                                            <option value="created-desc">🆕 Recent</option>
+                                            <option value="updated-desc">🕐 Updated</option>
+                                            <option value="manual">✋ Manual</option>
+                                        </optgroup>
+                                        <optgroup label="Multi-Criteria">
+                                            <option value="priority-due-date">🔥📅 Priority + Due Date</option>
+                                            <option value="overdue-priority">⚠️🔥 Overdue + Priority</option>
+                                            <option value="smart-sort">🎯 Smart Sort</option>
+                                        </optgroup>
                                     </select>
                                 </div>
                                 <div id="inprogress-column" class="space-y-2">
@@ -356,13 +370,20 @@
                                         Blocked <span id="blocked-count" class="text-sm font-normal">(0)</span>
                                     </h4>
                                     <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="blocked" onchange="handleSortChange(this)">
-                                        <option value="due-overdue-first">⚠️ Overdue First</option>
-                                        <option value="due-earliest">📅 Earliest</option>
-                                        <option value="due-latest">📅 Latest</option>
-                                        <option value="priority">🔥 Priority</option>
-                                        <option value="created-desc">🆕 Recent</option>
-                                        <option value="updated-desc">🕐 Updated</option>
-                                        <option value="manual">✋ Manual</option>
+                                        <optgroup label="Single Criteria">
+                                            <option value="due-overdue-first">⚠️ Overdue First</option>
+                                            <option value="due-earliest">📅 Earliest</option>
+                                            <option value="due-latest">📅 Latest</option>
+                                            <option value="priority">🔥 Priority</option>
+                                            <option value="created-desc">🆕 Recent</option>
+                                            <option value="updated-desc">🕐 Updated</option>
+                                            <option value="manual">✋ Manual</option>
+                                        </optgroup>
+                                        <optgroup label="Multi-Criteria">
+                                            <option value="priority-due-date">🔥📅 Priority + Due Date</option>
+                                            <option value="overdue-priority">⚠️🔥 Overdue + Priority</option>
+                                            <option value="smart-sort">🎯 Smart Sort</option>
+                                        </optgroup>
                                     </select>
                                 </div>
                                 <div id="blocked-column" class="space-y-2">
@@ -375,13 +396,20 @@
                                         Done <span id="done-count" class="text-sm font-normal">(0)</span>
                                     </h4>
                                     <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="done" onchange="handleSortChange(this)">
-                                        <option value="due-overdue-first">⚠️ Overdue First</option>
-                                        <option value="due-earliest">📅 Earliest</option>
-                                        <option value="due-latest">📅 Latest</option>
-                                        <option value="priority">🔥 Priority</option>
-                                        <option value="created-desc">🆕 Recent</option>
-                                        <option value="updated-desc">🕐 Updated</option>
-                                        <option value="manual">✋ Manual</option>
+                                        <optgroup label="Single Criteria">
+                                            <option value="due-overdue-first">⚠️ Overdue First</option>
+                                            <option value="due-earliest">📅 Earliest</option>
+                                            <option value="due-latest">📅 Latest</option>
+                                            <option value="priority">🔥 Priority</option>
+                                            <option value="created-desc">🆕 Recent</option>
+                                            <option value="updated-desc">🕐 Updated</option>
+                                            <option value="manual">✋ Manual</option>
+                                        </optgroup>
+                                        <optgroup label="Multi-Criteria">
+                                            <option value="priority-due-date">🔥📅 Priority + Due Date</option>
+                                            <option value="overdue-priority">⚠️🔥 Overdue + Priority</option>
+                                            <option value="smart-sort">🎯 Smart Sort</option>
+                                        </optgroup>
                                     </select>
                                 </div>
                                 <div id="done-column" class="space-y-2">
@@ -1137,9 +1165,103 @@
                     max-width: 120px;
                 }
             }
+            
+            /* Phase 3: Refresh controls */
+            .sort-controls {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                margin-top: 12px;
+                margin-bottom: 12px;
+            }
+            
+            .btn-refresh {
+                padding: 8px 16px;
+                background: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                transition: background 0.2s;
+            }
+            
+            .btn-refresh:hover {
+                background: #2563eb;
+            }
+            
+            .btn-refresh i {
+                font-size: 12px;
+            }
+            
+            .auto-refresh-toggle {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 14px;
+            }
+            
+            .auto-refresh-toggle label {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                cursor: pointer;
+            }
+            
+            .auto-refresh-toggle input[type="checkbox"] {
+                cursor: pointer;
+            }
+            
+            /* Phase 3: Toast notifications */
+            .toast {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                background: #1f2937;
+                color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                opacity: 0;
+                transform: translateY(20px);
+                transition: all 0.3s;
+                z-index: 9999;
+            }
+            
+            .toast.show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            
+            .toast.toast-success {
+                background: #10b981;
+            }
+            
+            .toast.toast-info {
+                background: #3b82f6;
+            }
+            
+            /* Mobile responsive for refresh controls */
+            @media (max-width: 768px) {
+                .sort-controls {
+                    flex-direction: column;
+                    align-items: stretch;
+                    gap: 8px;
+                    width: 100%;
+                    margin-top: 12px;
+                }
+                
+                .btn-refresh {
+                    width: 100%;
+                    justify-content: center;
+                }
+            }
         </style>
         <script src="comments.js?v=2"></script>
-        <script src="app.js?v=26"></script>
+        <script src="app.js?v=27"></script>
         <script src="js/project-management.js"></script>
     </body>
 </html>

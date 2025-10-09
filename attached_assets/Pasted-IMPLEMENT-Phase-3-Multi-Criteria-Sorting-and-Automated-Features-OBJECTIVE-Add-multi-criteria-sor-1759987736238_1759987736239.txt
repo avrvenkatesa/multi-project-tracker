@@ -1,0 +1,367 @@
+IMPLEMENT: Phase 3 - Multi-Criteria Sorting and Automated Features
+OBJECTIVE:
+Add multi-criteria sorting modes, automated daily re-sorting at midnight, and manual refresh controls to complete the Kanban sorting enhancement.
+REQUIREMENTS:
+
+ADD THREE NEW MULTI-CRITERIA SORT MODES:
+A. Priority + Due Date:
+
+javascript   function sortByPriorityAndDueDate(items) {
+     const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+     
+     return items.sort((a, b) => {
+       // Primary: Priority
+       const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+       const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+       
+       if (priorityA !== priorityB) {
+         return priorityA - priorityB;
+       }
+       
+       // Secondary: Due Date (earliest first)
+       if (!a.due_date && !b.due_date) return 0;
+       if (!a.due_date) return 1;
+       if (!b.due_date) return -1;
+       return new Date(a.due_date) - new Date(b.due_date);
+     });
+   }
+B. Overdue + Priority:
+javascript   function sortByOverdueAndPriority(items) {
+     const today = new Date();
+     today.setHours(0, 0, 0, 0);
+     const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+     
+     return items.sort((a, b) => {
+       const dueDateA = a.due_date ? new Date(a.due_date) : null;
+       const dueDateB = b.due_date ? new Date(b.due_date) : null;
+       
+       const isOverdueA = dueDateA && dueDateA < today;
+       const isOverdueB = dueDateB && dueDateB < today;
+       
+       // Primary: Overdue status (overdue items first)
+       if (isOverdueA && !isOverdueB) return -1;
+       if (!isOverdueA && isOverdueB) return 1;
+       
+       // Secondary: Priority within overdue/not overdue groups
+       const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+       const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+       
+       return priorityA - priorityB;
+     });
+   }
+C. Smart Sort (Weighted Score):
+javascript   function sortBySmartScore(items) {
+     const today = new Date();
+     today.setHours(0, 0, 0, 0);
+     const priorityWeight = { 'critical': 8, 'high': 6, 'medium': 4, 'low': 2 };
+     
+     return items.sort((a, b) => {
+       const scoreA = calculateSmartScore(a, today, priorityWeight);
+       const scoreB = calculateSmartScore(b, today, priorityWeight);
+       
+       return scoreB - scoreA; // Higher scores first
+     });
+   }
+   
+   function calculateSmartScore(item, today, priorityWeight) {
+     let score = 0;
+     
+     // Priority component (0-8 points)
+     score += priorityWeight[item.priority?.toLowerCase()] || 0;
+     
+     // Overdue component (up to 30 points)
+     if (item.due_date) {
+       const dueDate = new Date(item.due_date);
+       dueDate.setHours(0, 0, 0, 0);
+       const daysOverdue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+       
+       if (daysOverdue > 0) {
+         score += Math.min(daysOverdue * 3, 30); // 3 points per day overdue, max 30
+       } else if (daysOverdue === 0) {
+         score += 5; // Bonus for due today
+       }
+     }
+     
+     return score;
+   }
+
+UPDATE DROPDOWN WITH NEW OPTIONS:
+Add section separator and new options to dropdown:
+
+html   <select class="column-sort-select" data-column="${columnStatus}">
+     <optgroup label="Single Criteria">
+       <option value="due-overdue-first">⚠️ Due Date (Overdue First)</option>
+       <option value="due-earliest">📅 Due Date (Earliest)</option>
+       <option value="due-latest">📅 Due Date (Latest)</option>
+       <option value="priority">🔥 Priority</option>
+       <option value="created-desc">🆕 Recently Created</option>
+       <option value="updated-desc">🕐 Recently Updated</option>
+       <option value="manual">✋ Manual</option>
+     </optgroup>
+     <optgroup label="Multi-Criteria">
+       <option value="priority-due-date">🔥📅 Priority + Due Date</option>
+       <option value="overdue-priority">⚠️🔥 Overdue + Priority</option>
+       <option value="smart-sort">🎯 Smart Sort</option>
+     </optgroup>
+   </select>
+
+UPDATE sortItems() FUNCTION:
+Add new cases to switch statement:
+
+javascript   function sortItems(items, sortMode, columnId) {
+     switch(sortMode) {
+       // Existing Phase 1 & 2 modes...
+       case 'due-overdue-first':
+         return sortByDueDate(items);
+       case 'due-earliest':
+         return sortByDueEarliest(items);
+       case 'due-latest':
+         return sortByDueLatest(items);
+       case 'priority':
+         return sortByPriority(items);
+       case 'created-desc':
+         return sortByCreatedDesc(items);
+       case 'updated-desc':
+         return sortByUpdatedDesc(items);
+       case 'manual':
+         return loadManualOrder(items, columnId);
+       
+       // NEW: Multi-criteria modes
+       case 'priority-due-date':
+         return sortByPriorityAndDueDate(items);
+       case 'overdue-priority':
+         return sortByOverdueAndPriority(items);
+       case 'smart-sort':
+         return sortBySmartScore(items);
+       
+       default:
+         return sortByDueDate(items);
+     }
+   }
+
+IMPLEMENT AUTOMATED DAILY REFRESH:
+
+javascript   const AUTO_REFRESH_KEY = 'kanban-auto-refresh-enabled';
+   
+   function initializeAutoRefresh() {
+     const enabled = localStorage.getItem(AUTO_REFRESH_KEY) !== 'false'; // Default true
+     
+     if (enabled) {
+       scheduleNextMidnightRefresh();
+     }
+   }
+   
+   function scheduleNextMidnightRefresh() {
+     const now = new Date();
+     const tomorrow = new Date(now);
+     tomorrow.setDate(tomorrow.getDate() + 1);
+     tomorrow.setHours(0, 0, 0, 0);
+     
+     const msUntilMidnight = tomorrow - now;
+     
+     setTimeout(() => {
+       console.log('Auto-refreshing Kanban sort at midnight...');
+       refreshAllSorts();
+       scheduleNextMidnightRefresh(); // Schedule next day
+     }, msUntilMidnight);
+   }
+   
+   // Call on page load
+   document.addEventListener('DOMContentLoaded', () => {
+     initializeAutoRefresh();
+     // ... other initialization
+   });
+
+ADD MANUAL REFRESH CONTROLS:
+A. Add refresh button and auto-refresh toggle to page header:
+
+javascript   function addRefreshControls() {
+     const pageHeader = document.querySelector('.page-header') || document.querySelector('h1').parentElement;
+     
+     const controlsHTML = `
+       <div class="sort-controls">
+         <button class="btn-refresh" onclick="refreshAllSorts()" title="Refresh all sorts now">
+           <i class="fas fa-sync-alt"></i> Refresh Sort
+         </button>
+         <div class="auto-refresh-toggle">
+           <label>
+             <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh()">
+             <span>Auto-refresh daily</span>
+           </label>
+         </div>
+       </div>
+     `;
+     
+     pageHeader.insertAdjacentHTML('beforeend', controlsHTML);
+     
+     // Set initial checkbox state
+     const checkbox = document.getElementById('autoRefreshToggle');
+     if (checkbox) {
+       checkbox.checked = localStorage.getItem(AUTO_REFRESH_KEY) !== 'false';
+     }
+   }
+   
+   function refreshAllSorts() {
+     renderKanbanBoard();
+     showToast('Kanban board refreshed', 'info');
+   }
+   
+   function toggleAutoRefresh() {
+     const checkbox = document.getElementById('autoRefreshToggle');
+     const enabled = checkbox.checked;
+     
+     localStorage.setItem(AUTO_REFRESH_KEY, enabled.toString());
+     
+     if (enabled) {
+       scheduleNextMidnightRefresh();
+       showToast('Auto-refresh enabled - board will refresh daily at midnight', 'success');
+     } else {
+       showToast('Auto-refresh disabled', 'info');
+     }
+   }
+   
+   function showToast(message, type = 'info') {
+     // Simple toast notification
+     const toast = document.createElement('div');
+     toast.className = `toast toast-${type}`;
+     toast.textContent = message;
+     document.body.appendChild(toast);
+     
+     setTimeout(() => toast.classList.add('show'), 10);
+     setTimeout(() => {
+       toast.classList.remove('show');
+       setTimeout(() => toast.remove(), 300);
+     }, 3000);
+   }
+   
+   // Call on page load
+   document.addEventListener('DOMContentLoaded', () => {
+     addRefreshControls();
+   });
+
+ADD CSS STYLING:
+
+css   /* Sort controls */
+   .sort-controls {
+     display: flex;
+     align-items: center;
+     gap: 16px;
+     margin-left: auto;
+   }
+   
+   .btn-refresh {
+     padding: 8px 16px;
+     background: #3b82f6;
+     color: white;
+     border: none;
+     border-radius: 6px;
+     cursor: pointer;
+     font-size: 14px;
+     display: flex;
+     align-items: center;
+     gap: 8px;
+     transition: background 0.2s;
+   }
+   
+   .btn-refresh:hover {
+     background: #2563eb;
+   }
+   
+   .btn-refresh i {
+     font-size: 12px;
+   }
+   
+   .auto-refresh-toggle {
+     display: flex;
+     align-items: center;
+     gap: 8px;
+     font-size: 14px;
+   }
+   
+   .auto-refresh-toggle label {
+     display: flex;
+     align-items: center;
+     gap: 6px;
+     cursor: pointer;
+   }
+   
+   .auto-refresh-toggle input[type="checkbox"] {
+     cursor: pointer;
+   }
+   
+   /* Toast notifications */
+   .toast {
+     position: fixed;
+     bottom: 20px;
+     right: 20px;
+     padding: 12px 20px;
+     background: #1f2937;
+     color: white;
+     border-radius: 8px;
+     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+     opacity: 0;
+     transform: translateY(20px);
+     transition: all 0.3s;
+     z-index: 9999;
+   }
+   
+   .toast.show {
+     opacity: 1;
+     transform: translateY(0);
+   }
+   
+   .toast.toast-success {
+     background: #10b981;
+   }
+   
+   .toast.toast-info {
+     background: #3b82f6;
+   }
+   
+   /* Mobile responsive */
+   @media (max-width: 768px) {
+     .sort-controls {
+       flex-direction: column;
+       align-items: stretch;
+       gap: 8px;
+       width: 100%;
+       margin-top: 12px;
+     }
+     
+     .btn-refresh {
+       width: 100%;
+       justify-content: center;
+     }
+   }
+CRITICAL REQUIREMENTS:
+
+Apply to BOTH issues.js/issues.html AND actions.js/actions.html
+All Phase 1 & 2 features must continue to work
+Multi-criteria modes work correctly with all combinations
+Auto-refresh defaults to enabled
+Manual refresh button accessible
+Toast notifications for user feedback
+Performance optimized for large item counts
+Mobile responsive controls
+
+FILES TO MODIFY:
+
+public/js/issues.js
+public/js/actions.js
+public/css/issues.css
+public/css/actions.css
+
+TESTING:
+
+Test all 3 new multi-criteria sort modes
+Verify priority + due date sorts correctly
+Verify overdue + priority grouping
+Verify smart score calculation with various items
+Test manual refresh button
+Test auto-refresh toggle on/off
+Verify midnight refresh scheduling (check console log)
+Test with 50+ items for performance
+Verify all previous sort modes still work
+Test on mobile devices
+
+Please implement Phase 3 of Kanban sorting with multi-criteria and automation features.
