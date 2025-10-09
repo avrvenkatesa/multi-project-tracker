@@ -1,0 +1,645 @@
+# Risk Register Implementation - Context Summary for New Thread
+
+## 🎯 Project Context
+
+**Project:** Multi-Project Tracker
+**Current Version:** v0.7.1
+**Platform:** Replit + GitHub
+**Repository:** https://github.com/avrvenkatesa/multi-project-tracker
+**Current Branch:** main
+**Database:** Neon PostgreSQL with raw SQL (NOT Drizzle ORM)
+**Authentication:** Cookie-based JWT (httpOnly cookies)
+**Frontend:** Vanilla JavaScript with `credentials: 'include'`
+
+---
+
+## ✅ Recently Completed Work
+
+### v0.7.1 Features Complete:
+1. ✅ **Header UI Modernization** - Hamburger menu, icon-based logout
+2. ✅ **Edit/Delete for Issues & Action Items** - Full CRUD operations
+3. ✅ **Due Date & Priority Display Fix** - Proper formatting in detail views
+4. ✅ **File Attachments** (Issue #33) - Upload, download, delete attachments
+5. ✅ **AI Notification Fix** (Issue #34) - Notifications for AI-created items
+6. ✅ **Comprehensive SIKI Help System** - Complete user documentation
+
+### Current State:
+- **12 core database tables** operational
+- **Hybrid permission system** (global + project roles)
+- **25 project memberships** migrated
+- **Cookie-based authentication** only (no localStorage)
+- **Chart.js local** (not CDN)
+- **Production-ready** with modern UI
+
+---
+
+## 🚀 Next Feature: Risk Register
+
+### Feature Overview
+Implement a comprehensive Risk Register for project risk management with identification, assessment, tracking, and mitigation capabilities.
+
+---
+
+## 📊 Risk Register - Complete Design
+
+### 1. Core Concepts
+
+**Risk Register Purpose:**
+- Identify potential project risks early
+- Assess probability and impact
+- Track mitigation efforts
+- Monitor risk status throughout project lifecycle
+
+**Risk Assessment Model:**
+- **Probability:** 1-5 scale (Very Low to Very High)
+- **Impact:** 1-5 scale (Negligible to Catastrophic)
+- **Risk Score:** Probability × Impact
+- **Risk Level:** 
+  - Low: 1-6
+  - Medium: 8-12
+  - High: 15-20
+  - Critical: 25
+
+**Risk Categories (Default):**
+1. Technical - Technology/implementation risks
+2. Schedule - Timeline and deadline risks
+3. Budget - Cost and financial risks
+4. Resource - People/skills availability risks
+5. External - Third-party/vendor risks
+6. Compliance - Regulatory risks
+7. Security - Information security risks
+8. Quality - QA and defect risks
+
+---
+
+### 2. Database Schema
+
+#### Table: `risk_categories`
+```sql
+CREATE TABLE risk_categories (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  color VARCHAR(7),  -- Hex color
+  icon VARCHAR(50),  -- Icon/emoji
+  is_active BOOLEAN DEFAULT true,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(project_id, name)
+);
+```
+
+**Default Categories:**
+- Technical (#3b82f6, ⚙️)
+- Schedule (#f59e0b, 📅)
+- Budget (#10b981, 💰)
+- Resource (#8b5cf6, 👥)
+- External (#ef4444, 🌐)
+- Compliance (#6366f1, 📋)
+- Security (#dc2626, 🔒)
+- Quality (#ec4899, ✓)
+
+#### Table: `risks`
+```sql
+CREATE TABLE risks (
+  id SERIAL PRIMARY KEY,
+  risk_id VARCHAR(20) UNIQUE NOT NULL,  -- e.g., 'RISK-001'
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  
+  -- Identification
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  category VARCHAR(50) NOT NULL,
+  risk_source TEXT,
+  tags TEXT[],
+  
+  -- Assessment (auto-calculated via GENERATED columns)
+  probability INTEGER CHECK (probability >= 1 AND probability <= 5),
+  impact INTEGER CHECK (impact >= 1 AND impact <= 5),
+  risk_score INTEGER GENERATED ALWAYS AS (probability * impact) STORED,
+  risk_level VARCHAR(20) GENERATED ALWAYS AS (
+    CASE 
+      WHEN (probability * impact) <= 6 THEN 'Low'
+      WHEN (probability * impact) <= 12 THEN 'Medium'
+      WHEN (probability * impact) <= 20 THEN 'High'
+      ELSE 'Critical'
+    END
+  ) STORED,
+  
+  -- Response Planning
+  response_strategy VARCHAR(20),  -- Avoid, Mitigate, Transfer, Accept
+  mitigation_plan TEXT,
+  contingency_plan TEXT,
+  mitigation_cost DECIMAL(10, 2),
+  mitigation_effort_hours INTEGER,
+  
+  -- Ownership & Dates
+  risk_owner_id INTEGER REFERENCES users(id),
+  target_resolution_date DATE,
+  review_date DATE,
+  
+  -- Status & Tracking
+  status VARCHAR(20) DEFAULT 'identified',
+  residual_probability INTEGER CHECK (residual_probability >= 1 AND residual_probability <= 5),
+  residual_impact INTEGER CHECK (residual_impact >= 1 AND residual_impact <= 5),
+  
+  -- Metadata
+  created_by INTEGER REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  closed_at TIMESTAMP,
+  realized_at TIMESTAMP,
+  attachment_count INTEGER DEFAULT 0
+);
+```
+
+**Indexes:**
+- `idx_risks_project` ON risks(project_id)
+- `idx_risks_status` ON risks(status)
+- `idx_risks_owner` ON risks(risk_owner_id)
+- `idx_risks_level` ON risks(risk_level)
+- `idx_risks_category` ON risks(category)
+- `idx_risks_score` ON risks(risk_score DESC)
+
+#### Table: `risk_updates`
+```sql
+CREATE TABLE risk_updates (
+  id SERIAL PRIMARY KEY,
+  risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+  update_type VARCHAR(20) NOT NULL,  -- status_change, assessment_change, note
+  old_value TEXT,
+  new_value TEXT,
+  notes TEXT,
+  old_probability INTEGER,
+  new_probability INTEGER,
+  old_impact INTEGER,
+  new_impact INTEGER,
+  created_by INTEGER REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Table: `risk_assessments`
+```sql
+CREATE TABLE risk_assessments (
+  id SERIAL PRIMARY KEY,
+  risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+  probability INTEGER NOT NULL CHECK (probability >= 1 AND probability <= 5),
+  impact INTEGER NOT NULL CHECK (impact >= 1 AND impact <= 5),
+  risk_score INTEGER NOT NULL,
+  risk_level VARCHAR(20) NOT NULL,
+  assessment_notes TEXT,
+  assessed_by INTEGER REFERENCES users(id),
+  assessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Table: `risk_relationships` (Phase 4)
+```sql
+CREATE TABLE risk_relationships (
+  id SERIAL PRIMARY KEY,
+  risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+  related_type VARCHAR(20) NOT NULL,  -- issue, action_item, risk
+  related_id INTEGER NOT NULL,
+  relationship_type VARCHAR(50),  -- caused_by, mitigates, depends_on
+  notes TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(risk_id, related_type, related_id)
+);
+```
+
+#### Table: `risk_attachments` (Phase 6)
+```sql
+CREATE TABLE risk_attachments (
+  id SERIAL PRIMARY KEY,
+  risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+  file_name VARCHAR(255) NOT NULL,
+  file_path VARCHAR(500) NOT NULL,
+  file_size INTEGER,
+  file_type VARCHAR(100),
+  description TEXT,
+  uploaded_by INTEGER REFERENCES users(id),
+  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
+### 3. Backend API Endpoints
+
+#### Risk CRUD
+- `GET /api/projects/:projectId/risk-categories` - Get categories
+- `POST /api/projects/:projectId/risks` - Create risk
+- `GET /api/projects/:projectId/risks` - List risks (with filters)
+- `GET /api/risks/:riskId` - Get single risk
+- `PATCH /api/risks/:riskId` - Update risk
+- `DELETE /api/risks/:riskId` - Delete risk
+
+#### Risk Assessment & Updates
+- `POST /api/risks/:riskId/assessments` - Add assessment
+- `GET /api/risks/:riskId/assessments` - Assessment history
+- `POST /api/risks/:riskId/updates` - Add update/note
+- `GET /api/risks/:riskId/updates` - Update history
+
+#### Risk Relationships (Phase 4)
+- `POST /api/risks/:riskId/relationships` - Link to issue/action
+- `GET /api/risks/:riskId/relationships` - Get relationships
+- `DELETE /api/risks/:riskId/relationships/:id` - Remove link
+
+#### Risk Analytics (Phase 5)
+- `GET /api/projects/:projectId/risks/matrix` - Risk matrix data
+- `GET /api/projects/:projectId/risks/statistics` - Risk stats
+- `GET /api/projects/:projectId/risks/trends` - Trend analysis
+- `GET /api/projects/:projectId/risks/export` - Export CSV/Excel
+- `GET /api/projects/:projectId/risks/top` - Top risks by score
+
+---
+
+### 4. Business Logic
+
+#### Risk ID Generation
+```javascript
+async function generateRiskId(projectId) {
+  const result = await pool.query(
+    'SELECT COUNT(*) as count FROM risks WHERE project_id = $1',
+    [projectId]
+  );
+  const count = parseInt(result.rows[0].count) + 1;
+  return `RISK-${count.toString().padStart(3, '0')}`;
+}
+```
+
+#### Risk Scoring
+```javascript
+function calculateRiskScore(probability, impact) {
+  const score = probability * impact;
+  let level, color;
+  
+  if (score <= 6) {
+    level = 'Low';
+    color = '#10b981';
+  } else if (score <= 12) {
+    level = 'Medium';
+    color = '#f59e0b';
+  } else if (score <= 20) {
+    level = 'High';
+    color = '#f97316';
+  } else {
+    level = 'Critical';
+    color = '#ef4444';
+  }
+  
+  return { score, level, color };
+}
+```
+
+#### Risk Status Workflow
+```javascript
+const RISK_STATUSES = {
+  IDENTIFIED: 'identified',
+  ANALYZING: 'analyzing',
+  MITIGATING: 'mitigating',
+  MONITORING: 'monitoring',
+  CLOSED: 'closed',
+  REALIZED: 'realized'
+};
+```
+
+#### Permissions
+```javascript
+const RISK_PERMISSIONS = {
+  VIEW_RISKS: ['admin', 'pm', 'team_lead', 'team_member', 'stakeholder'],
+  CREATE_RISK: ['admin', 'pm', 'team_lead'],
+  EDIT_OWN_RISK: ['admin', 'pm', 'team_lead', 'team_member'],
+  EDIT_ANY_RISK: ['admin', 'pm'],
+  DELETE_RISK: ['admin', 'pm'],
+  CLOSE_RISK: ['admin', 'pm', 'risk_owner'],
+  REALIZE_RISK: ['admin', 'pm']
+};
+```
+
+---
+
+### 5. UI/UX Components
+
+#### Risk List View
+- Risk cards with color-coded levels
+- Filters: Status, Level, Category, Owner
+- Sort: Score, Date, Title
+- Summary stats: Critical, High, Medium, Low counts
+- Empty state
+
+#### Risk Matrix (Phase 2)
+```
+    5 │  M   H   H   C
+    4 │  M   M   H   H
+  I 3 │  L   M   M   H
+  M 2 │  L   L   M   M
+  P 1 │  L   L   L   M
+  A   └───────────────
+  C      1   2   3   4   5
+  T         PROBABILITY
+```
+
+#### Create/Edit Risk Form
+- **Risk Information:** Title, Description, Category, Owner, Tags
+- **Assessment:** Probability (1-5), Impact (1-5), Real-time score display
+- **Response Planning:** Strategy, Mitigation Plan, Contingency Plan, Cost, Effort
+- **Dates:** Target Resolution, Review Date
+- **Real-time Risk Score Calculation**
+
+#### Risk Detail View
+- Risk ID and title
+- Score/Level prominently displayed (color-coded)
+- All risk information
+- Assessment history
+- Update history
+- Related items (Phase 4)
+- Attachments (Phase 6)
+- Action buttons: Edit, Reassess, Close, Delete
+
+---
+
+## 📅 Implementation Phases
+
+### **Phase 1: Core Risk Register (8-12 hours) - READY TO START**
+
+**Deliverables:**
+- ✅ Database schema (4 tables)
+- ✅ Risk CRUD API endpoints (6 endpoints)
+- ✅ Basic risk list view with filters
+- ✅ Create/edit risk form
+- ✅ Risk detail modal
+- ✅ Risk scoring logic
+- ✅ Permission checks
+
+**Files to Create/Modify:**
+- Database migration script
+- `server.js` - Add utility functions and 6 API endpoints
+- `public/risks.html` - Risk list page
+- `public/js/risks.js` - Risk JavaScript functionality
+- `public/css/risks.css` - Risk styling
+- Add "Risks" navigation link
+
+**Key Features:**
+1. Create risks with all fields
+2. View list of risks with filtering
+3. Edit existing risks
+4. Delete risks with confirmation
+5. View risk details
+6. Real-time risk score calculation
+7. Permission-based access control
+
+**Testing Checklist:**
+- [ ] Create risk with all fields
+- [ ] Create risk with minimal fields
+- [ ] Edit risk and update probability/impact
+- [ ] Delete risk with confirmation
+- [ ] Filter by status, level, category
+- [ ] Sort by score, date, title
+- [ ] View risk details
+- [ ] Risk score calculates correctly (all 25 combinations)
+- [ ] Permission checks work
+- [ ] Mobile responsive
+
+---
+
+### **Phase 2: Risk Assessment & Matrix (6-8 hours)**
+
+**Deliverables:**
+- ✅ Risk matrix visualization (interactive heat map)
+- ✅ Assessment history tracking
+- ✅ Risk reassessment functionality
+- ✅ Probability/Impact scales with descriptions
+- ✅ Risk level color coding throughout UI
+
+**Key Features:**
+1. Interactive risk matrix (5x5 grid)
+2. Click matrix cell to see risks
+3. Track assessment changes over time
+4. Reassess risk (update probability/impact)
+5. View assessment history
+6. Visual trend indicators
+
+---
+
+### **Phase 3: Response Planning & Monitoring (6-8 hours)**
+
+**Deliverables:**
+- ✅ Mitigation plan capture and tracking
+- ✅ Contingency plan documentation
+- ✅ Risk status workflow enforcement
+- ✅ Risk updates and notes system
+- ✅ Review date tracking and reminders
+- ✅ Owner assignment and notifications
+
+**Key Features:**
+1. Detailed mitigation planning
+2. Status transitions with validation
+3. Add notes/updates to risks
+4. Review date reminders
+5. Status change audit trail
+6. Mitigation progress tracking
+
+---
+
+### **Phase 4: Integration & Relationships (4-6 hours)**
+
+**Deliverables:**
+- ✅ Link risks to issues
+- ✅ Link risks to action items
+- ✅ Create issues from realized risks
+- ✅ Create action items from mitigation plans
+- ✅ Risk summary on dashboard
+- ✅ Risk indicators on project timeline
+
+**Key Features:**
+1. Risk-to-issue relationships
+2. Risk-to-action relationships
+3. Automatic issue creation when risk realized
+4. Parse mitigation plan to create actions
+5. Dashboard widget showing risk summary
+6. Related items display in detail view
+
+---
+
+### **Phase 5: Analytics & Reporting (6-8 hours)**
+
+**Deliverables:**
+- ✅ Risk statistics and metrics
+- ✅ Risk trend analysis over time
+- ✅ Top risks report
+- ✅ CSV/Excel export
+- ✅ Risk burn-down chart
+- ✅ Category analysis
+
+**Key Features:**
+1. Project risk statistics dashboard
+2. Risk score trends over time
+3. Top 10 risks by score
+4. Export risk register to CSV/Excel
+5. Risk distribution by category
+6. Risk velocity metrics
+7. Custom report builder
+
+---
+
+### **Phase 6: Advanced Features (4-6 hours)**
+
+**Deliverables:**
+- ✅ Risk attachments (files/documents)
+- ✅ Custom risk categories per project
+- ✅ Risk templates for common scenarios
+- ✅ Email notifications for risk events
+- ✅ Review reminders
+- ✅ Mobile optimization
+
+**Key Features:**
+1. Attach files to risks
+2. Create project-specific categories
+3. Risk templates library
+4. Email alerts for critical risks
+5. Review due notifications
+6. PWA mobile experience
+
+---
+
+### Total Estimated Time: 34-48 hours (1-1.5 sprints)
+
+---
+
+## 🎯 Phase 1 Implementation Ready
+
+### Git Commands for Phase 1
+
+```bash
+# Create feature branch
+git checkout main
+git pull origin main
+git checkout -b feature/risk-register-phase1
+git branch
+```
+
+### GitHub Issue Creation
+
+```bash
+gh issue create \
+  --title "[Feature] Risk Register - Phase 1: Core Functionality" \
+  --label "enhancement,priority-high,risk-register" \
+  --milestone "v0.8.0" \
+  --body "[Use detailed body from previous conversation]"
+```
+
+### Implementation Approach
+
+**Recommended: Three Sequential Prompts**
+
+1. **Prompt 1: Database Setup** (15-20 min)
+   - Create 4 tables
+   - Add indexes
+   - Insert default categories
+   - Verify with queries
+
+2. **Prompt 2: Backend API** (2-3 hours)
+   - Add utility functions
+   - Implement 6 CRUD endpoints
+   - Add permission checks
+   - Test endpoints
+
+3. **Prompt 3: Frontend UI** (4-5 hours)
+   - Create risks.html
+   - Create risks.js
+   - Create risks.css
+   - Add navigation
+   - Test UI
+
+### Commit Commands After Phase 1
+
+```bash
+git add .
+git commit -m "feat(phase1): implement core risk register functionality
+
+- Add database schema with 4 tables
+- Implement 6 core API endpoints for CRUD operations
+- Add risk list view with filtering and sorting
+- Add create/edit risk form with real-time score calculation
+- Add risk detail view modal
+- Add delete confirmation workflow
+- Implement risk scoring algorithm (probability × impact)
+- Add permission checks for all risk operations
+- Create responsive UI with mobile support
+- Add 8 default risk categories
+
+Phase 1 Complete - Core risk register functionality operational"
+
+git push origin feature/risk-register-phase1
+git checkout main
+git merge feature/risk-register-phase1
+git push origin main
+```
+
+---
+
+## 🔑 Critical Technical Requirements
+
+1. **Database:** Raw SQL with parameterized queries (NOT ORM)
+2. **Authentication:** Cookie-based JWT only (no localStorage)
+3. **Frontend:** `credentials: 'include'` on ALL fetch calls
+4. **Charts:** Local Chart.js file (not CDN)
+5. **Generated Columns:** Use PostgreSQL GENERATED ALWAYS AS for risk_score and risk_level
+6. **Permissions:** Enforce on both frontend and backend
+7. **Mobile:** Responsive design required
+8. **Error Handling:** Graceful degradation, clear error messages
+
+---
+
+## 📝 Key Design Decisions
+
+1. **Calculated Risk Scores:** Using PostgreSQL generated columns ensures consistency
+2. **Separate Assessment History:** Allows trend analysis without complicating main table
+3. **Flexible Relationships:** Generic relationship table supports multiple entity types
+4. **Status Workflow:** Enforced transitions prevent invalid state changes
+5. **Audit Trail:** Every change tracked for compliance and analysis
+6. **Project-Specific Categories:** Allows customization while providing defaults
+
+---
+
+## 🎬 Next Actions
+
+1. **Start Phase 1 Implementation**
+   - Use three-prompt approach
+   - Test at each step
+   - Commit when complete
+
+2. **After Phase 1 Complete:**
+   - Tag as v0.8.0-phase1
+   - Demo to stakeholders
+   - Gather feedback
+   - Plan Phase 2 start date
+
+3. **Future Phases:**
+   - Phase 2: Risk Matrix (1 week after Phase 1)
+   - Phase 3: Response Planning (1 week after Phase 2)
+   - Phase 4: Integration (1 week after Phase 3)
+   - Phase 5: Analytics (1 week after Phase 4)
+   - Phase 6: Advanced Features (as needed)
+
+---
+
+## 📚 Reference Documentation
+
+All detailed implementation code, SQL schemas, API specifications, and UI mockups are available in the previous conversation. This summary provides the essential context needed to continue implementation in a new thread.
+
+---
+
+## ✅ Ready to Start!
+
+**Current Status:** All prerequisites complete, ready to begin Risk Register Phase 1
+
+**First Step:** Use Database Setup prompt to create schema
+
+**Expected Completion:** Phase 1 complete in 8-12 hours
+
+**Success Criteria:** Users can create, view, edit, delete risks with full CRUD functionality and proper permission controls.
