@@ -1194,10 +1194,31 @@ async function createActionItem(event) {
         }
         
         const newActionItem = await response.json();
-        hideModal();
         
-        // Show success message
-        showSuccessMessage(`Action Item "${newActionItem.title}" created successfully!`);
+        // Handle file uploads if any files selected
+        const fileInput = document.getElementById('create-action-item-attachments');
+        if (fileInput && fileInput.files.length > 0) {
+            const formData = new FormData();
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files', fileInput.files[i]);
+            }
+            
+            try {
+                await fetch(`/api/action-items/${newActionItem.id}/attachments`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                showSuccessMessage(`Action Item "${newActionItem.title}" created with ${fileInput.files.length} attachment(s)!`);
+            } catch (uploadError) {
+                console.error('Error uploading attachments:', uploadError);
+                showSuccessMessage(`Action Item "${newActionItem.title}" created but some attachments failed to upload`);
+            }
+        } else {
+            showSuccessMessage(`Action Item "${newActionItem.title}" created successfully!`);
+        }
+        
+        hideModal();
         
         // Refresh the current view if needed
         if (currentProject) {
