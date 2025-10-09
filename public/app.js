@@ -377,6 +377,93 @@ async function loadTeamMembers(projectId) {
     }
 }
 
+// Sort items by due date (overdue → today → upcoming → no date)
+function sortByDueDate(items) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const overdue = [];
+  const dueToday = [];
+  const upcoming = [];
+  const noDate = [];
+  
+  items.forEach(item => {
+    if (!item.due_date) {
+      noDate.push(item);
+    } else {
+      const dueDate = new Date(item.due_date);
+      dueDate.setHours(0, 0, 0, 0);
+      
+      if (dueDate < today) {
+        overdue.push(item);
+      } else if (dueDate.getTime() === today.getTime()) {
+        dueToday.push(item);
+      } else {
+        upcoming.push(item);
+      }
+    }
+  });
+  
+  // Sort within groups: earliest first
+  const sortByDate = (a, b) => new Date(a.due_date) - new Date(b.due_date);
+  overdue.sort(sortByDate);
+  upcoming.sort(sortByDate);
+  
+  return [...overdue, ...dueToday, ...upcoming, ...noDate];
+}
+
+// Create due date badge with color coding
+function createDueDateBadge(dueDate) {
+  if (!dueDate) {
+    return `<div class="due-date-badge none">
+      <i class="fas fa-calendar-times"></i>
+      <span>No due date</span>
+    </div>`;
+  }
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  
+  const diffTime = due - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  let badgeClass, icon, text;
+  
+  if (diffDays < 0) {
+    // Overdue
+    badgeClass = 'overdue';
+    icon = 'fa-exclamation-circle';
+    text = Math.abs(diffDays) === 1 ? '1 day overdue' : `${Math.abs(diffDays)} days overdue`;
+  } else if (diffDays === 0) {
+    // Due today
+    badgeClass = 'today';
+    icon = 'fa-calendar-day';
+    text = 'Due today';
+  } else if (diffDays === 1) {
+    // Due tomorrow
+    badgeClass = 'soon';
+    icon = 'fa-clock';
+    text = 'Due tomorrow';
+  } else if (diffDays <= 3) {
+    // Due soon (2-3 days)
+    badgeClass = 'soon';
+    icon = 'fa-clock';
+    text = `Due in ${diffDays} days`;
+  } else {
+    // Future
+    badgeClass = 'future';
+    icon = 'fa-calendar';
+    text = `Due in ${diffDays} days`;
+  }
+  
+  return `<div class="due-date-badge ${badgeClass}">
+    <i class="fas ${icon}"></i>
+    <span>${text}</span>
+  </div>`;
+}
+
 // Render Kanban board
 async function renderKanbanBoard() {
     // Filter by type if selected
@@ -427,7 +514,8 @@ async function renderKanbanBoard() {
     const columns = ["To Do", "In Progress", "Blocked", "Done"];
 
     columns.forEach((status) => {
-        const columnItems = allItems.filter((item) => item.status === status);
+        const unsortedItems = allItems.filter((item) => item.status === status);
+        const columnItems = sortByDueDate(unsortedItems);
         const columnId = status.toLowerCase().replace(/ /g, "");
         const container = document.getElementById(`${columnId}-column`);
 
@@ -486,8 +574,8 @@ async function renderKanbanBoard() {
                         }
                         <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
                             <span>${item.assignee || "Unassigned"}</span>
-                            <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
                         </div>
+                        ${createDueDateBadge(item.due_date)}
                         <div class="mt-2 pt-2 border-t border-gray-100 space-y-1">
                             <button class="manage-relationships-btn flex items-center text-xs ${relCount > 0 ? 'text-blue-600 font-medium' : 'text-gray-600'} hover:text-blue-700 transition-colors w-full" 
                                     data-item-id="${item.id}" 
