@@ -2174,25 +2174,25 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
         FROM issues
         WHERE project_id = $1
         GROUP BY assignee
-      ) issues_assigned ON issues_assigned.assignee = CAST(pm.user_id AS TEXT)
+      ) issues_assigned ON issues_assigned.assignee = u.username
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM issues
         WHERE project_id = $2 AND status = 'Done'
         GROUP BY assignee
-      ) issues_completed ON issues_completed.assignee = CAST(pm.user_id AS TEXT)
+      ) issues_completed ON issues_completed.assignee = u.username
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM action_items
         WHERE project_id = $3
         GROUP BY assignee
-      ) actions_assigned ON actions_assigned.assignee = CAST(pm.user_id AS TEXT)
+      ) actions_assigned ON actions_assigned.assignee = u.username
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM action_items
         WHERE project_id = $4 AND status = 'Completed'
         GROUP BY assignee
-      ) actions_completed ON actions_completed.assignee = CAST(pm.user_id AS TEXT)
+      ) actions_completed ON actions_completed.assignee = u.username
       LEFT JOIN (
         SELECT user_id, COUNT(*) as count
         FROM (
