@@ -464,6 +464,156 @@ function createDueDateBadge(dueDate) {
   </div>`;
 }
 
+// ============= SORT PREFERENCES & MANUAL ORDER =============
+const SORT_PREFERENCES_KEY = 'kanban-sort-preferences';
+const MANUAL_ORDER_KEY = 'kanban-manual-order';
+
+function getSortPreferences() {
+  const stored = localStorage.getItem(SORT_PREFERENCES_KEY);
+  if (stored) {
+    return JSON.parse(stored);
+  }
+  return {};
+}
+
+function saveSortPreference(columnId, sortMode) {
+  const prefs = getSortPreferences();
+  prefs[columnId] = sortMode;
+  localStorage.setItem(SORT_PREFERENCES_KEY, JSON.stringify(prefs));
+}
+
+function getSortPreference(columnId) {
+  const prefs = getSortPreferences();
+  return prefs[columnId] || 'due-overdue-first'; // Default from Phase 1
+}
+
+function saveManualOrder(columnId, itemIds) {
+  const stored = localStorage.getItem(MANUAL_ORDER_KEY);
+  const orders = stored ? JSON.parse(stored) : {};
+  orders[columnId] = itemIds;
+  localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(orders));
+}
+
+function loadManualOrder(items, columnId) {
+  const stored = localStorage.getItem(MANUAL_ORDER_KEY);
+  if (!stored) return items;
+  
+  const orders = JSON.parse(stored);
+  const savedOrder = orders[columnId];
+  if (!savedOrder) return items;
+  
+  // Sort items based on saved order
+  const orderedItems = [];
+  const itemsMap = new Map(items.map(item => [`${item.type}-${item.id}`, item]));
+  
+  savedOrder.forEach(key => {
+    if (itemsMap.has(key)) {
+      orderedItems.push(itemsMap.get(key));
+      itemsMap.delete(key);
+    }
+  });
+  
+  // Append any new items not in saved order
+  itemsMap.forEach(item => orderedItems.push(item));
+  
+  return orderedItems;
+}
+
+// Comprehensive sort function with multiple modes
+function sortItems(items, sortMode, columnId) {
+  // Make a copy to avoid mutating original array
+  const itemsCopy = [...items];
+  
+  switch(sortMode) {
+    case 'due-overdue-first':
+      return sortByDueDate(itemsCopy); // Use existing Phase 1 function
+      
+    case 'due-earliest':
+      return itemsCopy.sort((a, b) => {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return new Date(a.due_date) - new Date(b.due_date);
+      });
+      
+    case 'due-latest':
+      return itemsCopy.sort((a, b) => {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return new Date(b.due_date) - new Date(a.due_date);
+      });
+      
+    case 'priority':
+      const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+      return itemsCopy.sort((a, b) => {
+        const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+        const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+        return priorityA - priorityB;
+      });
+      
+    case 'created-desc':
+      return itemsCopy.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+    case 'updated-desc':
+      return itemsCopy.sort((a, b) => {
+        const aDate = a.updated_at || a.created_at;
+        const bDate = b.updated_at || b.created_at;
+        return new Date(bDate) - new Date(aDate);
+      });
+      
+    case 'manual':
+      // TODO: Full drag-drop reordering within column - future enhancement (Phase 3)
+      // Currently preserves order when switching modes and moving between columns
+      return loadManualOrder(itemsCopy, columnId);
+      
+    default:
+      return sortByDueDate(itemsCopy);
+  }
+}
+
+// Save manual order from current DOM state
+// @param columnId - The logical column ID (e.g., "todo", "inprogress", "blocked", "done")
+function saveManualOrderFromDOM(columnId) {
+  // Construct DOM element ID
+  const domId = `${columnId}-column`;
+  const container = document.getElementById(domId);
+  
+  if (!container) {
+    console.warn(`Cannot save manual order: column container "${domId}" not found`);
+    return;
+  }
+  
+  const cards = container.querySelectorAll('.kanban-card');
+  const itemKeys = Array.from(cards).map(card => {
+    const itemId = card.getAttribute('data-item-id');
+    const itemType = card.getAttribute('data-item-type');
+    return `${itemType}-${itemId}`;
+  });
+  
+  saveManualOrder(columnId, itemKeys);
+}
+
+// Handle sort change from dropdown
+function handleSortChange(selectElement) {
+  const columnId = selectElement.dataset.column;
+  const sortMode = selectElement.value;
+  
+  // Save preference
+  saveSortPreference(columnId, sortMode);
+  
+  // If switching to manual mode, save current order as baseline
+  if (sortMode === 'manual') {
+    // Wait for next tick to ensure DOM is updated
+    setTimeout(() => {
+      saveManualOrderFromDOM(columnId);
+    }, 10);
+  }
+  
+  // Re-render board
+  renderKanbanBoard();
+}
+
 // Render Kanban board
 async function renderKanbanBoard() {
     // Filter by type if selected
@@ -515,8 +665,24 @@ async function renderKanbanBoard() {
 
     columns.forEach((status) => {
         const unsortedItems = allItems.filter((item) => item.status === status);
-        const columnItems = sortByDueDate(unsortedItems);
         const columnId = status.toLowerCase().replace(/ /g, "");
+        
+        // Get user's sort preference for this column
+        const sortMode = getSortPreference(columnId);
+        const columnItems = sortItems(unsortedItems, sortMode, columnId);
+        
+        // Update item count in header
+        const countElement = document.getElementById(`${columnId}-count`);
+        if (countElement) {
+            countElement.textContent = `(${columnItems.length})`;
+        }
+        
+        // Set dropdown to saved preference
+        const selectElement = document.querySelector(`.column-sort-select[data-column="${columnId}"]`);
+        if (selectElement) {
+            selectElement.value = sortMode;
+        }
+        
         const container = document.getElementById(`${columnId}-column`);
 
         if (container) {
@@ -757,7 +923,7 @@ async function handleDrop(e) {
     
     // Get the target column's status
     const columnElement = e.currentTarget;
-    const columnId = columnElement.id;
+    const domColumnId = columnElement.id; // e.g., "todo-column"
     
     const statusMap = {
         'todo-column': 'To Do',
@@ -766,9 +932,17 @@ async function handleDrop(e) {
         'done-column': 'Done'
     };
     
-    const newStatus = statusMap[columnId];
+    const columnIdMap = {
+        'todo-column': 'todo',
+        'inprogress-column': 'inprogress',
+        'blocked-column': 'blocked',
+        'done-column': 'done'
+    };
     
-    if (!newStatus) return;
+    const newStatus = statusMap[domColumnId];
+    const targetColumnId = columnIdMap[domColumnId];
+    
+    if (!newStatus || !targetColumnId) return;
     
     try {
         const endpoint = draggedItem.type === 'action-item' 
@@ -786,7 +960,18 @@ async function handleDrop(e) {
             if (item) item.status = newStatus;
         }
         
-        renderKanbanBoard();
+        // Re-render board
+        await renderKanbanBoard();
+        
+        // If target column is in manual mode, save the current order
+        const sortMode = getSortPreference(targetColumnId);
+        if (sortMode === 'manual') {
+            // Use setTimeout to ensure DOM is fully updated
+            setTimeout(() => {
+                saveManualOrderFromDOM(targetColumnId);
+            }, 50);
+        }
+        
         showSuccessMessage('Status updated successfully!');
     } catch (error) {
         console.error('Error updating status:', error);

@@ -1,0 +1,574 @@
+Phase 2: User-Controlled Sort with Manual Override
+Step 1: Git Commands - Create Feature Branch
+bash# Ensure you're on main and up to date
+git checkout main
+git pull origin main
+
+# Create feature branch
+git checkout -b feature/kanban-due-date-sorting-phase2
+
+# Verify branch
+git branch
+
+Step 2: GitHub Issue Creation
+bashgh issue create \
+  --title "[Enhancement] Phase 2: Add user-controlled sort options with manual override" \
+  --label "enhancement,priority-medium" \
+  --body "## Enhancement Request - Phase 2 of 3
+
+Add user-controlled sort dropdown to Kanban columns with manual override capability.
+
+## Current Behavior (Phase 1 Complete)
+- ✅ Auto-sort by due date works well
+- ✅ Visual indicators show urgency
+- ❌ Users cannot change sort order
+- ❌ No manual arrangement option
+- ❌ Sort preference not saved
+
+## Desired Behavior - Phase 2
+- ✅ Sort dropdown in each Kanban column header
+- ✅ Multiple sort options available
+- ✅ Manual drag-drop override option
+- ✅ User preferences saved to localStorage
+- ✅ Per-column sort control
+- ✅ Smooth transitions when sorting changes
+
+## Sort Options to Implement
+
+### Dropdown Options:
+1. **⚠️ Due Date (Overdue First)** - Default from Phase 1
+2. **📅 Due Date (Earliest First)** - All items by due date ascending
+3. **📅 Due Date (Latest First)** - All items by due date descending
+4. **🔥 Priority (High to Low)** - Sort by priority field
+5. **📊 Status** - Group by status (if applicable)
+6. **🆕 Recently Created** - Newest items first
+7. **🕐 Recently Updated** - Most recently updated first
+8. **✋ Manual** - User drag-drop order (no auto-sort)
+
+## UI Design
+
+### Column Header with Sort Control:
+\`\`\`
+┌─────────────────────────────────┐
+│ To Do (5)          [Sort: ▼]   │
+│ ┌─────────────────────────────┐ │
+│ │ ⚠️ Due Date (Overdue First)│ │ ← Default
+│ │ 📅 Due Date (Earliest)     │ │
+│ │ 📅 Due Date (Latest)       │ │
+│ │ 🔥 Priority                │ │
+│ │ 🆕 Recently Created        │ │
+│ │ 🕐 Recently Updated        │ │
+│ │ ✋ Manual                  │ │
+│ └─────────────────────────────┘ │
+└─────────────────────────────────┘
+\`\`\`
+
+### Visual Indicators:
+- Current sort mode shown in header
+- Dropdown icon in column header
+- Subtle animation when sort changes
+- Manual mode shows drag handles
+
+## Implementation Details
+
+### Frontend Changes:
+
+1. **Add sort dropdown to column headers** (issues.html, actions.html)
+   \`\`\`html
+   <div class=\"kanban-column-header\">
+     <h3>To Do <span class=\"item-count\">(5)</span></h3>
+     <select class=\"column-sort-select\" data-column=\"to-do\">
+       <option value=\"due-overdue-first\">⚠️ Due Date (Overdue First)</option>
+       <option value=\"due-earliest\">📅 Due Date (Earliest)</option>
+       <option value=\"due-latest\">📅 Due Date (Latest)</option>
+       <option value=\"priority\">🔥 Priority</option>
+       <option value=\"created-desc\">🆕 Recently Created</option>
+       <option value=\"updated-desc\">🕐 Recently Updated</option>
+       <option value=\"manual\">✋ Manual</option>
+     </select>
+   </div>
+   \`\`\`
+
+2. **Implement sort functions** (issues.js, actions.js)
+   - Extend existing sortByDueDate() function
+   - Add sortByPriority(), sortByCreated(), sortByUpdated()
+   - Add manual mode (disable sorting, enable drag-drop reordering)
+
+3. **Save preferences to localStorage**
+   \`\`\`javascript
+   const SORT_PREFERENCES_KEY = 'kanban-sort-preferences';
+   
+   // Save format:
+   {
+     \"issues\": {
+       \"to-do\": \"due-overdue-first\",
+       \"in-progress\": \"updated-desc\",
+       \"blocked\": \"priority\",
+       \"done\": \"manual\"
+     },
+     \"actions\": {
+       \"to-do\": \"due-overdue-first\",
+       \"in-progress\": \"due-earliest\",
+       \"completed\": \"manual\"
+     }
+   }
+   \`\`\`
+
+4. **Drag-drop for manual mode**
+   - Enable SortableJS only when manual mode selected
+   - Save manual order to localStorage
+   - Show drag handles when in manual mode
+
+### Sort Function Implementations:
+
+\`\`\`javascript
+function sortItems(items, sortMode) {
+  switch(sortMode) {
+    case 'due-overdue-first':
+      return sortByDueDate(items); // From Phase 1
+      
+    case 'due-earliest':
+      return items.sort((a, b) => {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return new Date(a.due_date) - new Date(b.due_date);
+      });
+      
+    case 'due-latest':
+      return items.sort((a, b) => {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return new Date(b.due_date) - new Date(a.due_date);
+      });
+      
+    case 'priority':
+      const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+      return items.sort((a, b) => {
+        const priorityA = priorityOrder[a.priority] ?? 4;
+        const priorityB = priorityOrder[b.priority] ?? 4;
+        return priorityA - priorityB;
+      });
+      
+    case 'created-desc':
+      return items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+    case 'updated-desc':
+      return items.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      
+    case 'manual':
+      return loadManualOrder(items); // Load from localStorage
+      
+    default:
+      return sortByDueDate(items);
+  }
+}
+\`\`\`
+
+## User Impact
+- ✅ Flexibility to choose preferred sort order
+- ✅ Per-column customization (different sort per column)
+- ✅ Manual arrangement for custom workflows
+- ✅ Preferences persist across sessions
+- ✅ Quick switching between sort modes
+- ✅ Maintains Phase 1 default behavior
+
+## Technical Requirements
+- Add sort dropdown to column headers
+- Implement 7 different sort modes
+- Save/load preferences from localStorage
+- Enable drag-drop for manual mode only
+- Smooth transitions when sorting changes
+- Maintain Phase 1 visual indicators
+- Mobile responsive dropdown
+
+## Acceptance Criteria
+- [ ] Sort dropdown appears in each column header
+- [ ] All 7 sort modes work correctly
+- [ ] Default is \"Due Date (Overdue First)\" from Phase 1
+- [ ] User selection saved to localStorage
+- [ ] Preferences persist on page reload
+- [ ] Each column can have different sort mode
+- [ ] Manual mode enables drag-drop reordering
+- [ ] Manual order saved and restored
+- [ ] Smooth transitions between sort modes
+- [ ] Mobile responsive design
+- [ ] No performance degradation
+
+## Files to Modify
+- \`public/js/issues.js\` - Add sort functions and preference handling
+- \`public/js/actions.js\` - Add sort functions and preference handling
+- \`public/css/issues.css\` - Dropdown styling
+- \`public/css/actions.css\` - Dropdown styling
+- \`public/issues.html\` - Add dropdown to column headers
+- \`public/actions.html\` - Add dropdown to column headers
+
+## Testing Checklist
+- [ ] Select each sort mode and verify order
+- [ ] Test per-column independent sorting
+- [ ] Verify preferences save on selection
+- [ ] Verify preferences load on page reload
+- [ ] Test manual mode drag-drop
+- [ ] Test manual order persistence
+- [ ] Switch between modes smoothly
+- [ ] Test on mobile devices
+- [ ] Verify Phase 1 badges still visible
+
+## Dependencies
+- Phase 1 must be complete (Issue #37)
+- SortableJS library (already included for drag-drop)
+
+## Future Phase
+- **Phase 3**: Multi-criteria sorting, automated re-sorting, and advanced features
+
+**Estimated Time:** 4-5 hours"
+
+Step 3: Replit Agent Prompt
+IMPLEMENT: Phase 2 - User-Controlled Sort Options with Manual Override
+
+OBJECTIVE:
+Add sort dropdown to Kanban column headers with multiple sort options and manual drag-drop override capability.
+
+REQUIREMENTS:
+
+1. ADD SORT DROPDOWN TO COLUMN HEADERS:
+
+   A. Update column header HTML in renderKanbanBoard():
+   
+   \`\`\`html
+   <div class="kanban-column-header">
+     <h3>${columnTitle} <span class="item-count">(${items.length})</span></h3>
+     <select class="column-sort-select" data-column="${columnStatus}" onchange="handleSortChange(this)">
+       <option value="due-overdue-first">⚠️ Due Date (Overdue First)</option>
+       <option value="due-earliest">📅 Due Date (Earliest)</option>
+       <option value="due-latest">📅 Due Date (Latest)</option>
+       <option value="priority">🔥 Priority</option>
+       <option value="created-desc">🆕 Recently Created</option>
+       <option value="updated-desc">🕐 Recently Updated</option>
+       <option value="manual">✋ Manual</option>
+     </select>
+   </div>
+   \`\`\`
+
+2. IMPLEMENT SORT FUNCTIONS:
+
+   A. Create comprehensive sortItems() function in issues.js and actions.js:
+   
+   \`\`\`javascript
+   function sortItems(items, sortMode, columnId) {
+     switch(sortMode) {
+       case 'due-overdue-first':
+         return sortByDueDate(items); // Use existing Phase 1 function
+         
+       case 'due-earliest':
+         return items.sort((a, b) => {
+           if (!a.due_date && !b.due_date) return 0;
+           if (!a.due_date) return 1;
+           if (!b.due_date) return -1;
+           return new Date(a.due_date) - new Date(b.due_date);
+         });
+         
+       case 'due-latest':
+         return items.sort((a, b) => {
+           if (!a.due_date && !b.due_date) return 0;
+           if (!a.due_date) return 1;
+           if (!b.due_date) return -1;
+           return new Date(b.due_date) - new Date(a.due_date);
+         });
+         
+       case 'priority':
+         const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+         return items.sort((a, b) => {
+           const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+           const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+           return priorityA - priorityB;
+         });
+         
+       case 'created-desc':
+         return items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+         
+       case 'updated-desc':
+         return items.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+         
+       case 'manual':
+         return loadManualOrder(items, columnId);
+         
+       default:
+         return sortByDueDate(items);
+     }
+   }
+   \`\`\`
+
+3. IMPLEMENT PREFERENCE STORAGE:
+
+   A. Save/load sort preferences to localStorage:
+   
+   \`\`\`javascript
+   const SORT_PREFERENCES_KEY = 'kanban-sort-preferences';
+   
+   function getSortPreferences() {
+     const stored = localStorage.getItem(SORT_PREFERENCES_KEY);
+     if (stored) {
+       return JSON.parse(stored);
+     }
+     return {
+       issues: {},
+       actions: {}
+     };
+   }
+   
+   function saveSortPreference(pageType, columnId, sortMode) {
+     const prefs = getSortPreferences();
+     if (!prefs[pageType]) {
+       prefs[pageType] = {};
+     }
+     prefs[pageType][columnId] = sortMode;
+     localStorage.setItem(SORT_PREFERENCES_KEY, JSON.stringify(prefs));
+   }
+   
+   function getSortPreference(pageType, columnId) {
+     const prefs = getSortPreferences();
+     return prefs[pageType]?.[columnId] || 'due-overdue-first'; // Default
+   }
+   \`\`\`
+
+4. IMPLEMENT MANUAL MODE:
+
+   A. Save/load manual order:
+   
+   \`\`\`javascript
+   const MANUAL_ORDER_KEY = 'kanban-manual-order';
+   
+   function saveManualOrder(pageType, columnId, itemIds) {
+     const stored = localStorage.getItem(MANUAL_ORDER_KEY);
+     const orders = stored ? JSON.parse(stored) : {};
+     
+     if (!orders[pageType]) {
+       orders[pageType] = {};
+     }
+     orders[pageType][columnId] = itemIds;
+     
+     localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(orders));
+   }
+   
+   function loadManualOrder(items, columnId) {
+     const pageType = window.location.pathname.includes('actions') ? 'actions' : 'issues';
+     const stored = localStorage.getItem(MANUAL_ORDER_KEY);
+     
+     if (!stored) return items;
+     
+     const orders = JSON.parse(stored);
+     const savedOrder = orders[pageType]?.[columnId];
+     
+     if (!savedOrder) return items;
+     
+     // Sort items based on saved order
+     const orderedItems = [];
+     const itemsMap = new Map(items.map(item => [item.id, item]));
+     
+     savedOrder.forEach(id => {
+       if (itemsMap.has(id)) {
+         orderedItems.push(itemsMap.get(id));
+         itemsMap.delete(id);
+       }
+     });
+     
+     // Append any new items not in saved order
+     itemsMap.forEach(item => orderedItems.push(item));
+     
+     return orderedItems;
+   }
+   \`\`\`
+   
+   B. Enable drag-drop for manual mode:
+   
+   \`\`\`javascript
+   function handleSortChange(selectElement) {
+     const columnId = selectElement.dataset.column;
+     const sortMode = selectElement.value;
+     const pageType = window.location.pathname.includes('actions') ? 'actions' : 'issues';
+     
+     // Save preference
+     saveSortPreference(pageType, columnId, sortMode);
+     
+     // Enable/disable drag-drop
+     const columnElement = selectElement.closest('.kanban-column');
+     const cardContainer = columnElement.querySelector('.kanban-cards');
+     
+     if (sortMode === 'manual') {
+       // Enable SortableJS
+       if (!cardContainer.sortableInstance) {
+         cardContainer.sortableInstance = new Sortable(cardContainer, {
+           animation: 150,
+           handle: '.drag-handle',
+           onEnd: function(evt) {
+             // Save new order
+             const itemIds = Array.from(cardContainer.children).map(card => 
+               parseInt(card.dataset.itemId)
+             );
+             saveManualOrder(pageType, columnId, itemIds);
+           }
+         });
+       }
+       // Show drag handles
+       cardContainer.classList.add('manual-mode');
+     } else {
+       // Disable SortableJS
+       if (cardContainer.sortableInstance) {
+         cardContainer.sortableInstance.destroy();
+         cardContainer.sortableInstance = null;
+       }
+       // Hide drag handles
+       cardContainer.classList.remove('manual-mode');
+     }
+     
+     // Re-render column with new sort
+     renderKanbanBoard();
+   }
+   \`\`\`
+
+5. UPDATE RENDERING LOGIC:
+
+   A. Modify renderKanbanBoard() to use selected sort mode:
+   
+   \`\`\`javascript
+   function renderKanbanBoard() {
+     const pageType = window.location.pathname.includes('actions') ? 'actions' : 'issues';
+     
+     // For each column
+     ['to-do', 'in-progress', 'blocked', 'done'].forEach(columnId => {
+       const columnItems = items.filter(item => item.status === columnId);
+       
+       // Get saved sort preference
+       const sortMode = getSortPreference(pageType, columnId);
+       
+       // Apply sorting
+       const sortedItems = sortItems(columnItems, sortMode, columnId);
+       
+       // Render items...
+       // Set dropdown value
+       const dropdown = document.querySelector(\`[data-column="\${columnId}"]\`);
+       if (dropdown) {
+         dropdown.value = sortMode;
+       }
+     });
+   }
+   \`\`\`
+
+6. ADD CSS STYLING:
+
+   A. Style the dropdown in issues.css and actions.css:
+   
+   \`\`\`css
+   .kanban-column-header {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     padding: 12px 16px;
+     background: #f8fafc;
+     border-bottom: 2px solid #e2e8f0;
+   }
+   
+   .column-sort-select {
+     padding: 6px 12px;
+     border: 1px solid #cbd5e1;
+     border-radius: 6px;
+     background: white;
+     font-size: 13px;
+     cursor: pointer;
+     min-width: 200px;
+   }
+   
+   .column-sort-select:hover {
+     border-color: #3b82f6;
+   }
+   
+   .column-sort-select:focus {
+     outline: none;
+     border-color: #3b82f6;
+     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+   }
+   
+   /* Manual mode drag handles */
+   .manual-mode .kanban-card {
+     cursor: move;
+   }
+   
+   .manual-mode .kanban-card::before {
+     content: '⋮⋮';
+     position: absolute;
+     left: 8px;
+     top: 50%;
+     transform: translateY(-50%);
+     color: #94a3b8;
+     font-size: 16px;
+     font-weight: bold;
+   }
+   
+   .manual-mode .kanban-card {
+     padding-left: 32px;
+   }
+   
+   /* Mobile responsive */
+   @media (max-width: 768px) {
+     .kanban-column-header {
+       flex-direction: column;
+       gap: 8px;
+       align-items: stretch;
+     }
+     
+     .column-sort-select {
+       width: 100%;
+       min-width: auto;
+     }
+   }
+   \`\`\`
+
+7. INITIALIZE ON PAGE LOAD:
+
+   \`\`\`javascript
+   // On page load
+   document.addEventListener('DOMContentLoaded', () => {
+     // Load preferences and render
+     renderKanbanBoard();
+     
+     // Initialize manual mode if selected
+     const pageType = window.location.pathname.includes('actions') ? 'actions' : 'issues';
+     ['to-do', 'in-progress', 'blocked', 'done'].forEach(columnId => {
+       const sortMode = getSortPreference(pageType, columnId);
+       if (sortMode === 'manual') {
+         const dropdown = document.querySelector(\`[data-column="\${columnId}"]\`);
+         if (dropdown) {
+           handleSortChange(dropdown);
+         }
+       }
+     });
+   });
+   \`\`\`
+
+CRITICAL REQUIREMENTS:
+- Apply to BOTH issues.js/issues.html AND actions.js/actions.html
+- Default sort mode is 'due-overdue-first' (Phase 1 behavior)
+- Each column can have independent sort mode
+- Preferences persist across page reloads
+- Manual mode enables drag-drop with visual indicators
+- Manual order saves to localStorage
+- All Phase 1 features (badges, colors) remain functional
+- Mobile responsive dropdown
+
+FILES TO MODIFY:
+- public/js/issues.js
+- public/js/actions.js
+- public/css/issues.css
+- public/css/actions.css
+- (Column headers already in HTML, just need dropdown added)
+
+TESTING:
+- Select each sort mode and verify order
+- Test preference persistence on reload
+- Test manual drag-drop and order saving
+- Test different sort modes in different columns
+- Verify Phase 1 badges still work
+
+Please implement Phase 2 of Kanban sorting with user controls and manual override.

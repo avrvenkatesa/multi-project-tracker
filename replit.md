@@ -69,3 +69,49 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 - **Tailwind CSS CDN**: CSS framework delivery.
 - **Unpkg CDN**: JavaScript library delivery.
 - **Chart.js**: Data visualization charts for dashboard analytics.
+
+## Recent Changes
+
+### Feature: Phase 2 - User-Controlled Sort Options (October 9, 2025)
+Implemented user-controlled sort dropdown with 7 sort modes and localStorage persistence:
+- **Sort Modes Available**: Each Kanban column header now includes a dropdown with 7 sorting options:
+  - ⚠️ Due Date (Overdue First) - Default from Phase 1, prioritizes overdue items
+  - 📅 Due Date (Earliest) - All items sorted by due date ascending (null dates last)
+  - 📅 Due Date (Latest) - All items sorted by due date descending (null dates last)
+  - 🔥 Priority - Sort by priority level (Critical > High > Medium > Low)
+  - 🆕 Recently Created - Newest items first (created_at descending)
+  - 🕐 Recently Updated - Most recently updated first (updated_at descending)
+  - ✋ Manual - Preserves current order (full drag-drop reordering planned for Phase 3)
+- **Per-Column Preferences**: Each column can have an independent sort mode (e.g., To Do sorted by priority, In Progress by due date)
+- **localStorage Persistence**: User's sort preferences saved to browser localStorage and restored on page reload
+- **Dynamic Item Counts**: Column headers show live item counts (e.g., "To Do (5)")
+- **Responsive Design**: Sort dropdowns styled with mobile breakpoints for smaller screens
+- **Implementation Notes**:
+  - sortItems() function handles all 7 sort modes with array copies to prevent mutation
+  - getSortPreference() / saveSortPreference() manage localStorage persistence
+  - Manual mode preserves order when switching modes and moving between columns
+  - TODO: Full drag-drop reordering within same column (Phase 3 enhancement)
+- **Files Updated**: `public/app.js` (v26) - added sort functions and preference management; `public/index.html` - added column header dropdowns with item counts and CSS styling
+- **Impact**: Users can customize Kanban sorting per column, with preferences persisting across sessions for personalized workflow management
+
+### Feature: Phase 1 - Kanban Due Date Auto-Sorting with Visual Indicators (October 9, 2025)
+Implemented automatic due date sorting and color-coded visual indicators for the Kanban board:
+- **Sorting Logic**: Items in each Kanban column are automatically grouped and sorted by due date urgency:
+  - Overdue items (due_date < today): Displayed first, oldest overdue items at top
+  - Due today items (due_date = today): Shown after overdue
+  - Upcoming items (due_date > today): Sorted by soonest first
+  - No due date items (due_date is null): Displayed at bottom
+- **Visual Badges**: Every issue and action item card displays a color-coded due date badge:
+  - 🔴 Overdue: Red badge (#fee2e2 bg, #dc2626 text) - shows "X days overdue"
+  - 🟡 Today: Yellow/amber badge (#fef3c7 bg, #d97706 text) - shows "Due today"
+  - 🟠 Soon (1-3 days): Orange badge (#fef3c7 bg, #f59e0b text) - shows "Due tomorrow" or "Due in X days"
+  - 🔵 Future (3+ days): Blue badge (#dbeafe bg, #2563eb text) - shows "Due in X days"
+  - ⚪ None: Gray badge (#f3f4f6 bg, #6b7280 text) - shows "No due date"
+- **Implementation Details**:
+  - Added `sortByDueDate()` function that partitions items into buckets using normalized midnight date comparisons
+  - Added `createDueDateBadge()` function that generates badge HTML with appropriate icons and text
+  - Updated `renderKanbanBoard()` to apply sorting to each column before rendering
+  - Badge includes FontAwesome icons (calendar-times, exclamation-circle, calendar-day, clock, calendar)
+- **Responsive Design**: CSS includes mobile breakpoint (@media max-width: 768px) with smaller text and padding
+- **Files Updated**: `public/app.js` - added sorting and badge functions, updated renderKanbanBoard(); `public/index.html` - added CSS styles for all badge variants
+- **Impact**: Users can quickly identify urgent items at a glance with automatic sorting and clear visual indicators for due date status
