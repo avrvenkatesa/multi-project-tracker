@@ -519,6 +519,91 @@ function loadManualOrder(items, columnId) {
   return orderedItems;
 }
 
+// ============= PHASE 3: MULTI-CRITERIA SORT FUNCTIONS =============
+
+// Sort by Priority + Due Date (primary: priority, secondary: due date earliest)
+function sortByPriorityAndDueDate(items) {
+  const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+  
+  return items.sort((a, b) => {
+    // Primary: Priority
+    const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+    const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+    
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+    
+    // Secondary: Due Date (earliest first)
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date) - new Date(b.due_date);
+  });
+}
+
+// Sort by Overdue + Priority (primary: overdue status, secondary: priority)
+function sortByOverdueAndPriority(items) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+  
+  return items.sort((a, b) => {
+    const dueDateA = a.due_date ? new Date(a.due_date) : null;
+    const dueDateB = b.due_date ? new Date(b.due_date) : null;
+    
+    const isOverdueA = dueDateA && dueDateA < today;
+    const isOverdueB = dueDateB && dueDateB < today;
+    
+    // Primary: Overdue status (overdue items first)
+    if (isOverdueA && !isOverdueB) return -1;
+    if (!isOverdueA && isOverdueB) return 1;
+    
+    // Secondary: Priority within overdue/not overdue groups
+    const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+    const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+    
+    return priorityA - priorityB;
+  });
+}
+
+// Calculate smart score for weighted sorting
+function calculateSmartScore(item, today, priorityWeight) {
+  let score = 0;
+  
+  // Priority component (0-8 points)
+  score += priorityWeight[item.priority?.toLowerCase()] || 0;
+  
+  // Overdue component (up to 30 points)
+  if (item.due_date) {
+    const dueDate = new Date(item.due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    const daysOverdue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysOverdue > 0) {
+      score += Math.min(daysOverdue * 3, 30); // 3 points per day overdue, max 30
+    } else if (daysOverdue === 0) {
+      score += 5; // Bonus for due today
+    }
+  }
+  
+  return score;
+}
+
+// Sort by Smart Score (weighted algorithm combining priority and due date urgency)
+function sortBySmartScore(items) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const priorityWeight = { 'critical': 8, 'high': 6, 'medium': 4, 'low': 2 };
+  
+  return items.sort((a, b) => {
+    const scoreA = calculateSmartScore(a, today, priorityWeight);
+    const scoreB = calculateSmartScore(b, today, priorityWeight);
+    
+    return scoreB - scoreA; // Higher scores first
+  });
+}
+
 // Comprehensive sort function with multiple modes
 function sortItems(items, sortMode, columnId) {
   // Make a copy to avoid mutating original array
@@ -563,9 +648,19 @@ function sortItems(items, sortMode, columnId) {
       });
       
     case 'manual':
-      // TODO: Full drag-drop reordering within column - future enhancement (Phase 3)
+      // TODO: Full drag-drop reordering within column - future enhancement
       // Currently preserves order when switching modes and moving between columns
       return loadManualOrder(itemsCopy, columnId);
+      
+    // PHASE 3: Multi-criteria modes
+    case 'priority-due-date':
+      return sortByPriorityAndDueDate(itemsCopy);
+      
+    case 'overdue-priority':
+      return sortByOverdueAndPriority(itemsCopy);
+      
+    case 'smart-sort':
+      return sortBySmartScore(itemsCopy);
       
     default:
       return sortByDueDate(itemsCopy);
