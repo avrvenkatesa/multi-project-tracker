@@ -6095,18 +6095,22 @@ app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
         continue;
       }
       
+      console.log(`Updating assignee: "${oldName}" -> "${newName}"`);
+      
       // Update issues
       const issueResult = await pool.query(
         'UPDATE issues SET assignee = $1 WHERE TRIM(assignee) = $2',
-        [newName, oldName]
+        [newName, oldName.trim()]
       );
+      console.log(`  Issues updated: ${issueResult.rowCount || 0}`);
       issuesUpdated += issueResult.rowCount || 0;
       
       // Update action items
       const actionResult = await pool.query(
         'UPDATE action_items SET assignee = $1 WHERE TRIM(assignee) = $2',
-        [newName, oldName]
+        [newName, oldName.trim()]
       );
+      console.log(`  Action items updated: ${actionResult.rowCount || 0}`);
       actionsUpdated += actionResult.rowCount || 0;
     }
     

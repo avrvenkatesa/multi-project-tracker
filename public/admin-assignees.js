@@ -100,6 +100,8 @@ async function applyUpdates() {
     newName
   }));
 
+  console.log('Sending updates:', updates);
+
   try {
     const response = await fetch('/api/admin/update-assignees', {
       method: 'POST',
