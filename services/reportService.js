@@ -398,65 +398,41 @@ class ReportService {
       FROM project_members pm
       JOIN users u ON pm.user_id = u.id
       LEFT JOIN (
-        SELECT REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g') as assignee_alpha, COUNT(*) as count
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
         FROM issues
         WHERE project_id = $1 AND assignee IS NOT NULL AND assignee <> ''
-        GROUP BY REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g')
-      ) issues_assigned ON (
-        issues_assigned.assignee_alpha = REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')
-        OR (LENGTH(issues_assigned.assignee_alpha) >= 5 AND REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') LIKE issues_assigned.assignee_alpha || '%')
-        OR (LENGTH(REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')) >= 5 AND issues_assigned.assignee_alpha LIKE REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') || '%')
-      )
+        GROUP BY LOWER(TRIM(assignee))
+      ) issues_assigned ON issues_assigned.assignee_lower = LOWER(u.username)
       LEFT JOIN (
-        SELECT REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g') as assignee_alpha, COUNT(*) as count
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
         FROM issues
         WHERE project_id = $2 AND status = 'Done' AND assignee IS NOT NULL AND assignee <> ''
-        GROUP BY REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g')
-      ) issues_completed ON (
-        issues_completed.assignee_alpha = REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')
-        OR (LENGTH(issues_completed.assignee_alpha) >= 5 AND REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') LIKE issues_completed.assignee_alpha || '%')
-        OR (LENGTH(REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')) >= 5 AND issues_completed.assignee_alpha LIKE REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') || '%')
-      )
+        GROUP BY LOWER(TRIM(assignee))
+      ) issues_completed ON issues_completed.assignee_lower = LOWER(u.username)
       LEFT JOIN (
-        SELECT REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g') as assignee_alpha, COUNT(*) as count
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
         FROM issues
         WHERE project_id = $3 AND status = 'In Progress' AND assignee IS NOT NULL AND assignee <> ''
-        GROUP BY REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g')
-      ) issues_in_progress ON (
-        issues_in_progress.assignee_alpha = REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')
-        OR (LENGTH(issues_in_progress.assignee_alpha) >= 5 AND REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') LIKE issues_in_progress.assignee_alpha || '%')
-        OR (LENGTH(REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')) >= 5 AND issues_in_progress.assignee_alpha LIKE REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') || '%')
-      )
+        GROUP BY LOWER(TRIM(assignee))
+      ) issues_in_progress ON issues_in_progress.assignee_lower = LOWER(u.username)
       LEFT JOIN (
-        SELECT REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g') as assignee_alpha, COUNT(*) as count
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
         FROM action_items
         WHERE project_id = $4 AND assignee IS NOT NULL AND assignee <> ''
-        GROUP BY REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g')
-      ) actions_assigned ON (
-        actions_assigned.assignee_alpha = REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')
-        OR (LENGTH(actions_assigned.assignee_alpha) >= 5 AND REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') LIKE actions_assigned.assignee_alpha || '%')
-        OR (LENGTH(REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')) >= 5 AND actions_assigned.assignee_alpha LIKE REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') || '%')
-      )
+        GROUP BY LOWER(TRIM(assignee))
+      ) actions_assigned ON actions_assigned.assignee_lower = LOWER(u.username)
       LEFT JOIN (
-        SELECT REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g') as assignee_alpha, COUNT(*) as count
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
         FROM action_items
         WHERE project_id = $5 AND status = 'Done' AND assignee IS NOT NULL AND assignee <> ''
-        GROUP BY REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g')
-      ) actions_completed ON (
-        actions_completed.assignee_alpha = REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')
-        OR (LENGTH(actions_completed.assignee_alpha) >= 5 AND REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') LIKE actions_completed.assignee_alpha || '%')
-        OR (LENGTH(REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')) >= 5 AND actions_completed.assignee_alpha LIKE REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') || '%')
-      )
+        GROUP BY LOWER(TRIM(assignee))
+      ) actions_completed ON actions_completed.assignee_lower = LOWER(u.username)
       LEFT JOIN (
-        SELECT REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g') as assignee_alpha, COUNT(*) as count
+        SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
         FROM action_items
         WHERE project_id = $6 AND status = 'In Progress' AND assignee IS NOT NULL AND assignee <> ''
-        GROUP BY REGEXP_REPLACE(LOWER(TRIM(assignee)), '[^a-z]', '', 'g')
-      ) actions_in_progress ON (
-        actions_in_progress.assignee_alpha = REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')
-        OR (LENGTH(actions_in_progress.assignee_alpha) >= 5 AND REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') LIKE actions_in_progress.assignee_alpha || '%')
-        OR (LENGTH(REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g')) >= 5 AND actions_in_progress.assignee_alpha LIKE REGEXP_REPLACE(LOWER(u.username), '[^a-z]', '', 'g') || '%')
-      )
+        GROUP BY LOWER(TRIM(assignee))
+      ) actions_in_progress ON actions_in_progress.assignee_lower = LOWER(u.username)
       WHERE pm.project_id = $7 AND pm.status = 'active'
       ORDER BY u.username
     `, [projectId, projectId, projectId, projectId, projectId, projectId, projectId]);

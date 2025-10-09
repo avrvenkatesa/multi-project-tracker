@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Assignee Name Correction | Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900">Assignee Name Correction Tool</h1>
+            <p class="text-sm text-gray-600 mt-1">Fix mismatched assignee names to ensure accurate reporting</p>
+          </div>
+          <button onclick="window.location.href='/'" class="text-sm text-indigo-600 hover:text-indigo-800">
+            ← Back to Dashboard
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      <!-- Instructions -->
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <h3 class="text-sm font-semibold text-blue-800 mb-2">How to use this tool:</h3>
+        <ul class="text-sm text-blue-700 space-y-1 list-disc list-inside">
+          <li>Review mismatched assignee names below (highlighted in yellow)</li>
+          <li>Select the correct username from the dropdown for each mismatch</li>
+          <li>Click "Apply Selected Updates" to fix all selected items</li>
+          <li>Team Performance Reports will show correct data after updates are applied</li>
+        </ul>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loading" class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <p class="mt-2 text-gray-600">Loading assignee data...</p>
+      </div>
+
+      <!-- Error State -->
+      <div id="error" class="hidden bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <p class="text-sm text-red-800"></p>
+      </div>
+
+      <!-- Success Message -->
+      <div id="success" class="hidden bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+        <p class="text-sm text-green-800"></p>
+      </div>
+
+      <!-- Assignees Table -->
+      <div id="content" class="hidden">
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Current Assignee Name
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Issues
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Action Items
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Correct Username
+                </th>
+              </tr>
+            </thead>
+            <tbody id="assignee-list" class="bg-white divide-y divide-gray-200">
+              <!-- Rows will be inserted here -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="mt-6 flex justify-between items-center">
+          <button onclick="resetSelections()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+            Reset Selections
+          </button>
+          <button onclick="applyUpdates()" id="apply-btn" class="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+            Apply Selected Updates
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let mismatches = [];
+    let validUsernames = [];
+    let selectedUpdates = {};
+
+    async function loadData() {
+      try {
+        // Load mismatches and valid usernames in parallel
+        const [mismatchesRes, usernamesRes] = await Promise.all([
+          fetch('/api/admin/assignee-mismatches'),
+          fetch('/api/admin/valid-usernames')
+        ]);
+
+        if (!mismatchesRes.ok || !usernamesRes.ok) {
+          throw new Error('Failed to load data');
+        }
+
+        mismatches = await mismatchesRes.json();
+        validUsernames = await usernamesRes.json();
+
+        renderTable();
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('content').classList.remove('hidden');
+      } catch (error) {
+        console.error('Error loading data:', error);
+        document.getElementById('loading').classList.add('hidden');
+        const errorDiv = document.getElementById('error');
+        errorDiv.querySelector('p').textContent = 'Failed to load assignee data. Please try again.';
+        errorDiv.classList.remove('hidden');
+      }
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('assignee-list');
+      tbody.innerHTML = '';
+
+      mismatches.forEach((item, index) => {
+        const row = document.createElement('tr');
+        row.className = item.is_mismatch ? 'bg-yellow-50' : '';
+        
+        row.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+            ${escapeHtml(item.assignee_name)}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            ${item.issue_count}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            ${item.action_count}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+            ${item.total_count}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            ${item.is_mismatch 
+              ? '<span class="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">Mismatch</span>'
+              : '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">OK</span>'
+            }
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            ${item.is_mismatch 
+              ? `<select id="select-${index}" onchange="updateSelection('${escapeHtml(item.assignee_name)}', this.value, ${index})" 
+                  class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                  <option value="">-- Select Correct Username --</option>
+                  ${validUsernames.map(u => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.username)} (${escapeHtml(u.email)})</option>`).join('')}
+                </select>`
+              : `<span class="text-gray-400">${escapeHtml(item.matched_username || 'N/A')}</span>`
+            }
+          </td>
+        `;
+        
+        tbody.appendChild(row);
+      });
+    }
+
+    function updateSelection(oldName, newName, index) {
+      if (newName) {
+        selectedUpdates[oldName] = newName;
+        document.getElementById(`select-${index}`).classList.add('border-green-500', 'bg-green-50');
+      } else {
+        delete selectedUpdates[oldName];
+        document.getElementById(`select-${index}`).classList.remove('border-green-500', 'bg-green-50');
+      }
+
+      // Enable/disable apply button
+      const applyBtn = document.getElementById('apply-btn');
+      applyBtn.disabled = Object.keys(selectedUpdates).length === 0;
+    }
+
+    function resetSelections() {
+      selectedUpdates = {};
+      renderTable();
+      document.getElementById('apply-btn').disabled = true;
+    }
+
+    async function applyUpdates() {
+      if (Object.keys(selectedUpdates).length === 0) {
+        return;
+      }
+
+      const updates = Object.entries(selectedUpdates).map(([oldName, newName]) => ({
+        oldName,
+        newName
+      }));
+
+      try {
+        const response = await fetch('/api/admin/update-assignees', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ updates })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update assignees');
+        }
+
+        const result = await response.json();
+        
+        // Show success message
+        const successDiv = document.getElementById('success');
+        successDiv.querySelector('p').innerHTML = `
+          <strong>Success!</strong> Updated ${result.totalUpdated} items 
+          (${result.issuesUpdated} issues, ${result.actionsUpdated} action items)
+        `;
+        successDiv.classList.remove('hidden');
+
+        // Reload data
+        selectedUpdates = {};
+        await loadData();
+
+        // Hide success after 5 seconds
+        setTimeout(() => {
+          successDiv.classList.add('hidden');
+        }, 5000);
+      } catch (error) {
+        console.error('Error applying updates:', error);
+        const errorDiv = document.getElementById('error');
+        errorDiv.querySelector('p').textContent = 'Failed to apply updates. Please try again.';
+        errorDiv.classList.remove('hidden');
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Load data on page load
+    loadData();
+  </script>
+</body>
+</html>

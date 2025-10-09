@@ -5996,6 +5996,155 @@ app.get('/api/projects/:projectId/members', authenticateToken, async (req, res) 
   }
 });
 
+// ============= ADMIN TOOLS =============
+
+// Get mismatched assignee names
+app.get('/api/admin/assignee-mismatches', authenticateToken, async (req, res) => {
+  try {
+    // Check admin permission
+    const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+    if (userRoleLevel < ROLE_HIERARCHY['System Administrator']) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Get all unique assignees from both issues and action_items
+    const result = await pool.query(`
+      WITH all_assignees AS (
+        SELECT DISTINCT 
+          TRIM(assignee) as assignee_name,
+          'issue' as source_type
+        FROM issues 
+        WHERE assignee IS NOT NULL AND assignee <> ''
+        UNION
+        SELECT DISTINCT 
+          TRIM(assignee) as assignee_name,
+          'action_item' as source_type
+        FROM action_items 
+        WHERE assignee IS NOT NULL AND assignee <> ''
+      ),
+      assignee_counts AS (
+        SELECT 
+          aa.assignee_name,
+          COALESCE(i.issue_count, 0) as issue_count,
+          COALESCE(a.action_count, 0) as action_count,
+          CASE 
+            WHEN u.username IS NOT NULL THEN u.username
+            ELSE NULL
+          END as matched_username,
+          CASE 
+            WHEN u.username IS NULL THEN true
+            WHEN LOWER(TRIM(aa.assignee_name)) <> LOWER(u.username) THEN true
+            ELSE false
+          END as is_mismatch
+        FROM (SELECT DISTINCT assignee_name FROM all_assignees) aa
+        LEFT JOIN users u ON LOWER(TRIM(aa.assignee_name)) = LOWER(u.username)
+        LEFT JOIN (
+          SELECT TRIM(assignee) as name, COUNT(*) as issue_count 
+          FROM issues 
+          WHERE assignee IS NOT NULL AND assignee <> '' 
+          GROUP BY TRIM(assignee)
+        ) i ON i.name = aa.assignee_name
+        LEFT JOIN (
+          SELECT TRIM(assignee) as name, COUNT(*) as action_count 
+          FROM action_items 
+          WHERE assignee IS NOT NULL AND assignee <> '' 
+          GROUP BY TRIM(assignee)
+        ) a ON a.name = aa.assignee_name
+      )
+      SELECT 
+        assignee_name,
+        issue_count,
+        action_count,
+        (issue_count + action_count) as total_count,
+        matched_username,
+        is_mismatch
+      FROM assignee_counts
+      ORDER BY is_mismatch DESC, total_count DESC, assignee_name
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching assignee mismatches:', error);
+    res.status(500).json({ error: 'Failed to fetch mismatches' });
+  }
+});
+
+// Bulk update assignee names
+app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
+  try {
+    // Check admin permission
+    const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+    if (userRoleLevel < ROLE_HIERARCHY['System Administrator']) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { updates } = req.body; // Array of {oldName, newName}
+    
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ error: 'Updates array required' });
+    }
+    
+    let issuesUpdated = 0;
+    let actionsUpdated = 0;
+    
+    // Update each assignee name
+    for (const update of updates) {
+      const { oldName, newName } = update;
+      
+      if (!oldName || !newName) {
+        continue;
+      }
+      
+      // Update issues
+      const issueResult = await pool.query(
+        'UPDATE issues SET assignee = $1 WHERE TRIM(assignee) = $2',
+        [newName, oldName]
+      );
+      issuesUpdated += issueResult.rowCount || 0;
+      
+      // Update action items
+      const actionResult = await pool.query(
+        'UPDATE action_items SET assignee = $1 WHERE TRIM(assignee) = $2',
+        [newName, oldName]
+      );
+      actionsUpdated += actionResult.rowCount || 0;
+    }
+    
+    res.json({
+      success: true,
+      updatesApplied: updates.length,
+      issuesUpdated,
+      actionsUpdated,
+      totalUpdated: issuesUpdated + actionsUpdated
+    });
+  } catch (error) {
+    console.error('Error updating assignees:', error);
+    res.status(500).json({ error: 'Failed to update assignees' });
+  }
+});
+
+// Get all valid usernames for dropdown
+app.get('/api/admin/valid-usernames', authenticateToken, async (req, res) => {
+  try {
+    // Check admin permission
+    const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+    if (userRoleLevel < ROLE_HIERARCHY['System Administrator']) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const result = await pool.query(`
+      SELECT id, username, email, role 
+      FROM users 
+      ORDER BY username
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching valid usernames:', error);
+    res.status(500).json({ error: 'Failed to fetch usernames' });
+  }
+});
+
 // Serve frontend
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
