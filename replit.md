@@ -73,6 +73,22 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 
 ## Recent Changes
 
+### Bug Fix: Dashboard Metrics and API Query Issues (October 9, 2025)
+Fixed multiple critical bugs preventing correct data display in dashboard and reports:
+- **Root Cause 1 - Incorrect Status Values**: Dashboard stats were checking for status 'Completed' for action items, but action items use status 'Done' (same as issues)
+- **Root Cause 2 - Missing Table Aliases**: After adding JOINs for creator information, WHERE clause conditions lacked table aliases (e.g., `project_id` instead of `i.project_id`), causing ambiguous column references
+- **Impact**: 
+  - Dashboard showed 0 Total Issues despite data existing
+  - Completion rates showed 0% even with completed items
+  - Team performance reports displayed incorrect metrics
+  - API queries with filters failed to return data
+- **Fix Applied**:
+  - Updated dashboard stats to check for 'Done' status for both issues and action items (lines 1956, 1968, 1978)
+  - Added table aliases (`i.` and `a.`) to all WHERE clause conditions in GET /api/issues and GET /api/action-items endpoints
+  - Fixed overdue and upcoming deadlines queries to use 'Done' status consistently
+- **Files Modified**: server.js (dashboard stats endpoint, issues/action items GET endpoints)
+- **Result**: Dashboard and reports now correctly display all data with accurate completion rates
+
 ### Feature: Creator Display and Completion Email Notifications (October 9, 2025)
 Implemented creator username display on Kanban cards and email notifications when items are completed:
 - **API Enhancements**: Updated GET /api/issues and GET /api/action-items endpoints to include creator information via LEFT JOIN with users table
