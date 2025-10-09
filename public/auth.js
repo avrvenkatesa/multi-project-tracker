@@ -413,6 +413,15 @@ const AuthManager = {
         userManagementLink.classList.add('hidden');
       }
     }
+    
+    const adminToolsLink = document.getElementById('admin-tools-link');
+    if (adminToolsLink) {
+      if (this.canManageUsers()) {
+        adminToolsLink.classList.remove('hidden');
+      } else {
+        adminToolsLink.classList.add('hidden');
+      }
+    }
   },
 
   async updateInvitationCount() {
