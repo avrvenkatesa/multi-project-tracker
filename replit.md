@@ -88,7 +88,7 @@ Created a dedicated admin tool to fix mismatched assignee names that were causin
   - Admin-only access (System Administrator role required)
 - **Navigation**: Added "Admin Tools" link to hamburger menu, visible only to System Administrators
 - **Implementation**: Uses exact username matching after updates, ensuring accurate Team Performance Reports
-- **Files Modified**: server.js (3 new admin endpoints), public/admin-assignees.html (new), public/index.html (admin link), public/auth.js (v10 - show admin link)
+- **Files Modified**: server.js (3 new admin endpoints), public/admin-assignees.html (new), public/admin-assignees.js (external script), public/index.html (admin link), public/auth.js (v10 - show admin link)
 - **Impact**: Provides clean solution to fix data at source rather than complex workaround matching logic
 
 ### Bug Fix: Dashboard Metrics and API Query Issues (October 9, 2025)
