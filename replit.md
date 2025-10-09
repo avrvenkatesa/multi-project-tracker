@@ -62,6 +62,26 @@ Express.js handles requests, incorporating `express-rate-limit` for API protecti
 
 ## Recent Changes
 
+### Enhancement: File Attachment Upload in Create/Edit Modals (October 9, 2025)
+Added file attachment upload functionality directly to issue and action item create/edit modals, allowing users to attach files during item creation instead of only after:
+- **Create Modals**: Added file upload input fields to both issue and action item creation modals
+  - File input IDs: `create-issue-attachments` and `create-action-item-attachments`
+  - Support for multiple files (max 5), 10MB per file limit
+  - Accepted types: PDF, Word, Excel, images, text, CSV, ZIP
+- **Upload Flow**: Items created first, then attachments uploaded in sequence
+  - Uses FormData with proper authentication (`credentials: 'include'`)
+  - Upload failures don't block item creation - item is saved successfully
+  - Response checking with `if (!uploadResponse.ok)` for proper error detection
+- **User Feedback**: Distinct success messages based on upload outcome:
+  - "created with X attachment(s)" when upload succeeds
+  - "created but attachments failed to upload" when upload fails
+  - "created successfully" when no files selected
+- **API Integration**: Uses existing attachment endpoints
+  - `/api/issues/{id}/attachments` for issues
+  - `/api/action-items/{id}/attachments` for action items
+- **Files Updated**: `public/app.js` (v20) - modified showCreateIssue(), showCreateActionItem(), createIssue(), createActionItem(); `public/index.html` (v20) - version bump for cache busting
+- **Impact**: Streamlined workflow - users can now attach files during initial item creation, improving UX and reducing clicks
+
 ### Bug Fix: Dashboard Report Showing 0% Completion Rate (October 8, 2025)
 Fixed critical bug in PDF report generation where completion rate was incorrectly calculated as 0% despite having completed items:
 - **Root Cause**: ReportService only checked for status 'Done' when counting completed items, missing all completed action items which use status 'Completed'
