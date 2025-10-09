@@ -66,17 +66,19 @@ Express.js handles requests, incorporating `express-rate-limit` for API protecti
 Fixed critical bug where delete functionality was broken and showing "Failed to delete issue/action item" error:
 - **Root Cause**: DELETE endpoints used restrictive `requireRole('Team Lead')` middleware that blocked item creators from deleting their own items
 - **Secondary Issue**: Used incorrect user ID property (`req.user.userId` instead of `req.user.id`) causing creator checks to always fail
+- **Frontend Issue**: confirmDeleteItem() called non-existent `loadIssues()` and `loadActionItems()` functions
 - **Permission Fix**: Updated both endpoints to allow deletion by:
   - Item creator (using `parseInt(created_by) === parseInt(req.user.id)`)
   - OR users with Team Lead+ role level
 - **Attachment Cleanup**: Added manual deletion of attachments before item deletion (no FK constraint exists on attachments table)
 - **Database Cascade**: Comments automatically cascade delete (existing FK constraint with CASCADE rule)
+- **Frontend Fix**: Changed confirmDeleteItem() to use `loadProjectData(currentProject.id)` to reload data after deletion
 - **Error Handling**: Proper 404 (not found), 403 (forbidden), and 500 (server error) responses
 - **Affected Endpoints**: 
   - `DELETE /api/issues/:id` (lines 2709-2756)
   - `DELETE /api/action-items/:id` (lines 3057-3104)
 - **Impact**: Users can now delete issues and action items they created, Team Lead+ can delete any items, attachments are properly cleaned up
-- **Files Updated**: `server.js` - modified both DELETE endpoints with corrected permission logic and attachment cleanup
+- **Files Updated**: `server.js` - modified both DELETE endpoints with corrected permission logic and attachment cleanup; `public/app.js` (v22) - fixed confirmDeleteItem() to use correct reload function
 
 ### Bug Fix: Modal Scrolling for Create Issue/Action Item Forms (October 9, 2025)
 Fixed accessibility issue where create issue and action item modals were too tall and lacked scrollbars, making the attachments field unreachable:
