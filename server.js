@@ -2190,7 +2190,7 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM action_items
-        WHERE project_id = $4 AND status = 'Completed'
+        WHERE project_id = $4 AND status = 'Done'
         GROUP BY assignee
       ) actions_completed ON actions_completed.assignee = u.username
       LEFT JOIN (
@@ -2287,7 +2287,7 @@ app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (r
       SELECT 
         DATE(created_at) as date,
         COUNT(*) as created,
-        COUNT(CASE WHEN status = 'Completed' THEN 1 END) as completed
+        COUNT(CASE WHEN status = 'Done' THEN 1 END) as completed
       FROM action_items
       WHERE project_id = $1 
         AND created_at >= NOW() - ($2 || ' days')::INTERVAL

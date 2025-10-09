@@ -79,19 +79,18 @@ Fixed critical bugs in PDF report generation showing zero items and incorrect co
   2. dateRange value 'all' was not normalized to null, causing SQL query with undefined parameters
   3. Result: All reports showed "Total Items: 0" despite data existing
 - **Root Cause 2 - Zero Completion Counts**: Multiple issues in getMemberDetails() query:
-  1. Team metrics query was checking action items with status = 'Done', but action items use status = 'Completed'
-  2. Original query created cartesian product by LEFT JOINing ALL issues and action items (not pre-aggregated)
-  3. Case-sensitive assignee matching failed when usernames had different casing
-  4. No NULL/empty assignee filtering
+  1. Original query created cartesian product by LEFT JOINing ALL issues and action items (not pre-aggregated)
+  2. Case-sensitive assignee matching failed when usernames had different casing
+  3. No NULL/empty assignee filtering
 - **Fix Applied**: 
   1. Added parseInt() to projectId parameter in report endpoint (server.js)
   2. Normalized dateRange: convert 'all' and empty values to null
   3. Rewrote getMemberDetails() query to use pre-aggregated subqueries (matching dashboard pattern)
   4. Added LOWER(TRIM(assignee)) normalization to all subqueries
   5. Added NULL and empty string filtering for assignees
-  6. Fixed action items completion status from 'Done' to 'Completed'
-  7. Added comprehensive logging for report generation diagnostics
-  8. Added frontend blob validation and download tracking
+  6. Added comprehensive logging for report generation diagnostics
+  7. Added frontend blob validation and download tracking
+  8. Verified both issues AND action items use status 'Done' for completion (consistent across database)
 - **Impact**: All three PDF report types now generate correctly with accurate data:
   - Executive Summary: Shows correct project stats and team metrics
   - Detailed Report: Displays all issues and action items

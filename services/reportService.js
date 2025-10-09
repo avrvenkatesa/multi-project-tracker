@@ -307,9 +307,9 @@ class ReportService {
     
     const totalItems = issues.length + actionItems.length;
     
-    // Count completed items: Issues use 'Done', Action Items use 'Completed'
+    // Count completed items: Both Issues and Action Items use 'Done'
     const completedIssues = issues.filter(item => item.status === 'Done').length;
-    const completedActionItems = actionItems.filter(item => item.status === 'Completed').length;
+    const completedActionItems = actionItems.filter(item => item.status === 'Done').length;
     const completedItems = completedIssues + completedActionItems;
     const completionRate = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
     
@@ -424,7 +424,7 @@ class ReportService {
       LEFT JOIN (
         SELECT LOWER(TRIM(assignee)) as assignee_lower, COUNT(*) as count
         FROM action_items
-        WHERE project_id = $5 AND status = 'Completed' AND assignee IS NOT NULL AND assignee <> ''
+        WHERE project_id = $5 AND status = 'Done' AND assignee IS NOT NULL AND assignee <> ''
         GROUP BY LOWER(TRIM(assignee))
       ) actions_completed ON actions_completed.assignee_lower = LOWER(u.username)
       LEFT JOIN (
