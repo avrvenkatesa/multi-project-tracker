@@ -73,12 +73,20 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 ## Recent Changes
 
 ### Bug Fix: PDF Report Completion Counts (October 9, 2025)
-Fixed critical bug in PDF team performance reports showing incorrect completion counts:
-- **Root Cause**: Team metrics query in reportService.js was checking action items with status = 'Done', but action items use status = 'Completed'
-- **Fix Applied**: Updated line 399 in `services/reportService.js` to use correct 'Completed' status for action items completion check
-- **Impact**: PDF reports now accurately reflect completed action items, matching dashboard metrics
+Fixed critical bug in PDF team performance reports showing zero completion counts:
+- **Root Cause**: Multiple issues in getMemberDetails() query:
+  1. Team metrics query was checking action items with status = 'Done', but action items use status = 'Completed'
+  2. Original query created cartesian product by LEFT JOINing ALL issues and action items (not pre-aggregated)
+  3. Case-sensitive assignee matching failed when usernames had different casing
+  4. No NULL/empty assignee filtering
+- **Fix Applied**: 
+  1. Rewrote query to use pre-aggregated subqueries (matching dashboard pattern)
+  2. Added LOWER(TRIM(assignee)) normalization to all subqueries
+  3. Added NULL and empty string filtering for assignees
+  4. Fixed action items completion status from 'Done' to 'Completed'
+- **Impact**: PDF reports now accurately reflect completed items, matching dashboard metrics exactly
 - **Related**: This complements the earlier dashboard bug fix where JOIN was corrected from user_id to username for assignee matching
-- **Files Updated**: `services/reportService.js` - corrected action items completion status check
+- **Files Updated**: `services/reportService.js` - completely rewrote getMemberDetails() query with proper normalization
 - **Verification**: All three PDF report types (Executive Summary, Detailed Report, Team Performance) now show accurate completion statistics
 
 ### Feature: Phase 3 - Multi-Criteria Sorting and Automated Features (October 9, 2025)
