@@ -1,0 +1,234 @@
+MPLEMENT: Display Creator Name on Cards & Send Completion Email
+OBJECTIVE:
+
+Display creator name on all issue/action item cards in Kanban view
+Send email notification to creator when their item is moved to Done column
+
+REQUIREMENTS:
+
+UPDATE BACKEND API TO INCLUDE CREATOR INFO:
+A. Modify GET /api/projects/:projectId/issues endpoint:
+
+javascript   app.get('/api/projects/:projectId/issues', async (req, res) => {
+     try {
+       const result = await pool.query(
+         `SELECT 
+           i.*,
+           u.name as creator_name,
+           u.email as creator_email,
+           owner.name as assignee_name
+         FROM issues i
+         LEFT JOIN users u ON i.created_by = u.id
+         LEFT JOIN users owner ON i.assignee_id = owner.id
+         WHERE i.project_id = $1
+         ORDER BY i.created_at DESC`,
+         [req.params.projectId]
+       );
+       
+       res.json(result.rows);
+     } catch (error) {
+       console.error('Error fetching issues:', error);
+       res.status(500).json({ error: 'Failed to fetch issues' });
+     }
+   });
+B. Apply same change to GET /api/projects/:projectId/action-items
+
+ADD CREATOR DISPLAY TO CARDS:
+A. Update renderKanbanCard() in issues.js and actions.js:
+
+javascript   // In the card HTML template, add after due date badge:
+   
+   ${createDueDateBadge(item.due_date)}
+   
+   <div class="card-creator">
+     <i class="fas fa-user-circle"></i>
+     <span>Created by ${item.creator_name || 'Unknown'}</span>
+   </div>
+
+ADD COMPLETION EMAIL FUNCTION:
+A. Add to server.js (after existing email functions):
+
+javascript   async function sendCompletionEmail(itemType, item, completedBy) {
+     if (!item.creator_email) {
+       console.log('No creator email available for notification');
+       return;
+     }
+     
+     const itemLabel = itemType === 'issue' ? 'Issue' : 'Action Item';
+     const itemId = itemType === 'issue' ? item.issue_id : item.action_id;
+     
+     const subject = `✅ Your ${itemLabel.toLowerCase()} "${item.title}" has been completed`;
+     
+     const html = `
+       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+         <h2 style="color: #10b981;">✅ Item Completed</h2>
+         
+         <p>Hello ${item.creator_name || 'there'},</p>
+         
+         <p>Good news! The ${itemLabel.toLowerCase()} you created has been marked as complete:</p>
+         
+         <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+           <p style="margin: 8px 0;"><strong>${itemLabel}:</strong> ${itemId}</p>
+           <p style="margin: 8px 0;"><strong>Title:</strong> ${item.title}</p>
+           <p style="margin: 8px 0;"><strong>Priority:</strong> ${item.priority || 'N/A'}</p>
+           <p style="margin: 8px 0;"><strong>Completed:</strong> ${new Date().toLocaleString()}</p>
+           <p style="margin: 8px 0;"><strong>Completed by:</strong> ${completedBy || 'Team member'}</p>
+         </div>
+         
+         <p>
+           <a href="${process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co` : 'http://localhost:3000'}/${itemType === 'issue' ? 'issues' : 'actions'}.html" 
+              style="background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+             View Details
+           </a>
+         </p>
+         
+         <hr style="margin: 32px 0; border: none; border-top: 1px solid #e5e7eb;">
+         
+         <p style="color: #6b7280; font-size: 12px;">
+           Multi-Project Tracker<br>
+           This is an automated notification. Please do not reply to this email.
+         </p>
+       </div>
+     `;
+     
+     const text = `
+   ${itemLabel} Completed
+   
+   Hello ${item.creator_name || 'there'},
+   
+   The ${itemLabel.toLowerCase()} you created has been marked as complete:
+   
+   ${itemLabel}: ${itemId}
+   Title: ${item.title}
+   Priority: ${item.priority || 'N/A'}
+   Completed: ${new Date().toLocaleString()}
+   Completed by: ${completedBy || 'Team member'}
+   
+   View details in Multi-Project Tracker
+   
+   ---
+   Multi-Project Tracker
+     `;
+     
+     try {
+       await sendEmail(item.creator_email, subject, text, html);
+       console.log(`Completion email sent to ${item.creator_email} for ${itemLabel} ${itemId}`);
+     } catch (error) {
+       console.error('Error sending completion email:', error);
+     }
+   }
+
+UPDATE ISSUE PATCH ENDPOINT:
+A. Modify PATCH /api/issues/:issueId to detect completion:
+
+javascript   app.patch('/api/issues/:issueId', authenticateToken, async (req, res) => {
+     try {
+       const { issueId } = req.params;
+       const userId = req.user.userId;
+       
+       // Get old status first
+       const oldIssueResult = await pool.query(
+         'SELECT status FROM issues WHERE id = $1',
+         [issueId]
+       );
+       
+       const oldStatus = oldIssueResult.rows[0]?.status;
+       
+       // Perform update (existing update logic here)
+       // ... your existing PATCH code ...
+       
+       // After successful update, check if moved to done
+       if (req.body.status === 'done' && oldStatus !== 'done') {
+         // Fetch full issue with creator details
+         const fullIssueResult = await pool.query(
+           `SELECT 
+             i.*,
+             creator.name as creator_name,
+             creator.email as creator_email,
+             completer.name as completer_name
+           FROM issues i
+           LEFT JOIN users creator ON i.created_by = creator.id
+           LEFT JOIN users completer ON completer.id = $1
+           WHERE i.id = $2`,
+           [userId, issueId]
+         );
+         
+         if (fullIssueResult.rows.length > 0) {
+           const issueData = fullIssueResult.rows[0];
+           await sendCompletionEmail('issue', issueData, issueData.completer_name);
+         }
+       }
+       
+       // Return response
+       res.json(result.rows[0]);
+     } catch (error) {
+       console.error('Error updating issue:', error);
+       res.status(500).json({ error: 'Failed to update issue' });
+     }
+   });
+
+UPDATE ACTION ITEM PATCH ENDPOINT:
+Apply same logic to PATCH /api/action-items/:actionItemId
+ADD CSS STYLING:
+Add to issues.css and actions.css:
+
+css   .card-creator {
+     display: flex;
+     align-items: center;
+     gap: 6px;
+     margin-top: 8px;
+     padding-top: 8px;
+     border-top: 1px solid #e5e7eb;
+     font-size: 13px;
+     color: #6b7280;
+   }
+   
+   .card-creator i {
+     font-size: 14px;
+     color: #9ca3af;
+   }
+   
+   .card-creator span {
+     font-weight: 500;
+   }
+   
+   /* Mobile responsive */
+   @media (max-width: 768px) {
+     .card-creator {
+       font-size: 12px;
+     }
+     
+     .card-creator i {
+       font-size: 12px;
+     }
+   }
+CRITICAL REQUIREMENTS:
+
+Update BOTH issues and action items endpoints
+Add creator info to card display for BOTH issues and actions
+Send email ONLY when status changes TO 'done' (not from done, not to other statuses)
+Check old status before sending email to avoid duplicates
+Handle missing creator email gracefully (log, don't crash)
+Use existing sendEmail() infrastructure
+Add creator display after due date badge
+Apply CSS styling to both issues.css and actions.css
+
+TESTING:
+
+Verify creator name appears on all cards
+Move item to Done and verify email received
+Check email has correct content and formatting
+Verify no email sent when moving between other statuses
+Verify no duplicate emails
+Test with items that have no creator email
+Test on mobile devices
+
+FILES TO MODIFY:
+
+server.js (API endpoints + email function)
+public/js/issues.js
+public/js/actions.js
+public/css/issues.css
+public/css/actions.css
+
+Please implement creator display and completion email notification feature.
