@@ -2361,27 +2361,41 @@ app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (
     
     switch (reportType) {
       case 'executive':
+        console.log('[REPORT_GENERATE] Generating executive summary...');
         pdfBuffer = await reportService.generateExecutiveSummary(projectId, normalizedDateRange);
+        console.log('[REPORT_GENERATE] Executive summary buffer size:', pdfBuffer?.length);
         break;
       case 'detailed':
+        console.log('[REPORT_GENERATE] Generating detailed report...');
         pdfBuffer = await reportService.generateDetailedReport(projectId, normalizedDateRange);
+        console.log('[REPORT_GENERATE] Detailed report buffer size:', pdfBuffer?.length);
         break;
       case 'team':
+        console.log('[REPORT_GENERATE] Generating team performance report...');
         pdfBuffer = await reportService.generateTeamPerformanceReport(projectId, normalizedDateRange);
+        console.log('[REPORT_GENERATE] Team report buffer size:', pdfBuffer?.length);
         break;
       default:
         return res.status(400).json({ error: 'Invalid report type' });
     }
     
+    if (!pdfBuffer) {
+      console.error('[REPORT_GENERATE] PDF buffer is null/undefined for report type:', reportType);
+      return res.status(500).json({ error: 'Failed to generate PDF buffer' });
+    }
+    
     const filename = `${reportType}-report-${projectId}-${Date.now()}.pdf`;
+    
+    console.log('[REPORT_GENERATE] Sending PDF:', filename, 'Size:', pdfBuffer.length);
     
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
     
   } catch (error) {
-    console.error('Report generation error:', error);
-    res.status(500).json({ error: 'Failed to generate report' });
+    console.error('[REPORT_GENERATE] Report generation error:', error);
+    console.error('[REPORT_GENERATE] Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to generate report', details: error.message });
   }
 });
 
