@@ -656,6 +656,17 @@ async function generateReport(reportType) {
     
     // Get the PDF blob
     const blob = await response.blob();
+    console.log(`[REPORT] Received blob for ${reportType}:`, blob.size, 'bytes, type:', blob.type);
+    
+    // Validate blob
+    if (blob.size === 0) {
+      throw new Error('Received empty PDF file');
+    }
+    
+    if (!blob.type.includes('pdf') && !blob.type.includes('application/octet-stream')) {
+      console.error('[REPORT] Invalid blob type:', blob.type);
+      throw new Error('Invalid file type received');
+    }
     
     // Create download link
     const url = window.URL.createObjectURL(blob);
@@ -663,9 +674,11 @@ async function generateReport(reportType) {
     a.href = url;
     a.download = `${reportType}-report-${currentProjectId}-${Date.now()}.pdf`;
     document.body.appendChild(a);
+    console.log(`[REPORT] Triggering download for ${reportType}`);
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+    console.log(`[REPORT] Download triggered successfully for ${reportType}`);
     
     // Show success
     statusDiv.querySelector('div').className = 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg';
