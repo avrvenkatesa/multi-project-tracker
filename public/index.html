@@ -313,33 +313,77 @@
                         <!-- Kanban Board -->
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div class="bg-gray-100 rounded-lg p-4">
-                                <h4 class="font-semibold mb-3 text-gray-700">
-                                    To Do
-                                </h4>
+                                <div class="flex justify-between items-center mb-3">
+                                    <h4 class="font-semibold text-gray-700">
+                                        To Do <span id="todo-count" class="text-sm font-normal">(0)</span>
+                                    </h4>
+                                    <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="todo" onchange="handleSortChange(this)">
+                                        <option value="due-overdue-first">⚠️ Overdue First</option>
+                                        <option value="due-earliest">📅 Earliest</option>
+                                        <option value="due-latest">📅 Latest</option>
+                                        <option value="priority">🔥 Priority</option>
+                                        <option value="created-desc">🆕 Recent</option>
+                                        <option value="updated-desc">🕐 Updated</option>
+                                        <option value="manual">✋ Manual</option>
+                                    </select>
+                                </div>
                                 <div id="todo-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
                             </div>
                             <div class="bg-blue-50 rounded-lg p-4">
-                                <h4 class="font-semibold mb-3 text-blue-700">
-                                    In Progress
-                                </h4>
+                                <div class="flex justify-between items-center mb-3">
+                                    <h4 class="font-semibold text-blue-700">
+                                        In Progress <span id="inprogress-count" class="text-sm font-normal">(0)</span>
+                                    </h4>
+                                    <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="inprogress" onchange="handleSortChange(this)">
+                                        <option value="due-overdue-first">⚠️ Overdue First</option>
+                                        <option value="due-earliest">📅 Earliest</option>
+                                        <option value="due-latest">📅 Latest</option>
+                                        <option value="priority">🔥 Priority</option>
+                                        <option value="created-desc">🆕 Recent</option>
+                                        <option value="updated-desc">🕐 Updated</option>
+                                        <option value="manual">✋ Manual</option>
+                                    </select>
+                                </div>
                                 <div id="inprogress-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
                             </div>
                             <div class="bg-yellow-50 rounded-lg p-4">
-                                <h4 class="font-semibold mb-3 text-yellow-700">
-                                    Blocked
-                                </h4>
+                                <div class="flex justify-between items-center mb-3">
+                                    <h4 class="font-semibold text-yellow-700">
+                                        Blocked <span id="blocked-count" class="text-sm font-normal">(0)</span>
+                                    </h4>
+                                    <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="blocked" onchange="handleSortChange(this)">
+                                        <option value="due-overdue-first">⚠️ Overdue First</option>
+                                        <option value="due-earliest">📅 Earliest</option>
+                                        <option value="due-latest">📅 Latest</option>
+                                        <option value="priority">🔥 Priority</option>
+                                        <option value="created-desc">🆕 Recent</option>
+                                        <option value="updated-desc">🕐 Updated</option>
+                                        <option value="manual">✋ Manual</option>
+                                    </select>
+                                </div>
                                 <div id="blocked-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
                             </div>
                             <div class="bg-green-50 rounded-lg p-4">
-                                <h4 class="font-semibold mb-3 text-green-700">
-                                    Done
-                                </h4>
+                                <div class="flex justify-between items-center mb-3">
+                                    <h4 class="font-semibold text-green-700">
+                                        Done <span id="done-count" class="text-sm font-normal">(0)</span>
+                                    </h4>
+                                    <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="done" onchange="handleSortChange(this)">
+                                        <option value="due-overdue-first">⚠️ Overdue First</option>
+                                        <option value="due-earliest">📅 Earliest</option>
+                                        <option value="due-latest">📅 Latest</option>
+                                        <option value="priority">🔥 Priority</option>
+                                        <option value="created-desc">🆕 Recent</option>
+                                        <option value="updated-desc">🕐 Updated</option>
+                                        <option value="manual">✋ Manual</option>
+                                    </select>
+                                </div>
                                 <div id="done-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
@@ -1061,9 +1105,41 @@
                     font-size: 10px;
                 }
             }
+            
+            /* Sort dropdown styles */
+            .column-sort-select {
+                font-size: 11px;
+                padding: 4px 8px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background-color: white;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                max-width: 140px;
+            }
+            
+            .column-sort-select:hover {
+                border-color: #9ca3af;
+                background-color: #f9fafb;
+            }
+            
+            .column-sort-select:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            }
+            
+            /* Mobile responsive for sort dropdown */
+            @media (max-width: 768px) {
+                .column-sort-select {
+                    font-size: 10px;
+                    padding: 3px 6px;
+                    max-width: 120px;
+                }
+            }
         </style>
         <script src="comments.js?v=2"></script>
-        <script src="app.js?v=22"></script>
+        <script src="app.js?v=25"></script>
         <script src="js/project-management.js"></script>
     </body>
 </html>
