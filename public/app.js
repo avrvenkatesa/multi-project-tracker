@@ -1033,12 +1033,33 @@ async function createIssue(event) {
         }
         
         const newIssue = await response.json();
+        
+        // Handle file uploads if any files selected
+        const fileInput = document.getElementById('create-issue-attachments');
+        if (fileInput && fileInput.files.length > 0) {
+            const formData = new FormData();
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files', fileInput.files[i]);
+            }
+            
+            try {
+                await fetch(`/api/issues/${newIssue.id}/attachments`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                showSuccessMessage(`Issue "${newIssue.title}" created with ${fileInput.files.length} attachment(s)!`);
+            } catch (uploadError) {
+                console.error('Error uploading attachments:', uploadError);
+                showSuccessMessage(`Issue "${newIssue.title}" created but some attachments failed to upload`);
+            }
+        } else {
+            showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
+        }
+        
         issues.push(newIssue);
         renderKanbanBoard();
         hideModal();
-        
-        // Show success message
-        showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
         
     } catch (error) {
         console.error('Error creating issue:', error);
