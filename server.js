@@ -2338,8 +2338,14 @@ app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (r
 // Generate PDF report
 app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const projectId = parseInt(req.params.projectId);
     const { reportType, dateRange } = req.body;
+    
+    // Normalize dateRange - if it's 'all' or empty, set to null
+    const normalizedDateRange = (dateRange === 'all' || !dateRange) ? null : dateRange;
+    
+    console.log('[REPORT_GENERATE] projectId:', projectId, 'Type:', typeof projectId);
+    console.log('[REPORT_GENERATE] dateRange:', normalizedDateRange);
     
     // Check if user has access to this project
     const memberCheck = await pool.query(`
@@ -2355,13 +2361,13 @@ app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (
     
     switch (reportType) {
       case 'executive':
-        pdfBuffer = await reportService.generateExecutiveSummary(projectId, dateRange);
+        pdfBuffer = await reportService.generateExecutiveSummary(projectId, normalizedDateRange);
         break;
       case 'detailed':
-        pdfBuffer = await reportService.generateDetailedReport(projectId, dateRange);
+        pdfBuffer = await reportService.generateDetailedReport(projectId, normalizedDateRange);
         break;
       case 'team':
-        pdfBuffer = await reportService.generateTeamPerformanceReport(projectId, dateRange);
+        pdfBuffer = await reportService.generateTeamPerformanceReport(projectId, normalizedDateRange);
         break;
       default:
         return res.status(400).json({ error: 'Invalid report type' });
