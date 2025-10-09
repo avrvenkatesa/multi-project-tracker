@@ -930,6 +930,14 @@ function showCreateIssue() {
                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
             </div>
             
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Attachments (Optional)</label>
+                <input type="file" id="create-issue-attachments" multiple 
+                       accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip"
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-500 mt-1">PDF, DOC, XLS, Images, ZIP (Max 10MB per file, 5 files max)</p>
+            </div>
+            
             <div class="flex justify-end space-x-3">
                 <button type="button" id="cancel-issue-btn" 
                         class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
@@ -1025,12 +1033,38 @@ async function createIssue(event) {
         }
         
         const newIssue = await response.json();
+        
+        // Handle file uploads if any files selected
+        const fileInput = document.getElementById('create-issue-attachments');
+        if (fileInput && fileInput.files.length > 0) {
+            const formData = new FormData();
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files', fileInput.files[i]);
+            }
+            
+            try {
+                const uploadResponse = await fetch(`/api/issues/${newIssue.id}/attachments`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error('Upload failed');
+                }
+                
+                showSuccessMessage(`Issue "${newIssue.title}" created with ${fileInput.files.length} attachment(s)!`);
+            } catch (uploadError) {
+                console.error('Error uploading attachments:', uploadError);
+                showSuccessMessage(`Issue "${newIssue.title}" created but attachments failed to upload`);
+            }
+        } else {
+            showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
+        }
+        
         issues.push(newIssue);
         renderKanbanBoard();
         hideModal();
-        
-        // Show success message
-        showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
         
     } catch (error) {
         console.error('Error creating issue:', error);
@@ -1109,6 +1143,14 @@ function showCreateActionItem() {
                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
             </div>
             
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Attachments (Optional)</label>
+                <input type="file" id="create-action-item-attachments" multiple 
+                       accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip"
+                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-500 mt-1">PDF, DOC, XLS, Images, ZIP (Max 10MB per file, 5 files max)</p>
+            </div>
+            
             <div class="flex justify-end space-x-3">
                 <button type="button" id="cancel-action-item-btn" 
                         class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
@@ -1157,10 +1199,36 @@ async function createActionItem(event) {
         }
         
         const newActionItem = await response.json();
-        hideModal();
         
-        // Show success message
-        showSuccessMessage(`Action Item "${newActionItem.title}" created successfully!`);
+        // Handle file uploads if any files selected
+        const fileInput = document.getElementById('create-action-item-attachments');
+        if (fileInput && fileInput.files.length > 0) {
+            const formData = new FormData();
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files', fileInput.files[i]);
+            }
+            
+            try {
+                const uploadResponse = await fetch(`/api/action-items/${newActionItem.id}/attachments`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error('Upload failed');
+                }
+                
+                showSuccessMessage(`Action Item "${newActionItem.title}" created with ${fileInput.files.length} attachment(s)!`);
+            } catch (uploadError) {
+                console.error('Error uploading attachments:', uploadError);
+                showSuccessMessage(`Action Item "${newActionItem.title}" created but attachments failed to upload`);
+            }
+        } else {
+            showSuccessMessage(`Action Item "${newActionItem.title}" created successfully!`);
+        }
+        
+        hideModal();
         
         // Refresh the current view if needed
         if (currentProject) {
