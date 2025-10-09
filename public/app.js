@@ -1043,15 +1043,20 @@ async function createIssue(event) {
             }
             
             try {
-                await fetch(`/api/issues/${newIssue.id}/attachments`, {
+                const uploadResponse = await fetch(`/api/issues/${newIssue.id}/attachments`, {
                     method: 'POST',
                     credentials: 'include',
                     body: formData
                 });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error('Upload failed');
+                }
+                
                 showSuccessMessage(`Issue "${newIssue.title}" created with ${fileInput.files.length} attachment(s)!`);
             } catch (uploadError) {
                 console.error('Error uploading attachments:', uploadError);
-                showSuccessMessage(`Issue "${newIssue.title}" created but some attachments failed to upload`);
+                showSuccessMessage(`Issue "${newIssue.title}" created but attachments failed to upload`);
             }
         } else {
             showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
@@ -1204,15 +1209,20 @@ async function createActionItem(event) {
             }
             
             try {
-                await fetch(`/api/action-items/${newActionItem.id}/attachments`, {
+                const uploadResponse = await fetch(`/api/action-items/${newActionItem.id}/attachments`, {
                     method: 'POST',
                     credentials: 'include',
                     body: formData
                 });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error('Upload failed');
+                }
+                
                 showSuccessMessage(`Action Item "${newActionItem.title}" created with ${fileInput.files.length} attachment(s)!`);
             } catch (uploadError) {
                 console.error('Error uploading attachments:', uploadError);
-                showSuccessMessage(`Action Item "${newActionItem.title}" created but some attachments failed to upload`);
+                showSuccessMessage(`Action Item "${newActionItem.title}" created but attachments failed to upload`);
             }
         } else {
             showSuccessMessage(`Action Item "${newActionItem.title}" created successfully!`);
