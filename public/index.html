@@ -1001,6 +1001,66 @@
                 -webkit-box-orient: vertical;
                 overflow: hidden;
             }
+            
+            /* Due date badges */
+            .due-date-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 10px;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 500;
+                margin-top: 8px;
+                border-left: 3px solid;
+            }
+            
+            .due-date-badge i {
+                font-size: 12px;
+            }
+            
+            .due-date-badge.overdue {
+                background: #fee2e2;
+                color: #dc2626;
+                border-left-color: #dc2626;
+            }
+            
+            .due-date-badge.today {
+                background: #fef3c7;
+                color: #d97706;
+                border-left-color: #d97706;
+            }
+            
+            .due-date-badge.soon {
+                background: #fef3c7;
+                color: #f59e0b;
+                border-left-color: #f59e0b;
+            }
+            
+            .due-date-badge.future {
+                background: #dbeafe;
+                color: #2563eb;
+                border-left-color: #2563eb;
+            }
+            
+            .due-date-badge.none {
+                background: #f3f4f6;
+                color: #6b7280;
+                border-left-color: transparent;
+            }
+            
+            /* Mobile responsive */
+            @media (max-width: 768px) {
+                .due-date-badge {
+                    font-size: 11px;
+                    padding: 4px 8px;
+                    gap: 4px;
+                }
+                
+                .due-date-badge i {
+                    font-size: 10px;
+                }
+            }
         </style>
         <script src="comments.js?v=2"></script>
         <script src="app.js?v=22"></script>

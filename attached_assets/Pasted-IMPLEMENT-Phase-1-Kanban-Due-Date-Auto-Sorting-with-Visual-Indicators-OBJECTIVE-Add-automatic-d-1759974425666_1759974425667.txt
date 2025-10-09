@@ -1,0 +1,225 @@
+IMPLEMENT: Phase 1 - Kanban Due Date Auto-Sorting with Visual Indicators
+
+OBJECTIVE:
+Add automatic due date sorting to the Kanban board (Issues and Actions pages) with color-coded visual indicators for urgency.
+
+REQUIREMENTS:
+
+1. SORTING LOGIC:
+   Group and sort items in each Kanban column by due date:
+   - OVERDUE (due_date < today): Red badges, oldest overdue first
+   - DUE TODAY (due_date = today): Yellow badges
+   - UPCOMING (due_date > today): Orange (≤3 days) or Blue (>3 days), soonest first
+   - NO DUE DATE (due_date is null): Gray badges, at bottom
+
+2. VISUAL INDICATORS:
+   Add color-coded due date badges to EVERY issue/action card on Kanban board:
+   
+   Badge colors:
+   - 🔴 Overdue: background #fee2e2, text #dc2626, border-left #dc2626
+   - 🟡 Today: background #fef3c7, text #d97706, border-left #d97706
+   - 🟠 Soon (1-3 days): background #fef3c7, text #f59e0b, border-left #f59e0b
+   - 🔵 Future (3+ days): background #dbeafe, text #2563eb, border-left #2563eb
+   - ⚪ None: background #f3f4f6, text #6b7280
+   
+   Badge text format:
+   - "3 days overdue" (if overdue)
+   - "Due today" (if today)
+   - "Due tomorrow" (if 1 day away)
+   - "Due in 5 days" (if future)
+   - "No due date" (if no date set)
+
+3. IMPLEMENTATION:
+
+   A. In public/js/issues.js:
+```javascript
+   // Add this sorting function
+   function sortByDueDate(items) {
+     const today = new Date();
+     today.setHours(0, 0, 0, 0);
+     
+     const overdue = [];
+     const dueToday = [];
+     const upcoming = [];
+     const noDate = [];
+     
+     items.forEach(item => {
+       if (!item.due_date) {
+         noDate.push(item);
+       } else {
+         const dueDate = new Date(item.due_date);
+         dueDate.setHours(0, 0, 0, 0);
+         
+         if (dueDate < today) {
+           overdue.push(item);
+         } else if (dueDate.getTime() === today.getTime()) {
+           dueToday.push(item);
+         } else {
+           upcoming.push(item);
+         }
+       }
+     });
+     
+     // Sort within groups: earliest first
+     const sortByDate = (a, b) => new Date(a.due_date) - new Date(b.due_date);
+     overdue.sort(sortByDate);
+     upcoming.sort(sortByDate);
+     
+     return [...overdue, ...dueToday, ...upcoming, ...noDate];
+   }
+   
+   // Add badge creation function
+   function createDueDateBadge(dueDate) {
+     if (!dueDate) {
+       return `<div class="due-date-badge none">
+         <i class="fas fa-calendar-times"></i>
+         <span>No due date</span>
+       </div>`;
+     }
+     
+     const today = new Date();
+     today.setHours(0, 0, 0, 0);
+     const due = new Date(dueDate);
+     due.setHours(0, 0, 0, 0);
+     
+     const diffTime = due - today;
+     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+     
+     let badgeClass, icon, text;
+     
+     if (diffDays < 0) {
+       // Overdue
+       badgeClass = 'overdue';
+       icon = 'fa-exclamation-circle';
+       text = Math.abs(diffDays) === 1 ? '1 day overdue' : `${Math.abs(diffDays)} days overdue`;
+     } else if (diffDays === 0) {
+       // Due today
+       badgeClass = 'today';
+       icon = 'fa-calendar-day';
+       text = 'Due today';
+     } else if (diffDays === 1) {
+       // Due tomorrow
+       badgeClass = 'soon';
+       icon = 'fa-clock';
+       text = 'Due tomorrow';
+     } else if (diffDays <= 3) {
+       // Due soon (2-3 days)
+       badgeClass = 'soon';
+       icon = 'fa-clock';
+       text = `Due in ${diffDays} days`;
+     } else {
+       // Future
+       badgeClass = 'future';
+       icon = 'fa-calendar';
+       text = `Due in ${diffDays} days`;
+     }
+     
+     return `<div class="due-date-badge ${badgeClass}">
+       <i class="fas ${icon}"></i>
+       <span>${text}</span>
+     </div>`;
+   }
+B. Update renderKanbanBoard() function:
+
+BEFORE rendering items in each column, call sortByDueDate(items)
+Add badge to EVERY card template using createDueDateBadge(issue.due_date)
+
+C. Apply same changes to public/js/actions.js
+D. Add CSS to public/css/issues.css and public/css/actions.css:
+css   .due-date-badge {
+     display: inline-flex;
+     align-items: center;
+     gap: 6px;
+     padding: 6px 10px;
+     border-radius: 6px;
+     font-size: 13px;
+     font-weight: 500;
+     margin-top: 8px;
+     border-left: 3px solid;
+   }
+   
+   .due-date-badge i {
+     font-size: 12px;
+   }
+   
+   .due-date-badge.overdue {
+     background: #fee2e2;
+     color: #dc2626;
+     border-left-color: #dc2626;
+   }
+   
+   .due-date-badge.today {
+     background: #fef3c7;
+     color: #d97706;
+     border-left-color: #d97706;
+   }
+   
+   .due-date-badge.soon {
+     background: #fef3c7;
+     color: #f59e0b;
+     border-left-color: #f59e0b;
+   }
+   
+   .due-date-badge.future {
+     background: #dbeafe;
+     color: #2563eb;
+     border-left-color: #2563eb;
+   }
+   
+   .due-date-badge.none {
+     background: #f3f4f6;
+     color: #6b7280;
+     border-left-color: transparent;
+   }
+   
+   /* Mobile responsive */
+   @media (max-width: 768px) {
+     .due-date-badge {
+       font-size: 11px;
+       padding: 4px 8px;
+       gap: 4px;
+     }
+     
+     .due-date-badge i {
+       font-size: 10px;
+     }
+   }
+
+WHERE TO APPLY SORTING:
+
+In renderKanbanBoard() function, BEFORE rendering items
+After fetchIssues() / fetchActions() completes
+After creating new items
+After editing items with due date changes
+On page load
+
+
+TESTING:
+Create test items with these due dates to verify:
+
+5 days ago (should show red "5 days overdue" at top)
+Yesterday (should show red "1 day overdue")
+Today (should show yellow "Due today")
+Tomorrow (should show orange "Due tomorrow")
+In 2 days (should show orange "Due in 2 days")
+In 5 days (should show blue "Due in 5 days")
+No due date (should show gray "No due date" at bottom)
+
+
+
+CRITICAL:
+
+Sort items BEFORE rendering them in Kanban columns
+Add badge to EVERY card in Kanban view
+Maintain existing functionality (edit, delete, drag-drop still work)
+Don't modify backend/database - this is frontend-only
+Apply to BOTH issues.html AND actions.html pages
+
+FILES TO MODIFY:
+
+public/js/issues.js
+public/js/actions.js
+public/css/issues.css
+public/css/actions.css
+
+Please implement Phase 1 of due date sorting with visual indicators.
