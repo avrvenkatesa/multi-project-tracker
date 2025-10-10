@@ -299,13 +299,10 @@ async function deleteComment(commentId, itemType) {
 
 async function loadProjectMembers(projectId) {
   try {
-    console.log('[MENTIONS] Loading project members for project:', projectId);
     const response = await axios.get(`/api/projects/${projectId}/members`, { withCredentials: true });
     projectMembers = response.data;
-    console.log('[MENTIONS] Loaded members:', projectMembers.length, 'users');
-    console.log('[MENTIONS] Sample members:', projectMembers.slice(0, 3).map(m => m.username));
   } catch (error) {
-    console.error('[MENTIONS] Error loading project members:', error);
+    console.error('Error loading project members:', error);
     projectMembers = [];
   }
 }
@@ -314,14 +311,7 @@ function setupMentionAutocomplete(textareaId, dropdownId) {
   const textarea = document.getElementById(textareaId);
   const dropdown = document.getElementById(dropdownId);
   
-  if (!textarea || !dropdown) {
-    console.warn('[MENTIONS] Missing elements:', { textarea: !!textarea, dropdown: !!dropdown });
-    return;
-  }
-  
-  console.log('[MENTIONS] Setup autocomplete for:', textareaId, 'with', projectMembers.length, 'members');
-  console.log('[MENTIONS] Initial dropdown classes:', dropdown.className);
-  console.log('[MENTIONS] Has hidden class?:', dropdown.classList.contains('hidden'));
+  if (!textarea || !dropdown) return;
   
   textarea.addEventListener('input', () => {
     const text = textarea.value;
@@ -329,18 +319,13 @@ function setupMentionAutocomplete(textareaId, dropdownId) {
     const textBeforeCursor = text.substring(0, cursorPos);
     const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
     
-    console.log('[MENTIONS] Input detected:', { text, cursorPos, lastAtSymbol });
-    
     if (lastAtSymbol !== -1 && cursorPos - lastAtSymbol > 0) {
       const searchTerm = textBeforeCursor.substring(lastAtSymbol + 1).toLowerCase();
-      console.log('[MENTIONS] Search term:', searchTerm);
       
       if (searchTerm.length > 0 && !searchTerm.includes(' ')) {
         const matches = projectMembers.filter(m => 
           m.username.toLowerCase().startsWith(searchTerm)
         );
-        
-        console.log('[MENTIONS] Found matches:', matches.length);
         
         if (matches.length > 0) {
           showMentionDropdown(dropdown, matches, textarea, lastAtSymbol);
@@ -358,17 +343,7 @@ function setupMentionAutocomplete(textareaId, dropdownId) {
 }
 
 function showMentionDropdown(dropdown, matches, textarea, atPosition) {
-  console.log('[MENTIONS] showMentionDropdown called:', { 
-    dropdown: !!dropdown, 
-    matches: matches.length,
-    textareaId: textarea?.id,
-    atPosition 
-  });
-  
-  if (!dropdown) {
-    console.error('[MENTIONS] Dropdown element is null!');
-    return;
-  }
+  if (!dropdown) return;
   
   dropdown.innerHTML = matches.map(member => {
     const username = escapeHtml(member.username);
@@ -397,9 +372,7 @@ function showMentionDropdown(dropdown, matches, textarea, atPosition) {
     });
   });
   
-  // Use inline style instead of class toggle to avoid CSS conflicts
   dropdown.style.display = 'block';
-  console.log('[MENTIONS] Dropdown shown with display: block');
 }
 
 function hideMentionDropdown(dropdown) {
