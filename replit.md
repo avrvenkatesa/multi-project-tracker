@@ -24,6 +24,7 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 - **Kanban Board**: Automatic and user-controlled multi-criteria sorting, color-coded visual badges, and automated daily refreshes.
 - **Tagging System**: Comprehensive tagging functionality with custom color-coded tags, dedicated tag management interface (tags.html), visual display on Kanban cards with color-coded badges, on-the-fly tag creation from all modals, tag selection for issues and action items, tag-based filtering for issues and action items, and deletion protection (tags in use cannot be deleted).
 - **Filtering & Search**: Advanced filtering system supporting search, type (Issues/Action Items), status, priority, assignee, category, and tags. Filters are composable, persist in URL for shareable links, and display as removable badges.
+- **Shareable Links**: One-click copy link functionality for issues and action items. Copy buttons available on Kanban cards and in edit modals. Shared links automatically open the item in the appropriate modal with visual highlighting (pulsing blue border animation) and smooth scroll-to-item functionality.
 - **Toast Notification System**: User-friendly feedback messages.
 
 ### System Design Choices

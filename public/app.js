@@ -420,7 +420,7 @@ async function selectProject(projectId) {
 
     await loadProjectData(projectId);
     
-    // Check for deep-link parameters (itemId and itemType from email notifications)
+    // Check for deep-link parameters (itemId and itemType from email notifications or shared links)
     const params = new URLSearchParams(window.location.search);
     const itemId = params.get('itemId');
     const itemType = params.get('itemType');
@@ -429,6 +429,10 @@ async function selectProject(projectId) {
         // Auto-open the item detail modal
         setTimeout(() => {
             openItemDetailModal(parseInt(itemId), itemType);
+            
+            // Highlight and scroll to the card
+            highlightCard(parseInt(itemId));
+            setTimeout(() => scrollToCard(parseInt(itemId)), 300);
         }, 500); // Small delay to ensure kanban board is rendered
         
         // Clean up URL (remove itemId and itemType params)
@@ -983,6 +987,14 @@ async function renderKanbanBoard() {
                                 <span>Attachments</span>
                                 ${(item.attachment_count || 0) > 0 ? `<span class="ml-auto px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">${item.attachment_count}</span>` : ''}
                             </button>
+                            <button class="copy-link-btn flex items-center text-xs text-gray-600 hover:text-purple-600 transition-colors w-full" 
+                                    data-item-id="${item.id}" 
+                                    data-item-type="${item.type || 'issue'}">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                </svg>
+                                <span>Copy Link</span>
+                            </button>
                             ${canEdit || canDelete ? `
                                 <div class="flex gap-1 pt-1">
                                     ${canEdit ? `
@@ -1062,6 +1074,16 @@ async function renderKanbanBoard() {
                     const itemId = parseInt(this.getAttribute('data-item-id'));
                     const itemType = this.getAttribute('data-item-type');
                     openItemDetailModal(itemId, itemType);
+                });
+            });
+            
+            // Add copy link button listeners
+            container.querySelectorAll('.copy-link-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent drag start and card click
+                    const itemId = parseInt(this.getAttribute('data-item-id'));
+                    const itemType = this.getAttribute('data-item-type');
+                    copyItemLink(itemId, itemType);
                 });
             });
             
@@ -3849,6 +3871,14 @@ async function openEditModal(itemId, itemType) {
       
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
+      
+      // Setup copy link button (use onclick to avoid duplicate listeners)
+      const copyLinkBtn = document.getElementById('copyEditIssueLinkBtn');
+      if (copyLinkBtn) {
+        copyLinkBtn.onclick = function() {
+          copyItemLink(itemId, 'issue');
+        };
+      }
     } else {
       // Populate action item edit modal
       document.getElementById('edit-action-item-id').value = item.id;
@@ -3878,6 +3908,14 @@ async function openEditModal(itemId, itemType) {
       
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
+      
+      // Setup copy link button (use onclick to avoid duplicate listeners)
+      const copyLinkBtn = document.getElementById('copyEditActionItemLinkBtn');
+      if (copyLinkBtn) {
+        copyLinkBtn.onclick = function() {
+          copyItemLink(itemId, 'action-item');
+        };
+      }
     }
   } catch (error) {
     console.error('Error loading item for edit:', error);
@@ -4363,4 +4401,79 @@ document.getElementById('edit-action-item-tag-select')?.addEventListener('change
     e.target.value = '';
   }
 });
+
+// ============= COPY LINK FEATURE =============
+
+/**
+ * Copy a shareable link to an issue or action item
+ * @param {number} itemId - The ID of the item
+ * @param {string} itemType - 'issue' or 'action-item'
+ */
+function copyItemLink(itemId, itemType) {
+  if (!currentProject) {
+    showToast('❌ No project selected', 'error');
+    return;
+  }
+  
+  // Construct the URL with project and item parameters
+  const baseUrl = window.location.origin;
+  const url = `${baseUrl}/?project=${currentProject.id}&itemId=${itemId}&itemType=${itemType}`;
+  
+  // Copy to clipboard using Clipboard API
+  navigator.clipboard.writeText(url)
+    .then(() => {
+      showToast('✅ Link copied to clipboard!', 'success');
+    })
+    .catch(err => {
+      console.error('Failed to copy link:', err);
+      // Fallback for older browsers
+      fallbackCopyToClipboard(url);
+    });
+}
+
+/**
+ * Fallback copy method for older browsers
+ * @param {string} text - The text to copy
+ */
+function fallbackCopyToClipboard(text) {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-999999px';
+  document.body.appendChild(textArea);
+  textArea.select();
+  
+  try {
+    document.execCommand('copy');
+    showToast('✅ Link copied to clipboard!', 'success');
+  } catch (err) {
+    console.error('Fallback copy failed:', err);
+    showToast('❌ Failed to copy link', 'error');
+  }
+  
+  document.body.removeChild(textArea);
+}
+
+/**
+ * Highlight a card temporarily
+ * @param {number} itemId - The ID of the item to highlight
+ */
+function highlightCard(itemId) {
+  const card = document.querySelector(`[data-item-id="${itemId}"]`);
+  if (card) {
+    card.classList.add('highlighted');
+    setTimeout(() => card.classList.remove('highlighted'), 2500);
+  }
+}
+
+/**
+ * Scroll to a card smoothly
+ * @param {number} itemId - The ID of the item to scroll to
+ */
+function scrollToCard(itemId) {
+  const card = document.querySelector(`[data-item-id="${itemId}"]`);
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
 
