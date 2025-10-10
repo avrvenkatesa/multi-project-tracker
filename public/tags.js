@@ -126,14 +126,14 @@ function renderTags() {
           </span>
         </div>
         <div class="flex gap-1">
-          <button onclick="editTag(${tag.id})" 
+          <button data-action="edit" data-tag-id="${tag.id}"
                   class="p-1 text-gray-600 hover:text-blue-600 rounded" 
                   title="Edit tag">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
             </svg>
           </button>
-          <button onclick="deleteTag(${tag.id}, '${escapeHtml(tag.name)}', ${tag.usage_count})" 
+          <button data-action="delete" data-tag-id="${tag.id}" data-tag-name="${escapeHtml(tag.name)}" data-usage-count="${tag.usage_count}"
                   class="p-1 text-gray-600 hover:text-red-600 rounded" 
                   title="Delete tag">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,6 +151,35 @@ function renderTags() {
       </div>
     </div>
   `).join('');
+  
+  // Add event delegation for edit and delete buttons
+  setupTagActionListeners();
+}
+
+// Setup event listeners for tag actions (edit/delete)
+function setupTagActionListeners() {
+  const grid = document.getElementById('tagsGrid');
+  
+  // Remove old listener if exists
+  const oldGrid = grid.cloneNode(true);
+  grid.replaceWith(oldGrid);
+  const newGrid = document.getElementById('tagsGrid');
+  
+  newGrid.addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-action]');
+    if (!button) return;
+    
+    const action = button.dataset.action;
+    const tagId = parseInt(button.dataset.tagId);
+    
+    if (action === 'edit') {
+      editTag(tagId);
+    } else if (action === 'delete') {
+      const tagName = button.dataset.tagName;
+      const usageCount = parseInt(button.dataset.usageCount);
+      deleteTag(tagId, tagName, usageCount);
+    }
+  });
 }
 
 // Show tag modal (create or edit)
