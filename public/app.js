@@ -2431,7 +2431,7 @@ async function populateTagFilter() {
   
   try {
     // Fetch tags for the current project
-    const response = await axios.get(`/api/tags?projectId=${currentProject.id}`);
+    const response = await axios.get(`/api/projects/${currentProject.id}/tags`);
     const tags = response.data;
     
     // Build tag options
