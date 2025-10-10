@@ -22,7 +22,8 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 - **Communication**: Comprehensive comment system with markdown and @mention autocomplete, including email notifications.
 - **File Attachments**: Upload, view, download, and delete files associated with issues and action items.
 - **Kanban Board**: Automatic and user-controlled multi-criteria sorting, color-coded visual badges, and automated daily refreshes.
-- **Tagging System**: Comprehensive tagging functionality with custom color-coded tags, dedicated tag management interface (tags.html), visual display on Kanban cards with color-coded badges, on-the-fly tag creation from all modals, tag selection for issues and action items, and deletion protection (tags in use cannot be deleted).
+- **Tagging System**: Comprehensive tagging functionality with custom color-coded tags, dedicated tag management interface (tags.html), visual display on Kanban cards with color-coded badges, on-the-fly tag creation from all modals, tag selection for issues and action items, tag-based filtering for issues and action items, and deletion protection (tags in use cannot be deleted).
+- **Filtering & Search**: Advanced filtering system supporting search, type (Issues/Action Items), status, priority, assignee, category, and tags. Filters are composable, persist in URL for shareable links, and display as removable badges.
 - **Toast Notification System**: User-friendly feedback messages.
 
 ### System Design Choices
