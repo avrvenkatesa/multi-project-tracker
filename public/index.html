@@ -1211,6 +1211,21 @@
                 border-left: 3px solid;
             }
             
+            /* Highlight animation for shared links */
+            @keyframes highlight-pulse {
+                0%, 100% {
+                    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+                }
+                50% {
+                    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.4);
+                }
+            }
+            
+            .highlight-card {
+                animation: highlight-pulse 2s ease-in-out 3;
+                border: 2px solid #3b82f6 !important;
+            }
+            
             .due-date-badge i {
                 font-size: 12px;
             }
@@ -1449,7 +1464,7 @@
             }
         </style>
         <script src="comments.js?v=8"></script>
-        <script src="app.js?v=41"></script>
+        <script src="app.js?v=43"></script>
         <script src="js/project-management.js"></script>
     </body>
 </html>
