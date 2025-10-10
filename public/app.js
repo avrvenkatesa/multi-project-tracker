@@ -3779,8 +3779,8 @@ async function openEditModal(itemId, itemType) {
         await loadProjectTags(item.project_id);
         const itemTags = await loadItemTags(itemId, 'issue');
         selectedIssueTags = itemTags;
-        populateTagSelect('issue');
-        renderSelectedTags('issue');
+        populateTagSelect('edit-issue');
+        renderSelectedTags('edit-issue');
       }
       
       // Setup new tag creation handlers
@@ -3808,8 +3808,8 @@ async function openEditModal(itemId, itemType) {
         await loadProjectTags(item.project_id);
         const itemTags = await loadItemTags(itemId, 'action-item');
         selectedActionItemTags = itemTags;
-        populateTagSelect('action-item');
-        renderSelectedTags('action-item');
+        populateTagSelect('edit-action-item');
+        renderSelectedTags('edit-action-item');
       }
       
       // Setup new tag creation handlers
@@ -4192,14 +4192,32 @@ function renderSelectedTags(itemType) {
   if (!container) return;
   
   const selectedTags = itemType.includes('issue') ? selectedIssueTags : selectedActionItemTags;
-  const baseType = itemType.includes('issue') ? 'issue' : 'action-item';
   
   container.innerHTML = selectedTags.map(tag => `
     <span class="tag-badge" style="background-color: ${tag.color}20; color: ${tag.color}; border-color: ${tag.color}">
       ${escapeHtml(tag.name)}
-      <span class="remove-tag" onclick="removeTag(${tag.id}, '${baseType}')">&times;</span>
+      <span class="remove-tag" data-tag-id="${tag.id}" data-item-type="${itemType}">&times;</span>
     </span>
   `).join('');
+  
+  // Add event delegation for remove buttons
+  setupRemoveTagListeners(container);
+}
+
+// Setup event listeners for removing tags
+function setupRemoveTagListeners(container) {
+  // Remove old listener if exists
+  const oldContainer = container.cloneNode(true);
+  container.replaceWith(oldContainer);
+  const newContainer = document.getElementById(oldContainer.id);
+  
+  newContainer.addEventListener('click', (e) => {
+    if (e.target.classList.contains('remove-tag')) {
+      const tagId = parseInt(e.target.dataset.tagId);
+      const itemType = e.target.dataset.itemType;
+      removeTag(tagId, itemType);
+    }
+  });
 }
 
 // Add tag to item
@@ -4207,7 +4225,7 @@ function addTag(tagId, itemType) {
   const tag = projectTags.find(t => t.id == tagId);
   if (!tag) return;
   
-  if (itemType === 'issue') {
+  if (itemType.includes('issue')) {
     if (!selectedIssueTags.find(t => t.id === tag.id)) {
       selectedIssueTags.push(tag);
     }
@@ -4223,7 +4241,7 @@ function addTag(tagId, itemType) {
 
 // Remove tag from item
 function removeTag(tagId, itemType) {
-  if (itemType === 'issue') {
+  if (itemType.includes('issue')) {
     selectedIssueTags = selectedIssueTags.filter(t => t.id != tagId);
   } else {
     selectedActionItemTags = selectedActionItemTags.filter(t => t.id != tagId);
@@ -4272,14 +4290,14 @@ function renderTagBadge(tag) {
 // Setup tag select change handlers
 document.getElementById('edit-issue-tag-select')?.addEventListener('change', function(e) {
   if (e.target.value) {
-    addTag(parseInt(e.target.value), 'issue');
+    addTag(parseInt(e.target.value), 'edit-issue');
     e.target.value = '';
   }
 });
 
 document.getElementById('edit-action-item-tag-select')?.addEventListener('change', function(e) {
   if (e.target.value) {
-    addTag(parseInt(e.target.value), 'action-item');
+    addTag(parseInt(e.target.value), 'edit-action-item');
     e.target.value = '';
   }
 });
