@@ -299,10 +299,14 @@ async function deleteComment(commentId, itemType) {
 
 async function loadProjectMembers(projectId) {
   try {
+    console.log('[MENTIONS] Loading project members for project:', projectId);
     const response = await axios.get(`/api/projects/${projectId}/members`, { withCredentials: true });
     projectMembers = response.data;
+    console.log('[MENTIONS] Loaded members:', projectMembers.length, 'users');
+    console.log('[MENTIONS] Sample members:', projectMembers.slice(0, 3).map(m => m.username));
   } catch (error) {
-    console.error('Error loading project members:', error);
+    console.error('[MENTIONS] Error loading project members:', error);
+    projectMembers = [];
   }
 }
 
@@ -547,8 +551,11 @@ async function openItemDetailModal(itemId, itemType) {
     
     modal.classList.remove('hidden');
     
+    console.log('[MENTIONS] currentProject:', currentProject);
     if (currentProject) {
       await loadProjectMembers(currentProject.id);
+    } else {
+      console.warn('[MENTIONS] No currentProject - mentions will not work!');
     }
     
     setupMentionAutocomplete('item-detail-new-comment', 'item-detail-mention-dropdown');
