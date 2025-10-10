@@ -1,0 +1,483 @@
+IMPLEMENT: Tagging System for Issues and Action Items
+OBJECTIVE:
+Add comprehensive tagging capability to issues and action items with tag management, color-coded badges, filtering, and deletion protection.
+REQUIREMENTS:
+
+CREATE DATABASE SCHEMA:
+A. Create tags table:
+
+sql   CREATE TABLE tags (
+     id SERIAL PRIMARY KEY,
+     project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+     name VARCHAR(50) NOT NULL,
+     color VARCHAR(7) NOT NULL,
+     description TEXT,
+     created_by INTEGER REFERENCES users(id),
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     UNIQUE(project_id, name),
+     CHECK (color ~ '^#[0-9A-Fa-f]{6}$')
+   );
+   
+   CREATE INDEX idx_tags_project ON tags(project_id);
+   CREATE INDEX idx_tags_name ON tags(name);
+B. Create issue_tags junction table:
+sql   CREATE TABLE issue_tags (
+     id SERIAL PRIMARY KEY,
+     issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+     tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     UNIQUE(issue_id, tag_id)
+   );
+   
+   CREATE INDEX idx_issue_tags_issue ON issue_tags(issue_id);
+   CREATE INDEX idx_issue_tags_tag ON issue_tags(tag_id);
+C. Create action_item_tags junction table:
+sql   CREATE TABLE action_item_tags (
+     id SERIAL PRIMARY KEY,
+     action_item_id INTEGER NOT NULL REFERENCES action_items(id) ON DELETE CASCADE,
+     tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     UNIQUE(action_item_id, tag_id)
+   );
+   
+   CREATE INDEX idx_action_item_tags_action ON action_item_tags(action_item_id);
+   CREATE INDEX idx_action_item_tags_tag ON action_item_tags(tag_id);
+
+IMPLEMENT TAG MANAGEMENT API ENDPOINTS:
+Add these endpoints to server.js:
+
+javascript   // Get all tags for project (with usage count)
+   app.get('/api/projects/:projectId/tags', authenticateToken, async (req, res) => {
+     try {
+       const result = await pool.query(
+         `SELECT 
+           t.*,
+           (SELECT COUNT(*) FROM issue_tags WHERE tag_id = t.id) +
+           (SELECT COUNT(*) FROM action_item_tags WHERE tag_id = t.id) as usage_count
+         FROM tags t
+         WHERE t.project_id = $1
+         ORDER BY t.name`,
+         [req.params.projectId]
+       );
+       res.json(result.rows);
+     } catch (error) {
+       console.error('Error fetching tags:', error);
+       res.status(500).json({ error: 'Failed to fetch tags' });
+     }
+   });
+   
+   // Create new tag
+   app.post('/api/projects/:projectId/tags', authenticateToken, async (req, res) => {
+     try {
+       const { name, color, description } = req.body;
+       const result = await pool.query(
+         `INSERT INTO tags (project_id, name, color, description, created_by, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          RETURNING *`,
+         [req.params.projectId, name, color, description, req.user.userId]
+       );
+       res.status(201).json(result.rows[0]);
+     } catch (error) {
+       if (error.code === '23505') {
+         res.status(409).json({ error: 'Tag name already exists in this project' });
+       } else {
+         console.error('Error creating tag:', error);
+         res.status(500).json({ error: 'Failed to create tag' });
+       }
+     }
+   });
+   
+   // Update tag
+   app.patch('/api/tags/:tagId', authenticateToken, async (req, res) => {
+     try {
+       const { name, color, description } = req.body;
+       const result = await pool.query(
+         `UPDATE tags 
+          SET name = COALESCE($1, name),
+              color = COALESCE($2, color),
+              description = COALESCE($3, description),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = $4
+          RETURNING *`,
+         [name, color, description, req.params.tagId]
+       );
+       res.json(result.rows[0]);
+     } catch (error) {
+       console.error('Error updating tag:', error);
+       res.status(500).json({ error: 'Failed to update tag' });
+     }
+   });
+   
+   // Delete tag (only if not in use)
+   app.delete('/api/tags/:tagId', authenticateToken, async (req, res) => {
+     try {
+       // Check usage count
+       const usageResult = await pool.query(
+         `SELECT 
+           (SELECT COUNT(*) FROM issue_tags WHERE tag_id = $1) +
+           (SELECT COUNT(*) FROM action_item_tags WHERE tag_id = $1) as count`,
+         [req.params.tagId]
+       );
+       
+       const usageCount = parseInt(usageResult.rows[0].count);
+       
+       if (usageCount > 0) {
+         return res.status(409).json({ 
+           error: `Cannot delete tag. It is used by ${usageCount} item(s)` 
+         });
+       }
+       
+       await pool.query('DELETE FROM tags WHERE id = $1', [req.params.tagId]);
+       res.json({ message: 'Tag deleted successfully' });
+     } catch (error) {
+       console.error('Error deleting tag:', error);
+       res.status(500).json({ error: 'Failed to delete tag' });
+     }
+   });
+   
+   // Get issue tags
+   app.get('/api/issues/:issueId/tags', authenticateToken, async (req, res) => {
+     try {
+       const result = await pool.query(
+         `SELECT t.* FROM tags t
+          JOIN issue_tags it ON t.id = it.tag_id
+          WHERE it.issue_id = $1
+          ORDER BY t.name`,
+         [req.params.issueId]
+       );
+       res.json(result.rows);
+     } catch (error) {
+       console.error('Error fetching issue tags:', error);
+       res.status(500).json({ error: 'Failed to fetch tags' });
+     }
+   });
+   
+   // Add tag to issue
+   app.post('/api/issues/:issueId/tags', authenticateToken, async (req, res) => {
+     try {
+       const { tag_id } = req.body;
+       await pool.query(
+         `INSERT INTO issue_tags (issue_id, tag_id, created_at)
+          VALUES ($1, $2, CURRENT_TIMESTAMP)
+          ON CONFLICT (issue_id, tag_id) DO NOTHING`,
+         [req.params.issueId, tag_id]
+       );
+       res.status(201).json({ message: 'Tag added to issue' });
+     } catch (error) {
+       console.error('Error adding tag to issue:', error);
+       res.status(500).json({ error: 'Failed to add tag' });
+     }
+   });
+   
+   // Remove tag from issue
+   app.delete('/api/issues/:issueId/tags/:tagId', authenticateToken, async (req, res) => {
+     try {
+       await pool.query(
+         'DELETE FROM issue_tags WHERE issue_id = $1 AND tag_id = $2',
+         [req.params.issueId, req.params.tagId]
+       );
+       res.json({ message: 'Tag removed from issue' });
+     } catch (error) {
+       console.error('Error removing tag from issue:', error);
+       res.status(500).json({ error: 'Failed to remove tag' });
+     }
+   });
+   
+   // Apply similar endpoints for action items:
+   // GET /api/action-items/:actionItemId/tags
+   // POST /api/action-items/:actionItemId/tags
+   // DELETE /api/action-items/:actionItemId/tags/:tagId
+
+UPDATE EXISTING API ENDPOINTS:
+Modify GET issues and actions endpoints to include tags:
+
+javascript   // In GET /api/projects/:projectId/issues
+   // Add tags to the query
+   const result = await pool.query(
+     `SELECT 
+       i.*,
+       u.name as creator_name,
+       COALESCE(
+         json_agg(
+           json_build_object('id', t.id, 'name', t.name, 'color', t.color)
+           ORDER BY t.name
+         ) FILTER (WHERE t.id IS NOT NULL),
+         '[]'
+       ) as tags
+     FROM issues i
+     LEFT JOIN users u ON i.created_by = u.id
+     LEFT JOIN issue_tags it ON i.id = it.issue_id
+     LEFT JOIN tags t ON it.tag_id = t.id
+     WHERE i.project_id = $1
+     GROUP BY i.id, u.name
+     ORDER BY i.created_at DESC`,
+     [req.params.projectId]
+   );
+
+CREATE TAG MANAGEMENT INTERFACE:
+A. Create public/tags.html:
+
+html   <!DOCTYPE html>
+   <html lang="en">
+   <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Tag Management - Multi-Project Tracker</title>
+     <link rel="stylesheet" href="css/common.css">
+     <link rel="stylesheet" href="css/tags.css">
+     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+   </head>
+   <body>
+     <header class="app-header">
+       <!-- Navigation here -->
+     </header>
+     
+     <main class="container">
+       <div class="page-header">
+         <h1>Tag Management</h1>
+         <button class="btn btn-primary" onclick="showCreateTagModal()">
+           <i class="fas fa-plus"></i> Create Tag
+         </button>
+       </div>
+       
+       <div class="tags-grid" id="tagsGrid">
+         <!-- Tags will be rendered here -->
+       </div>
+     </main>
+     
+     <!-- Create/Edit Tag Modal -->
+     <div id="tagModal" class="modal">
+       <div class="modal-content">
+         <h2 id="modalTitle">Create Tag</h2>
+         <form id="tagForm">
+           <label>Name *</label>
+           <input type="text" id="tagName" required maxlength="50">
+           
+           <label>Color *</label>
+           <input type="color" id="tagColor" required value="#3b82f6">
+           
+           <label>Description</label>
+           <textarea id="tagDescription" rows="3"></textarea>
+           
+           <div class="modal-actions">
+             <button type="button" class="btn" onclick="closeModal()">Cancel</button>
+             <button type="submit" class="btn btn-primary">Save Tag</button>
+           </div>
+         </form>
+       </div>
+     </div>
+     
+     <script src="js/tags.js"></script>
+   </body>
+   </html>
+B. Create public/js/tags.js with CRUD operations
+
+ADD TAGS TO ISSUE/ACTION CREATE/EDIT MODALS:
+In issues.js and actions.js, update create/edit modal HTML:
+
+html   <!-- Add to modal form -->
+   <div class="form-group">
+     <label>Tags</label>
+     <div class="tag-input-container">
+       <input type="text" 
+              id="tagInput" 
+              placeholder="Type to search or create tags..."
+              onkeyup="handleTagInput(event)"
+              onfocus="showTagSuggestions()">
+       <div id="tagSuggestions" class="tag-suggestions" style="display: none;">
+         <!-- Autocomplete suggestions -->
+       </div>
+     </div>
+     
+     <div id="selectedTags" class="selected-tags">
+       <!-- Selected tags will appear here -->
+     </div>
+   </div>
+Add JavaScript functions:
+javascript   async function fetchProjectTags() {
+     const response = await fetch(`/api/projects/${currentProjectId}/tags`, {
+       credentials: 'include'
+     });
+     return await response.json();
+   }
+   
+   function renderTagBadge(tag, removable = false) {
+     return `
+       <span class="tag-badge" style="background-color: ${tag.color}20; color: ${tag.color}; border: 1px solid ${tag.color}">
+         ${tag.name}
+         ${removable ? `<i class="fas fa-times" onclick="removeTag(${tag.id})"></i>` : ''}
+       </span>
+     `;
+   }
+   
+   async function addTagToItem(itemId, tagId) {
+     await fetch(`/api/issues/${itemId}/tags`, {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       credentials: 'include',
+       body: JSON.stringify({ tag_id: tagId })
+     });
+   }
+
+DISPLAY TAGS ON CARDS:
+Update renderKanbanCard() to show tags:
+
+javascript   function renderKanbanCard(item) {
+     const tagsHTML = item.tags && item.tags.length > 0
+       ? `<div class="card-tags">
+            ${item.tags.map(tag => renderTagBadge(tag)).join('')}
+          </div>`
+       : '';
+     
+     return `
+       <div class="kanban-card">
+         <!-- Existing card content -->
+         ${tagsHTML}
+       </div>
+     `;
+   }
+
+ADD TAG FILTERING:
+Add tag filter to issues.html and actions.html:
+
+html   <div class="filters">
+     <!-- Existing filters -->
+     <select id="tagFilter" multiple onchange="applyFilters()">
+       <option value="">All Tags</option>
+       <!-- Tags populated dynamically -->
+     </select>
+     
+     <label>
+       <input type="radio" name="tagLogic" value="OR" checked> Match Any
+       <input type="radio" name="tagLogic" value="AND"> Match All
+     </label>
+   </div>
+
+ADD CSS STYLING:
+Create public/css/tags.css:
+
+css   .tags-grid {
+     display: grid;
+     gap: 16px;
+     margin-top: 24px;
+   }
+   
+   .tag-item {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     padding: 16px;
+     background: white;
+     border: 1px solid #e5e7eb;
+     border-radius: 8px;
+   }
+   
+   .tag-badge {
+     display: inline-flex;
+     align-items: center;
+     gap: 6px;
+     padding: 4px 12px;
+     border-radius: 16px;
+     font-size: 12px;
+     font-weight: 500;
+   }
+   
+   .tag-badge i {
+     cursor: pointer;
+     opacity: 0.7;
+   }
+   
+   .tag-badge i:hover {
+     opacity: 1;
+   }
+   
+   .card-tags {
+     display: flex;
+     flex-wrap: wrap;
+     gap: 6px;
+     margin-top: 8px;
+     padding-top: 8px;
+     border-top: 1px solid #e5e7eb;
+   }
+   
+   .tag-input-container {
+     position: relative;
+   }
+   
+   .tag-suggestions {
+     position: absolute;
+     top: 100%;
+     left: 0;
+     right: 0;
+     background: white;
+     border: 1px solid #e5e7eb;
+     border-radius: 6px;
+     max-height: 200px;
+     overflow-y: auto;
+     z-index: 1000;
+     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+   }
+   
+   .tag-suggestion-item {
+     padding: 8px 12px;
+     cursor: pointer;
+   }
+   
+   .tag-suggestion-item:hover {
+     background: #f3f4f6;
+   }
+   
+   .selected-tags {
+     display: flex;
+     flex-wrap: wrap;
+     gap: 8px;
+     margin-top: 8px;
+   }
+CRITICAL REQUIREMENTS:
+
+Create 3 new database tables
+Implement 13 API endpoints (7 tag management + 6 tag assignment)
+Add tag management interface (tags.html)
+Update issue/action modals to support tags
+Display tags on cards
+Add tag filtering capability
+Prevent deletion of tags in use
+Include tags in API responses (JOIN queries)
+Apply to BOTH issues and action items
+Color-coded tag badges
+Autocomplete for tag input
+Mobile responsive
+
+FILES TO CREATE:
+
+Database migration SQL script
+public/tags.html
+public/js/tags.js
+public/css/tags.css
+
+FILES TO MODIFY:
+
+server.js (add 13 endpoints + update GET endpoints)
+public/js/issues.js (tag functionality)
+public/js/actions.js (tag functionality)
+public/css/issues.css (tag styling)
+public/css/actions.css (tag styling)
+Navigation (add Tags link)
+
+TESTING:
+
+Create tag
+Edit tag
+Delete unused tag
+Try delete tag in use (should prevent)
+Add tags to issue
+Add tags to action
+Remove tags from items
+Filter by single tag
+Filter by multiple tags
+Autocomplete shows suggestions
+Tags display on cards
+Mobile responsive
+
+Please implement the comprehensive tagging system for issues and action items.
