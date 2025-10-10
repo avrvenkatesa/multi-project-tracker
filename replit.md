@@ -131,3 +131,18 @@ Implemented creator username display on Kanban cards and email notifications whe
 - **Files Modified**: server.js (GET and PATCH endpoints), services/notificationService.js (new method), public/app.js (v28 - card rendering), public/index.html (CSS styles)
 - **Impact**: Provides visibility into item ownership and automated recognition when work is completed, improving team communication and accountability
 - **Note**: Users table contains username field only (no separate name field), so creator display uses username
+
+### Documentation Update: Help Center Enhancement (October 10, 2025)
+Comprehensively updated all help documentation to reflect recent application enhancements:
+- **New Help Pages Created**:
+  - File Attachments (attachments.html) - Complete guide to uploading, viewing, downloading, and managing file attachments
+  - Admin Tools (admin-tools.html) - Documentation for System Administrator utilities, including Assignee Name Correction Tool
+- **Updated Existing Pages**:
+  - Notifications - Added Item Completion Notifications section explaining automated emails when items are marked Done
+  - Kanban Board - Added Card Information Display section (creator, attachment badges, due date color coding) and Advanced Multi-Criteria Sorting section (due date urgency, priority, recently updated, manual sort)
+  - Comments & @Mentions - Enhanced @Mentions section with detailed autocomplete functionality explanation and smart features
+- **Main Help Center Updates**:
+  - Added File Attachments and Admin Tools cards to main help landing page (help.html)
+  - Search functionality automatically includes new topics (works with existing card structure)
+- **Files Modified**: public/help/attachments.html (new), public/help/admin-tools.html (new), public/help/notifications.html, public/help/kanban-board.html, public/help/comments-mentions.html, public/help.html
+- **Impact**: Help documentation now accurately reflects all current features, making it easier for users to learn and use the application effectively
