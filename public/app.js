@@ -465,6 +465,7 @@ async function loadProjectData(projectId) {
         displayActiveFilters();
         displayResultsCount();
         populateAssigneeFilter();
+        populateTagFilter();
         
         // Load review queue
         await loadReviewQueue(projectId);
