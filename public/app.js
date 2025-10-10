@@ -1420,6 +1420,21 @@ function showCreateIssue() {
                 <p class="text-xs text-gray-500 mt-1">PDF, DOC, XLS, Images, ZIP (Max 10MB per file, 5 files max)</p>
             </div>
             
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    Tags
+                </label>
+                <select id="create-issue-tag-select" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 mb-2">
+                    <option value="">Add a tag...</option>
+                </select>
+                <div id="create-issue-selected-tags" class="flex flex-wrap gap-2">
+                    <!-- Selected tags will appear here -->
+                </div>
+            </div>
+            
             <div class="flex justify-end space-x-3">
                 <button type="button" id="cancel-issue-btn" 
                         class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
@@ -1438,6 +1453,25 @@ function showCreateIssue() {
     // Add event listeners
     document.getElementById('cancel-issue-btn').addEventListener('click', hideModal);
     document.getElementById('create-issue-form').addEventListener('submit', createIssue);
+    
+    // Initialize tags for create form
+    selectedIssueTags = [];
+    loadProjectTags(currentProject.id).then(() => {
+        populateTagSelect('create-issue');
+    });
+    
+    // Tag selection handler
+    document.getElementById('create-issue-tag-select')?.addEventListener('change', function(e) {
+        if (e.target.value) {
+            const tag = projectTags.find(t => t.id == e.target.value);
+            if (tag && !selectedIssueTags.find(t => t.id === tag.id)) {
+                selectedIssueTags.push(tag);
+                renderSelectedTags('create-issue');
+                populateTagSelect('create-issue');
+            }
+            e.target.value = '';
+        }
+    });
 }
 
 // Helper functions for dynamic dropdowns
@@ -1515,6 +1549,21 @@ async function createIssue(event) {
         }
         
         const newIssue = await response.json();
+        
+        // Save tags if any selected
+        if (selectedIssueTags.length > 0) {
+            for (const tag of selectedIssueTags) {
+                try {
+                    await axios.post(`/api/issues/${newIssue.id}/tags`, {
+                        tag_id: tag.id
+                    }, {
+                        withCredentials: true
+                    });
+                } catch (error) {
+                    console.error('Error adding tag:', error);
+                }
+            }
+        }
         
         // Handle file uploads if any files selected
         const fileInput = document.getElementById('create-issue-attachments');
@@ -1633,6 +1682,21 @@ function showCreateActionItem() {
                 <p class="text-xs text-gray-500 mt-1">PDF, DOC, XLS, Images, ZIP (Max 10MB per file, 5 files max)</p>
             </div>
             
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    Tags
+                </label>
+                <select id="create-action-item-tag-select" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 mb-2">
+                    <option value="">Add a tag...</option>
+                </select>
+                <div id="create-action-item-selected-tags" class="flex flex-wrap gap-2">
+                    <!-- Selected tags will appear here -->
+                </div>
+            </div>
+            
             <div class="flex justify-end space-x-3">
                 <button type="button" id="cancel-action-item-btn" 
                         class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
@@ -1651,6 +1715,25 @@ function showCreateActionItem() {
     // Add event listeners
     document.getElementById('cancel-action-item-btn').addEventListener('click', hideModal);
     document.getElementById('create-action-item-form').addEventListener('submit', createActionItem);
+    
+    // Initialize tags for create form
+    selectedActionItemTags = [];
+    loadProjectTags(currentProject.id).then(() => {
+        populateTagSelect('create-action-item');
+    });
+    
+    // Tag selection handler
+    document.getElementById('create-action-item-tag-select')?.addEventListener('change', function(e) {
+        if (e.target.value) {
+            const tag = projectTags.find(t => t.id == e.target.value);
+            if (tag && !selectedActionItemTags.find(t => t.id === tag.id)) {
+                selectedActionItemTags.push(tag);
+                renderSelectedTags('create-action-item');
+                populateTagSelect('create-action-item');
+            }
+            e.target.value = '';
+        }
+    });
 }
 
 // Create action item function
@@ -1681,6 +1764,21 @@ async function createActionItem(event) {
         }
         
         const newActionItem = await response.json();
+        
+        // Save tags if any selected
+        if (selectedActionItemTags.length > 0) {
+            for (const tag of selectedActionItemTags) {
+                try {
+                    await axios.post(`/api/action-items/${newActionItem.id}/tags`, {
+                        tag_id: tag.id
+                    }, {
+                        withCredentials: true
+                    });
+                } catch (error) {
+                    console.error('Error adding tag:', error);
+                }
+            }
+        }
         
         // Handle file uploads if any files selected
         const fileInput = document.getElementById('create-action-item-attachments');
@@ -3825,12 +3923,14 @@ async function loadItemTags(itemId, itemType) {
 
 // Populate tag select dropdown
 function populateTagSelect(itemType) {
-  const selectId = itemType === 'issue' ? 'edit-issue-tag-select' : 'edit-action-item-tag-select';
+  const selectId = itemType.includes('issue') ? `${itemType}-tag-select` : `${itemType}-tag-select`;
   const select = document.getElementById(selectId);
+  
+  if (!select) return;
   
   select.innerHTML = '<option value="">Add a tag...</option>';
   
-  const selectedTags = itemType === 'issue' ? selectedIssueTags : selectedActionItemTags;
+  const selectedTags = itemType.includes('issue') ? selectedIssueTags : selectedActionItemTags;
   const availableTags = projectTags.filter(tag => 
     !selectedTags.find(st => st.id === tag.id)
   );
@@ -3845,14 +3945,18 @@ function populateTagSelect(itemType) {
 
 // Render selected tags
 function renderSelectedTags(itemType) {
-  const containerId = itemType === 'issue' ? 'edit-issue-selected-tags' : 'edit-action-item-selected-tags';
+  const containerId = itemType.includes('issue') ? `${itemType}-selected-tags` : `${itemType}-selected-tags`;
   const container = document.getElementById(containerId);
-  const selectedTags = itemType === 'issue' ? selectedIssueTags : selectedActionItemTags;
+  
+  if (!container) return;
+  
+  const selectedTags = itemType.includes('issue') ? selectedIssueTags : selectedActionItemTags;
+  const baseType = itemType.includes('issue') ? 'issue' : 'action-item';
   
   container.innerHTML = selectedTags.map(tag => `
     <span class="tag-badge" style="background-color: ${tag.color}20; color: ${tag.color}; border-color: ${tag.color}">
       ${escapeHtml(tag.name)}
-      <span class="remove-tag" onclick="removeTag(${tag.id}, '${itemType}')">&times;</span>
+      <span class="remove-tag" onclick="removeTag(${tag.id}, '${baseType}')">&times;</span>
     </span>
   `).join('');
 }
