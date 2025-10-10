@@ -6062,6 +6062,9 @@ app.get('/api/admin/assignee-mismatches', authenticateToken, async (req, res) =>
       ORDER BY is_mismatch DESC, total_count DESC, assignee_name
     `);
     
+    console.log(`[ADMIN MISMATCHES] Found ${result.rows.length} unique assignees`);
+    console.log(`[ADMIN MISMATCHES] Mismatches:`, result.rows.filter(r => r.is_mismatch).map(r => ({ name: r.assignee_name, total: r.total_count })));
+    
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching assignee mismatches:', error);
@@ -6095,14 +6098,14 @@ app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
         continue;
       }
       
-      console.log(`Updating assignee: "${oldName}" -> "${newName}"`);
+      console.log(`[ADMIN UPDATE] Updating assignee: "${oldName}" -> "${newName}"`);
       
       // Update issues
       const issueResult = await pool.query(
         'UPDATE issues SET assignee = $1 WHERE TRIM(assignee) = $2',
         [newName, oldName.trim()]
       );
-      console.log(`  Issues updated: ${issueResult.rowCount || 0}`);
+      console.log(`[ADMIN UPDATE]   Issues updated: ${issueResult.rowCount || 0}`);
       issuesUpdated += issueResult.rowCount || 0;
       
       // Update action items
@@ -6110,7 +6113,7 @@ app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
         'UPDATE action_items SET assignee = $1 WHERE TRIM(assignee) = $2',
         [newName, oldName.trim()]
       );
-      console.log(`  Action items updated: ${actionResult.rowCount || 0}`);
+      console.log(`[ADMIN UPDATE]   Action items updated: ${actionResult.rowCount || 0}`);
       actionsUpdated += actionResult.rowCount || 0;
     }
     
