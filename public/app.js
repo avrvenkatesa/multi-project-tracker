@@ -12,7 +12,8 @@ let currentFilters = {
   status: '',
   priority: '',
   assignee: '',
-  category: ''
+  category: '',
+  tag: ''
 };
 
 // ==================== AI BADGE HELPERS ====================
@@ -448,6 +449,7 @@ async function loadProjectData(projectId) {
         if (currentFilters.priority) params.append('priority', currentFilters.priority);
         if (currentFilters.assignee) params.append('assignee', currentFilters.assignee);
         if (currentFilters.category) params.append('category', currentFilters.category);
+        if (currentFilters.tag) params.append('tag', currentFilters.tag);
         if (currentFilters.search) params.append('search', currentFilters.search);
         
         const [issuesResponse, actionItemsResponse] = await Promise.all([
@@ -2232,6 +2234,16 @@ function initializeFilters() {
     });
   }
   
+  // Tag filter
+  const tagFilter = document.getElementById('tag-filter');
+  if (tagFilter) {
+    tagFilter.addEventListener('change', (e) => {
+      currentFilters.tag = e.target.value;
+      applyFilters();
+      updateURL();
+    });
+  }
+  
   // Clear filters button
   const clearBtn = document.getElementById('clear-filters-btn');
   if (clearBtn) {
@@ -2243,6 +2255,9 @@ function initializeFilters() {
   
   // Populate assignee dropdown
   populateAssigneeFilter();
+  
+  // Populate tag dropdown
+  populateTagFilter();
 }
 
 // Apply filters - reload data with filter params
@@ -2260,7 +2275,8 @@ function clearAllFilters() {
     status: '',
     priority: '',
     assignee: '',
-    category: ''
+    category: '',
+    tag: ''
   };
   
   // Reset form inputs
@@ -2269,12 +2285,14 @@ function clearAllFilters() {
   const statusFilter = document.getElementById('status-filter');
   const priorityFilter = document.getElementById('priority-filter');
   const assigneeFilter = document.getElementById('assignee-filter');
+  const tagFilter = document.getElementById('tag-filter');
   
   if (searchInput) searchInput.value = '';
   if (typeFilter) typeFilter.value = '';
   if (statusFilter) statusFilter.value = '';
   if (priorityFilter) priorityFilter.value = '';
   if (assigneeFilter) assigneeFilter.value = '';
+  if (tagFilter) tagFilter.value = '';
   
   // Reload data
   applyFilters();
@@ -2313,6 +2331,9 @@ function displayActiveFilters() {
   }
   if (currentFilters.category) {
     activeFilters.push({ key: 'category', label: `Category: ${currentFilters.category}` });
+  }
+  if (currentFilters.tag) {
+    activeFilters.push({ key: 'tag', label: `Tag: ${currentFilters.tag}` });
   }
   
   if (activeFilters.length === 0) {
@@ -2402,6 +2423,32 @@ function populateAssigneeFilter() {
   `;
 }
 
+// Populate tag filter dropdown with available tags
+async function populateTagFilter() {
+  const select = document.getElementById('tag-filter');
+  if (!select || !currentProject) return;
+  
+  try {
+    // Fetch tags for the current project
+    const response = await axios.get(`/api/tags?projectId=${currentProject.id}`);
+    const tags = response.data;
+    
+    // Build tag options
+    const tagOptions = tags
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(tag => `<option value="${tag.name}">${tag.name}</option>`)
+      .join('');
+    
+    // Update dropdown
+    select.innerHTML = `
+      <option value="">All Tags</option>
+      ${tagOptions}
+    `;
+  } catch (error) {
+    console.error('Error loading tags for filter:', error);
+  }
+}
+
 // Update URL with current filters (for shareable links)
 function updateURL() {
   if (!currentProject) return;
@@ -2415,6 +2462,7 @@ function updateURL() {
   if (currentFilters.priority) params.set('priority', currentFilters.priority);
   if (currentFilters.assignee) params.set('assignee', currentFilters.assignee);
   if (currentFilters.category) params.set('category', currentFilters.category);
+  if (currentFilters.tag) params.set('tag', currentFilters.tag);
   
   const newURL = `${window.location.pathname}?${params.toString()}`;
   window.history.replaceState({}, '', newURL);
@@ -2430,6 +2478,7 @@ function loadFiltersFromURL() {
   currentFilters.priority = params.get('priority') || '';
   currentFilters.assignee = params.get('assignee') || '';
   currentFilters.category = params.get('category') || '';
+  currentFilters.tag = params.get('tag') || '';
   
   // Update form inputs
   const searchInput = document.getElementById('search-input');
@@ -2437,12 +2486,14 @@ function loadFiltersFromURL() {
   const statusFilter = document.getElementById('status-filter');
   const priorityFilter = document.getElementById('priority-filter');
   const assigneeFilter = document.getElementById('assignee-filter');
+  const tagFilter = document.getElementById('tag-filter');
   
   if (searchInput && currentFilters.search) searchInput.value = currentFilters.search;
   if (typeFilter && currentFilters.type) typeFilter.value = currentFilters.type;
   if (statusFilter && currentFilters.status) statusFilter.value = currentFilters.status;
   if (priorityFilter && currentFilters.priority) priorityFilter.value = currentFilters.priority;
   if (assigneeFilter && currentFilters.assignee) assigneeFilter.value = currentFilters.assignee;
+  if (tagFilter && currentFilters.tag) tagFilter.value = currentFilters.tag;
 }
 
 // ============= RELATIONSHIP MANAGEMENT =============
