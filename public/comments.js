@@ -320,6 +320,8 @@ function setupMentionAutocomplete(textareaId, dropdownId) {
   }
   
   console.log('[MENTIONS] Setup autocomplete for:', textareaId, 'with', projectMembers.length, 'members');
+  console.log('[MENTIONS] Initial dropdown classes:', dropdown.className);
+  console.log('[MENTIONS] Has hidden class?:', dropdown.classList.contains('hidden'));
   
   textarea.addEventListener('input', () => {
     const text = textarea.value;
