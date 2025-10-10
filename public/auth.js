@@ -39,6 +39,11 @@ const AuthManager = {
     }
   },
 
+  async checkAuth() {
+    await this.checkAuthStatus();
+    return this.isAuthenticated;
+  },
+
   async checkAuthStatus() {
     try {
       const response = await fetch('/api/auth/me', {

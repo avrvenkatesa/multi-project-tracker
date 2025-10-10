@@ -9,21 +9,22 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### UI/UX Decisions
-The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles and authentication. Key features include AI analysis capabilities (in-modal search, review queue, smart matching, relationship detection), a comprehensive comment system with markdown support and real-time @mention autocomplete, and a Project Dashboard with analytics, Chart.js visualizations, activity feed, and team performance metrics. Kanban boards include automatic due date sorting with color-coded visual indicators for urgency, attachment count badges, and multi-criteria sorting options.
+The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles and authentication. Key features include AI analysis capabilities (in-modal search, review queue, smart matching, relationship detection), a comprehensive comment system with markdown support and real-time @mention autocomplete, and a Project Dashboard with analytics, Chart.js visualizations, activity feed, and team performance metrics. Kanban boards include automatic due date sorting with color-coded visual indicators for urgency, attachment count badges, and multi-criteria sorting options. A comprehensive tagging system is also implemented with custom color-coded tags and a dedicated tag management interface.
 
 ### Technical Implementations
-The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. File attachment functionality is implemented with Multer for secure uploads. AI-powered meeting transcript analysis leverages OpenAI.
+The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. File attachment functionality is implemented with Multer for secure uploads. AI-powered meeting transcript analysis leverages OpenAI. The system also includes robust PDF and CSV export capabilities.
 
 ### Feature Specifications
 - **AI Meeting Analysis**: Two-phase processing (item extraction + status update detection) with in-modal search and a persistent review queue. AI-created items send assignment notifications.
 - **Role-Based Access Control (RBAC)**: A 6-tier RBAC system ensures granular permissions.
 - **Authentication**: JWT authentication with httpOnly cookie-based session management.
 - **Project Management**: Centralized tracking of issues and action items with full CRUD operations.
-- **Reporting**: PDF and CSV export capabilities for various reports.
-- **Communication**: Comprehensive comment system with markdown and @mention autocomplete. Email notifications for assignments, updates, and item completion.
+- **Communication**: Comprehensive comment system with markdown and @mention autocomplete, including email notifications.
 - **File Attachments**: Upload, view, download, and delete files associated with issues and action items.
-- **Kanban Board**: Automatic and user-controlled multi-criteria sorting of items by due date urgency, priority, and update status, with color-coded visual badges and automated daily refreshes.
-- **Toast Notification System**: User-friendly feedback messages for various actions.
+- **Kanban Board**: Automatic and user-controlled multi-criteria sorting, color-coded visual badges, and automated daily refreshes.
+- **Tagging System**: Comprehensive tagging functionality with custom color-coded tags, dedicated tag management interface (tags.html), visual display on Kanban cards with color-coded badges, on-the-fly tag creation from all modals, tag selection for issues and action items, tag-based filtering for issues and action items, and deletion protection (tags in use cannot be deleted).
+- **Filtering & Search**: Advanced filtering system supporting search, type (Issues/Action Items), status, priority, assignee, category, and tags. Filters are composable, persist in URL for shareable links, and display as removable badges.
+- **Toast Notification System**: User-friendly feedback messages.
 
 ### System Design Choices
 - **Frontend**: Vanilla JavaScript SPA with Tailwind CSS for responsiveness and dynamic UI rendering.
@@ -67,82 +68,4 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 - **csv-writer**: CSV file generation for data export.
 
 ### CDN Services
-- **Tailwind CSS CDN**: CSS framework delivery.
-- **Unpkg CDN**: JavaScript library delivery.
 - **Chart.js**: Data visualization charts for dashboard analytics.
-
-Created a dedicated admin tool to fix mismatched assignee names that were causing Team Performance Reports to show incorrect data:
-- **Root Issue**: Items had assignee names like "Sri Hari" and "Sakthi S4" that didn't exactly match usernames like "Srihari S" and "Sakthi", causing report queries to fail matching
-- **Solution**: Admin tool with bulk update capability instead of complex fuzzy matching logic
-- **Backend APIs**: 
-  - GET /api/admin/assignee-mismatches - Detects all mismatches and provides statistics
-  - POST /api/admin/update-assignees - Bulk updates assignee names with proper validation
-  - GET /api/admin/valid-usernames - Returns all valid usernames for dropdown selection
-- **Frontend UI**: Clean admin page (admin-assignees.html) with:
-  - Visual highlighting of mismatched names (yellow background)
-  - Dropdown selection to pick correct username
-  - Bulk update with confirmation and success feedback
-  - Admin-only access (System Administrator role required)
-- **Navigation**: Added "Admin Tools" link to hamburger menu, visible only to System Administrators
-- **Implementation**: Uses exact username matching after updates, ensuring accurate Team Performance Reports
-- **Files Modified**: server.js (3 new admin endpoints), public/admin-assignees.html (new), public/admin-assignees.js (external script), public/index.html (admin link), public/auth.js (v10 - show admin link)
-- **Impact**: Provides clean solution to fix data at source rather than complex workaround matching logic
-
-### Bug Fix: Dashboard Metrics and API Query Issues (October 9, 2025)
-Fixed multiple critical bugs preventing correct data display in dashboard and reports:
-- **Root Cause 1 - Incorrect Status Values**: Dashboard stats were checking for status 'Completed' for action items, but action items use status 'Done' (same as issues)
-- **Root Cause 2 - Missing Table Aliases**: After adding JOINs for creator information, WHERE clause conditions lacked table aliases (e.g., `project_id` instead of `i.project_id`), causing ambiguous column references
-- **Impact**: 
-  - Dashboard showed 0 Total Issues despite data existing
-  - Completion rates showed 0% even with completed items
-  - Team performance reports displayed incorrect metrics
-  - API queries with filters failed to return data
-- **Fix Applied**:
-  - Updated dashboard stats to check for 'Done' status for both issues and action items (lines 1956, 1968, 1978)
-  - Added table aliases (`i.` and `a.`) to all WHERE clause conditions in GET /api/issues and GET /api/action-items endpoints
-  - Fixed overdue and upcoming deadlines queries to use 'Done' status consistently
-- **Files Modified**: server.js (dashboard stats endpoint, issues/action items GET endpoints)
-- **Result**: Dashboard and reports now correctly display all data with accurate completion rates
-
-### Feature: Creator Display and Completion Email Notifications (October 9, 2025)
-Implemented creator username display on Kanban cards and email notifications when items are completed:
-- **API Enhancements**: Updated GET /api/issues and GET /api/action-items endpoints to include creator information via LEFT JOIN with users table
-  - Returns creator_username and creator_email for each item
-  - Maintains backward compatibility with existing frontend code
-- **Kanban Card Display**: Added creator information to all issue and action item cards
-  - Shows "Created by [Username]" below due date badge
-  - Displays user icon with creator username
-  - Falls back to 'Unknown' if creator information not available
-- **Completion Email Notifications**: New automated email sent to item creator when status changes to 'Done'
-  - Email includes item details (ID, title, priority, completion date, completed by)
-  - Only sent when status changes TO 'Done' (not from Done or between other statuses)
-  - Respects user notification preferences (uses status_changes preference)
-  - Includes direct link to view item details
-  - Professional HTML formatting with plain text fallback
-- **Implementation Details**:
-  - Added sendCompletionNotification() method to NotificationService following existing patterns
-  - Updated PATCH endpoints for both issues and action items to detect completion
-  - Completion email sent to creator (not assignee) with details of who completed the item
-  - Comprehensive error handling for missing creator email and database errors
-- **UI Styling**: Added card-creator CSS class with responsive design
-  - Separated by top border for visual clarity
-  - Includes user-circle icon and semi-bold text
-  - Mobile-responsive with smaller font sizes on narrow screens
-- **Files Modified**: server.js (GET and PATCH endpoints), services/notificationService.js (new method), public/app.js (v28 - card rendering), public/index.html (CSS styles)
-- **Impact**: Provides visibility into item ownership and automated recognition when work is completed, improving team communication and accountability
-- **Note**: Users table contains username field only (no separate name field), so creator display uses username
-
-### Documentation Update: Help Center Enhancement (October 10, 2025)
-Comprehensively updated all help documentation to reflect recent application enhancements:
-- **New Help Pages Created**:
-  - File Attachments (attachments.html) - Complete guide to uploading, viewing, downloading, and managing file attachments
-  - Admin Tools (admin-tools.html) - Documentation for System Administrator utilities, including Assignee Name Correction Tool
-- **Updated Existing Pages**:
-  - Notifications - Added Item Completion Notifications section explaining automated emails when items are marked Done
-  - Kanban Board - Added Card Information Display section (creator, attachment badges, due date color coding) and Advanced Multi-Criteria Sorting section (due date urgency, priority, recently updated, manual sort)
-  - Comments & @Mentions - Enhanced @Mentions section with detailed autocomplete functionality explanation and smart features
-- **Main Help Center Updates**:
-  - Added File Attachments and Admin Tools cards to main help landing page (help.html)
-  - Search functionality automatically includes new topics (works with existing card structure)
-- **Files Modified**: public/help/attachments.html (new), public/help/admin-tools.html (new), public/help/notifications.html, public/help/kanban-board.html, public/help/comments-mentions.html, public/help.html
-- **Impact**: Help documentation now accurately reflects all current features, making it easier for users to learn and use the application effectively

@@ -2399,12 +2399,207 @@ app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (
   }
 });
 
+// ============= TAG MANAGEMENT ROUTES =============
+
+// Get all tags for project (with usage count)
+app.get('/api/projects/:projectId/tags', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT 
+        t.*,
+        (SELECT COUNT(*) FROM issue_tags WHERE tag_id = t.id) +
+        (SELECT COUNT(*) FROM action_item_tags WHERE tag_id = t.id) as usage_count
+      FROM tags t
+      WHERE t.project_id = $1
+      ORDER BY t.name`,
+      [req.params.projectId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching tags:', error);
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Create new tag
+app.post('/api/projects/:projectId/tags', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { name, color, description } = req.body;
+    const result = await pool.query(
+      `INSERT INTO tags (project_id, name, color, description, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [req.params.projectId, name, color, description || null, req.user.userId]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    if (error.code === '23505') {
+      res.status(409).json({ error: 'Tag name already exists in this project' });
+    } else {
+      console.error('Error creating tag:', error);
+      res.status(500).json({ error: 'Failed to create tag' });
+    }
+  }
+});
+
+// Update tag
+app.patch('/api/tags/:tagId', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { name, color, description } = req.body;
+    const result = await pool.query(
+      `UPDATE tags 
+       SET name = COALESCE($1, name),
+           color = COALESCE($2, color),
+           description = COALESCE($3, description),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING *`,
+      [name, color, description, req.params.tagId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Tag not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    if (error.code === '23505') {
+      res.status(409).json({ error: 'Tag name already exists in this project' });
+    } else {
+      console.error('Error updating tag:', error);
+      res.status(500).json({ error: 'Failed to update tag' });
+    }
+  }
+});
+
+// Delete tag (only if not in use)
+app.delete('/api/tags/:tagId', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    // Check usage count
+    const usageResult = await pool.query(
+      `SELECT 
+        (SELECT COUNT(*) FROM issue_tags WHERE tag_id = $1) +
+        (SELECT COUNT(*) FROM action_item_tags WHERE tag_id = $1) as count`,
+      [req.params.tagId]
+    );
+    
+    const usageCount = parseInt(usageResult.rows[0].count);
+    
+    if (usageCount > 0) {
+      return res.status(409).json({ 
+        error: `Cannot delete tag. It is used by ${usageCount} item(s)`,
+        usageCount
+      });
+    }
+    
+    await pool.query('DELETE FROM tags WHERE id = $1', [req.params.tagId]);
+    res.json({ message: 'Tag deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting tag:', error);
+    res.status(500).json({ error: 'Failed to delete tag' });
+  }
+});
+
+// Get issue tags
+app.get('/api/issues/:issueId/tags', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT t.* FROM tags t
+       JOIN issue_tags it ON t.id = it.tag_id
+       WHERE it.issue_id = $1
+       ORDER BY t.name`,
+      [req.params.issueId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching issue tags:', error);
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Add tag to issue
+app.post('/api/issues/:issueId/tags', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { tag_id } = req.body;
+    await pool.query(
+      `INSERT INTO issue_tags (issue_id, tag_id, created_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (issue_id, tag_id) DO NOTHING`,
+      [req.params.issueId, tag_id]
+    );
+    res.status(201).json({ message: 'Tag added to issue' });
+  } catch (error) {
+    console.error('Error adding tag to issue:', error);
+    res.status(500).json({ error: 'Failed to add tag' });
+  }
+});
+
+// Remove tag from issue
+app.delete('/api/issues/:issueId/tags/:tagId', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM issue_tags WHERE issue_id = $1 AND tag_id = $2',
+      [req.params.issueId, req.params.tagId]
+    );
+    res.json({ message: 'Tag removed from issue' });
+  } catch (error) {
+    console.error('Error removing tag from issue:', error);
+    res.status(500).json({ error: 'Failed to remove tag' });
+  }
+});
+
+// Get action item tags
+app.get('/api/action-items/:actionItemId/tags', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT t.* FROM tags t
+       JOIN action_item_tags ait ON t.id = ait.tag_id
+       WHERE ait.action_item_id = $1
+       ORDER BY t.name`,
+      [req.params.actionItemId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching action item tags:', error);
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Add tag to action item
+app.post('/api/action-items/:actionItemId/tags', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { tag_id } = req.body;
+    await pool.query(
+      `INSERT INTO action_item_tags (action_item_id, tag_id, created_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (action_item_id, tag_id) DO NOTHING`,
+      [req.params.actionItemId, tag_id]
+    );
+    res.status(201).json({ message: 'Tag added to action item' });
+  } catch (error) {
+    console.error('Error adding tag to action item:', error);
+    res.status(500).json({ error: 'Failed to add tag' });
+  }
+});
+
+// Remove tag from action item
+app.delete('/api/action-items/:actionItemId/tags/:tagId', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM action_item_tags WHERE action_item_id = $1 AND tag_id = $2',
+      [req.params.actionItemId, req.params.tagId]
+    );
+    res.json({ message: 'Tag removed from action item' });
+  } catch (error) {
+    console.error('Error removing tag from action item:', error);
+    res.status(500).json({ error: 'Failed to remove tag' });
+  }
+});
+
 // ============= ISSUES ROUTES =============
 
 // Get issues with filtering and search
 app.get('/api/issues', authenticateToken, async (req, res) => {
   try {
-    const { projectId, status, priority, assignee, category, search } = req.query;
+    const { projectId, status, priority, assignee, category, tag, search } = req.query;
     
     // Build dynamic WHERE conditions
     let conditions = [];
@@ -2435,6 +2630,11 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
       params.push(category);
     }
     
+    if (tag) {
+      conditions.push(`t.name = $${params.length + 1}`);
+      params.push(tag);
+    }
+    
     if (search) {
       conditions.push(`(i.title ILIKE $${params.length + 1} OR i.description ILIKE $${params.length + 2})`);
       params.push(`%${search}%`);
@@ -2450,10 +2650,20 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
       SELECT 
         i.*,
         u.username as creator_username,
-        u.email as creator_email
+        u.email as creator_email,
+        COALESCE(
+          json_agg(
+            json_build_object('id', t.id, 'name', t.name, 'color', t.color)
+            ORDER BY t.name
+          ) FILTER (WHERE t.id IS NOT NULL),
+          '[]'
+        ) as tags
       FROM issues i
       LEFT JOIN users u ON i.created_by = u.id::text
+      LEFT JOIN issue_tags it ON i.id = it.issue_id
+      LEFT JOIN tags t ON it.tag_id = t.id
       ${whereClause} 
+      GROUP BY i.id, u.username, u.email
       ORDER BY i.created_at DESC
     `;
     
@@ -2498,6 +2708,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
     assignee, 
     dueDate, 
     projectId,
+    progress = 0,
     // AI-related fields
     createdByAI = false,
     aiConfidence = null,
@@ -2521,7 +2732,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
     const [newIssue] = await sql`
       INSERT INTO issues (
         title, description, priority, category, assignee, 
-        due_date, project_id, status, created_by,
+        due_date, project_id, status, progress, created_by,
         created_by_ai, ai_confidence, ai_analysis_id
       ) VALUES (
         ${title.trim()}, 
@@ -2532,6 +2743,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
         ${dueDate || null}, 
         ${parseInt(projectId)}, 
         'To Do',
+        ${progress || 0},
         ${req.user.id.toString()},
         ${createdByAI},
         ${aiConfidence},
@@ -2580,7 +2792,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
 app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, assignee, due_date, priority, status, category } = req.body;
+    const { title, description, assignee, due_date, priority, status, category, progress } = req.body;
     
     console.log('PATCH /api/issues/:id - Request body:', req.body);
     console.log('Issue ID:', id);
@@ -2641,6 +2853,10 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     if (category !== undefined) {
       updates.push(`category = $${valueIndex++}`);
       values.push(category || '');
+    }
+    if (progress !== undefined) {
+      updates.push(`progress = $${valueIndex++}`);
+      values.push(progress || 0);
     }
     
     if (updates.length === 0) {
@@ -2815,7 +3031,7 @@ app.delete('/api/issues/:id', authenticateToken, async (req, res) => {
 // Get action items with filtering and search
 app.get("/api/action-items", authenticateToken, async (req, res) => {
   try {
-    const { projectId, status, priority, assignee, search } = req.query;
+    const { projectId, status, priority, assignee, tag, search } = req.query;
     
     // Build dynamic WHERE conditions
     let conditions = [];
@@ -2841,6 +3057,11 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
       params.push(assignee);
     }
     
+    if (tag) {
+      conditions.push(`t.name = $${params.length + 1}`);
+      params.push(tag);
+    }
+    
     if (search) {
       conditions.push(`(a.title ILIKE $${params.length + 1} OR a.description ILIKE $${params.length + 2})`);
       params.push(`%${search}%`);
@@ -2856,10 +3077,20 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
       SELECT 
         a.*,
         u.username as creator_username,
-        u.email as creator_email
+        u.email as creator_email,
+        COALESCE(
+          json_agg(
+            json_build_object('id', t.id, 'name', t.name, 'color', t.color)
+            ORDER BY t.name
+          ) FILTER (WHERE t.id IS NOT NULL),
+          '[]'
+        ) as tags
       FROM action_items a
       LEFT JOIN users u ON a.created_by = u.id::text
+      LEFT JOIN action_item_tags ait ON a.id = ait.action_item_id
+      LEFT JOIN tags t ON ait.tag_id = t.id
       ${whereClause} 
+      GROUP BY a.id, u.username, u.email
       ORDER BY a.created_at DESC
     `;
     
@@ -2975,7 +3206,7 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
 app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, assignee, due_date, priority, status, progress_percentage } = req.body;
+    const { title, description, assignee, due_date, priority, status, progress } = req.body;
     
     console.log('PATCH /api/action-items/:id - Request body:', req.body);
     console.log('Action item ID:', id);
@@ -3033,9 +3264,9 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
       updates.push(`status = $${valueIndex++}`);
       values.push(status);
     }
-    if (progress_percentage !== undefined) {
-      updates.push(`progress_percentage = $${valueIndex++}`);
-      values.push(progress_percentage || 0);
+    if (progress !== undefined) {
+      updates.push(`progress = $${valueIndex++}`);
+      values.push(progress || 0);
     }
     
     if (updates.length === 0) {
