@@ -1,0 +1,367 @@
+IMPLEMENT: Copy Link Feature for Issues and Action Items
+OBJECTIVE:
+Add one-click copy link functionality to issues and action items, allowing users to easily share direct links via email, chat, or other channels.
+REQUIREMENTS:
+
+ADD COPY LINK FUNCTION:
+Add to both issues.js and actions.js:
+
+javascript   function copyItemLink(itemId, itemType) {
+     // Construct the URL
+     const baseUrl = window.location.origin;
+     const page = itemType === 'issue' ? 'issues.html' : 'actions.html';
+     const param = itemType === 'issue' ? 'issue' : 'action';
+     const url = `${baseUrl}/${page}?${param}=${itemId}`;
+     
+     // Copy to clipboard using Clipboard API
+     navigator.clipboard.writeText(url)
+       .then(() => {
+         showToast('✅ Link copied to clipboard!', 'success');
+       })
+       .catch(err => {
+         console.error('Failed to copy link:', err);
+         // Fallback for older browsers
+         fallbackCopyToClipboard(url);
+       });
+   }
+   
+   // Fallback copy method for older browsers
+   function fallbackCopyToClipboard(text) {
+     const textArea = document.createElement('textarea');
+     textArea.value = text;
+     textArea.style.position = 'fixed';
+     textArea.style.left = '-999999px';
+     document.body.appendChild(textArea);
+     textArea.select();
+     
+     try {
+       document.execCommand('copy');
+       showToast('✅ Link copied to clipboard!', 'success');
+     } catch (err) {
+       console.error('Fallback copy failed:', err);
+       showToast('❌ Failed to copy link', 'error');
+     }
+     
+     document.body.removeChild(textArea);
+   }
+   
+   // Toast notification (reuse existing or create if needed)
+   function showToast(message, type = 'info') {
+     const toast = document.createElement('div');
+     toast.className = `toast toast-${type}`;
+     toast.textContent = message;
+     document.body.appendChild(toast);
+     
+     setTimeout(() => toast.classList.add('show'), 10);
+     setTimeout(() => {
+       toast.classList.remove('show');
+       setTimeout(() => toast.remove(), 300);
+     }, 3000);
+   }
+
+HANDLE URL PARAMETERS ON PAGE LOAD:
+Add to DOMContentLoaded in issues.js:
+
+javascript   document.addEventListener('DOMContentLoaded', async () => {
+     // Existing initialization code...
+     await initialize();
+     
+     // Check for URL parameters
+     const urlParams = new URLSearchParams(window.location.search);
+     const issueId = urlParams.get('issue');
+     
+     if (issueId) {
+       // Find the issue
+       const issue = allIssues.find(i => i.id === parseInt(issueId));
+       
+       if (issue) {
+         // Open detail modal
+         setTimeout(() => {
+           showIssueDetail(issue.id);
+           highlightCard(issue.id);
+           scrollToCard(issue.id);
+         }, 500); // Wait for render
+       } else {
+         showToast('Issue not found or you do not have access', 'error');
+       }
+       
+       // Clean up URL (remove parameter)
+       window.history.replaceState({}, document.title, window.location.pathname);
+     }
+   });
+   
+   function highlightCard(itemId) {
+     const card = document.querySelector(`[data-item-id="${itemId}"]`);
+     if (card) {
+       card.classList.add('highlighted');
+       setTimeout(() => card.classList.remove('highlighted'), 2000);
+     }
+   }
+   
+   function scrollToCard(itemId) {
+     const card = document.querySelector(`[data-item-id="${itemId}"]`);
+     if (card) {
+       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+     }
+   }
+Add similar code to actions.js with 'action' parameter
+
+ADD COPY LINK BUTTON TO KANBAN CARDS:
+Update renderKanbanCard() function:
+
+javascript   function renderKanbanCard(item) {
+     const itemType = window.location.pathname.includes('actions') ? 'action' : 'issue';
+     const itemId = item.issue_id || item.action_id;
+     
+     return `
+       <div class="kanban-card" data-item-id="${item.id}">
+         <div class="card-header">
+           <span class="item-id">${itemId}</span>
+           <div class="card-header-actions">
+             <span class="priority-badge ${item.priority}">${item.priority}</span>
+             <button class="btn-icon" 
+                     onclick="event.stopPropagation(); copyItemLink(${item.id}, '${itemType}')" 
+                     title="Copy link to this item">
+               <i class="fas fa-link"></i>
+             </button>
+           </div>
+         </div>
+         
+         <h4 class="card-title">${item.title}</h4>
+         
+         ${createDueDateBadge(item.due_date)}
+         
+         <div class="card-creator">
+           <i class="fas fa-user-circle"></i>
+           <span>Created by ${item.creator_name || 'Unknown'}</span>
+         </div>
+         
+         ${item.tags && item.tags.length > 0 ? `
+           <div class="card-tags">
+             ${item.tags.map(tag => renderTagBadge(tag)).join('')}
+           </div>
+         ` : ''}
+         
+         <div class="card-actions">
+           <button onclick="editItem(${item.id})">
+             <i class="fas fa-edit"></i> Edit
+           </button>
+           <button onclick="deleteItem(${item.id})">
+             <i class="fas fa-trash"></i> Delete
+           </button>
+         </div>
+       </div>
+     `;
+   }
+
+ADD COPY LINK BUTTON TO DETAIL MODAL:
+Update showIssueDetail() or showActionDetail() modal header:
+
+javascript   function showIssueDetail(issueId) {
+     const issue = allIssues.find(i => i.id === issueId);
+     if (!issue) return;
+     
+     const modalHTML = `
+       <div class="modal" id="detailModal">
+         <div class="modal-content">
+           <div class="modal-header">
+             <h2>${issue.issue_id}: ${issue.title}</h2>
+             <div class="modal-header-actions">
+               <button class="btn btn-sm" onclick="copyItemLink(${issue.id}, 'issue')">
+                 <i class="fas fa-link"></i> Copy Link
+               </button>
+               <button class="btn-close" onclick="closeModal()">×</button>
+             </div>
+           </div>
+           
+           <!-- Rest of modal content -->
+         </div>
+       </div>
+     `;
+     
+     // Show modal...
+   }
+
+ADD CSS STYLING:
+Add to issues.css and actions.css:
+
+css   /* Copy link button */
+   .btn-icon {
+     background: transparent;
+     border: none;
+     color: #6b7280;
+     cursor: pointer;
+     padding: 4px 8px;
+     border-radius: 4px;
+     transition: all 0.2s;
+     font-size: 14px;
+   }
+   
+   .btn-icon:hover {
+     background: #f3f4f6;
+     color: #3b82f6;
+   }
+   
+   .btn-icon:active {
+     transform: scale(0.95);
+   }
+   
+   /* Card header layout */
+   .card-header {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     margin-bottom: 8px;
+   }
+   
+   .card-header-actions {
+     display: flex;
+     align-items: center;
+     gap: 8px;
+   }
+   
+   /* Modal header */
+   .modal-header {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     margin-bottom: 20px;
+     padding-bottom: 16px;
+     border-bottom: 2px solid #e5e7eb;
+   }
+   
+   .modal-header h2 {
+     margin: 0;
+     flex: 1;
+   }
+   
+   .modal-header-actions {
+     display: flex;
+     align-items: center;
+     gap: 12px;
+   }
+   
+   /* Highlight animation */
+   .kanban-card.highlighted {
+     animation: highlight-pulse 2s ease-in-out;
+     border: 2px solid #3b82f6;
+     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+   }
+   
+   @keyframes highlight-pulse {
+     0%, 100% {
+       box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+     }
+     50% {
+       box-shadow: 0 8px 20px rgba(59, 130, 246, 0.5);
+     }
+   }
+   
+   /* Toast notifications */
+   .toast {
+     position: fixed;
+     bottom: 20px;
+     right: 20px;
+     padding: 14px 24px;
+     background: #1f2937;
+     color: white;
+     border-radius: 8px;
+     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+     opacity: 0;
+     transform: translateY(20px);
+     transition: all 0.3s ease;
+     z-index: 10000;
+     font-size: 14px;
+     font-weight: 500;
+   }
+   
+   .toast.show {
+     opacity: 1;
+     transform: translateY(0);
+   }
+   
+   .toast.toast-success {
+     background: #10b981;
+   }
+   
+   .toast.toast-error {
+     background: #ef4444;
+   }
+   
+   .toast.toast-info {
+     background: #3b82f6;
+   }
+   
+   /* Mobile responsive */
+   @media (max-width: 768px) {
+     .btn-icon {
+       padding: 4px 6px;
+       font-size: 12px;
+     }
+     
+     .card-header-actions {
+       gap: 4px;
+     }
+     
+     .modal-header {
+       flex-direction: column;
+       align-items: flex-start;
+       gap: 12px;
+     }
+     
+     .modal-header-actions {
+       width: 100%;
+       justify-content: flex-end;
+     }
+     
+     .toast {
+       left: 20px;
+       right: 20px;
+       bottom: 20px;
+     }
+   }
+CRITICAL REQUIREMENTS:
+
+Apply to BOTH issues.js AND actions.js
+Use navigator.clipboard API with fallback
+Parse URL parameters on page load (issue=123 or action=456)
+Open detail modal automatically when link clicked
+Highlight and scroll to card
+Clean URL after processing (remove parameter)
+Toast notification on copy success/failure
+event.stopPropagation() on copy button to prevent card click
+Mobile responsive design
+Smooth animations
+
+FEATURES TO IMPLEMENT:
+
+Copy link icon on every card
+Copy link button in detail modal
+URL parameter handling on page load
+Auto-open detail modal from link
+Card highlight animation
+Scroll to card
+Toast notifications
+Fallback for older browsers
+
+TESTING:
+
+Click copy link on issue card
+Click copy link on action card
+Click copy link in detail modal
+Paste link and verify it opens item
+Verify modal opens automatically
+Verify card highlights
+Verify scroll to card works
+Test with non-existent item ID
+Test on mobile devices
+Test toast notifications
+
+FILES TO MODIFY:
+
+public/js/issues.js
+public/js/actions.js
+public/css/issues.css
+public/css/actions.css
+
+Please implement the copy link feature for issues and action items.

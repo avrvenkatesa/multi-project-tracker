@@ -420,7 +420,7 @@ async function selectProject(projectId) {
 
     await loadProjectData(projectId);
     
-    // Check for deep-link parameters (itemId and itemType from email notifications)
+    // Check for deep-link parameters (itemId and itemType from email notifications or shared links)
     const params = new URLSearchParams(window.location.search);
     const itemId = params.get('itemId');
     const itemType = params.get('itemType');
@@ -429,6 +429,10 @@ async function selectProject(projectId) {
         // Auto-open the item detail modal
         setTimeout(() => {
             openItemDetailModal(parseInt(itemId), itemType);
+            
+            // Highlight and scroll to the card
+            highlightCard(parseInt(itemId));
+            setTimeout(() => scrollToCard(parseInt(itemId)), 300);
         }, 500); // Small delay to ensure kanban board is rendered
         
         // Clean up URL (remove itemId and itemType params)
@@ -4363,4 +4367,79 @@ document.getElementById('edit-action-item-tag-select')?.addEventListener('change
     e.target.value = '';
   }
 });
+
+// ============= COPY LINK FEATURE =============
+
+/**
+ * Copy a shareable link to an issue or action item
+ * @param {number} itemId - The ID of the item
+ * @param {string} itemType - 'issue' or 'action-item'
+ */
+function copyItemLink(itemId, itemType) {
+  if (!currentProject) {
+    showToast('❌ No project selected', 'error');
+    return;
+  }
+  
+  // Construct the URL with project and item parameters
+  const baseUrl = window.location.origin;
+  const url = `${baseUrl}/?project=${currentProject.id}&itemId=${itemId}&itemType=${itemType}`;
+  
+  // Copy to clipboard using Clipboard API
+  navigator.clipboard.writeText(url)
+    .then(() => {
+      showToast('✅ Link copied to clipboard!', 'success');
+    })
+    .catch(err => {
+      console.error('Failed to copy link:', err);
+      // Fallback for older browsers
+      fallbackCopyToClipboard(url);
+    });
+}
+
+/**
+ * Fallback copy method for older browsers
+ * @param {string} text - The text to copy
+ */
+function fallbackCopyToClipboard(text) {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-999999px';
+  document.body.appendChild(textArea);
+  textArea.select();
+  
+  try {
+    document.execCommand('copy');
+    showToast('✅ Link copied to clipboard!', 'success');
+  } catch (err) {
+    console.error('Fallback copy failed:', err);
+    showToast('❌ Failed to copy link', 'error');
+  }
+  
+  document.body.removeChild(textArea);
+}
+
+/**
+ * Highlight a card temporarily
+ * @param {number} itemId - The ID of the item to highlight
+ */
+function highlightCard(itemId) {
+  const card = document.querySelector(`[data-item-id="${itemId}"]`);
+  if (card) {
+    card.classList.add('highlighted');
+    setTimeout(() => card.classList.remove('highlighted'), 2500);
+  }
+}
+
+/**
+ * Scroll to a card smoothly
+ * @param {number} itemId - The ID of the item to scroll to
+ */
+function scrollToCard(itemId) {
+  const card = document.querySelector(`[data-item-id="${itemId}"]`);
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
 
