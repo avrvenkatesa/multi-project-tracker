@@ -3190,7 +3190,7 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
 app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, assignee, due_date, priority, status, progress_percentage } = req.body;
+    const { title, description, assignee, due_date, priority, status, progress } = req.body;
     
     console.log('PATCH /api/action-items/:id - Request body:', req.body);
     console.log('Action item ID:', id);
@@ -3248,9 +3248,9 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
       updates.push(`status = $${valueIndex++}`);
       values.push(status);
     }
-    if (progress_percentage !== undefined) {
-      updates.push(`progress_percentage = $${valueIndex++}`);
-      values.push(progress_percentage || 0);
+    if (progress !== undefined) {
+      updates.push(`progress = $${valueIndex++}`);
+      values.push(progress || 0);
     }
     
     if (updates.length === 0) {
