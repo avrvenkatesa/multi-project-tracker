@@ -314,7 +314,12 @@ function setupMentionAutocomplete(textareaId, dropdownId) {
   const textarea = document.getElementById(textareaId);
   const dropdown = document.getElementById(dropdownId);
   
-  if (!textarea || !dropdown) return;
+  if (!textarea || !dropdown) {
+    console.warn('[MENTIONS] Missing elements:', { textarea: !!textarea, dropdown: !!dropdown });
+    return;
+  }
+  
+  console.log('[MENTIONS] Setup autocomplete for:', textareaId, 'with', projectMembers.length, 'members');
   
   textarea.addEventListener('input', () => {
     const text = textarea.value;
@@ -322,13 +327,18 @@ function setupMentionAutocomplete(textareaId, dropdownId) {
     const textBeforeCursor = text.substring(0, cursorPos);
     const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
     
+    console.log('[MENTIONS] Input detected:', { text, cursorPos, lastAtSymbol });
+    
     if (lastAtSymbol !== -1 && cursorPos - lastAtSymbol > 0) {
       const searchTerm = textBeforeCursor.substring(lastAtSymbol + 1).toLowerCase();
+      console.log('[MENTIONS] Search term:', searchTerm);
       
       if (searchTerm.length > 0 && !searchTerm.includes(' ')) {
         const matches = projectMembers.filter(m => 
           m.username.toLowerCase().startsWith(searchTerm)
         );
+        
+        console.log('[MENTIONS] Found matches:', matches.length);
         
         if (matches.length > 0) {
           showMentionDropdown(dropdown, matches, textarea, lastAtSymbol);
