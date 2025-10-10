@@ -2599,7 +2599,7 @@ app.delete('/api/action-items/:actionItemId/tags/:tagId', authenticateToken, req
 // Get issues with filtering and search
 app.get('/api/issues', authenticateToken, async (req, res) => {
   try {
-    const { projectId, status, priority, assignee, category, search } = req.query;
+    const { projectId, status, priority, assignee, category, tag, search } = req.query;
     
     // Build dynamic WHERE conditions
     let conditions = [];
@@ -2628,6 +2628,11 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
     if (category) {
       conditions.push(`i.category = $${params.length + 1}`);
       params.push(category);
+    }
+    
+    if (tag) {
+      conditions.push(`t.name = $${params.length + 1}`);
+      params.push(tag);
     }
     
     if (search) {
@@ -3026,7 +3031,7 @@ app.delete('/api/issues/:id', authenticateToken, async (req, res) => {
 // Get action items with filtering and search
 app.get("/api/action-items", authenticateToken, async (req, res) => {
   try {
-    const { projectId, status, priority, assignee, search } = req.query;
+    const { projectId, status, priority, assignee, tag, search } = req.query;
     
     // Build dynamic WHERE conditions
     let conditions = [];
@@ -3050,6 +3055,11 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
     if (assignee) {
       conditions.push(`a.assignee = $${params.length + 1}`);
       params.push(assignee);
+    }
+    
+    if (tag) {
+      conditions.push(`t.name = $${params.length + 1}`);
+      params.push(tag);
     }
     
     if (search) {
