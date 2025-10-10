@@ -987,6 +987,14 @@ async function renderKanbanBoard() {
                                 <span>Attachments</span>
                                 ${(item.attachment_count || 0) > 0 ? `<span class="ml-auto px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">${item.attachment_count}</span>` : ''}
                             </button>
+                            <button class="copy-link-btn flex items-center text-xs text-gray-600 hover:text-purple-600 transition-colors w-full" 
+                                    data-item-id="${item.id}" 
+                                    data-item-type="${item.type || 'issue'}">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                </svg>
+                                <span>Copy Link</span>
+                            </button>
                             ${canEdit || canDelete ? `
                                 <div class="flex gap-1 pt-1">
                                     ${canEdit ? `
@@ -1066,6 +1074,16 @@ async function renderKanbanBoard() {
                     const itemId = parseInt(this.getAttribute('data-item-id'));
                     const itemType = this.getAttribute('data-item-type');
                     openItemDetailModal(itemId, itemType);
+                });
+            });
+            
+            // Add copy link button listeners
+            container.querySelectorAll('.copy-link-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent drag start and card click
+                    const itemId = parseInt(this.getAttribute('data-item-id'));
+                    const itemType = this.getAttribute('data-item-type');
+                    copyItemLink(itemId, itemType);
                 });
             });
             
