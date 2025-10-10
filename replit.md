@@ -71,9 +71,6 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 - **Unpkg CDN**: JavaScript library delivery.
 - **Chart.js**: Data visualization charts for dashboard analytics.
 
-## Recent Changes
-
-### Feature: Admin Assignee Name Correction Tool (October 9, 2025)
 Created a dedicated admin tool to fix mismatched assignee names that were causing Team Performance Reports to show incorrect data:
 - **Root Issue**: Items had assignee names like "Sri Hari" and "Sakthi S4" that didn't exactly match usernames like "Srihari S" and "Sakthi", causing report queries to fail matching
 - **Solution**: Admin tool with bulk update capability instead of complex fuzzy matching logic

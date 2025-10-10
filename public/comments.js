@@ -551,11 +551,8 @@ async function openItemDetailModal(itemId, itemType) {
     
     modal.classList.remove('hidden');
     
-    console.log('[MENTIONS] currentProject:', currentProject);
     if (currentProject) {
       await loadProjectMembers(currentProject.id);
-    } else {
-      console.warn('[MENTIONS] No currentProject - mentions will not work!');
     }
     
     setupMentionAutocomplete('item-detail-new-comment', 'item-detail-mention-dropdown');
