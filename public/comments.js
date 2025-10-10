@@ -356,6 +356,18 @@ function setupMentionAutocomplete(textareaId, dropdownId) {
 }
 
 function showMentionDropdown(dropdown, matches, textarea, atPosition) {
+  console.log('[MENTIONS] showMentionDropdown called:', { 
+    dropdown: !!dropdown, 
+    matches: matches.length,
+    textareaId: textarea?.id,
+    atPosition 
+  });
+  
+  if (!dropdown) {
+    console.error('[MENTIONS] Dropdown element is null!');
+    return;
+  }
+  
   dropdown.innerHTML = matches.map(member => {
     const username = escapeHtml(member.username);
     const email = escapeHtml(member.email);
@@ -383,7 +395,9 @@ function showMentionDropdown(dropdown, matches, textarea, atPosition) {
     });
   });
   
+  console.log('[MENTIONS] Removing hidden class, current classes:', dropdown.className);
   dropdown.classList.remove('hidden');
+  console.log('[MENTIONS] After removing hidden, classes:', dropdown.className);
 }
 
 function hideMentionDropdown(dropdown) {
