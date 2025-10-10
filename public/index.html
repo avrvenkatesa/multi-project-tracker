@@ -979,10 +979,27 @@
                             </svg>
                             Tags
                         </label>
-                        <div class="relative">
-                            <select id="edit-issue-tag-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <div class="flex gap-2 mb-1">
+                            <select id="edit-issue-tag-select" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                 <option value="">Add a tag...</option>
                             </select>
+                            <button type="button" id="edit-issue-new-tag-btn" class="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 whitespace-nowrap text-sm">
+                                + New Tag
+                            </button>
+                        </div>
+                        <div id="edit-issue-new-tag-form" class="hidden mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <div class="flex gap-2 items-end">
+                                <div class="flex-1">
+                                    <label class="block text-xs font-medium mb-1">Tag Name</label>
+                                    <input type="text" id="edit-issue-new-tag-name" placeholder="Enter tag name" class="w-full border rounded px-2 py-1 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Color</label>
+                                    <input type="color" id="edit-issue-new-tag-color" value="#3B82F6" class="border rounded px-1 py-1 h-8">
+                                </div>
+                                <button type="button" id="edit-issue-save-tag-btn" class="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Save</button>
+                                <button type="button" id="edit-issue-cancel-tag-btn" class="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Cancel</button>
+                            </div>
                         </div>
                         <div id="edit-issue-selected-tags" class="flex flex-wrap gap-2 mt-3">
                             <!-- Selected tags will appear here -->
@@ -1095,10 +1112,27 @@
                             </svg>
                             Tags
                         </label>
-                        <div class="relative">
-                            <select id="edit-action-item-tag-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <div class="flex gap-2 mb-1">
+                            <select id="edit-action-item-tag-select" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                 <option value="">Add a tag...</option>
                             </select>
+                            <button type="button" id="edit-action-item-new-tag-btn" class="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 whitespace-nowrap text-sm">
+                                + New Tag
+                            </button>
+                        </div>
+                        <div id="edit-action-item-new-tag-form" class="hidden mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <div class="flex gap-2 items-end">
+                                <div class="flex-1">
+                                    <label class="block text-xs font-medium mb-1">Tag Name</label>
+                                    <input type="text" id="edit-action-item-new-tag-name" placeholder="Enter tag name" class="w-full border rounded px-2 py-1 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Color</label>
+                                    <input type="color" id="edit-action-item-new-tag-color" value="#3B82F6" class="border rounded px-1 py-1 h-8">
+                                </div>
+                                <button type="button" id="edit-action-item-save-tag-btn" class="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Save</button>
+                                <button type="button" id="edit-action-item-cancel-tag-btn" class="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Cancel</button>
+                            </div>
                         </div>
                         <div id="edit-action-item-selected-tags" class="flex flex-wrap gap-2 mt-3">
                             <!-- Selected tags will appear here -->
@@ -1380,7 +1414,7 @@
             }
         </style>
         <script src="comments.js?v=8"></script>
-        <script src="app.js?v=31"></script>
+        <script src="app.js?v=35"></script>
         <script src="js/project-management.js"></script>
     </body>
 </html>

@@ -1427,9 +1427,28 @@ function showCreateIssue() {
                     </svg>
                     Tags
                 </label>
-                <select id="create-issue-tag-select" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 mb-2">
-                    <option value="">Add a tag...</option>
-                </select>
+                <div class="flex gap-2 mb-1">
+                    <select id="create-issue-tag-select" class="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        <option value="">Add a tag...</option>
+                    </select>
+                    <button type="button" id="create-issue-new-tag-btn" class="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 whitespace-nowrap text-sm">
+                        + New Tag
+                    </button>
+                </div>
+                <div id="create-issue-new-tag-form" class="hidden mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div class="flex gap-2 items-end">
+                        <div class="flex-1">
+                            <label class="block text-xs font-medium mb-1">Tag Name</label>
+                            <input type="text" id="create-issue-new-tag-name" placeholder="Enter tag name" class="w-full border rounded px-2 py-1 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium mb-1">Color</label>
+                            <input type="color" id="create-issue-new-tag-color" value="#3B82F6" class="border rounded px-1 py-1 h-8">
+                        </div>
+                        <button type="button" id="create-issue-save-tag-btn" class="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Save</button>
+                        <button type="button" id="create-issue-cancel-tag-btn" class="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Cancel</button>
+                    </div>
+                </div>
                 <div id="create-issue-selected-tags" class="flex flex-wrap gap-2">
                     <!-- Selected tags will appear here -->
                 </div>
@@ -1460,18 +1479,79 @@ function showCreateIssue() {
         populateTagSelect('create-issue');
     });
     
-    // Tag selection handler
-    document.getElementById('create-issue-tag-select')?.addEventListener('change', function(e) {
-        if (e.target.value) {
-            const tag = projectTags.find(t => t.id == e.target.value);
-            if (tag && !selectedIssueTags.find(t => t.id === tag.id)) {
-                selectedIssueTags.push(tag);
+    // Tag selection handler (remove old listeners to prevent duplicates)
+    const createIssueTagSelect = document.getElementById('create-issue-tag-select');
+    if (createIssueTagSelect) {
+        const newSelect = createIssueTagSelect.cloneNode(true);
+        createIssueTagSelect.replaceWith(newSelect);
+        newSelect.addEventListener('change', function(e) {
+            if (e.target.value) {
+                const tag = projectTags.find(t => t.id == e.target.value);
+                if (tag && !selectedIssueTags.find(t => t.id === tag.id)) {
+                    selectedIssueTags.push(tag);
+                    renderSelectedTags('create-issue');
+                    populateTagSelect('create-issue');
+                }
+                e.target.value = '';
+            }
+        });
+    }
+    
+    // Setup new tag creation handlers (remove old listeners to prevent duplicates)
+    const createIssueNewTagBtn = document.getElementById('create-issue-new-tag-btn');
+    if (createIssueNewTagBtn) {
+        const newBtn = createIssueNewTagBtn.cloneNode(true);
+        createIssueNewTagBtn.replaceWith(newBtn);
+        newBtn.addEventListener('click', function() {
+            document.getElementById('create-issue-new-tag-form').classList.remove('hidden');
+        });
+    }
+    
+    const createIssueCancelTagBtn = document.getElementById('create-issue-cancel-tag-btn');
+    if (createIssueCancelTagBtn) {
+        const newBtn = createIssueCancelTagBtn.cloneNode(true);
+        createIssueCancelTagBtn.replaceWith(newBtn);
+        newBtn.addEventListener('click', function() {
+            document.getElementById('create-issue-new-tag-form').classList.add('hidden');
+            document.getElementById('create-issue-new-tag-name').value = '';
+        });
+    }
+    
+    const createIssueSaveTagBtn = document.getElementById('create-issue-save-tag-btn');
+    if (createIssueSaveTagBtn) {
+        const newBtn = createIssueSaveTagBtn.cloneNode(true);
+        createIssueSaveTagBtn.replaceWith(newBtn);
+        newBtn.addEventListener('click', async function() {
+            const tagName = document.getElementById('create-issue-new-tag-name').value.trim();
+            const tagColor = document.getElementById('create-issue-new-tag-color').value;
+            
+            if (!tagName) {
+                alert('Please enter a tag name');
+                return;
+            }
+            
+            try {
+                const response = await axios.post(`/api/projects/${currentProject.id}/tags`, {
+                    name: tagName,
+                    color: tagColor
+                }, { withCredentials: true });
+                
+                const newTag = response.data;
+                projectTags.push(newTag);
+                selectedIssueTags.push(newTag);
+                
+                document.getElementById('create-issue-new-tag-form').classList.add('hidden');
+                document.getElementById('create-issue-new-tag-name').value = '';
+                
                 renderSelectedTags('create-issue');
                 populateTagSelect('create-issue');
+                showToast('Tag created and added!', 'success');
+            } catch (error) {
+                console.error('Error creating tag:', error);
+                alert(error.response?.data?.error || 'Failed to create tag');
             }
-            e.target.value = '';
-        }
-    });
+        });
+    }
 }
 
 // Helper functions for dynamic dropdowns
@@ -1689,9 +1769,28 @@ function showCreateActionItem() {
                     </svg>
                     Tags
                 </label>
-                <select id="create-action-item-tag-select" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 mb-2">
-                    <option value="">Add a tag...</option>
-                </select>
+                <div class="flex gap-2 mb-1">
+                    <select id="create-action-item-tag-select" class="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        <option value="">Add a tag...</option>
+                    </select>
+                    <button type="button" id="create-action-item-new-tag-btn" class="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 whitespace-nowrap text-sm">
+                        + New Tag
+                    </button>
+                </div>
+                <div id="create-action-item-new-tag-form" class="hidden mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div class="flex gap-2 items-end">
+                        <div class="flex-1">
+                            <label class="block text-xs font-medium mb-1">Tag Name</label>
+                            <input type="text" id="create-action-item-new-tag-name" placeholder="Enter tag name" class="w-full border rounded px-2 py-1 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium mb-1">Color</label>
+                            <input type="color" id="create-action-item-new-tag-color" value="#3B82F6" class="border rounded px-1 py-1 h-8">
+                        </div>
+                        <button type="button" id="create-action-item-save-tag-btn" class="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Save</button>
+                        <button type="button" id="create-action-item-cancel-tag-btn" class="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Cancel</button>
+                    </div>
+                </div>
                 <div id="create-action-item-selected-tags" class="flex flex-wrap gap-2">
                     <!-- Selected tags will appear here -->
                 </div>
@@ -1722,18 +1821,79 @@ function showCreateActionItem() {
         populateTagSelect('create-action-item');
     });
     
-    // Tag selection handler
-    document.getElementById('create-action-item-tag-select')?.addEventListener('change', function(e) {
-        if (e.target.value) {
-            const tag = projectTags.find(t => t.id == e.target.value);
-            if (tag && !selectedActionItemTags.find(t => t.id === tag.id)) {
-                selectedActionItemTags.push(tag);
+    // Tag selection handler (remove old listeners to prevent duplicates)
+    const createActionItemTagSelect = document.getElementById('create-action-item-tag-select');
+    if (createActionItemTagSelect) {
+        const newSelect = createActionItemTagSelect.cloneNode(true);
+        createActionItemTagSelect.replaceWith(newSelect);
+        newSelect.addEventListener('change', function(e) {
+            if (e.target.value) {
+                const tag = projectTags.find(t => t.id == e.target.value);
+                if (tag && !selectedActionItemTags.find(t => t.id === tag.id)) {
+                    selectedActionItemTags.push(tag);
+                    renderSelectedTags('create-action-item');
+                    populateTagSelect('create-action-item');
+                }
+                e.target.value = '';
+            }
+        });
+    }
+    
+    // Setup new tag creation handlers (remove old listeners to prevent duplicates)
+    const createActionItemNewTagBtn = document.getElementById('create-action-item-new-tag-btn');
+    if (createActionItemNewTagBtn) {
+        const newBtn = createActionItemNewTagBtn.cloneNode(true);
+        createActionItemNewTagBtn.replaceWith(newBtn);
+        newBtn.addEventListener('click', function() {
+            document.getElementById('create-action-item-new-tag-form').classList.remove('hidden');
+        });
+    }
+    
+    const createActionItemCancelTagBtn = document.getElementById('create-action-item-cancel-tag-btn');
+    if (createActionItemCancelTagBtn) {
+        const newBtn = createActionItemCancelTagBtn.cloneNode(true);
+        createActionItemCancelTagBtn.replaceWith(newBtn);
+        newBtn.addEventListener('click', function() {
+            document.getElementById('create-action-item-new-tag-form').classList.add('hidden');
+            document.getElementById('create-action-item-new-tag-name').value = '';
+        });
+    }
+    
+    const createActionItemSaveTagBtn = document.getElementById('create-action-item-save-tag-btn');
+    if (createActionItemSaveTagBtn) {
+        const newBtn = createActionItemSaveTagBtn.cloneNode(true);
+        createActionItemSaveTagBtn.replaceWith(newBtn);
+        newBtn.addEventListener('click', async function() {
+            const tagName = document.getElementById('create-action-item-new-tag-name').value.trim();
+            const tagColor = document.getElementById('create-action-item-new-tag-color').value;
+            
+            if (!tagName) {
+                alert('Please enter a tag name');
+                return;
+            }
+            
+            try {
+                const response = await axios.post(`/api/projects/${currentProject.id}/tags`, {
+                    name: tagName,
+                    color: tagColor
+                }, { withCredentials: true });
+                
+                const newTag = response.data;
+                projectTags.push(newTag);
+                selectedActionItemTags.push(newTag);
+                
+                document.getElementById('create-action-item-new-tag-form').classList.add('hidden');
+                document.getElementById('create-action-item-new-tag-name').value = '';
+                
                 renderSelectedTags('create-action-item');
                 populateTagSelect('create-action-item');
+                showToast('Tag created and added!', 'success');
+            } catch (error) {
+                console.error('Error creating tag:', error);
+                alert(error.response?.data?.error || 'Failed to create tag');
             }
-            e.target.value = '';
-        }
-    });
+        });
+    }
 }
 
 // Create action item function
@@ -3623,6 +3783,9 @@ async function openEditModal(itemId, itemType) {
         renderSelectedTags('issue');
       }
       
+      // Setup new tag creation handlers
+      setupEditModalTagHandlers('issue', item.project_id);
+      
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
     } else {
@@ -3649,12 +3812,82 @@ async function openEditModal(itemId, itemType) {
         renderSelectedTags('action-item');
       }
       
+      // Setup new tag creation handlers
+      setupEditModalTagHandlers('action-item', item.project_id);
+      
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
     }
   } catch (error) {
     console.error('Error loading item for edit:', error);
     alert('Failed to load item data. Please try again.');
+  }
+}
+
+// Setup new tag creation handlers for edit modals
+function setupEditModalTagHandlers(itemType, projectId) {
+  const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
+  
+  // New tag button handler
+  const newTagBtn = document.getElementById(`${prefix}-new-tag-btn`);
+  if (newTagBtn) {
+    newTagBtn.replaceWith(newTagBtn.cloneNode(true)); // Remove old listeners
+    document.getElementById(`${prefix}-new-tag-btn`).addEventListener('click', function() {
+      document.getElementById(`${prefix}-new-tag-form`).classList.remove('hidden');
+    });
+  }
+  
+  // Cancel tag button handler
+  const cancelTagBtn = document.getElementById(`${prefix}-cancel-tag-btn`);
+  if (cancelTagBtn) {
+    cancelTagBtn.replaceWith(cancelTagBtn.cloneNode(true)); // Remove old listeners
+    document.getElementById(`${prefix}-cancel-tag-btn`).addEventListener('click', function() {
+      document.getElementById(`${prefix}-new-tag-form`).classList.add('hidden');
+      document.getElementById(`${prefix}-new-tag-name`).value = '';
+    });
+  }
+  
+  // Save tag button handler
+  const saveTagBtn = document.getElementById(`${prefix}-save-tag-btn`);
+  if (saveTagBtn) {
+    saveTagBtn.replaceWith(saveTagBtn.cloneNode(true)); // Remove old listeners
+    document.getElementById(`${prefix}-save-tag-btn`).addEventListener('click', async function() {
+      const tagName = document.getElementById(`${prefix}-new-tag-name`).value.trim();
+      const tagColor = document.getElementById(`${prefix}-new-tag-color`).value;
+      
+      if (!tagName) {
+        alert('Please enter a tag name');
+        return;
+      }
+      
+      try {
+        const response = await axios.post(`/api/projects/${projectId}/tags`, {
+          name: tagName,
+          color: tagColor
+        }, { withCredentials: true });
+        
+        const newTag = response.data;
+        projectTags.push(newTag);
+        
+        if (itemType === 'issue') {
+          selectedIssueTags.push(newTag);
+          renderSelectedTags('edit-issue');
+          populateTagSelect('edit-issue');
+        } else {
+          selectedActionItemTags.push(newTag);
+          renderSelectedTags('edit-action-item');
+          populateTagSelect('edit-action-item');
+        }
+        
+        document.getElementById(`${prefix}-new-tag-form`).classList.add('hidden');
+        document.getElementById(`${prefix}-new-tag-name`).value = '';
+        
+        showToast('Tag created and added!', 'success');
+      } catch (error) {
+        console.error('Error creating tag:', error);
+        alert(error.response?.data?.error || 'Failed to create tag');
+      }
+    });
   }
 }
 
@@ -3928,19 +4161,27 @@ function populateTagSelect(itemType) {
   
   if (!select) return;
   
-  select.innerHTML = '<option value="">Add a tag...</option>';
-  
   const selectedTags = itemType.includes('issue') ? selectedIssueTags : selectedActionItemTags;
   const availableTags = projectTags.filter(tag => 
     !selectedTags.find(st => st.id === tag.id)
   );
   
-  availableTags.forEach(tag => {
-    const option = document.createElement('option');
-    option.value = tag.id;
-    option.textContent = tag.name;
-    select.appendChild(option);
-  });
+  if (projectTags.length === 0) {
+    select.innerHTML = '<option value="">No tags available - Create tags first</option>';
+    select.disabled = true;
+  } else if (availableTags.length === 0) {
+    select.innerHTML = '<option value="">All tags already added</option>';
+    select.disabled = true;
+  } else {
+    select.disabled = false;
+    select.innerHTML = '<option value="">Add a tag...</option>';
+    availableTags.forEach(tag => {
+      const option = document.createElement('option');
+      option.value = tag.id;
+      option.textContent = tag.name;
+      select.appendChild(option);
+    });
+  }
 }
 
 // Render selected tags
