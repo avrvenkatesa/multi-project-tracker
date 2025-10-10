@@ -2703,6 +2703,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
     assignee, 
     dueDate, 
     projectId,
+    progress = 0,
     // AI-related fields
     createdByAI = false,
     aiConfidence = null,
@@ -2726,7 +2727,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
     const [newIssue] = await sql`
       INSERT INTO issues (
         title, description, priority, category, assignee, 
-        due_date, project_id, status, created_by,
+        due_date, project_id, status, progress, created_by,
         created_by_ai, ai_confidence, ai_analysis_id
       ) VALUES (
         ${title.trim()}, 
@@ -2737,6 +2738,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
         ${dueDate || null}, 
         ${parseInt(projectId)}, 
         'To Do',
+        ${progress || 0},
         ${req.user.id.toString()},
         ${createdByAI},
         ${aiConfidence},
@@ -2785,7 +2787,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
 app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, assignee, due_date, priority, status, category } = req.body;
+    const { title, description, assignee, due_date, priority, status, category, progress } = req.body;
     
     console.log('PATCH /api/issues/:id - Request body:', req.body);
     console.log('Issue ID:', id);
@@ -2846,6 +2848,10 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     if (category !== undefined) {
       updates.push(`category = $${valueIndex++}`);
       values.push(category || '');
+    }
+    if (progress !== undefined) {
+      updates.push(`progress = $${valueIndex++}`);
+      values.push(progress || 0);
     }
     
     if (updates.length === 0) {

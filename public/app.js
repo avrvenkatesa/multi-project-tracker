@@ -1617,6 +1617,7 @@ async function createIssue(event) {
         component: document.getElementById('issue-component').value,
         assignee: document.getElementById('issue-assignee').value,
         dueDate: document.getElementById('issue-due-date').value,
+        progress: parseInt(document.getElementById('issue-progress').value) || 0,
         projectId: currentProject.id,
         type: 'issue',
         status: 'To Do'
@@ -3776,6 +3777,7 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-issue-priority').value = item.priority || 'medium';
       document.getElementById('edit-issue-status').value = item.status || 'To Do';
       document.getElementById('edit-issue-category').value = item.category || '';
+      document.getElementById('edit-issue-progress').value = item.progress || 0;
       
       // Load team members for assignee dropdown using the item's project_id
       if (item.project_id) {
@@ -3943,7 +3945,8 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     due_date: document.getElementById('edit-issue-due-date').value,
     priority: document.getElementById('edit-issue-priority').value,
     status: document.getElementById('edit-issue-status').value,
-    category: document.getElementById('edit-issue-category').value
+    category: document.getElementById('edit-issue-category').value,
+    progress: parseInt(document.getElementById('edit-issue-progress').value) || 0
   };
   
   try {
