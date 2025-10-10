@@ -1406,10 +1406,17 @@ function showCreateIssue() {
                 </select>
             </div>
             
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Due Date</label>
-                <input type="date" id="issue-due-date"
-                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Due Date</label>
+                    <input type="date" id="issue-due-date"
+                           class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Progress %</label>
+                    <input type="number" id="issue-progress" min="0" max="100" value="0"
+                           class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                </div>
             </div>
             
             <div class="mb-4">
