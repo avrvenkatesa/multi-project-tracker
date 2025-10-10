@@ -3872,13 +3872,12 @@ async function openEditModal(itemId, itemType) {
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
       
-      // Setup copy link button
+      // Setup copy link button (use onclick to avoid duplicate listeners)
       const copyLinkBtn = document.getElementById('copyEditIssueLinkBtn');
       if (copyLinkBtn) {
-        copyLinkBtn.replaceWith(copyLinkBtn.cloneNode(true)); // Remove old listeners
-        document.getElementById('copyEditIssueLinkBtn').addEventListener('click', function() {
+        copyLinkBtn.onclick = function() {
           copyItemLink(itemId, 'issue');
-        });
+        };
       }
     } else {
       // Populate action item edit modal
@@ -3910,13 +3909,12 @@ async function openEditModal(itemId, itemType) {
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
       
-      // Setup copy link button
+      // Setup copy link button (use onclick to avoid duplicate listeners)
       const copyLinkBtn = document.getElementById('copyEditActionItemLinkBtn');
       if (copyLinkBtn) {
-        copyLinkBtn.replaceWith(copyLinkBtn.cloneNode(true)); // Remove old listeners
-        document.getElementById('copyEditActionItemLinkBtn').addEventListener('click', function() {
+        copyLinkBtn.onclick = function() {
           copyItemLink(itemId, 'action-item');
-        });
+        };
       }
     }
   } catch (error) {
