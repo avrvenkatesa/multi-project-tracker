@@ -397,13 +397,14 @@ function showMentionDropdown(dropdown, matches, textarea, atPosition) {
     });
   });
   
-  console.log('[MENTIONS] Removing hidden class, current classes:', dropdown.className);
-  dropdown.classList.remove('hidden');
-  console.log('[MENTIONS] After removing hidden, classes:', dropdown.className);
+  // Use inline style instead of class toggle to avoid CSS conflicts
+  dropdown.style.display = 'block';
+  console.log('[MENTIONS] Dropdown shown with display: block');
 }
 
 function hideMentionDropdown(dropdown) {
-  dropdown.classList.add('hidden');
+  if (!dropdown) return;
+  dropdown.style.display = 'none';
 }
 
 function insertMention(username, textareaId, dropdownId, atPosition) {
