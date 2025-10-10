@@ -12,8 +12,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   
+  // Check for project ID in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const projectIdFromUrl = urlParams.get('projectId');
+  
   await loadProjects();
   setupEventListeners();
+  
+  // Auto-select project if provided in URL
+  if (projectIdFromUrl) {
+    currentProjectId = projectIdFromUrl;
+    
+    // Hide project selector, show project header
+    document.getElementById('projectSelector').classList.add('hidden');
+    document.getElementById('projectHeader').classList.remove('hidden');
+    
+    // Find and display project name
+    const project = projects.find(p => p.id == projectIdFromUrl);
+    if (project) {
+      document.getElementById('projectName').textContent = project.name;
+    }
+    
+    // Show tags section and load tags
+    document.getElementById('tagsSection').classList.remove('hidden');
+    await loadTags();
+  }
 });
 
 // Setup event listeners
