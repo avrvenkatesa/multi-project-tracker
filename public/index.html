@@ -203,6 +203,17 @@
                                     </svg>
                                     Transcripts
                                 </button>
+                                <!-- Tags Management button -->
+                                <button
+                                    id="tags-management-btn"
+                                    data-requires-write
+                                    class="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 flex items-center gap-2 transition-all"
+                                >
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                                    </svg>
+                                    Tags
+                                </button>
                             </div>
                             
                             <!-- Create buttons remain on right -->
@@ -959,6 +970,24 @@
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         <p class="text-xs text-gray-500 mt-1">Max 5 files, 10MB each. Supported: PDF, Word, Excel, Images, Text, CSV, ZIP</p>
                     </div>
+
+                    <!-- Tags Section -->
+                    <div class="mb-6 border-t pt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                            Tags
+                        </label>
+                        <div class="relative">
+                            <select id="edit-issue-tag-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="">Add a tag...</option>
+                            </select>
+                        </div>
+                        <div id="edit-issue-selected-tags" class="flex flex-wrap gap-2 mt-3">
+                            <!-- Selected tags will appear here -->
+                        </div>
+                    </div>
                     
                     <div class="flex justify-end gap-3">
                         <button type="button" id="cancelEditIssue"
@@ -1057,6 +1086,24 @@
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         <p class="text-xs text-gray-500 mt-1">Max 5 files, 10MB each. Supported: PDF, Word, Excel, Images, Text, CSV, ZIP</p>
                     </div>
+
+                    <!-- Tags Section -->
+                    <div class="mb-6 border-t pt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                            Tags
+                        </label>
+                        <div class="relative">
+                            <select id="edit-action-item-tag-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="">Add a tag...</option>
+                            </select>
+                        </div>
+                        <div id="edit-action-item-selected-tags" class="flex flex-wrap gap-2 mt-3">
+                            <!-- Selected tags will appear here -->
+                        </div>
+                    </div>
                     
                     <div class="flex justify-end gap-3">
                         <button type="button" id="cancelEditActionItem"
@@ -1114,6 +1161,38 @@
             .due-date-badge.soon {
                 background: #fef3c7;
                 color: #f59e0b;
+            }
+            
+            /* Tag styles */
+            .tag-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 12px;
+                border-radius: 16px;
+                font-size: 12px;
+                font-weight: 500;
+                border: 1px solid;
+            }
+            
+            .tag-badge .remove-tag {
+                cursor: pointer;
+                opacity: 0.7;
+                font-size: 14px;
+                margin-left: 2px;
+            }
+            
+            .tag-badge .remove-tag:hover {
+                opacity: 1;
+            }
+            
+            .card-tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 8px;
+                padding-top: 8px;
+                border-top: 1px solid #e5e7eb;
                 border-left-color: #f59e0b;
             }
             
@@ -1301,7 +1380,7 @@
             }
         </style>
         <script src="comments.js?v=8"></script>
-        <script src="app.js?v=28"></script>
+        <script src="app.js?v=30"></script>
         <script src="js/project-management.js"></script>
     </body>
 </html>

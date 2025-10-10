@@ -234,6 +234,11 @@ function setupEventListeners() {
             window.location.href = `dashboard.html?projectId=${currentProject.id}`;
         }
     });
+    document.getElementById('tags-management-btn')?.addEventListener('click', () => {
+        if (currentProject) {
+            window.location.href = `tags.html?projectId=${currentProject.id}`;
+        }
+    });
     
     // Relationship modal buttons
     document.getElementById('close-relationship-modal-btn')?.addEventListener('click', closeRelationshipModal);
@@ -941,6 +946,11 @@ async function renderKanbanBoard() {
                             <i class="fas fa-user-circle"></i>
                             <span>Created by ${item.creator_username || 'Unknown'}</span>
                         </div>
+                        ${item.tags && item.tags.length > 0 ? `
+                        <div class="card-tags">
+                            ${item.tags.map(tag => renderTagBadge(tag)).join('')}
+                        </div>
+                        ` : ''}
                         <div class="mt-2 pt-2 border-t border-gray-100 space-y-1">
                             <button class="manage-relationships-btn flex items-center text-xs ${relCount > 0 ? 'text-blue-600 font-medium' : 'text-gray-600'} hover:text-blue-700 transition-colors w-full" 
                                     data-item-id="${item.id}" 
@@ -3506,6 +3516,13 @@ async function openEditModal(itemId, itemType) {
       if (item.project_id) {
         await loadTeamMembersForEdit('issue', item.project_id);
         document.getElementById('edit-issue-assignee').value = item.assignee || '';
+        
+        // Load tags for project
+        await loadProjectTags(item.project_id);
+        const itemTags = await loadItemTags(itemId, 'issue');
+        selectedIssueTags = itemTags;
+        populateTagSelect('issue');
+        renderSelectedTags('issue');
       }
       
       // Show modal
@@ -3525,6 +3542,13 @@ async function openEditModal(itemId, itemType) {
       if (item.project_id) {
         await loadTeamMembersForEdit('action-item', item.project_id);
         document.getElementById('edit-action-item-assignee').value = item.assignee || '';
+        
+        // Load tags for project
+        await loadProjectTags(item.project_id);
+        const itemTags = await loadItemTags(itemId, 'action-item');
+        selectedActionItemTags = itemTags;
+        populateTagSelect('action-item');
+        renderSelectedTags('action-item');
       }
       
       // Show modal
@@ -3591,6 +3615,10 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     
     const updatedIssue = response.data;
     
+    // Save tags
+    const currentTags = await loadItemTags(itemId, 'issue');
+    await saveTags(itemId, 'issue', currentTags, selectedIssueTags);
+    
     // Handle file uploads if any files are selected
     const fileInput = document.getElementById('edit-issue-attachments');
     if (fileInput && fileInput.files.length > 0) {
@@ -3655,6 +3683,10 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     });
     
     const updatedItem = response.data;
+    
+    // Save tags
+    const currentTags = await loadItemTags(itemId, 'action-item');
+    await saveTags(itemId, 'action-item', currentTags, selectedActionItemTags);
     
     // Handle file uploads if any files are selected
     const fileInput = document.getElementById('edit-action-item-attachments');
@@ -3756,4 +3788,154 @@ function showToast(message, type = 'info') {
     toast.remove();
   }, 3000);
 }
+
+// ============= TAG FUNCTIONALITY =============
+
+let projectTags = [];
+let selectedIssueTags = [];
+let selectedActionItemTags = [];
+
+// Load tags for current project
+async function loadProjectTags(projectId) {
+  try {
+    const response = await axios.get(`/api/projects/${projectId}/tags`, {
+      withCredentials: true
+    });
+    projectTags = response.data;
+    return projectTags;
+  } catch (error) {
+    console.error('Error loading project tags:', error);
+    return [];
+  }
+}
+
+// Load item tags
+async function loadItemTags(itemId, itemType) {
+  try {
+    const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${endpoint}/${itemId}/tags`, {
+      withCredentials: true
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error loading item tags:', error);
+    return [];
+  }
+}
+
+// Populate tag select dropdown
+function populateTagSelect(itemType) {
+  const selectId = itemType === 'issue' ? 'edit-issue-tag-select' : 'edit-action-item-tag-select';
+  const select = document.getElementById(selectId);
+  
+  select.innerHTML = '<option value="">Add a tag...</option>';
+  
+  const selectedTags = itemType === 'issue' ? selectedIssueTags : selectedActionItemTags;
+  const availableTags = projectTags.filter(tag => 
+    !selectedTags.find(st => st.id === tag.id)
+  );
+  
+  availableTags.forEach(tag => {
+    const option = document.createElement('option');
+    option.value = tag.id;
+    option.textContent = tag.name;
+    select.appendChild(option);
+  });
+}
+
+// Render selected tags
+function renderSelectedTags(itemType) {
+  const containerId = itemType === 'issue' ? 'edit-issue-selected-tags' : 'edit-action-item-selected-tags';
+  const container = document.getElementById(containerId);
+  const selectedTags = itemType === 'issue' ? selectedIssueTags : selectedActionItemTags;
+  
+  container.innerHTML = selectedTags.map(tag => `
+    <span class="tag-badge" style="background-color: ${tag.color}20; color: ${tag.color}; border-color: ${tag.color}">
+      ${escapeHtml(tag.name)}
+      <span class="remove-tag" onclick="removeTag(${tag.id}, '${itemType}')">&times;</span>
+    </span>
+  `).join('');
+}
+
+// Add tag to item
+function addTag(tagId, itemType) {
+  const tag = projectTags.find(t => t.id == tagId);
+  if (!tag) return;
+  
+  if (itemType === 'issue') {
+    if (!selectedIssueTags.find(t => t.id === tag.id)) {
+      selectedIssueTags.push(tag);
+    }
+  } else {
+    if (!selectedActionItemTags.find(t => t.id === tag.id)) {
+      selectedActionItemTags.push(tag);
+    }
+  }
+  
+  renderSelectedTags(itemType);
+  populateTagSelect(itemType);
+}
+
+// Remove tag from item
+function removeTag(tagId, itemType) {
+  if (itemType === 'issue') {
+    selectedIssueTags = selectedIssueTags.filter(t => t.id != tagId);
+  } else {
+    selectedActionItemTags = selectedActionItemTags.filter(t => t.id != tagId);
+  }
+  
+  renderSelectedTags(itemType);
+  populateTagSelect(itemType);
+}
+
+// Save tags for item
+async function saveTags(itemId, itemType, currentTags, newTags) {
+  const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+  
+  // Remove tags that are no longer selected
+  const tagsToRemove = currentTags.filter(ct => !newTags.find(nt => nt.id === ct.id));
+  for (const tag of tagsToRemove) {
+    try {
+      await axios.delete(`/api/${endpoint}/${itemId}/tags/${tag.id}`, {
+        withCredentials: true
+      });
+    } catch (error) {
+      console.error('Error removing tag:', error);
+    }
+  }
+  
+  // Add new tags
+  const tagsToAdd = newTags.filter(nt => !currentTags.find(ct => ct.id === nt.id));
+  for (const tag of tagsToAdd) {
+    try {
+      await axios.post(`/api/${endpoint}/${itemId}/tags`, {
+        tag_id: tag.id
+      }, {
+        withCredentials: true
+      });
+    } catch (error) {
+      console.error('Error adding tag:', error);
+    }
+  }
+}
+
+// Render tag badge HTML
+function renderTagBadge(tag) {
+  return `<span class="tag-badge" style="background-color: ${tag.color}20; color: ${tag.color}; border-color: ${tag.color}">${escapeHtml(tag.name)}</span>`;
+}
+
+// Setup tag select change handlers
+document.getElementById('edit-issue-tag-select')?.addEventListener('change', function(e) {
+  if (e.target.value) {
+    addTag(parseInt(e.target.value), 'issue');
+    e.target.value = '';
+  }
+});
+
+document.getElementById('edit-action-item-tag-select')?.addEventListener('change', function(e) {
+  if (e.target.value) {
+    addTag(parseInt(e.target.value), 'action-item');
+    e.target.value = '';
+  }
+});
 
