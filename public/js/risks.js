@@ -428,6 +428,7 @@ function openEditModal(risk) {
   document.getElementById('riskStatus').value = risk.status || 'identified';
   document.getElementById('riskMitigationPlan').value = risk.mitigation_plan || '';
   document.getElementById('riskContingencyPlan').value = risk.contingency_plan || '';
+  document.getElementById('riskCostCurrency').value = risk.cost_currency || 'USD';
   document.getElementById('riskMitigationCost').value = risk.mitigation_cost || '';
   document.getElementById('riskMitigationEffort').value = risk.mitigation_effort_hours || '';
   document.getElementById('riskOwner').value = risk.risk_owner_id || '';
@@ -498,6 +499,7 @@ async function handleRiskSubmit(e) {
   const status = document.getElementById('riskStatus').value;
   const mitigationPlan = document.getElementById('riskMitigationPlan').value.trim();
   const contingencyPlan = document.getElementById('riskContingencyPlan').value.trim();
+  const costCurrency = document.getElementById('riskCostCurrency').value;
   const mitigationCost = parseFloat(document.getElementById('riskMitigationCost').value) || null;
   const mitigationEffort = parseFloat(document.getElementById('riskMitigationEffort').value) || null;
   const riskOwnerId = parseInt(document.getElementById('riskOwner').value) || null;
@@ -523,6 +525,7 @@ async function handleRiskSubmit(e) {
     status,
     mitigation_plan: mitigationPlan || null,
     contingency_plan: contingencyPlan || null,
+    cost_currency: costCurrency,
     mitigation_cost: mitigationCost,
     mitigation_effort_hours: mitigationEffort,
     risk_owner_id: riskOwnerId,
@@ -641,7 +644,7 @@ function showRiskDetails(risk) {
           
           ${risk.mitigation_cost ? `
             <span class="detail-label">Mitigation Cost</span>
-            <span class="detail-value">$${risk.mitigation_cost.toLocaleString()}</span>
+            <span class="detail-value">${getCurrencySymbol(risk.cost_currency || 'USD')}${risk.mitigation_cost.toLocaleString()}</span>
           ` : ''}
           
           ${risk.mitigation_effort_hours ? `
@@ -777,6 +780,16 @@ function escapeHtml(text) {
 function formatStatus(status) {
   if (!status) return 'Unknown';
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function getCurrencySymbol(currency) {
+  const symbols = {
+    'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'CNY': '¥', 
+    'INR': '₹', 'AUD': '$', 'CAD': '$', 'CHF': '₣', 'SEK': 'kr',
+    'NZD': '$', 'SGD': '$', 'HKD': '$', 'NOK': 'kr', 'KRW': '₩',
+    'MXN': '$', 'BRL': 'R$', 'ZAR': 'R'
+  };
+  return symbols[currency] || currency + ' ';
 }
 
 function showError(message) {

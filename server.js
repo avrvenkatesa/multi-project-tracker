@@ -5497,6 +5497,7 @@ app.post('/api/projects/:projectId/risks', authenticateToken, async (req, res) =
       response_strategy,
       mitigation_plan,
       contingency_plan,
+      cost_currency,
       mitigation_cost,
       mitigation_effort_hours,
       risk_owner_id,
@@ -5518,14 +5519,14 @@ app.post('/api/projects/:projectId/risks', authenticateToken, async (req, res) =
       `INSERT INTO risks (
         risk_id, project_id, title, description, category, risk_source, tags,
         probability, impact, response_strategy, mitigation_plan, contingency_plan,
-        mitigation_cost, mitigation_effort_hours, risk_owner_id, 
+        cost_currency, mitigation_cost, mitigation_effort_hours, risk_owner_id, 
         target_resolution_date, review_date, status, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *`,
       [
         riskId, projectId, title, description, category, risk_source, tags,
         probability, impact, response_strategy, mitigation_plan, contingency_plan,
-        mitigation_cost, mitigation_effort_hours, risk_owner_id,
+        cost_currency || 'USD', mitigation_cost, mitigation_effort_hours, risk_owner_id,
         target_resolution_date, review_date, status || 'identified', userId
       ]
     );
@@ -5705,7 +5706,7 @@ app.patch('/api/risks/:riskId', authenticateToken, async (req, res) => {
     const allowedFields = [
       'title', 'description', 'category', 'risk_source', 'tags',
       'probability', 'impact', 'response_strategy', 'mitigation_plan',
-      'contingency_plan', 'mitigation_cost', 'mitigation_effort_hours',
+      'contingency_plan', 'cost_currency', 'mitigation_cost', 'mitigation_effort_hours',
       'risk_owner_id', 'target_resolution_date', 'review_date', 'status',
       'residual_probability', 'residual_impact'
     ];
