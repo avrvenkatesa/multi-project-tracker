@@ -2411,6 +2411,12 @@ app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (
 // Get all tags for project (with usage count)
 app.get('/api/projects/:projectId/tags', authenticateToken, async (req, res) => {
   try {
+    const projectId = parseInt(req.params.projectId);
+    
+    if (isNaN(projectId)) {
+      return res.status(400).json({ error: 'Invalid project ID' });
+    }
+    
     const result = await pool.query(
       `SELECT 
         t.*,
@@ -2419,7 +2425,7 @@ app.get('/api/projects/:projectId/tags', authenticateToken, async (req, res) => 
       FROM tags t
       WHERE t.project_id = $1
       ORDER BY t.name`,
-      [req.params.projectId]
+      [projectId]
     );
     res.json(result.rows);
   } catch (error) {

@@ -1749,6 +1749,11 @@ function generateAssigneeOptions() {
 async function createIssue(event) {
     event.preventDefault();
     
+    if (!currentProject || !currentProject.id) {
+        showToast('❌ Please select a project first', 'error');
+        return;
+    }
+    
     const issueData = {
         title: document.getElementById('issue-title').value,
         description: document.getElementById('issue-description').value,
@@ -1765,19 +1770,11 @@ async function createIssue(event) {
     };
     
     try {
-        const response = await fetch('/api/issues', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(issueData)
+        const response = await axios.post('/api/issues', issueData, {
+            withCredentials: true
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const newIssue = await response.json();
+        const newIssue = response.data;
         
         // Save tags if any selected
         if (selectedIssueTags.length > 0) {
@@ -1803,23 +1800,20 @@ async function createIssue(event) {
             }
             
             try {
-                const uploadResponse = await fetch(`/api/issues/${newIssue.id}/attachments`, {
-                    method: 'POST',
-                    credentials: 'include',
-                    body: formData
+                await axios.post(`/api/issues/${newIssue.id}/attachments`, formData, {
+                    withCredentials: true,
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
                 });
                 
-                if (!uploadResponse.ok) {
-                    throw new Error('Upload failed');
-                }
-                
-                showSuccessMessage(`Issue "${newIssue.title}" created with ${fileInput.files.length} attachment(s)!`);
+                showToast(`✅ Issue "${newIssue.title}" created with ${fileInput.files.length} attachment(s)!`, 'success');
             } catch (uploadError) {
                 console.error('Error uploading attachments:', uploadError);
-                showSuccessMessage(`Issue "${newIssue.title}" created but attachments failed to upload`);
+                showToast(`✅ Issue "${newIssue.title}" created but attachments failed to upload`, 'warning');
             }
         } else {
-            showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
+            showToast(`✅ Issue "${newIssue.title}" created successfully!`, 'success');
         }
         
         issues.push(newIssue);
@@ -1828,7 +1822,8 @@ async function createIssue(event) {
         
     } catch (error) {
         console.error('Error creating issue:', error);
-        alert('Error creating issue. Please try again.');
+        const errorMsg = error.response?.data?.error || error.message || 'Error creating issue. Please try again.';
+        showToast(`❌ ${errorMsg}`, 'error');
     }
 }
 
