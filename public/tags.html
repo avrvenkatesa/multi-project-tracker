@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tags - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .tag-card {
+      transition: all 0.2s;
+    }
+    .tag-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 shadow-lg">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">Multi-Project Tracker</h1>
+        <p class="text-sm text-blue-100">Tag Management</p>
+      </div>
+      <div class="flex gap-3 items-center">
+        <button onclick="window.location.href='index.html'" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
+          Back to Projects
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto p-6">
+    <!-- Project Header -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 id="project-name" class="text-2xl font-bold text-gray-800">Loading...</h2>
+          <p class="text-gray-600 mt-1">Manage and view tags for issues and action items</p>
+        </div>
+        <button onclick="goBackToProject()" class="text-blue-600 hover:text-blue-700 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+          Back to Project
+        </button>
+      </div>
+    </div>
+
+    <!-- Tag Statistics -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Tag Overview</h3>
+      <div id="tag-stats" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="text-center p-4 bg-blue-50 rounded-lg">
+          <div id="total-tags" class="text-3xl font-bold text-blue-600">-</div>
+          <div class="text-sm text-gray-600 mt-1">Total Tags</div>
+        </div>
+        <div class="text-center p-4 bg-green-50 rounded-lg">
+          <div id="issue-tags" class="text-3xl font-bold text-green-600">-</div>
+          <div class="text-sm text-gray-600 mt-1">Tags on Issues</div>
+        </div>
+        <div class="text-center p-4 bg-purple-50 rounded-lg">
+          <div id="action-tags" class="text-3xl font-bold text-purple-600">-</div>
+          <div class="text-sm text-gray-600 mt-1">Tags on Action Items</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tags List -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-800">All Tags</h3>
+        <div class="text-sm text-gray-600">
+          Click on a tag to filter items
+        </div>
+      </div>
+      
+      <div id="tags-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Tags will be loaded here -->
+      </div>
+      
+      <div id="empty-state" class="hidden text-center py-12">
+        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+        </svg>
+        <p class="text-gray-500 text-lg">No tags found in this project</p>
+        <p class="text-gray-400 text-sm mt-2">Add tags to your issues and action items to see them here</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/tags.js"></script>
+</body>
+</html>

@@ -134,6 +134,11 @@ function setupEventListeners() {
             window.location.href = `dashboard.html?projectId=${currentProject.id}`;
         }
     });
+    document.getElementById('view-tags-btn')?.addEventListener('click', () => {
+        if (currentProject) {
+            window.location.href = `tags.html?projectId=${currentProject.id}`;
+        }
+    });
     document.getElementById('view-risks-btn')?.addEventListener('click', () => {
         if (currentProject) {
             window.location.href = `risks.html?projectId=${currentProject.id}`;

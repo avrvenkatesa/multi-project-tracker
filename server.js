@@ -5574,7 +5574,7 @@ app.get('/api/projects/:projectId/risks', authenticateToken, async (req, res) =>
     
     // Build query
     let query = `
-      SELECT r.*, u.name as owner_name, u.email as owner_email
+      SELECT r.*, u.username as owner_name, u.email as owner_email
       FROM risks r
       LEFT JOIN users u ON r.risk_owner_id = u.id
       WHERE r.project_id = $1
@@ -5645,8 +5645,8 @@ app.get('/api/risks/:riskId', authenticateToken, async (req, res) => {
     const { riskId } = req.params;
     
     const result = await pool.query(
-      `SELECT r.*, u.name as owner_name, u.email as owner_email,
-              c.name as created_by_name
+      `SELECT r.*, u.username as owner_name, u.email as owner_email,
+              c.username as created_by_name
        FROM risks r
        LEFT JOIN users u ON r.risk_owner_id = u.id
        LEFT JOIN users c ON r.created_by = c.id
