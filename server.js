@@ -14,6 +14,7 @@ const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const stringSimilarity = require('string-similarity');
 const notificationService = require('./services/notificationService');
+const schedulerService = require('./services/schedulerService');
 const reportService = require('./services/reportService');
 
 // Configure WebSocket for Node.js < v22
@@ -2710,6 +2711,38 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       }
     }
     
+    // Send Teams notification for status change (non-blocking)
+    if (status !== undefined && issue.status !== status) {
+      const [project] = await sql`SELECT name FROM projects WHERE id = ${updatedIssue.project_id}`;
+      
+      // Send completion notification if status changed to Done/Completed
+      if (status === 'Done' || status === 'Completed') {
+        notificationService.sendCompletionTeamsNotification({
+          itemId: updatedIssue.id,
+          itemTitle: updatedIssue.title,
+          itemType: 'issue',
+          completedByName: req.user.username,
+          projectId: updatedIssue.project_id,
+          projectName: project?.name || 'Unknown'
+        }).catch(err => {
+          console.error('Error sending completion Teams notification:', err);
+        });
+      } else {
+        notificationService.sendStatusChangeTeamsNotification({
+          itemId: updatedIssue.id,
+          itemTitle: updatedIssue.title,
+          itemType: 'issue',
+          oldStatus: issue.status,
+          newStatus: status,
+          changedByName: req.user.username,
+          projectId: updatedIssue.project_id,
+          projectName: project?.name || 'Unknown'
+        }).catch(err => {
+          console.error('Error sending status change Teams notification:', err);
+        });
+      }
+    }
+    
     res.json(updatedIssue);
   } catch (error) {
     console.error('Error updating issue:', error);
@@ -2884,6 +2917,21 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
       }
     }
     
+    // Send Teams notification for action item creation (non-blocking)
+    const [project] = await sql`SELECT * FROM projects WHERE id = ${parseInt(projectId)}`;
+    notificationService.sendActionItemCreationTeamsNotification({
+      actionItemId: newItem.id,
+      actionItemTitle: title,
+      creatorName: req.user.username,
+      projectId: parseInt(projectId),
+      projectName: project?.name || 'Unknown',
+      priority: priority || 'medium',
+      status: 'To Do',
+      dueDate: dueDate
+    }).catch(err => {
+      console.error('Error sending Teams notification:', err);
+    });
+    
     res.status(201).json(newItem);
   } catch (error) {
     console.error('Error creating action item:', error);
@@ -3013,6 +3061,38 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
         }
       } catch (err) {
         console.error('Error looking up assignee for assignment notification:', err);
+      }
+    }
+    
+    // Send Teams notification for status change (non-blocking)
+    if (status !== undefined && item.status !== status) {
+      const [project] = await sql`SELECT name FROM projects WHERE id = ${updatedItem.project_id}`;
+      
+      // Send completion notification if status changed to Done/Completed
+      if (status === 'Done' || status === 'Completed') {
+        notificationService.sendCompletionTeamsNotification({
+          itemId: updatedItem.id,
+          itemTitle: updatedItem.title,
+          itemType: 'action-item',
+          completedByName: req.user.username,
+          projectId: updatedItem.project_id,
+          projectName: project?.name || 'Unknown'
+        }).catch(err => {
+          console.error('Error sending completion Teams notification:', err);
+        });
+      } else {
+        notificationService.sendStatusChangeTeamsNotification({
+          itemId: updatedItem.id,
+          itemTitle: updatedItem.title,
+          itemType: 'action-item',
+          oldStatus: item.status,
+          newStatus: status,
+          changedByName: req.user.username,
+          projectId: updatedItem.project_id,
+          projectName: project?.name || 'Unknown'
+        }).catch(err => {
+          console.error('Error sending status change Teams notification:', err);
+        });
       }
     }
     
@@ -5859,6 +5939,9 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Multi-Project Tracker running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
+  
+  // Start scheduler for daily notifications
+  schedulerService.start();
   console.log(`📋 API Endpoints:`);
   console.log(`   POST /api/auth/register`);
   console.log(`   POST /api/auth/login`);
