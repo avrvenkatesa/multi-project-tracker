@@ -837,6 +837,26 @@ app.get("/api/projects", authenticateToken, async (req, res) => {
   }
 });
 
+// Get single project by ID
+app.get("/api/projects/:projectId", authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const [project] = await sql`
+      SELECT * FROM projects 
+      WHERE id = ${projectId}
+    `;
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    res.json(project);
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    res.status(500).json({ error: 'Failed to fetch project' });
+  }
+});
+
 // Create project (PM or higher)
 app.post("/api/projects", authenticateToken, requireRole('Project Manager'), async (req, res) => {
   try {

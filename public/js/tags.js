@@ -42,10 +42,10 @@ async function loadTags() {
   try {
     // Fetch issues and action items
     const [issuesRes, actionItemsRes] = await Promise.all([
-      fetch(`/api/projects/${currentProjectId}/issues`, {
+      fetch(`/api/issues?projectId=${currentProjectId}`, {
         credentials: 'include'
       }),
-      fetch(`/api/projects/${currentProjectId}/action-items`, {
+      fetch(`/api/action-items?projectId=${currentProjectId}`, {
         credentials: 'include'
       })
     ]);
