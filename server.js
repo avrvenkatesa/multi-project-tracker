@@ -871,7 +871,7 @@ app.post("/api/projects", authenticateToken, requireRole('Project Manager'), asy
 app.put("/api/projects/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, template, start_date, end_date } = req.body;
+    const { name, description, template, start_date, end_date, teams_webhook_url, teams_notifications_enabled } = req.body;
     
     const [membership] = await sql`
       SELECT role FROM project_members 
@@ -889,6 +889,9 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Project name is required' });
     }
     
+    // Get current project to preserve existing values
+    const [currentProject] = await sql`SELECT * FROM projects WHERE id = ${id}`;
+    
     const [updatedProject] = await sql`
       UPDATE projects 
       SET 
@@ -897,6 +900,8 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
         template = ${template || 'generic'},
         start_date = ${start_date || null},
         end_date = ${end_date || null},
+        teams_webhook_url = ${teams_webhook_url !== undefined ? teams_webhook_url : currentProject?.teams_webhook_url || null},
+        teams_notifications_enabled = ${teams_notifications_enabled !== undefined ? teams_notifications_enabled : currentProject?.teams_notifications_enabled !== undefined ? currentProject.teams_notifications_enabled : true},
         updated_by = ${req.user.id}
       WHERE id = ${id}
       RETURNING *
