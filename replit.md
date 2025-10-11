@@ -4,6 +4,11 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
+- **Comprehensive Teams Notifications**: Implemented complete Microsoft Teams integration with instant notifications and daily scheduled reports:
+  - **Instant Notifications**: Real-time Teams alerts for issue/action item creation, status changes, and completions (with celebration 🎉 emoji for Done status)
+  - **Daily Scheduled Reports** (9 AM): Automated overdue alerts showing top overdue items with days-overdue count, and project health summaries with health score (0-100), completion rates, and activity metrics
+  - **Scheduler Service**: Created schedulerService.js with node-cron for reliable daily notifications at 9 AM (timezone-aware)
+  - All notifications use Microsoft Teams Adaptive Cards, respect project-level configuration (teams_webhook_url, teams_notifications_enabled), and run non-blocking
 - **Teams Notification Fix**: Fixed "Created by undefined" error in Teams notifications by implementing proper Teams webhook integration in notificationService.js. Issue creation notifications now correctly display creator username via Microsoft Teams Adaptive Cards with all issue details (priority, status, project, due date). Non-blocking notification respects project-level Teams configuration (teams_webhook_url, teams_notifications_enabled).
 - **CSP Compliance for Tags Page**: Eliminated all Content Security Policy violations on Tags page by replacing inline onclick handlers with proper event listeners and event delegation. Navigation buttons and tag card clicks now use data attributes with addEventListener instead of inline scripts (tags.js v6).
 - **Risk Register Currency Selector**: Added multi-currency support for mitigation costs with 18 global currencies (USD, EUR, GBP, JPY, CNY, INR, AUD, CAD, CHF, SEK, NZD, SGD, HKD, NOK, KRW, MXN, BRL, ZAR). Currency selection is persisted in database and displayed with appropriate symbols.
@@ -59,6 +64,7 @@ Express.js handles requests, incorporating `express-rate-limit` for API protecti
 
 ### Email & Notifications
 - **nodemailer**: SMTP email sending library.
+- **node-cron**: Scheduled task manager for daily notifications.
 
 ### Reporting & Export
 - **pdfkit**: Server-side PDF generation for reports.
