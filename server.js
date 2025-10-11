@@ -2564,6 +2564,20 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
       }
     }
     
+    // Send Teams notification for issue creation (non-blocking)
+    notificationService.sendIssueCreationTeamsNotification({
+      issueId: newIssue.id,
+      issueTitle: title,
+      creatorName: req.user.username,
+      projectId: parseInt(projectId),
+      projectName: project.name,
+      priority: priority || 'medium',
+      status: 'To Do',
+      dueDate: dueDate
+    }).catch(err => {
+      console.error('Error sending Teams notification:', err);
+    });
+    
     res.status(201).json(newIssue);
   } catch (error) {
     console.error('Error creating issue:', error);

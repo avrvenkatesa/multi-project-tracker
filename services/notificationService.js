@@ -36,6 +36,125 @@ class NotificationService {
     }
   }
   
+  async sendTeamsNotification({ projectId, webhookUrl, title, message, facts, actionUrl, actionText }) {
+    try {
+      if (!webhookUrl) {
+        console.log('📢 Teams webhook URL not configured for project', projectId);
+        return;
+      }
+      
+      const adaptiveCard = {
+        type: 'message',
+        attachments: [
+          {
+            contentType: 'application/vnd.microsoft.card.adaptive',
+            content: {
+              $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+              type: 'AdaptiveCard',
+              version: '1.4',
+              body: [
+                {
+                  type: 'TextBlock',
+                  text: title,
+                  weight: 'Bolder',
+                  size: 'Medium',
+                  wrap: true
+                },
+                {
+                  type: 'TextBlock',
+                  text: message,
+                  wrap: true,
+                  spacing: 'Medium'
+                },
+                {
+                  type: 'FactSet',
+                  facts: facts || [],
+                  spacing: 'Medium'
+                }
+              ],
+              actions: actionUrl ? [
+                {
+                  type: 'Action.OpenUrl',
+                  title: actionText || 'View Issue',
+                  url: actionUrl
+                }
+              ] : []
+            }
+          }
+        ]
+      };
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(adaptiveCard)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Teams webhook failed: ${response.status} ${response.statusText}`);
+      }
+      
+      console.log('📢 Teams notification sent successfully for project', projectId);
+    } catch (error) {
+      console.error('Error sending Teams notification:', error);
+    }
+  }
+  
+  async sendIssueCreationTeamsNotification({ issueId, issueTitle, creatorName, projectId, projectName, priority, status, dueDate }) {
+    try {
+      // Get project Teams webhook configuration
+      const result = await pool.query(
+        'SELECT teams_webhook_url, teams_notifications_enabled FROM projects WHERE id = $1',
+        [projectId]
+      );
+      
+      if (result.rows.length === 0) {
+        console.log('Project not found for Teams notification:', projectId);
+        return;
+      }
+      
+      const project = result.rows[0];
+      
+      if (!project.teams_notifications_enabled) {
+        console.log('📢 Teams notifications disabled for project', projectId);
+        return;
+      }
+      
+      const appUrl = getAppUrl();
+      const facts = [
+        { title: 'Created by', value: creatorName || 'Unknown' },
+        { title: 'Priority', value: priority || 'medium' },
+        { title: 'Status', value: status || 'To Do' },
+        { title: 'Project', value: projectName || 'Unknown' }
+      ];
+      
+      if (dueDate) {
+        facts.push({ 
+          title: 'Due Date', 
+          value: new Date(dueDate).toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          }) 
+        });
+      }
+      
+      await this.sendTeamsNotification({
+        projectId,
+        webhookUrl: project.teams_webhook_url,
+        title: `🆕 New Issue Created: ${issueId}`,
+        message: issueTitle,
+        facts,
+        actionUrl: `${appUrl}/index.html?project=${projectId}&itemId=${issueId}&itemType=issue`,
+        actionText: 'View Issue'
+      });
+    } catch (error) {
+      console.error('Error sending issue creation Teams notification:', error);
+    }
+  }
+  
   async generateUnsubscribeToken(userId) {
     const token = crypto.randomBytes(32).toString('hex');
     await pool.query(
