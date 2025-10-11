@@ -9,6 +9,7 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 - **Modal UX Improvements**: Fixed modal close buttons (X, Cancel, Close) with proper event listeners across all Risk modals.
 - **Navigation Consistency**: Unified header design across Risk Register, Tags, and Dashboard pages with intelligent "Back to Project/Projects" button toggling.
 - **Back to Project Button Fix**: Fixed "Back to Project" blue button in Risk Register page - removed preventDefault from event listener and added debug logging.
+- **Tags Page API Fix**: Fixed Tags page JSON parsing errors by correcting API endpoint format to use query parameters (/api/issues?projectId=X instead of /api/projects/X/issues). Added missing GET /api/projects/:projectId endpoint for fetching single project details.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
