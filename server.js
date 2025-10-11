@@ -2414,6 +2414,120 @@ app.post('/api/projects/:projectId/reports/generate', authenticateToken, async (
   }
 });
 
+// ============= TAGS ROUTES =============
+
+// Get all tags for a project
+app.get("/api/projects/:projectId/tags", authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    const tags = await pool.query(
+      `SELECT t.*, u.username as created_by_name,
+       (SELECT COUNT(*) FROM issue_tags WHERE tag_id = t.id) as issue_count,
+       (SELECT COUNT(*) FROM action_item_tags WHERE tag_id = t.id) as action_item_count
+       FROM tags t
+       LEFT JOIN users u ON t.created_by = u.id
+       WHERE t.project_id = $1
+       ORDER BY t.name ASC`,
+      [projectId]
+    );
+    
+    res.json(tags.rows);
+  } catch (error) {
+    console.error('Error fetching tags:', error);
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Create a new tag
+app.post("/api/projects/:projectId/tags", authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { name, color, description } = req.body;
+    
+    if (!name || !color) {
+      return res.status(400).json({ error: 'Name and color are required' });
+    }
+    
+    // Check if tag already exists
+    const existing = await pool.query(
+      `SELECT id FROM tags WHERE project_id = $1 AND LOWER(name) = LOWER($2)`,
+      [projectId, name]
+    );
+    
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'A tag with this name already exists' });
+    }
+    
+    const result = await pool.query(
+      `INSERT INTO tags (project_id, name, color, description, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+       RETURNING *`,
+      [projectId, name, color, description || null, req.user.id]
+    );
+    
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating tag:', error);
+    res.status(500).json({ error: 'Failed to create tag' });
+  }
+});
+
+// Update a tag
+app.put("/api/projects/:projectId/tags/:tagId", authenticateToken, async (req, res) => {
+  try {
+    const { tagId } = req.params;
+    const { name, color, description } = req.body;
+    
+    if (!name || !color) {
+      return res.status(400).json({ error: 'Name and color are required' });
+    }
+    
+    const result = await pool.query(
+      `UPDATE tags 
+       SET name = $1, color = $2, description = $3, updated_at = NOW()
+       WHERE id = $4
+       RETURNING *`,
+      [name, color, description || null, tagId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Tag not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating tag:', error);
+    res.status(500).json({ error: 'Failed to update tag' });
+  }
+});
+
+// Delete a tag
+app.delete("/api/projects/:projectId/tags/:tagId", authenticateToken, async (req, res) => {
+  try {
+    const { tagId } = req.params;
+    
+    // Delete tag associations first
+    await pool.query(`DELETE FROM issue_tags WHERE tag_id = $1`, [tagId]);
+    await pool.query(`DELETE FROM action_item_tags WHERE tag_id = $1`, [tagId]);
+    
+    // Delete the tag
+    const result = await pool.query(
+      `DELETE FROM tags WHERE id = $1 RETURNING *`,
+      [tagId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Tag not found' });
+    }
+    
+    res.json({ message: 'Tag deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting tag:', error);
+    res.status(500).json({ error: 'Failed to delete tag' });
+  }
+});
+
 // ============= ISSUES ROUTES =============
 
 // Get issues with filtering and search

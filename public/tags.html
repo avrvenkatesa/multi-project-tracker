@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tags - Multi-Project Tracker</title>
+  <title>Tag Management - Multi-Project Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .tag-card {
@@ -20,12 +20,12 @@
   <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 shadow-lg">
     <div class="max-w-7xl mx-auto flex justify-between items-center">
       <div>
-        <h1 class="text-2xl font-bold">Multi-Project Tracker</h1>
-        <p class="text-sm text-blue-100">Tag Management</p>
+        <h1 class="text-2xl font-bold">Tag Management</h1>
+        <p class="text-sm text-blue-100">Organize your issue and action items with color-coded tags</p>
       </div>
       <div class="flex gap-3 items-center">
         <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
-          Back to Projects
+          ← Back to Projects
         </button>
       </div>
     </div>
@@ -33,48 +33,22 @@
 
   <!-- Main Content -->
   <main class="max-w-7xl mx-auto p-6">
-    <!-- Project Header -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 id="project-name" class="text-2xl font-bold text-gray-800">Loading...</h2>
-          <p class="text-gray-600 mt-1">Manage and view tags for issues and action items</p>
-        </div>
-        <button id="backToProjectBtn" class="text-blue-600 hover:text-blue-700 flex items-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-          </svg>
-          Back to Project
-        </button>
-      </div>
+    <!-- Project Context -->
+    <div class="mb-6">
+      <p class="text-sm text-gray-600">Managing tags for:</p>
+      <h2 id="project-name" class="text-xl font-bold text-gray-800">Loading...</h2>
     </div>
 
-    <!-- Tag Statistics -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h3 class="text-lg font-semibold text-gray-800 mb-4">Tag Overview</h3>
-      <div id="tag-stats" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="text-center p-4 bg-blue-50 rounded-lg">
-          <div id="total-tags" class="text-3xl font-bold text-blue-600">-</div>
-          <div class="text-sm text-gray-600 mt-1">Total Tags</div>
-        </div>
-        <div class="text-center p-4 bg-green-50 rounded-lg">
-          <div id="issue-tags" class="text-3xl font-bold text-green-600">-</div>
-          <div class="text-sm text-gray-600 mt-1">Tags on Issues</div>
-        </div>
-        <div class="text-center p-4 bg-purple-50 rounded-lg">
-          <div id="action-tags" class="text-3xl font-bold text-purple-600">-</div>
-          <div class="text-sm text-gray-600 mt-1">Tags on Action Items</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tags List -->
+    <!-- Tags Section -->
     <div class="bg-white rounded-lg shadow-md p-6">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-semibold text-gray-800">All Tags</h3>
-        <div class="text-sm text-gray-600">
-          Click on a tag to filter items
-        </div>
+      <div class="flex justify-between items-center mb-6">
+        <h3 class="text-lg font-semibold text-gray-800">Tags</h3>
+        <button id="createTagBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+          </svg>
+          Create Tag
+        </button>
       </div>
       
       <div id="tags-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -91,6 +65,60 @@
     </div>
   </main>
 
-  <script src="/js/tags.js?v=6"></script>
+  <!-- Create/Edit Tag Modal -->
+  <div id="tagModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-full max-w-md">
+      <div class="flex justify-between items-center mb-4">
+        <h3 id="modalTitle" class="text-xl font-bold">Create Tag</h3>
+        <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      
+      <form id="tagForm">
+        <input type="hidden" id="tagId">
+        
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Tag Name *</label>
+          <input type="text" id="tagName" required
+                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+        </div>
+        
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+          <textarea id="tagDescription" rows="3"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+        
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Color</label>
+          <div class="flex gap-2 flex-wrap">
+            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#3b82f6" style="background-color: #3b82f6;"></button>
+            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#10b981" style="background-color: #10b981;"></button>
+            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#f59e0b" style="background-color: #f59e0b;"></button>
+            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#ef4444" style="background-color: #ef4444;"></button>
+            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#8b5cf6" style="background-color: #8b5cf6;"></button>
+            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#ec4899" style="background-color: #ec4899;"></button>
+            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#06b6d4" style="background-color: #06b6d4;"></button>
+            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#84cc16" style="background-color: #84cc16;"></button>
+          </div>
+          <input type="hidden" id="tagColor" value="#3b82f6">
+        </div>
+        
+        <div class="flex justify-end gap-3">
+          <button type="button" id="cancelBtn" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            Save Tag
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/tags.js?v=7"></script>
 </body>
 </html>
