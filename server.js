@@ -894,7 +894,15 @@ app.post("/api/projects", authenticateToken, requireRole('Project Manager'), asy
 app.put("/api/projects/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, template, start_date, end_date } = req.body;
+    const { 
+      name, 
+      description, 
+      template, 
+      start_date, 
+      end_date,
+      teams_notifications_enabled,
+      teams_webhook_url
+    } = req.body;
     
     const [membership] = await sql`
       SELECT role FROM project_members 
@@ -920,6 +928,8 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
         template = ${template || 'generic'},
         start_date = ${start_date || null},
         end_date = ${end_date || null},
+        teams_notifications_enabled = ${teams_notifications_enabled || false},
+        teams_webhook_url = ${teams_webhook_url || null},
         updated_by = ${req.user.id}
       WHERE id = ${id}
       RETURNING *
