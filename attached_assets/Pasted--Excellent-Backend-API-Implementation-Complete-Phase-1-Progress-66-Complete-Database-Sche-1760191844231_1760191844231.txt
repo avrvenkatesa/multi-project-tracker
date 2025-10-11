@@ -1,0 +1,236 @@
+🎉 Excellent! Backend API Implementation Complete!
+✅ Phase 1 Progress: 66% Complete
+
+✅ Database Schema (Complete)
+✅ Backend API (Complete)
+⏳ Frontend UI (Next)
+
+
+PROMPT 3: Risk Register Frontend UI
+Create the frontend user interface for the Risk Register feature.
+📋 Files to Create
+1. public/risks.html
+Complete HTML page with:
+
+Header with project selector and "New Risk" button
+Filter bar (status, category, level, owner)
+Risk list/cards display
+Empty state
+Create/Edit risk modal
+Risk detail view modal
+Delete confirmation modal
+
+2. public/js/risks.js
+Complete JavaScript with:
+
+Page initialization
+Fetch risks from API
+Display risk list
+Filter and sort functionality
+Create risk form handling
+Edit risk form handling
+Delete risk confirmation
+Risk detail modal
+Real-time risk score calculation
+Cookie-based authentication (credentials: 'include')
+
+3. public/css/risks.css
+Complete styling with:
+
+Risk card styles
+Risk level color coding (Low=Green, Medium=Yellow, High=Orange, Critical=Red)
+Modal styles
+Filter bar styles
+Responsive mobile design
+Empty state styling
+
+
+🎨 Design Requirements
+Risk Card Layout
+┌─────────────────────────────────────────┐
+│ RISK-001 [🔴 CRITICAL]                 │
+│ Cloud Migration Failure                 │
+│ ─────────────────────────────────────── │
+│ Category: Technical                     │
+│ P:5 I:5 Score:25 • Owner: John Doe      │
+│ Status: Mitigating • Due: 10/15/2025    │
+│ ─────────────────────────────────────── │
+│ Mitigation: Multi-stage testing...      │
+│ [View Details] [Edit] [Delete]          │
+└─────────────────────────────────────────┘
+Risk Levels Color Coding
+
+Low (1-6): Green #10b981
+Medium (8-12): Yellow #f59e0b
+High (15-20): Orange #f97316
+Critical (25): Red #ef4444
+
+Create/Edit Risk Form
+
+Title (required)
+Description (textarea)
+Category (dropdown from API)
+Risk Source (textarea)
+Tags (comma-separated input)
+Probability (1-5 scale with labels)
+
+1: Very Low
+2: Low
+3: Medium
+4: High
+5: Very High
+
+
+Impact (1-5 scale with labels)
+
+1: Negligible
+2: Minor
+3: Moderate
+4: Major
+5: Catastrophic
+
+
+Real-time Risk Score Display (updates as probability/impact change)
+Response Strategy (dropdown: Avoid, Mitigate, Transfer, Accept)
+Mitigation Plan (textarea)
+Contingency Plan (textarea)
+Mitigation Cost (number)
+Mitigation Effort Hours (number)
+Risk Owner (user dropdown)
+Target Resolution Date (date picker)
+Review Date (date picker)
+Status (dropdown: identified, analyzing, mitigating, monitoring, closed, realized)
+
+Filter Bar
+
+Status filter (All, Identified, Analyzing, Mitigating, Monitoring, Closed, Realized)
+Category filter (All, Technical, Schedule, Budget, etc.)
+Level filter (All, Low, Medium, High, Critical)
+Owner filter (All, users dropdown)
+Sort dropdown (Score ↓, Score ↑, Date ↓, Date ↑, Title A-Z, Title Z-A)
+
+
+🔧 Technical Requirements
+
+Authentication: All API calls use credentials: 'include'
+Error Handling: Display user-friendly error messages
+Loading States: Show loading indicators during API calls
+Validation: Client-side validation before submission
+Responsive: Mobile-friendly design (stack cards, collapsible filters)
+Permissions: Hide/disable actions based on user role
+Empty State: Friendly message when no risks exist
+
+
+📱 Mobile Responsive
+
+Stack risk cards vertically
+Collapsible filter bar
+Full-width modals
+Touch-friendly buttons
+Readable text sizes
+
+
+🎯 Key Features
+Real-Time Risk Score Calculation
+javascriptfunction updateRiskScore() {
+  const probability = parseInt(document.getElementById('probability').value) || 0;
+  const impact = parseInt(document.getElementById('impact').value) || 0;
+  const score = probability * impact;
+  
+  let level, color;
+  if (score <= 6) {
+    level = 'Low'; color = '#10b981';
+  } else if (score <= 12) {
+    level = 'Medium'; color = '#f59e0b';
+  } else if (score <= 20) {
+    level = 'High'; color = '#f97316';
+  } else {
+    level = 'Critical'; color = '#ef4444';
+  }
+  
+  // Update display
+  document.getElementById('risk-score-value').textContent = score;
+  document.getElementById('risk-level-value').textContent = level;
+  document.getElementById('risk-level-badge').style.backgroundColor = color;
+}
+Permission-Based UI
+javascriptfunction canCreateRisk(user) {
+  return ['admin', 'pm', 'team_lead'].includes(user.global_role);
+}
+
+function canEditRisk(user, risk) {
+  if (['admin', 'pm'].includes(user.global_role)) return true;
+  return user.id === risk.risk_owner_id;
+}
+
+function canDeleteRisk(user) {
+  return ['admin', 'pm'].includes(user.global_role);
+}
+
+🔗 Navigation Integration
+Update the main navigation to include "Risks" link:
+In public/dashboard.html, public/projects.html, etc.:
+html<nav>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/projects">Projects</a>
+  <a href="/team">Team</a>
+  <a href="/issues">Issues</a>
+  <a href="/actions">Actions</a>
+  <a href="/risks">Risks</a> <!-- ADD THIS -->
+  <a href="/reports">Reports</a>
+</nav>
+
+✅ Acceptance Criteria
+After implementation, verify:
+
+ Can view list of risks for a project
+ Can filter risks by status, category, level, owner
+ Can sort risks by score, date, title
+ Can create new risk with all fields
+ Can create new risk with minimal fields (title + category)
+ Can edit existing risk
+ Can delete risk with confirmation dialog
+ Can view risk details in modal
+ Risk score calculates in real-time (25 combinations work)
+ Risk level badge shows correct color
+ Empty state displays when no risks
+ Loading states show during API calls
+ Error messages display clearly
+ Mobile responsive (test on 375px width)
+ Create/Edit buttons hidden for users without permissions
+ Delete button hidden for users without permissions
+ Navigation link to Risks page works
+
+
+📦 Implementation Order
+
+Create public/css/risks.css - All styling first
+Create public/risks.html - Complete HTML structure
+Create public/js/risks.js - All JavaScript functionality
+Update navigation - Add Risks link to all pages
+Test thoroughly - All 17 acceptance criteria
+
+
+🧪 Testing Checklist
+Test these scenarios:
+
+Create Risk: All fields → Success
+Create Risk: Only title + category → Success
+Edit Risk: Change probability from 3 to 5 → Score updates
+Delete Risk: Click delete → Confirmation → Success
+Filter: Status = "Mitigating" → Shows only mitigating risks
+Filter: Level = "Critical" → Shows only critical risks
+Sort: Score ↓ → Highest score first
+Permission: Team member can't see delete button
+Permission: Stakeholder can't see create button
+Mobile: View on 375px width → Cards stack, filters work
+Empty State: Project with no risks → Friendly message
+Real-time Calc: P=5, I=5 → Score:25, Level:Critical (Red)
+Real-time Calc: P=2, I=3 → Score:6, Level:Low (Green)
+Detail Modal: Click risk card → Modal opens with all info
+Edit Modal: Click edit → Form pre-filled → Update works
+Validation: Create risk with no title → Error message
+Navigation: Click "Risks" in nav → Goes to risks page
+
+
+Please implement the frontend UI (3 files + navigation update) and report when complete!RetryClaude can make mistakes. Please double-check responses.
