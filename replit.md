@@ -4,11 +4,11 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
+- **CSP Compliance for Tags Page**: Eliminated all Content Security Policy violations on Tags page by replacing inline onclick handlers with proper event listeners and event delegation. Navigation buttons and tag card clicks now use data attributes with addEventListener instead of inline scripts (tags.js v6).
 - **Risk Register Currency Selector**: Added multi-currency support for mitigation costs with 18 global currencies (USD, EUR, GBP, JPY, CNY, INR, AUD, CAD, CHF, SEK, NZD, SGD, HKD, NOK, KRW, MXN, BRL, ZAR). Currency selection is persisted in database and displayed with appropriate symbols.
 - **Tag System Clarification**: Risk Register tags are stored separately (TEXT[] in risks table) from Issue/Action Item tags (JSONB). The Tags page only displays Issue/Action Item tags, not Risk tags.
 - **Modal UX Improvements**: Fixed modal close buttons (X, Cancel, Close) with proper event listeners across all Risk modals.
 - **Navigation Consistency**: Unified header design across Risk Register, Tags, and Dashboard pages with intelligent "Back to Project/Projects" button toggling.
-- **Back to Project Button Fix**: Fixed "Back to Project" blue button in Risk Register page - removed preventDefault from event listener and added debug logging.
 - **Tags Page API Fix**: Fixed Tags page JSON parsing errors by correcting API endpoint format to use query parameters (/api/issues?projectId=X instead of /api/projects/X/issues). Added missing GET /api/projects/:projectId endpoint for fetching single project details.
 
 ## User Preferences

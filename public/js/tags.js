@@ -14,9 +14,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   
+  // Setup navigation button listeners
+  setupNavigationButtons();
+  
   await loadProject();
   await loadTags();
 });
+
+// Setup navigation buttons
+function setupNavigationButtons() {
+  // Back to Projects button
+  const backToProjectsBtn = document.getElementById('backToProjectsBtn');
+  if (backToProjectsBtn) {
+    backToProjectsBtn.addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+  }
+  
+  // Back to Project button
+  const backToProjectBtn = document.getElementById('backToProjectBtn');
+  if (backToProjectBtn) {
+    backToProjectBtn.addEventListener('click', () => {
+      goBackToProject();
+    });
+  }
+}
+
+// Navigate back to project
+function goBackToProject() {
+  if (currentProjectId) {
+    window.location.href = `index.html?project=${currentProjectId}`;
+  }
+}
 
 // Load project details
 async function loadProject() {
@@ -137,7 +166,7 @@ function renderTags() {
     const color = getTagColor(total);
     
     return `
-      <div class="tag-card bg-white border border-gray-200 rounded-lg p-4 cursor-pointer" onclick="filterByTag('${escapeHtml(tag.name)}')">
+      <div class="tag-card bg-white border border-gray-200 rounded-lg p-4 cursor-pointer" data-tag-name="${escapeHtml(tag.name)}">
         <div class="flex items-start justify-between mb-2">
           <div class="flex items-center gap-2">
             <svg class="w-5 h-5 text-${color}-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,6 +187,30 @@ function renderTags() {
       </div>
     `;
   }).join('');
+  
+  // Setup event delegation for tag clicks
+  setupTagClickListeners();
+}
+
+// Setup tag click listeners using event delegation
+function setupTagClickListeners() {
+  const container = document.getElementById('tags-list');
+  if (!container) return;
+  
+  // Remove any existing listeners to avoid duplicates
+  const newContainer = container.cloneNode(true);
+  container.parentNode.replaceChild(newContainer, container);
+  
+  // Add event listener using delegation
+  newContainer.addEventListener('click', (e) => {
+    const tagCard = e.target.closest('.tag-card');
+    if (tagCard) {
+      const tagName = tagCard.dataset.tagName;
+      if (tagName) {
+        filterByTag(tagName);
+      }
+    }
+  });
 }
 
 // Update statistics
@@ -182,11 +235,6 @@ function getTagColor(count) {
 // Filter by tag (go back to project with tag filter)
 function filterByTag(tagName) {
   window.location.href = `index.html?project=${currentProjectId}&tag=${encodeURIComponent(tagName)}`;
-}
-
-// Go back to project
-function goBackToProject() {
-  window.location.href = `index.html?project=${currentProjectId}`;
 }
 
 // Utility function

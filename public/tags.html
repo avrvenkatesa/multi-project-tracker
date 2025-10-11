@@ -24,7 +24,7 @@
         <p class="text-sm text-blue-100">Tag Management</p>
       </div>
       <div class="flex gap-3 items-center">
-        <button onclick="window.location.href='index.html'" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
+        <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
           Back to Projects
         </button>
       </div>
@@ -40,7 +40,7 @@
           <h2 id="project-name" class="text-2xl font-bold text-gray-800">Loading...</h2>
           <p class="text-gray-600 mt-1">Manage and view tags for issues and action items</p>
         </div>
-        <button onclick="goBackToProject()" class="text-blue-600 hover:text-blue-700 flex items-center gap-2">
+        <button id="backToProjectBtn" class="text-blue-600 hover:text-blue-700 flex items-center gap-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>
@@ -91,6 +91,6 @@
     </div>
   </main>
 
-  <script src="/js/tags.js?v=3"></script>
+  <script src="/js/tags.js?v=6"></script>
 </body>
 </html>
