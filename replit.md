@@ -3,6 +3,12 @@
 ## Overview
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
+## Recent Changes (October 2025)
+- **Risk Register Currency Selector**: Added multi-currency support for mitigation costs with 18 global currencies (USD, EUR, GBP, JPY, CNY, INR, AUD, CAD, CHF, SEK, NZD, SGD, HKD, NOK, KRW, MXN, BRL, ZAR). Currency selection is persisted in database and displayed with appropriate symbols.
+- **Tag System Clarification**: Risk Register tags are stored separately (TEXT[] in risks table) from Issue/Action Item tags (JSONB). The Tags page only displays Issue/Action Item tags, not Risk tags.
+- **Modal UX Improvements**: Fixed modal close buttons (X, Cancel, Close) with proper event listeners across all Risk modals.
+- **Navigation Consistency**: Unified header design across Risk Register, Tags, and Dashboard pages with intelligent "Back to Project/Projects" button toggling.
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
