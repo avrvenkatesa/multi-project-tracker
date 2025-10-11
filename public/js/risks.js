@@ -116,12 +116,23 @@ function setupEventListeners() {
       });
     }
   });
+  
+  // Back to Project button - add event listener as backup
+  const backToProjectBtn = document.getElementById('backToProjectBtn');
+  if (backToProjectBtn) {
+    backToProjectBtn.addEventListener('click', function() {
+      goBackToProject();
+    });
+  }
 }
 
 // Go back to project
 function goBackToProject() {
+  console.log('goBackToProject called, currentProjectId:', currentProjectId);
   if (currentProjectId) {
     window.location.href = `index.html?project=${currentProjectId}`;
+  } else {
+    console.warn('No currentProjectId set, cannot navigate back to project');
   }
 }
 
