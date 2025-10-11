@@ -2778,6 +2778,17 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
       ) RETURNING *
     `;
     
+    // Fetch the complete issue with creator info
+    const [issueWithCreator] = await sql`
+      SELECT 
+        i.*,
+        u.username as creator_username,
+        u.email as creator_email
+      FROM issues i
+      LEFT JOIN users u ON i.created_by = u.id::text
+      WHERE i.id = ${newIssue.id}
+    `;
+    
     // Send Teams notification if enabled (non-blocking)
     if (project.teams_notifications_enabled && project.teams_webhook_url) {
       teamsNotifications.notifyNewIssue(
@@ -2818,7 +2829,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
       }
     }
     
-    res.status(201).json(newIssue);
+    res.status(201).json(issueWithCreator);
   } catch (error) {
     console.error('Error creating issue:', error);
     res.status(500).json({ error: 'Failed to create issue' });
@@ -3217,6 +3228,17 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
       ) RETURNING *
     `;
     
+    // Fetch the complete action item with creator info
+    const [actionItemWithCreator] = await sql`
+      SELECT 
+        a.*,
+        u.username as creator_username,
+        u.email as creator_email
+      FROM action_items a
+      LEFT JOIN users u ON a.created_by = u.id::text
+      WHERE a.id = ${newItem.id}
+    `;
+    
     // Send Teams notification if enabled (non-blocking)
     try {
       const [project] = await sql`SELECT * FROM projects WHERE id = ${parseInt(projectId)}`;
@@ -3262,7 +3284,7 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
       }
     }
     
-    res.status(201).json(newItem);
+    res.status(201).json(actionItemWithCreator);
   } catch (error) {
     console.error('Error creating action item:', error);
     res.status(500).json({ error: 'Failed to create action item' });
