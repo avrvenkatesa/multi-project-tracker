@@ -267,6 +267,22 @@ function setupEventListeners() {
                 updateUserRole(parseInt(userId));
             }
         }
+        
+        // Handle edit project button
+        if (e.target.closest('.edit-project-btn')) {
+            const projectId = e.target.closest('.edit-project-btn').getAttribute('data-project-id');
+            if (projectId) {
+                openEditProjectModal(parseInt(projectId));
+            }
+        }
+        
+        // Handle archive project button
+        if (e.target.closest('.archive-project-btn')) {
+            const projectId = e.target.closest('.archive-project-btn').getAttribute('data-project-id');
+            if (projectId) {
+                archiveProject(parseInt(projectId));
+            }
+        }
     });
 
     // Handle form submissions
@@ -327,7 +343,10 @@ function renderProjects() {
              data-project-id="${project.id}">
             <div class="flex justify-between items-start mb-2">
                 <div data-project-click="${project.id}" class="cursor-pointer flex-1">
-                    <h3 class="text-lg font-semibold mb-2">${project.name}</h3>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-lg font-semibold">${project.name}</h3>
+                        <span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">ID: ${project.id}</span>
+                    </div>
                 </div>
                 <div class="flex gap-2">
                     <button class="edit-project-btn text-blue-600 hover:text-blue-800 p-1" data-project-id="${project.id}" title="Edit Project">
@@ -1308,6 +1327,103 @@ async function createProject(event) {
     }
 }
 
+// Open Edit Project Modal
+function openEditProjectModal(projectId) {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    
+    // Populate the form fields
+    document.getElementById('editProjectId').value = project.id;
+    document.getElementById('editProjectName').value = project.name;
+    document.getElementById('editProjectDescription').value = project.description || '';
+    document.getElementById('editProjectTemplate').value = project.template || 'generic';
+    document.getElementById('editProjectStartDate').value = project.start_date ? project.start_date.split('T')[0] : '';
+    document.getElementById('editProjectEndDate').value = project.end_date ? project.end_date.split('T')[0] : '';
+    
+    // Populate Teams Integration fields
+    document.getElementById('editTeamsWebhookUrl').value = project.teams_webhook_url || '';
+    document.getElementById('editTeamsNotificationsEnabled').checked = project.teams_notifications_enabled !== false;
+    
+    // Show the modal
+    document.getElementById('editProjectModal').classList.remove('hidden');
+}
+
+// Close Edit Project Modal
+document.getElementById('closeEditProjectModal')?.addEventListener('click', () => {
+    document.getElementById('editProjectModal').classList.add('hidden');
+});
+
+document.getElementById('cancelEditProject')?.addEventListener('click', () => {
+    document.getElementById('editProjectModal').classList.add('hidden');
+});
+
+// Handle Edit Project Form Submission
+document.getElementById('editProjectForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const projectId = parseInt(document.getElementById('editProjectId').value);
+    const projectData = {
+        name: document.getElementById('editProjectName').value,
+        description: document.getElementById('editProjectDescription').value,
+        template: document.getElementById('editProjectTemplate').value,
+        start_date: document.getElementById('editProjectStartDate').value || null,
+        end_date: document.getElementById('editProjectEndDate').value || null,
+        teams_webhook_url: document.getElementById('editTeamsWebhookUrl').value || null,
+        teams_notifications_enabled: document.getElementById('editTeamsNotificationsEnabled').checked
+    };
+    
+    try {
+        const response = await axios.put(`/api/projects/${projectId}`, projectData, {
+            withCredentials: true
+        });
+        
+        // Update the project in the local array
+        const index = projects.findIndex(p => p.id === projectId);
+        if (index !== -1) {
+            projects[index] = response.data;
+        }
+        
+        renderProjects();
+        document.getElementById('editProjectModal').classList.add('hidden');
+        showToast('✅ Project updated successfully', 'success');
+        
+        // If this is the current project, update it
+        if (currentProject && currentProject.id === projectId) {
+            currentProject = response.data;
+        }
+    } catch (error) {
+        console.error('Error updating project:', error);
+        showToast('❌ Failed to update project', 'error');
+    }
+});
+
+// Archive Project
+async function archiveProject(projectId) {
+    if (!confirm('Are you sure you want to archive this project?')) {
+        return;
+    }
+    
+    try {
+        await axios.post(`/api/projects/${projectId}/archive`, {}, {
+            withCredentials: true
+        });
+        
+        // Remove from projects list
+        projects = projects.filter(p => p.id !== projectId);
+        renderProjects();
+        showToast('✅ Project archived successfully', 'success');
+        
+        // If this was the current project, clear it
+        if (currentProject && currentProject.id === projectId) {
+            currentProject = null;
+            document.getElementById('project-section').classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error archiving project:', error);
+        showToast('❌ Failed to archive project', 'error');
+    }
+}
+
 function showModal(content) {
     document.getElementById("modal-content").innerHTML = content;
     document.getElementById("modal-overlay").classList.remove("hidden");
@@ -1633,6 +1749,11 @@ function generateAssigneeOptions() {
 async function createIssue(event) {
     event.preventDefault();
     
+    if (!currentProject || !currentProject.id) {
+        showToast('❌ Please select a project first', 'error');
+        return;
+    }
+    
     const issueData = {
         title: document.getElementById('issue-title').value,
         description: document.getElementById('issue-description').value,
@@ -1649,19 +1770,11 @@ async function createIssue(event) {
     };
     
     try {
-        const response = await fetch('/api/issues', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(issueData)
+        const response = await axios.post('/api/issues', issueData, {
+            withCredentials: true
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const newIssue = await response.json();
+        const newIssue = response.data;
         
         // Save tags if any selected
         if (selectedIssueTags.length > 0) {
@@ -1687,23 +1800,20 @@ async function createIssue(event) {
             }
             
             try {
-                const uploadResponse = await fetch(`/api/issues/${newIssue.id}/attachments`, {
-                    method: 'POST',
-                    credentials: 'include',
-                    body: formData
+                await axios.post(`/api/issues/${newIssue.id}/attachments`, formData, {
+                    withCredentials: true,
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
                 });
                 
-                if (!uploadResponse.ok) {
-                    throw new Error('Upload failed');
-                }
-                
-                showSuccessMessage(`Issue "${newIssue.title}" created with ${fileInput.files.length} attachment(s)!`);
+                showToast(`✅ Issue "${newIssue.title}" created with ${fileInput.files.length} attachment(s)!`, 'success');
             } catch (uploadError) {
                 console.error('Error uploading attachments:', uploadError);
-                showSuccessMessage(`Issue "${newIssue.title}" created but attachments failed to upload`);
+                showToast(`✅ Issue "${newIssue.title}" created but attachments failed to upload`, 'warning');
             }
         } else {
-            showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
+            showToast(`✅ Issue "${newIssue.title}" created successfully!`, 'success');
         }
         
         issues.push(newIssue);
@@ -1712,7 +1822,8 @@ async function createIssue(event) {
         
     } catch (error) {
         console.error('Error creating issue:', error);
-        alert('Error creating issue. Please try again.');
+        const errorMsg = error.response?.data?.error || error.message || 'Error creating issue. Please try again.';
+        showToast(`❌ ${errorMsg}`, 'error');
     }
 }
 
