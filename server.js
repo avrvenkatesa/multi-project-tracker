@@ -892,6 +892,14 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
     // Get current project to preserve existing values
     const [currentProject] = await sql`SELECT * FROM projects WHERE id = ${id}`;
     
+    if (!currentProject) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Determine final values with proper handling
+    const finalWebhookUrl = teams_webhook_url !== undefined ? teams_webhook_url : currentProject.teams_webhook_url;
+    const finalNotificationsEnabled = teams_notifications_enabled !== undefined ? teams_notifications_enabled : (currentProject.teams_notifications_enabled !== undefined ? currentProject.teams_notifications_enabled : true);
+    
     const [updatedProject] = await sql`
       UPDATE projects 
       SET 
@@ -900,8 +908,8 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
         template = ${template || 'generic'},
         start_date = ${start_date || null},
         end_date = ${end_date || null},
-        teams_webhook_url = ${teams_webhook_url !== undefined ? teams_webhook_url : currentProject?.teams_webhook_url || null},
-        teams_notifications_enabled = ${teams_notifications_enabled !== undefined ? teams_notifications_enabled : currentProject?.teams_notifications_enabled !== undefined ? currentProject.teams_notifications_enabled : true},
+        teams_webhook_url = ${finalWebhookUrl || null},
+        teams_notifications_enabled = ${finalNotificationsEnabled},
         updated_by = ${req.user.id}
       WHERE id = ${id}
       RETURNING *
@@ -918,7 +926,13 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
     
   } catch (error) {
     console.error('Update project error:', error);
-    res.status(500).json({ error: 'Failed to update project' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      projectId: req.params.id,
+      updateData: req.body
+    });
+    res.status(500).json({ error: 'Failed to update project', details: error.message });
   }
 });
 
