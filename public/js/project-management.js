@@ -37,6 +37,10 @@ async function openEditProjectModal(projectId) {
     document.getElementById('editProjectStartDate').value = project.start_date ? project.start_date.split('T')[0] : '';
     document.getElementById('editProjectEndDate').value = project.end_date ? project.end_date.split('T')[0] : '';
     
+    // Populate Teams integration fields
+    document.getElementById('editTeamsNotificationsEnabled').checked = project.teams_notifications_enabled || false;
+    document.getElementById('editTeamsWebhookUrl').value = project.teams_webhook_url || '';
+    
     document.getElementById('editProjectModal').classList.remove('hidden');
     
   } catch (error) {
@@ -55,13 +59,23 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
   const template = document.getElementById('editProjectTemplate').value;
   const start_date = document.getElementById('editProjectStartDate').value || null;
   const end_date = document.getElementById('editProjectEndDate').value || null;
+  const teams_notifications_enabled = document.getElementById('editTeamsNotificationsEnabled').checked;
+  const teams_webhook_url = document.getElementById('editTeamsWebhookUrl').value || null;
   
   try {
     const response = await fetch(`/api/projects/${projectId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ name, description, template, start_date, end_date })
+      body: JSON.stringify({ 
+        name, 
+        description, 
+        template, 
+        start_date, 
+        end_date,
+        teams_notifications_enabled,
+        teams_webhook_url
+      })
     });
     
     const data = await response.json();
