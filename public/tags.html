@@ -81,30 +81,27 @@
         <input type="hidden" id="tagId">
         
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Tag Name *</label>
-          <input type="text" id="tagName" required
+          <label class="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+          <input type="text" id="tagName" required placeholder="e.g., Bug, Feature, Priority"
                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
         </div>
         
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
-          <textarea id="tagDescription" rows="3"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Color *</label>
+          <div class="flex gap-3 items-center">
+            <input type="color" id="tagColor" value="#3b82f6" 
+                   class="w-24 h-10 border border-gray-300 rounded cursor-pointer">
+            <button type="button" id="previewBtn" 
+                    class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all">
+              Preview
+            </button>
+          </div>
         </div>
         
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Color</label>
-          <div class="flex gap-2 flex-wrap">
-            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#3b82f6" style="background-color: #3b82f6;"></button>
-            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#10b981" style="background-color: #10b981;"></button>
-            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#f59e0b" style="background-color: #f59e0b;"></button>
-            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#ef4444" style="background-color: #ef4444;"></button>
-            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#8b5cf6" style="background-color: #8b5cf6;"></button>
-            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#ec4899" style="background-color: #ec4899;"></button>
-            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#06b6d4" style="background-color: #06b6d4;"></button>
-            <button type="button" class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" data-color="#84cc16" style="background-color: #84cc16;"></button>
-          </div>
-          <input type="hidden" id="tagColor" value="#3b82f6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Description (optional)</label>
+          <textarea id="tagDescription" rows="3" placeholder="What is this tag used for?"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
         </div>
         
         <div class="flex justify-end gap-3">
@@ -119,6 +116,6 @@
     </div>
   </div>
 
-  <script src="/js/tags.js?v=7"></script>
+  <script src="/js/tags.js?v=8"></script>
 </body>
 </html>

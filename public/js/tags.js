@@ -37,12 +37,10 @@ function setupEventListeners() {
   document.getElementById('closeModalBtn')?.addEventListener('click', closeModal);
   document.getElementById('cancelBtn')?.addEventListener('click', closeModal);
   
-  // Color selection
-  document.querySelectorAll('.color-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      selectColor(btn.dataset.color);
-    });
+  // Preview button
+  document.getElementById('previewBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    showColorPreview();
   });
   
   // Form submit
@@ -168,7 +166,8 @@ function openCreateModal() {
   editingTagId = null;
   document.getElementById('modalTitle').textContent = 'Create Tag';
   document.getElementById('tagForm').reset();
-  selectColor('#3b82f6');
+  document.getElementById('tagColor').value = '#3b82f6';
+  selectedColor = '#3b82f6';
   document.getElementById('tagModal').classList.remove('hidden');
 }
 
@@ -178,7 +177,8 @@ function openEditModal(id, name, description, color) {
   document.getElementById('modalTitle').textContent = 'Edit Tag';
   document.getElementById('tagName').value = name;
   document.getElementById('tagDescription').value = description;
-  selectColor(color);
+  document.getElementById('tagColor').value = color;
+  selectedColor = color;
   document.getElementById('tagModal').classList.remove('hidden');
 }
 
@@ -189,17 +189,15 @@ function closeModal() {
   editingTagId = null;
 }
 
-// Select color
-function selectColor(color) {
+// Show color preview
+function showColorPreview() {
+  const color = document.getElementById('tagColor').value;
   selectedColor = color;
-  document.getElementById('tagColor').value = color;
-  document.querySelectorAll('.color-btn').forEach(btn => {
-    if (btn.dataset.color === color) {
-      btn.classList.add('ring-4', 'ring-offset-2');
-    } else {
-      btn.classList.remove('ring-4', 'ring-offset-2');
-    }
-  });
+  
+  const name = document.getElementById('tagName').value.trim() || 'Tag Name';
+  const description = document.getElementById('tagDescription').value.trim() || 'Tag description';
+  
+  alert(`Preview:\n\nTag: ${name}\nColor: ${color}\nDescription: ${description}`);
 }
 
 // Handle tag form submit
@@ -208,7 +206,7 @@ async function handleTagSubmit(e) {
   
   const name = document.getElementById('tagName').value.trim();
   const description = document.getElementById('tagDescription').value.trim();
-  const color = selectedColor;
+  const color = document.getElementById('tagColor').value;
   
   if (!name) {
     alert('Tag name is required');
