@@ -1,0 +1,692 @@
+IMPLEMENT: Microsoft Teams Integration via Webhooks
+OBJECTIVE:
+Add comprehensive Microsoft Teams integration to send real-time notifications for project events, including automated overdue alerts and daily summaries.
+CRITICAL: This implementation MUST include:
+
+Real-time notifications for create/update/complete events
+Automated overdue alerts (daily cron job)
+Daily summary reports (daily cron job)
+
+REQUIREMENTS:
+
+INSTALL REQUIRED PACKAGES:
+
+bashnpm install axios node-cron
+
+ADD DATABASE COLUMNS:
+
+sql-- Add to migration or run directly
+ALTER TABLE projects ADD COLUMN teams_webhook_url TEXT;
+ALTER TABLE projects ADD COLUMN teams_notifications_enabled BOOLEAN DEFAULT true;
+
+CREATE TEAMS NOTIFICATION SERVICE:
+
+Create services/teamsNotifications.js:
+javascriptconst axios = require('axios');
+
+/**
+ * Base function to send notification to Microsoft Teams
+ */
+async function sendTeamsNotification(webhookUrl, title, message, details = {}, color = '0078D4') {
+  if (!webhookUrl) {
+    console.log('Teams webhook URL not configured');
+    return false;
+  }
+
+  const appUrl = process.env.REPL_SLUG 
+    ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+    : 'http://localhost:3000';
+
+  const card = {
+    "@type": "MessageCard",
+    "@context": "https://schema.org/extensions",
+    "summary": title,
+    "themeColor": color,
+    "title": title,
+    "sections": [
+      {
+        "activityTitle": message,
+        "activitySubtitle": details.subtitle || '',
+        "facts": Object.entries(details.facts || {}).map(([key, value]) => ({
+          name: key,
+          value: String(value)
+        })),
+        "markdown": true
+      }
+    ],
+    "potentialAction": details.actions || []
+  };
+
+  try {
+    await axios.post(webhookUrl, card, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    console.log(`✅ Teams notification sent: ${title}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Teams notification failed: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * Notify when new issue created
+ */
+async function notifyNewIssue(webhookUrl, issue, creator, project) {
+  const appUrl = process.env.REPL_SLUG 
+    ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+    : 'http://localhost:3000';
+
+  await sendTeamsNotification(
+    webhookUrl,
+    `🆕 New Issue Created: ${issue.issue_id}`,
+    issue.title,
+    {
+      subtitle: `Created by ${creator.name} in ${project.name}`,
+      facts: {
+        'Priority': issue.priority || 'Not set',
+        'Status': issue.status,
+        'Due Date': issue.due_date ? new Date(issue.due_date).toLocaleDateString() : 'Not set',
+        'Project': project.name
+      },
+      actions: [
+        {
+          "@type": "OpenUri",
+          "name": "View Issue",
+          "targets": [{ "os": "default", "uri": `${appUrl}/issues.html?issue=${issue.id}` }]
+        }
+      ]
+    },
+    '0078D4' // Blue
+  );
+}
+
+/**
+ * Notify when issue updated
+ */
+async function notifyIssueUpdated(webhookUrl, issue, updater, project, changes) {
+  const appUrl = process.env.REPL_SLUG 
+    ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+    : 'http://localhost:3000';
+
+  const changesList = Object.entries(changes)
+    .map(([field, values]) => `${field}: ${values.old} → ${values.new}`)
+    .join(', ');
+
+  await sendTeamsNotification(
+    webhookUrl,
+    `✏️ Issue Updated: ${issue.issue_id}`,
+    issue.title,
+    {
+      subtitle: `Updated by ${updater.name} in ${project.name}`,
+      facts: {
+        'Changes': changesList,
+        'Current Status': issue.status,
+        'Priority': issue.priority || 'Not set'
+      },
+      actions: [
+        {
+          "@type": "OpenUri",
+          "name": "View Issue",
+          "targets": [{ "os": "default", "uri": `${appUrl}/issues.html?issue=${issue.id}` }]
+        }
+      ]
+    },
+    'FFA500' // Orange
+  );
+}
+
+/**
+ * Notify when issue completed
+ */
+async function notifyIssueCompleted(webhookUrl, issue, completer, project) {
+  const appUrl = process.env.REPL_SLUG 
+    ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+    : 'http://localhost:3000';
+
+  await sendTeamsNotification(
+    webhookUrl,
+    `✅ Issue Completed: ${issue.issue_id}`,
+    issue.title,
+    {
+      subtitle: `Completed by ${completer.name} in ${project.name}`,
+      facts: {
+        'Priority': issue.priority || 'Not set',
+        'Completed': new Date().toLocaleString(),
+        'Project': project.name
+      },
+      actions: [
+        {
+          "@type": "OpenUri",
+          "name": "View Issue",
+          "targets": [{ "os": "default", "uri": `${appUrl}/issues.html?issue=${issue.id}` }]
+        }
+      ]
+    },
+    '28A745' // Green
+  );
+}
+
+/**
+ * Notify when single issue is overdue
+ */
+async function notifyIssueOverdue(webhookUrl, issue, assignee, project) {
+  const appUrl = process.env.REPL_SLUG 
+    ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+    : 'http://localhost:3000';
+
+  const daysOverdue = Math.floor(
+    (new Date() - new Date(issue.due_date)) / (1000 * 60 * 60 * 24)
+  );
+
+  await sendTeamsNotification(
+    webhookUrl,
+    `⚠️ Overdue Issue: ${issue.issue_id}`,
+    issue.title,
+    {
+      subtitle: `Assigned to ${assignee?.name || 'Unassigned'} in ${project.name}`,
+      facts: {
+        'Days Overdue': daysOverdue,
+        'Due Date': new Date(issue.due_date).toLocaleDateString(),
+        'Priority': issue.priority || 'Not set',
+        'Status': issue.status,
+        'Project': project.name
+      },
+      actions: [
+        {
+          "@type": "OpenUri",
+          "name": "View Issue",
+          "targets": [{ "os": "default", "uri": `${appUrl}/issues.html?issue=${issue.id}` }]
+        }
+      ]
+    },
+    'DC3545' // Red
+  );
+}
+
+/**
+ * Notify for new action item
+ */
+async function notifyNewAction(webhookUrl, action, creator, project) {
+  const appUrl = process.env.REPL_SLUG 
+    ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+    : 'http://localhost:3000';
+
+  await sendTeamsNotification(
+    webhookUrl,
+    `📋 New Action Item: ${action.action_id}`,
+    action.title,
+    {
+      subtitle: `Created by ${creator.name} in ${project.name}`,
+      facts: {
+        'Priority': action.priority || 'Not set',
+        'Status': action.status,
+        'Due Date': action.due_date ? new Date(action.due_date).toLocaleDateString() : 'Not set',
+        'Project': project.name
+      },
+      actions: [
+        {
+          "@type": "OpenUri",
+          "name": "View Action",
+          "targets": [{ "os": "default", "uri": `${appUrl}/actions.html?action=${action.id}` }]
+        }
+      ]
+    },
+    '6F42C1' // Purple
+  );
+}
+
+/**
+ * Notify for action completed
+ */
+async function notifyActionCompleted(webhookUrl, action, completer, project) {
+  const appUrl = process.env.REPL_SLUG 
+    ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+    : 'http://localhost:3000';
+
+  await sendTeamsNotification(
+    webhookUrl,
+    `✅ Action Completed: ${action.action_id}`,
+    action.title,
+    {
+      subtitle: `Completed by ${completer.name} in ${project.name}`,
+      facts: {
+        'Priority': action.priority || 'Not set',
+        'Completed': new Date().toLocaleString(),
+        'Project': project.name
+      },
+      actions: [
+        {
+          "@type": "OpenUri",
+          "name": "View Action",
+          "targets": [{ "os": "default", "uri": `${appUrl}/actions.html?action=${action.id}` }]
+        }
+      ]
+    },
+    '28A745' // Green
+  );
+}
+
+/**
+ * Send daily summary for a project
+ */
+async function sendDailySummary(webhookUrl, project, overdueIssues, overdueActions) {
+  const appUrl = process.env.REPL_SLUG 
+    ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+    : 'http://localhost:3000';
+
+  const totalOverdue = overdueIssues.length + overdueActions.length;
+
+  if (totalOverdue === 0) {
+    return; // Don't send if nothing overdue
+  }
+
+  await sendTeamsNotification(
+    webhookUrl,
+    `📊 Daily Summary: ${project.name}`,
+    `You have ${totalOverdue} overdue item(s)`,
+    {
+      subtitle: new Date().toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      }),
+      facts: {
+        'Overdue Issues': overdueIssues.length,
+        'Overdue Actions': overdueActions.length,
+        'Total Overdue': totalOverdue
+      },
+      actions: [
+        {
+          "@type": "OpenUri",
+          "name": "View Issues",
+          "targets": [{ "os": "default", "uri": `${appUrl}/issues.html` }]
+        },
+        {
+          "@type": "OpenUri",
+          "name": "View Actions",
+          "targets": [{ "os": "default", "uri": `${appUrl}/actions.html` }]
+        }
+      ]
+    },
+    'FFC107' // Yellow
+  );
+}
+
+module.exports = {
+  sendTeamsNotification,
+  notifyNewIssue,
+  notifyIssueUpdated,
+  notifyIssueCompleted,
+  notifyIssueOverdue,
+  notifyNewAction,
+  notifyActionCompleted,
+  sendDailySummary
+};
+
+CREATE SCHEDULED JOBS FILE:
+
+Create jobs/dailyNotifications.js:
+javascriptconst cron = require('node-cron');
+const { Pool } = require('pg');
+const teamsNotifications = require('../services/teamsNotifications');
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false }
+});
+
+/**
+ * Check for overdue items and send individual alerts
+ */
+async function checkOverdueItems() {
+  console.log('🔍 Checking for overdue items...');
+  
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Get all projects with Teams enabled
+    const projects = await pool.query(
+      `SELECT id, name, teams_webhook_url 
+       FROM projects 
+       WHERE teams_notifications_enabled = true 
+       AND teams_webhook_url IS NOT NULL`
+    );
+    
+    for (const project of projects.rows) {
+      // Get overdue issues
+      const overdueIssues = await pool.query(
+        `SELECT i.*, u.name as assignee_name
+         FROM issues i
+         LEFT JOIN users u ON i.assignee_id = u.id
+         WHERE i.project_id = $1
+         AND i.status != 'done'
+         AND i.due_date < $2`,
+        [project.id, today]
+      );
+      
+      // Send alert for each overdue issue
+      for (const issue of overdueIssues.rows) {
+        await teamsNotifications.notifyIssueOverdue(
+          project.teams_webhook_url,
+          issue,
+          { name: issue.assignee_name },
+          project
+        );
+      }
+      
+      // Get overdue actions
+      const overdueActions = await pool.query(
+        `SELECT a.*, u.name as assignee_name
+         FROM action_items a
+         LEFT JOIN users u ON a.assignee_id = u.id
+         WHERE a.project_id = $1
+         AND a.status != 'completed'
+         AND a.due_date < $2`,
+        [project.id, today]
+      );
+      
+      // Send alert for each overdue action
+      for (const action of overdueActions.rows) {
+        await teamsNotifications.notifyIssueOverdue(
+          project.teams_webhook_url,
+          action,
+          { name: action.assignee_name },
+          project
+        );
+      }
+      
+      console.log(`✅ Checked overdue items for project: ${project.name}`);
+    }
+  } catch (error) {
+    console.error('❌ Error checking overdue items:', error);
+  }
+}
+
+/**
+ * Send daily summary for each project
+ */
+async function sendDailySummaries() {
+  console.log('📊 Sending daily summaries...');
+  
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Get all projects with Teams enabled
+    const projects = await pool.query(
+      `SELECT id, name, teams_webhook_url 
+       FROM projects 
+       WHERE teams_notifications_enabled = true 
+       AND teams_webhook_url IS NOT NULL`
+    );
+    
+    for (const project of projects.rows) {
+      // Get overdue issues
+      const overdueIssues = await pool.query(
+        `SELECT * FROM issues 
+         WHERE project_id = $1 
+         AND status != 'done' 
+         AND due_date < $2`,
+        [project.id, today]
+      );
+      
+      // Get overdue actions
+      const overdueActions = await pool.query(
+        `SELECT * FROM action_items 
+         WHERE project_id = $1 
+         AND status != 'completed' 
+         AND due_date < $2`,
+        [project.id, today]
+      );
+      
+      // Send summary
+      await teamsNotifications.sendDailySummary(
+        project.teams_webhook_url,
+        project,
+        overdueIssues.rows,
+        overdueActions.rows
+      );
+      
+      console.log(`✅ Sent daily summary for project: ${project.name}`);
+    }
+  } catch (error) {
+    console.error('❌ Error sending daily summaries:', error);
+  }
+}
+
+/**
+ * Initialize scheduled jobs
+ */
+function initializeDailyJobs() {
+  // Run every day at 9:00 AM
+  cron.schedule('0 9 * * *', async () => {
+    console.log('⏰ Daily notification job started at 9:00 AM');
+    await checkOverdueItems();
+    await sendDailySummaries();
+  });
+  
+  console.log('✅ Daily notification jobs initialized (runs at 9:00 AM daily)');
+}
+
+module.exports = {
+  initializeDailyJobs,
+  checkOverdueItems,
+  sendDailySummaries
+};
+
+INTEGRATE INTO server.js:
+
+Add at the top of server.js:
+javascriptconst teamsNotifications = require('./services/teamsNotifications');
+const { initializeDailyJobs } = require('./jobs/dailyNotifications');
+
+// Initialize daily jobs after database connection
+initializeDailyJobs();
+Add to POST /api/projects/:projectId/issues endpoint:
+javascriptapp.post('/api/projects/:projectId/issues', authenticateToken, async (req, res) => {
+  try {
+    // ... existing issue creation code ...
+    
+    const issue = result.rows[0];
+    
+    // Get creator and project info for Teams notification
+    const creator = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.userId]);
+    const project = await pool.query(
+      'SELECT name, teams_webhook_url, teams_notifications_enabled FROM projects WHERE id = $1', 
+      [req.params.projectId]
+    );
+    
+    // Send Teams notification if enabled
+    if (project.rows[0].teams_notifications_enabled && project.rows[0].teams_webhook_url) {
+      await teamsNotifications.notifyNewIssue(
+        project.rows[0].teams_webhook_url,
+        issue,
+        creator.rows[0],
+        project.rows[0]
+      );
+    }
+    
+    res.status(201).json(issue);
+  } catch (error) {
+    console.error('Error creating issue:', error);
+    res.status(500).json({ error: 'Failed to create issue' });
+  }
+});
+Add to PATCH /api/issues/:issueId endpoint:
+javascriptapp.patch('/api/issues/:issueId', authenticateToken, async (req, res) => {
+  try {
+    // Get old issue first
+    const oldIssue = await pool.query('SELECT * FROM issues WHERE id = $1', [req.params.issueId]);
+    const old = oldIssue.rows[0];
+    
+    // ... existing update code ...
+    
+    const updated = result.rows[0];
+    
+    // Get updater and project info
+    const updater = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.userId]);
+    const project = await pool.query(
+      'SELECT name, teams_webhook_url, teams_notifications_enabled FROM projects WHERE id = $1',
+      [updated.project_id]
+    );
+    
+    if (project.rows[0].teams_notifications_enabled && project.rows[0].teams_webhook_url) {
+      // Detect changes
+      const changes = {};
+      if (old.status !== updated.status) {
+        changes.Status = { old: old.status, new: updated.status };
+      }
+      if (old.priority !== updated.priority) {
+        changes.Priority = { old: old.priority || 'None', new: updated.priority || 'None' };
+      }
+      
+      // Send appropriate notification
+      if (updated.status === 'done' && old.status !== 'done') {
+        await teamsNotifications.notifyIssueCompleted(
+          project.rows[0].teams_webhook_url,
+          updated,
+          updater.rows[0],
+          project.rows[0]
+        );
+      } else if (Object.keys(changes).length > 0) {
+        await teamsNotifications.notifyIssueUpdated(
+          project.rows[0].teams_webhook_url,
+          updated,
+          updater.rows[0],
+          project.rows[0],
+          changes
+        );
+      }
+    }
+    
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating issue:', error);
+    res.status(500).json({ error: 'Failed to update issue' });
+  }
+});
+Apply similar changes to action items endpoints.
+
+ADD API ENDPOINTS FOR TEAMS SETTINGS:
+
+javascript// Get Teams settings for project
+app.get('/api/projects/:projectId/teams-settings', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT teams_webhook_url, teams_notifications_enabled FROM projects WHERE id = $1',
+      [req.params.projectId]
+    );
+    res.json(result.rows[0] || {});
+  } catch (error) {
+    console.error('Error fetching Teams settings:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// Update Teams settings
+app.patch('/api/projects/:projectId/teams-settings', authenticateToken, async (req, res) => {
+  try {
+    const { teams_webhook_url, teams_notifications_enabled } = req.body;
+    
+    const result = await pool.query(
+      `UPDATE projects 
+       SET teams_webhook_url = $1, 
+           teams_notifications_enabled = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3
+       RETURNING *`,
+      [teams_webhook_url, teams_notifications_enabled, req.params.projectId]
+    );
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating Teams settings:', error);
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+// Test Teams webhook
+app.post('/api/projects/:projectId/teams-test', authenticateToken, async (req, res) => {
+  try {
+    const project = await pool.query(
+      'SELECT name, teams_webhook_url FROM projects WHERE id = $1',
+      [req.params.projectId]
+    );
+    
+    if (!project.rows[0].teams_webhook_url) {
+      return res.status(400).json({ error: 'No webhook URL configured' });
+    }
+    
+    const success = await teamsNotifications.sendTeamsNotification(
+      project.rows[0].teams_webhook_url,
+      '✅ Teams Integration Test',
+      'Connection successful!',
+      {
+        subtitle: 'Multi-Project Tracker is connected to Teams',
+        facts: {
+          'Status': 'Connected',
+          'Project': project.rows[0].name,
+          'Time': new Date().toLocaleString()
+        }
+      },
+      '28A745'
+    );
+    
+    if (success) {
+      res.json({ message: 'Test notification sent successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to send test notification' });
+    }
+  } catch (error) {
+    console.error('Error testing Teams webhook:', error);
+    res.status(500).json({ error: 'Failed to test webhook' });
+  }
+});
+CRITICAL REQUIREMENTS:
+
+Install axios and node-cron packages
+Add database columns for teams_webhook_url and teams_notifications_enabled
+Create services/teamsNotifications.js with all notification functions
+Create jobs/dailyNotifications.js with cron jobs
+Initialize cron jobs in server.js
+Integrate notifications into issue/action create/update endpoints
+Add API endpoints for Teams settings management
+Cron job MUST run at 9:00 AM daily
+Send individual overdue alerts for each item
+Send one summary per project
+Only send summary if overdue items exist
+Include clickable links in all notifications
+Use proper color coding (Blue/Orange/Green/Red/Yellow)
+
+TESTING:
+
+Create issue → verify Teams notification
+Update issue → verify Teams notification
+Complete issue → verify Teams notification
+Same for actions
+Configure Teams webhook URL
+Test webhook connection
+Manually trigger cron jobs to test:
+
+checkOverdueItems()
+sendDailySummaries()
+
+
+Verify overdue alerts sent for past-due items
+Verify daily summary shows correct counts
+
+FILES TO CREATE:
+
+services/teamsNotifications.js
+jobs/dailyNotifications.js
+
+FILES TO MODIFY:
+
+server.js
+Database schema (ALTER TABLE)
+Project settings UI (optional for now)
+
+Please implement the complete Microsoft Teams integration with webhooks, including overdue alerts and daily summaries.
