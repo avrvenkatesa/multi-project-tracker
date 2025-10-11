@@ -8,46 +8,26 @@
   <link rel="stylesheet" href="/css/risks.css">
 </head>
 <body class="bg-gray-50">
-  <!-- Navigation -->
-  <nav class="bg-white border-b border-gray-200">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between h-16">
-        <div class="flex">
-          <div class="flex-shrink-0 flex items-center">
-            <h1 class="text-xl font-bold text-gray-900">Multi-Project Tracker</h1>
-          </div>
-          <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-            <a href="/dashboard.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-              Dashboard
-            </a>
-            <a href="/projects.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-              Projects
-            </a>
-            <a href="/team.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-              Team
-            </a>
-            <a href="/issues.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-              Issues
-            </a>
-            <a href="/actions.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-              Actions
-            </a>
-            <a href="/risks.html" class="border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-              Risks
-            </a>
-            <a href="/reports.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-              Reports
-            </a>
-          </div>
-        </div>
-        <div class="flex items-center">
-          <button id="logoutBtn" class="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-            Logout
-          </button>
-        </div>
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 shadow-lg">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">Multi-Project Tracker</h1>
+        <p class="text-sm text-blue-100">Risk Register</p>
+      </div>
+      <div class="flex gap-3 items-center">
+        <button onclick="goBackToProject()" id="backToProjectBtn" class="bg-blue-800 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition-all flex items-center gap-2" style="display: none;">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+          Back to Project
+        </button>
+        <button onclick="window.location.href='index.html'" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
+          Back to Projects
+        </button>
       </div>
     </div>
-  </nav>
+  </header>
 
   <!-- Main Content -->
   <div class="risks-container">
@@ -378,6 +358,6 @@
     </div>
   </div>
 
-  <script src="/js/risks.js?v=50"></script>
+  <script src="/js/risks.js?v=51"></script>
 </body>
 </html>

@@ -93,12 +93,17 @@ function setupEventListeners() {
     input.addEventListener('change', updateRiskScore);
   });
   
-  // Logout
-  document.getElementById('logoutBtn').addEventListener('click', async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-    window.location.href = '/index.html';
-  });
 }
+
+// Go back to project
+function goBackToProject() {
+  if (currentProjectId) {
+    window.location.href = `index.html?project=${currentProjectId}`;
+  }
+}
+
+// Expose to global scope for onclick handlers
+window.goBackToProject = goBackToProject;
 
 // Project change handler
 async function onProjectChange() {
@@ -109,10 +114,14 @@ async function onProjectChange() {
     document.getElementById('risksList').innerHTML = '';
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('btnNewRisk').style.display = 'none';
+    document.getElementById('backToProjectBtn').style.display = 'none';
     return;
   }
   
   currentProjectId = projectId;
+  
+  // Show back to project button
+  document.getElementById('backToProjectBtn').style.display = 'flex';
   
   // Check permissions
   const canCreate = canCreateRisk(currentUser);
