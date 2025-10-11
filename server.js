@@ -5669,9 +5669,9 @@ app.post('/api/projects/:projectId/risks', authenticateToken, async (req, res) =
     
     // Log creation
     await pool.query(
-      `INSERT INTO risk_updates (risk_id, update_type, new_value, created_by)
+      `INSERT INTO risk_updates (risk_id, update_type, notes, created_by)
        VALUES ($1, $2, $3, $4)`,
-      [risk.id, 'created', `Risk created: ${title}`, userId]
+      [risk.id, 'note', `Risk created: ${title}`, userId]
     );
     
     res.status(201).json(risk);
@@ -5874,7 +5874,7 @@ app.patch('/api/risks/:riskId', authenticateToken, async (req, res) => {
     await pool.query(
       `INSERT INTO risk_updates (risk_id, update_type, notes, created_by)
        VALUES ($1, $2, $3, $4)`,
-      [riskId, 'updated', `Risk updated: ${Object.keys(updates).join(', ')}`, userId]
+      [riskId, 'note', `Risk updated: ${Object.keys(updates).join(', ')}`, userId]
     );
     
     // If probability or impact changed, create new assessment
