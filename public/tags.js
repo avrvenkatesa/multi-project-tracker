@@ -21,16 +21,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Auto-select project if provided in URL
   if (projectIdFromUrl) {
-    currentProjectId = projectIdFromUrl;
+    currentProjectId = parseInt(projectIdFromUrl);
     
     // Hide project selector, show project header
     document.getElementById('projectSelector').classList.add('hidden');
     document.getElementById('projectHeader').classList.remove('hidden');
     
-    // Find and display project name
-    const project = projects.find(p => p.id == projectIdFromUrl);
+    // Find and display project name - ensure both IDs are compared as numbers
+    const project = projects.find(p => parseInt(p.id) === currentProjectId);
+    
+    console.log('Tag page debug:', {
+      projectIdFromUrl,
+      currentProjectId,
+      projectsCount: projects.length,
+      projectFound: !!project,
+      projectName: project?.name
+    });
+    
     if (project) {
       document.getElementById('projectName').textContent = project.name;
+    } else {
+      console.error('Project not found in projects list. Available projects:', projects.map(p => ({ id: p.id, name: p.name })));
+      document.getElementById('projectName').textContent = `Project ID: ${currentProjectId}`;
     }
     
     // Show tags section and load tags
