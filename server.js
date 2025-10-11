@@ -15,6 +15,8 @@ const { v4: uuidv4 } = require('uuid');
 const stringSimilarity = require('string-similarity');
 const notificationService = require('./services/notificationService');
 const reportService = require('./services/reportService');
+const teamsNotifications = require('./services/teamsNotifications');
+const { initializeDailyJobs } = require('./jobs/dailyNotifications');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -2751,6 +2753,16 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
       ) RETURNING *
     `;
     
+    // Send Teams notification if enabled (non-blocking)
+    if (project.teams_notifications_enabled && project.teams_webhook_url) {
+      teamsNotifications.notifyNewIssue(
+        project.teams_webhook_url,
+        newIssue,
+        req.user,
+        project
+      ).catch(err => console.error('Error sending Teams notification:', err));
+    }
+    
     // Send assignment notification if assignee is set (non-blocking)
     if (assignee && assignee.trim() !== '') {
       try {
@@ -2942,6 +2954,21 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
         }
       } catch (err) {
         console.error('Error looking up creator for completion notification:', err);
+      }
+      
+      // Send Teams completion notification if enabled
+      try {
+        const [project] = await sql`SELECT * FROM projects WHERE id = ${updatedIssue.project_id}`;
+        if (project && project.teams_notifications_enabled && project.teams_webhook_url) {
+          teamsNotifications.notifyIssueCompleted(
+            project.teams_webhook_url,
+            updatedIssue,
+            req.user,
+            project
+          ).catch(err => console.error('Error sending Teams completion notification:', err));
+        }
+      } catch (err) {
+        console.error('Error sending Teams completion notification:', err);
       }
     }
     
@@ -3165,6 +3192,21 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
       ) RETURNING *
     `;
     
+    // Send Teams notification if enabled (non-blocking)
+    try {
+      const [project] = await sql`SELECT * FROM projects WHERE id = ${parseInt(projectId)}`;
+      if (project && project.teams_notifications_enabled && project.teams_webhook_url) {
+        teamsNotifications.notifyNewAction(
+          project.teams_webhook_url,
+          newItem,
+          req.user,
+          project
+        ).catch(err => console.error('Error sending Teams notification:', err));
+      }
+    } catch (err) {
+      console.error('Error sending Teams notification:', err);
+    }
+    
     // Send assignment notification if assignee is set (non-blocking)
     if (assignee && assignee.trim() !== '') {
       try {
@@ -3343,6 +3385,21 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
         }
       } catch (err) {
         console.error('Error looking up creator for completion notification:', err);
+      }
+      
+      // Send Teams completion notification if enabled
+      try {
+        const [project] = await sql`SELECT * FROM projects WHERE id = ${updatedItem.project_id}`;
+        if (project && project.teams_notifications_enabled && project.teams_webhook_url) {
+          teamsNotifications.notifyActionCompleted(
+            project.teams_webhook_url,
+            updatedItem,
+            req.user,
+            project
+          ).catch(err => console.error('Error sending Teams completion notification:', err));
+        }
+      } catch (err) {
+        console.error('Error sending Teams completion notification:', err);
       }
     }
     
@@ -6413,4 +6470,7 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`   GET  /api/action-items`);
   console.log(`   POST /api/action-items`);
   console.log(`   GET  /api/users`);
+  
+  // Initialize daily notification jobs
+  initializeDailyJobs();
 });
