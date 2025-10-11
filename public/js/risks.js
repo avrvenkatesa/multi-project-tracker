@@ -93,6 +93,29 @@ function setupEventListeners() {
     input.addEventListener('change', updateRiskScore);
   });
   
+  // Modal close buttons - add event listeners for all close buttons
+  document.querySelectorAll('.modal-close').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const modalId = this.closest('.modal').id;
+      if (modalId === 'riskModal') closeRiskModal();
+      else if (modalId === 'detailModal') closeDetailModal();
+      else if (modalId === 'deleteModal') closeDeleteModal();
+    });
+  });
+  
+  // Cancel buttons in modals
+  document.querySelectorAll('.btn-secondary').forEach(btn => {
+    if (btn.textContent.includes('Cancel') || btn.textContent.includes('Close')) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const modalId = this.closest('.modal').id;
+        if (modalId === 'riskModal') closeRiskModal();
+        else if (modalId === 'detailModal') closeDetailModal();
+        else if (modalId === 'deleteModal') closeDeleteModal();
+      });
+    }
+  });
 }
 
 // Go back to project
@@ -115,13 +138,15 @@ async function onProjectChange() {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('btnNewRisk').style.display = 'none';
     document.getElementById('backToProjectBtn').style.display = 'none';
+    document.getElementById('backToProjectsBtn').style.display = 'inline-block';
     return;
   }
   
   currentProjectId = projectId;
   
-  // Show back to project button
+  // Toggle navigation buttons - show Back to Project, hide Back to Projects
   document.getElementById('backToProjectBtn').style.display = 'flex';
+  document.getElementById('backToProjectsBtn').style.display = 'none';
   
   // Check permissions
   const canCreate = canCreateRisk(currentUser);
