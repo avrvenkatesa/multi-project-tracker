@@ -412,6 +412,9 @@ function closeRiskModal() {
   editingRiskId = null;
 }
 
+// Expose to global scope for onclick handlers
+window.closeRiskModal = closeRiskModal;
+
 // Update risk score in real-time
 function updateRiskScore() {
   const probability = parseInt(document.querySelector('input[name="probability"]:checked')?.value) || 0;
@@ -669,6 +672,9 @@ function closeDetailModal() {
   document.getElementById('detailModal').classList.remove('active');
 }
 
+// Expose to global scope for onclick handlers
+window.closeDetailModal = closeDetailModal;
+
 // Confirm delete
 function confirmDelete(riskId) {
   const deleteBtn = document.getElementById('btnConfirmDelete');
@@ -680,6 +686,9 @@ function confirmDelete(riskId) {
 function closeDeleteModal() {
   document.getElementById('deleteModal').classList.remove('active');
 }
+
+// Expose to global scope for onclick handlers
+window.closeDeleteModal = closeDeleteModal;
 
 // Delete risk
 async function deleteRisk(riskId) {
