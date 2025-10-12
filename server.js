@@ -607,6 +607,101 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 
+// ============= RISK REGISTER UTILITY FUNCTIONS =============
+// RISK REGISTER UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Check if user has access to a project
+ */
+async function checkProjectAccess(userId, projectId, userRole = null) {
+  // System Administrators have access to all projects
+  if (userRole === 'System Administrator') {
+    return true;
+  }
+  
+  const result = await pool.query(`
+    SELECT * FROM project_members 
+    WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+  `, [userId, projectId]);
+  
+  return result.rows.length > 0;
+}
+
+/**
+ * Generate unique risk ID for a project
+ * Format: RISK-001, RISK-002, etc.
+ */
+async function generateRiskId(projectId) {
+  const result = await pool.query(
+    'SELECT COUNT(*) as count FROM risks WHERE project_id = $1',
+    [projectId]
+  );
+  const count = parseInt(result.rows[0].count) + 1;
+  return `RISK-${count.toString().padStart(3, '0')}`;
+}
+
+/**
+ * Calculate risk score and level from probability and impact
+ */
+function calculateRiskScore(probability, impact) {
+  const score = probability * impact;
+  let level, color;
+  
+  if (score <= 6) {
+    level = 'Low';
+    color = '#10b981';
+  } else if (score <= 12) {
+    level = 'Medium';
+    color = '#f59e0b';
+  } else if (score <= 20) {
+    level = 'High';
+    color = '#f97316';
+  } else {
+    level = 'Critical';
+    color = '#ef4444';
+  }
+  
+  return { score, level, color };
+}
+
+/**
+ * Check if user can perform risk action
+ */
+function canPerformRiskAction(user, action, risk = null) {
+  const permissions = {
+    VIEW_RISKS: ['System Administrator', 'Project Manager', 'Team Lead', 'Team Member', 'Stakeholder'],
+    CREATE_RISK: ['System Administrator', 'Project Manager', 'Team Lead'],
+    EDIT_ANY_RISK: ['System Administrator', 'Project Manager'],
+    EDIT_OWN_RISK: ['System Administrator', 'Project Manager', 'Team Lead', 'Team Member'],
+    DELETE_RISK: ['System Administrator', 'Project Manager']
+  };
+  
+  const allowedRoles = permissions[action];
+  if (!allowedRoles) return false;
+  
+  // Check global role
+  if (allowedRoles.includes(user.role)) {
+    // For edit own risk - verify user is the risk owner
+    if (action === 'EDIT_OWN_RISK' && risk && user.id === risk.risk_owner_id) {
+      return true;
+    }
+    // For other actions, role check is sufficient
+    if (action !== 'EDIT_OWN_RISK') {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "Multi-Project Tracker API is running",
+
+
 // Get user notification preferences
 app.get('/api/notifications/preferences', authenticateToken, async (req, res) => {
   try {
@@ -6332,6 +6427,470 @@ app.get('/api/projects/:projectId/members', authenticateToken, async (req, res) 
 });
 
 // ============= ADMIN TOOLS =============
+
+// ============= RISK REGISTER API ENDPOINTS =============
+// RISK REGISTER API ENDPOINTS
+// ============================================================================
+
+// Get risk categories for a project
+app.get('/api/projects/:projectId/risk-categories', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    // Check project access
+    const hasAccess = await checkProjectAccess(req.user.id, projectId, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get default categories + project-specific categories
+    const result = await pool.query(
+      `SELECT * FROM risk_categories 
+       WHERE project_id IS NULL OR project_id = $1
+       ORDER BY display_order, name`,
+      [projectId]
+    );
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching risk categories:', error);
+    res.status(500).json({ error: 'Failed to fetch risk categories' });
+  }
+});
+
+// Create new risk
+app.post('/api/projects/:projectId/risks', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const userId = req.user.id;
+    
+    // Check permissions
+    const hasAccess = await checkProjectAccess(userId, projectId, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    if (!canPerformRiskAction(req.user, 'CREATE_RISK')) {
+      return res.status(403).json({ error: 'Insufficient permissions to create risks' });
+    }
+    
+    const {
+      title,
+      description,
+      category,
+      risk_source,
+      tags,
+      probability,
+      impact,
+      response_strategy,
+      mitigation_plan,
+      contingency_plan,
+      cost_currency,
+      mitigation_cost,
+      mitigation_effort_hours,
+      risk_owner_id,
+      target_resolution_date,
+      review_date,
+      status
+    } = req.body;
+    
+    // Validate required fields
+    if (!title || !category) {
+      return res.status(400).json({ error: 'Title and category are required' });
+    }
+    
+    // Generate risk ID
+    const riskId = await generateRiskId(projectId);
+    
+    // Insert risk
+    const result = await pool.query(
+      `INSERT INTO risks (
+        risk_id, project_id, title, description, category, risk_source, tags,
+        probability, impact, response_strategy, mitigation_plan, contingency_plan,
+        cost_currency, mitigation_cost, mitigation_effort_hours, risk_owner_id, 
+        target_resolution_date, review_date, status, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      RETURNING *`,
+      [
+        riskId, projectId, title, description, category, risk_source, tags,
+        probability, impact, response_strategy, mitigation_plan, contingency_plan,
+        cost_currency || 'USD', mitigation_cost, mitigation_effort_hours, risk_owner_id,
+        target_resolution_date, review_date, status || 'identified', userId
+      ]
+    );
+    
+    const risk = result.rows[0];
+    
+    // Create initial assessment record if probability and impact provided
+    if (probability && impact) {
+      const { score, level } = calculateRiskScore(probability, impact);
+      await pool.query(
+        `INSERT INTO risk_assessments (risk_id, probability, impact, risk_score, risk_level, assessed_by)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [risk.id, probability, impact, score, level, userId]
+      );
+    }
+    
+    // Log creation
+    await pool.query(
+      `INSERT INTO risk_updates (risk_id, update_type, notes, created_by)
+       VALUES ($1, $2, $3, $4)`,
+      [risk.id, 'note', `Risk created: ${title}`, userId]
+    );
+    
+    res.status(201).json(risk);
+  } catch (error) {
+    console.error('Error creating risk:', error);
+    res.status(500).json({ error: 'Failed to create risk' });
+  }
+});
+
+// Get risks for a project (with filters)
+app.get('/api/projects/:projectId/risks', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { status, category, level, owner, sort = 'score_desc' } = req.query;
+    
+    // Check access
+    const hasAccess = await checkProjectAccess(req.user.id, projectId, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    if (!canPerformRiskAction(req.user, 'VIEW_RISKS')) {
+      return res.status(403).json({ error: 'Insufficient permissions to view risks' });
+    }
+    
+    // Build query
+    let query = `
+      SELECT r.*, u.username as owner_name, u.email as owner_email
+      FROM risks r
+      LEFT JOIN users u ON r.risk_owner_id = u.id
+      WHERE r.project_id = $1
+    `;
+    const params = [projectId];
+    let paramCount = 1;
+    
+    // Add filters
+    if (status) {
+      paramCount++;
+      query += ` AND r.status = $${paramCount}`;
+      params.push(status);
+    }
+    
+    if (category) {
+      paramCount++;
+      query += ` AND r.category = $${paramCount}`;
+      params.push(category);
+    }
+    
+    if (level) {
+      paramCount++;
+      query += ` AND r.risk_level = $${paramCount}`;
+      params.push(level);
+    }
+    
+    if (owner) {
+      paramCount++;
+      query += ` AND r.risk_owner_id = $${paramCount}`;
+      params.push(owner);
+    }
+    
+    // Add sorting
+    switch (sort) {
+      case 'score_desc':
+        query += ' ORDER BY r.risk_score DESC NULLS LAST, r.created_at DESC';
+        break;
+      case 'score_asc':
+        query += ' ORDER BY r.risk_score ASC NULLS LAST, r.created_at DESC';
+        break;
+      case 'date_desc':
+        query += ' ORDER BY r.created_at DESC';
+        break;
+      case 'date_asc':
+        query += ' ORDER BY r.created_at ASC';
+        break;
+      case 'title_asc':
+        query += ' ORDER BY r.title ASC';
+        break;
+      case 'title_desc':
+        query += ' ORDER BY r.title DESC';
+        break;
+      default:
+        query += ' ORDER BY r.risk_score DESC NULLS LAST, r.created_at DESC';
+    }
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching risks:', error);
+    res.status(500).json({ error: 'Failed to fetch risks' });
+  }
+});
+
+// Get single risk
+app.get('/api/risks/:riskId', authenticateToken, async (req, res) => {
+  try {
+    const { riskId } = req.params;
+    
+    const result = await pool.query(
+      `SELECT r.*, u.username as owner_name, u.email as owner_email,
+              c.username as created_by_name
+       FROM risks r
+       LEFT JOIN users u ON r.risk_owner_id = u.id
+       LEFT JOIN users c ON r.created_by = c.id
+       WHERE r.id = $1`,
+      [riskId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Risk not found' });
+    }
+    
+    const risk = result.rows[0];
+    
+    // Check access
+    const hasAccess = await checkProjectAccess(req.user.id, risk.project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    res.json(risk);
+  } catch (error) {
+    console.error('Error fetching risk:', error);
+    res.status(500).json({ error: 'Failed to fetch risk' });
+  }
+});
+
+// Get tags for a specific risk
+app.get("/api/risks/:riskId/tags", authenticateToken, async (req, res) => {
+  try {
+    const { riskId } = req.params;
+    
+    // Get risk and verify access
+    const risk = await pool.query('SELECT project_id FROM risks WHERE id = $1', [riskId]);
+    if (risk.rows.length === 0) {
+      return res.status(404).json({ error: 'Risk not found' });
+    }
+    
+    const hasAccess = await checkProjectAccess(req.user.id, risk.rows[0].project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const tags = await pool.query(
+      `SELECT t.* FROM tags t
+       JOIN risk_tags rt ON t.id = rt.tag_id
+       WHERE rt.risk_id = $1
+       ORDER BY t.name ASC`,
+      [riskId]
+    );
+    
+    res.json(tags.rows);
+  } catch (error) {
+    console.error('Error fetching risk tags:', error);
+    res.status(500).json({ error: 'Failed to fetch risk tags' });
+  }
+});
+
+// Assign tags to a risk
+app.put("/api/risks/:riskId/tags", authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { riskId } = req.params;
+    const { tagIds } = req.body;
+    
+    // Get risk and verify access
+    const risk = await client.query('SELECT project_id FROM risks WHERE id = $1', [riskId]);
+    if (risk.rows.length === 0) {
+      return res.status(404).json({ error: 'Risk not found' });
+    }
+    
+    const hasAccess = await checkProjectAccess(req.user.id, risk.rows[0].project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Validate tags belong to same project and have correct type
+    if (tagIds && tagIds.length > 0) {
+      const tagCheck = await client.query(
+        `SELECT id FROM tags 
+         WHERE id = ANY($1) 
+         AND project_id = $2 
+         AND tag_type IN ('risk', 'both')`,
+        [tagIds, risk.rows[0].project_id]
+      );
+      
+      if (tagCheck.rows.length !== tagIds.length) {
+        return res.status(400).json({ error: 'Invalid tags or tag types for risk' });
+      }
+    }
+    
+    await client.query('BEGIN');
+    
+    // Delete existing tags
+    await client.query(`DELETE FROM risk_tags WHERE risk_id = $1`, [riskId]);
+    
+    // Insert new tags
+    if (tagIds && tagIds.length > 0) {
+      const values = tagIds.map((tagId, index) => 
+        `($1, $${index + 2})`
+      ).join(', ');
+      
+      await client.query(
+        `INSERT INTO risk_tags (risk_id, tag_id) VALUES ${values}`,
+        [riskId, ...tagIds]
+      );
+    }
+    
+    await client.query('COMMIT');
+    res.json({ message: 'Tags updated successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error updating risk tags:', error);
+    res.status(500).json({ error: 'Failed to update risk tags' });
+  } finally {
+    client.release();
+  }
+});
+
+// Update risk
+app.patch('/api/risks/:riskId', authenticateToken, async (req, res) => {
+  try {
+    const { riskId } = req.params;
+    const userId = req.user.id;
+    
+    // Get existing risk
+    const existing = await pool.query('SELECT * FROM risks WHERE id = $1', [riskId]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Risk not found' });
+    }
+    
+    const risk = existing.rows[0];
+    
+    // Check access
+    const hasAccess = await checkProjectAccess(userId, risk.project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Check permissions
+    const canEditAny = canPerformRiskAction(req.user, 'EDIT_ANY_RISK');
+    const canEditOwn = canPerformRiskAction(req.user, 'EDIT_OWN_RISK', risk);
+    
+    if (!canEditAny && !canEditOwn) {
+      return res.status(403).json({ error: 'Insufficient permissions to edit this risk' });
+    }
+    
+    const updates = req.body;
+    const allowedFields = [
+      'title', 'description', 'category', 'risk_source', 'tags',
+      'probability', 'impact', 'response_strategy', 'mitigation_plan',
+      'contingency_plan', 'cost_currency', 'mitigation_cost', 'mitigation_effort_hours',
+      'risk_owner_id', 'target_resolution_date', 'review_date', 'status',
+      'residual_probability', 'residual_impact'
+    ];
+    
+    const updateFields = [];
+    const values = [];
+    let paramCount = 0;
+    
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key)) {
+        paramCount++;
+        updateFields.push(`${key} = $${paramCount}`);
+        values.push(value);
+      }
+    }
+    
+    if (updateFields.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+    
+    // Add updated_at
+    paramCount++;
+    updateFields.push(`updated_at = $${paramCount}`);
+    values.push(new Date());
+    
+    // Add risk ID
+    paramCount++;
+    values.push(riskId);
+    
+    const query = `
+      UPDATE risks 
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING *
+    `;
+    
+    const result = await pool.query(query, values);
+    const updatedRisk = result.rows[0];
+    
+    // Log update
+    await pool.query(
+      `INSERT INTO risk_updates (risk_id, update_type, notes, created_by)
+       VALUES ($1, $2, $3, $4)`,
+      [riskId, 'note', `Risk updated: ${Object.keys(updates).join(', ')}`, userId]
+    );
+    
+    // If probability or impact changed, create new assessment
+    if (updates.probability || updates.impact) {
+      const prob = updates.probability || risk.probability;
+      const imp = updates.impact || risk.impact;
+      const { score, level } = calculateRiskScore(prob, imp);
+      
+      await pool.query(
+        `INSERT INTO risk_assessments (risk_id, probability, impact, risk_score, risk_level, assessed_by)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [riskId, prob, imp, score, level, userId]
+      );
+    }
+    
+    res.json(updatedRisk);
+  } catch (error) {
+    console.error('Error updating risk:', error);
+    res.status(500).json({ error: 'Failed to update risk' });
+  }
+});
+
+// Delete risk
+app.delete('/api/risks/:riskId', authenticateToken, async (req, res) => {
+  try {
+    const { riskId } = req.params;
+    
+    // Get risk
+    const existing = await pool.query('SELECT * FROM risks WHERE id = $1', [riskId]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Risk not found' });
+    }
+    
+    const risk = existing.rows[0];
+    
+    // Check access
+    const hasAccess = await checkProjectAccess(req.user.id, risk.project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Check permissions
+    if (!canPerformRiskAction(req.user, 'DELETE_RISK')) {
+      return res.status(403).json({ error: 'Insufficient permissions to delete risks' });
+    }
+    
+    // Delete risk (cascade will handle related records)
+    await pool.query('DELETE FROM risks WHERE id = $1', [riskId]);
+    
+    res.json({ message: 'Risk deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting risk:', error);
+    res.status(500).json({ error: 'Failed to delete risk' });
+  }
+});
+
+// Serve frontend
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+
 
 // Get mismatched assignee names
 app.get('/api/admin/assignee-mismatches', authenticateToken, async (req, res) => {

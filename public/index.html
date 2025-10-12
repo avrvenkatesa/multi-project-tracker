@@ -96,12 +96,6 @@
                                             <p id="mobile-userEmail" class="text-xs text-gray-600"></p>
                                         </div>
                                         
-                                        <a href="admin-assignees.html" id="admin-tools-link" class="hidden block px-4 py-2 text-gray-800 hover:bg-gray-100">
-                                            <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
-                                            </svg>
-                                            Admin Tools
-                                        </a>
                                         <a href="notification-settings.html" class="block px-4 py-2 text-gray-800 hover:bg-gray-100">
                                             <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
@@ -203,16 +197,25 @@
                                     </svg>
                                     Transcripts
                                 </button>
-                                <!-- Tags Management button -->
+                                <!-- Tags button -->
                                 <button
-                                    id="tags-management-btn"
-                                    data-requires-write
-                                    class="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 flex items-center gap-2 transition-all"
+                                    id="view-tags-btn"
+                                    class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 flex items-center gap-2 transition-all"
                                 >
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
                                     </svg>
                                     Tags
+                                </button>
+                                <!-- Risk Register button -->
+                                <button
+                                    id="view-risks-btn"
+                                    class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 flex items-center gap-2 transition-all"
+                                >
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                    </svg>
+                                    Risks
                                 </button>
                             </div>
                             
@@ -314,18 +317,6 @@
                                         <!-- Dynamic options will be added by JavaScript -->
                                     </select>
                                 </div>
-                                
-                                <!-- Tag Filter -->
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">Tag</label>
-                                    <select 
-                                        id="tag-filter"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    >
-                                        <option value="">All Tags</option>
-                                        <!-- Dynamic options will be added by JavaScript -->
-                                    </select>
-                                </div>
                             </div>
                             
                             <!-- Active Filters Display -->
@@ -342,105 +333,33 @@
                         <!-- Kanban Board -->
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div class="bg-gray-100 rounded-lg p-4">
-                                <div class="flex justify-between items-center mb-3">
-                                    <h4 class="font-semibold text-gray-700">
-                                        To Do <span id="todo-count" class="text-sm font-normal">(0)</span>
-                                    </h4>
-                                    <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="todo" onchange="handleSortChange(this)">
-                                        <optgroup label="Single Criteria">
-                                            <option value="due-overdue-first">⚠️ Overdue First</option>
-                                            <option value="due-earliest">📅 Earliest</option>
-                                            <option value="due-latest">📅 Latest</option>
-                                            <option value="priority">🔥 Priority</option>
-                                            <option value="created-desc">🆕 Recent</option>
-                                            <option value="updated-desc">🕐 Updated</option>
-                                            <option value="manual">✋ Manual</option>
-                                        </optgroup>
-                                        <optgroup label="Multi-Criteria">
-                                            <option value="priority-due-date">🔥📅 Priority + Due Date</option>
-                                            <option value="overdue-priority">⚠️🔥 Overdue + Priority</option>
-                                            <option value="smart-sort">🎯 Smart Sort</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
+                                <h4 class="font-semibold mb-3 text-gray-700">
+                                    To Do
+                                </h4>
                                 <div id="todo-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
                             </div>
                             <div class="bg-blue-50 rounded-lg p-4">
-                                <div class="flex justify-between items-center mb-3">
-                                    <h4 class="font-semibold text-blue-700">
-                                        In Progress <span id="inprogress-count" class="text-sm font-normal">(0)</span>
-                                    </h4>
-                                    <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="inprogress" onchange="handleSortChange(this)">
-                                        <optgroup label="Single Criteria">
-                                            <option value="due-overdue-first">⚠️ Overdue First</option>
-                                            <option value="due-earliest">📅 Earliest</option>
-                                            <option value="due-latest">📅 Latest</option>
-                                            <option value="priority">🔥 Priority</option>
-                                            <option value="created-desc">🆕 Recent</option>
-                                            <option value="updated-desc">🕐 Updated</option>
-                                            <option value="manual">✋ Manual</option>
-                                        </optgroup>
-                                        <optgroup label="Multi-Criteria">
-                                            <option value="priority-due-date">🔥📅 Priority + Due Date</option>
-                                            <option value="overdue-priority">⚠️🔥 Overdue + Priority</option>
-                                            <option value="smart-sort">🎯 Smart Sort</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
+                                <h4 class="font-semibold mb-3 text-blue-700">
+                                    In Progress
+                                </h4>
                                 <div id="inprogress-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
                             </div>
                             <div class="bg-yellow-50 rounded-lg p-4">
-                                <div class="flex justify-between items-center mb-3">
-                                    <h4 class="font-semibold text-yellow-700">
-                                        Blocked <span id="blocked-count" class="text-sm font-normal">(0)</span>
-                                    </h4>
-                                    <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="blocked" onchange="handleSortChange(this)">
-                                        <optgroup label="Single Criteria">
-                                            <option value="due-overdue-first">⚠️ Overdue First</option>
-                                            <option value="due-earliest">📅 Earliest</option>
-                                            <option value="due-latest">📅 Latest</option>
-                                            <option value="priority">🔥 Priority</option>
-                                            <option value="created-desc">🆕 Recent</option>
-                                            <option value="updated-desc">🕐 Updated</option>
-                                            <option value="manual">✋ Manual</option>
-                                        </optgroup>
-                                        <optgroup label="Multi-Criteria">
-                                            <option value="priority-due-date">🔥📅 Priority + Due Date</option>
-                                            <option value="overdue-priority">⚠️🔥 Overdue + Priority</option>
-                                            <option value="smart-sort">🎯 Smart Sort</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
+                                <h4 class="font-semibold mb-3 text-yellow-700">
+                                    Blocked
+                                </h4>
                                 <div id="blocked-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
                             </div>
                             <div class="bg-green-50 rounded-lg p-4">
-                                <div class="flex justify-between items-center mb-3">
-                                    <h4 class="font-semibold text-green-700">
-                                        Done <span id="done-count" class="text-sm font-normal">(0)</span>
-                                    </h4>
-                                    <select class="column-sort-select text-xs border-gray-300 rounded px-2 py-1" data-column="done" onchange="handleSortChange(this)">
-                                        <optgroup label="Single Criteria">
-                                            <option value="due-overdue-first">⚠️ Overdue First</option>
-                                            <option value="due-earliest">📅 Earliest</option>
-                                            <option value="due-latest">📅 Latest</option>
-                                            <option value="priority">🔥 Priority</option>
-                                            <option value="created-desc">🆕 Recent</option>
-                                            <option value="updated-desc">🕐 Updated</option>
-                                            <option value="manual">✋ Manual</option>
-                                        </optgroup>
-                                        <optgroup label="Multi-Criteria">
-                                            <option value="priority-due-date">🔥📅 Priority + Due Date</option>
-                                            <option value="overdue-priority">⚠️🔥 Overdue + Priority</option>
-                                            <option value="smart-sort">🎯 Smart Sort</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
+                                <h4 class="font-semibold mb-3 text-green-700">
+                                    Done
+                                </h4>
                                 <div id="done-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
@@ -486,7 +405,7 @@
                 id="modal-overlay"
                 class="hidden fixed inset-0 bg-black bg-opacity-50 z-50"
             >
-                <div class="flex items-center justify-center min-h-screen">
+                <div class="flex items-center justify-center min-h-screen py-4">
                     <div
                         id="modal-content"
                         class="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
@@ -686,32 +605,6 @@
                             <!-- Item details will be displayed here -->
                         </div>
                         
-                        <!-- Attachments Section -->
-                        <div class="border-t pt-6 mb-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-lg font-semibold flex items-center gap-2">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                    </svg>
-                                    Attachments
-                                    <span id="item-detail-attachment-count" class="text-sm text-gray-500">(0)</span>
-                                </h3>
-                                <label for="item-detail-attachment-upload" class="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                    </svg>
-                                    Upload Files
-                                </label>
-                                <input type="file" id="item-detail-attachment-upload" multiple class="hidden"
-                                       accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip">
-                            </div>
-                            
-                            <!-- Attachments List -->
-                            <div id="item-detail-attachments-list">
-                                <!-- Attachments will be populated here -->
-                            </div>
-                        </div>
-                        
                         <!-- Comments Section -->
                         <div class="border-t pt-6">
                             <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -722,16 +615,14 @@
                             
                             <!-- Comment Input -->
                             <div class="mb-4">
-                                <div class="relative">
-                                    <textarea 
-                                        id="item-detail-new-comment"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
-                                        rows="3"
-                                        placeholder="Add a comment... Use @username to mention someone"></textarea>
-                                    
-                                    <!-- Mention Autocomplete Dropdown -->
-                                    <div id="item-detail-mention-dropdown" class="hidden absolute bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto z-50" style="display: none;"></div>
-                                </div>
+                                <textarea 
+                                    id="item-detail-new-comment"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
+                                    rows="3"
+                                    placeholder="Add a comment... Use @username to mention someone"></textarea>
+                                
+                                <!-- Mention Autocomplete Dropdown -->
+                                <div id="item-detail-mention-dropdown" class="hidden absolute bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto z-50"></div>
                                 
                                 <div class="flex justify-between items-center mt-2">
                                     <div class="text-xs text-gray-500">
@@ -859,33 +750,30 @@
                         </div>
                     </div>
                     
-                    <!-- Teams Integration Section -->
-                    <div class="mb-6 border-t pt-4">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                            <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                    <!-- Microsoft Teams Integration -->
+                    <div class="mb-6 border-t pt-6">
+                        <div class="flex items-center gap-2 mb-4">
+                            <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                             </svg>
-                            Microsoft Teams Integration
-                        </h3>
+                            <h3 class="text-lg font-semibold text-gray-900">Microsoft Teams Integration</h3>
+                        </div>
                         
                         <div class="mb-4">
-                            <label class="flex items-center gap-2 mb-3">
-                                <input type="checkbox" id="editTeamsNotificationsEnabled"
-                                       class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="editTeamsNotificationsEnabled" 
+                                       class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                                 <span class="text-sm font-medium text-gray-700">Enable Teams Notifications</span>
                             </label>
-                            <p class="text-xs text-gray-500 ml-6">
-                                Send real-time notifications and daily reports to your Microsoft Teams channel
-                            </p>
+                            <p class="text-sm text-gray-500 mt-1 ml-6">Send real-time notifications and daily reports to your Microsoft Teams channel</p>
                         </div>
                         
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Teams Webhook URL</label>
-                            <input type="url" id="editTeamsWebhookUrl" placeholder="https://outlook.office.com/webhook/..."
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm">
-                            <p class="text-xs text-gray-500 mt-1">
-                                Get this from Teams: Channel → ⋯ → Connectors → Incoming Webhook
-                            </p>
+                            <input type="url" id="editTeamsWebhookUrl" 
+                                   placeholder="https://your-org.webhook.office.com/webhookb2/..."
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <p class="text-sm text-gray-500 mt-1">Get your webhook URL from Teams → Channel → Connectors → Incoming Webhook</p>
                         </div>
                     </div>
                     
@@ -926,19 +814,11 @@
             <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-2xl font-bold">Edit Issue</h2>
-                    <div class="flex items-center gap-2">
-                        <button id="copyEditIssueLinkBtn" type="button" class="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                            </svg>
-                            Copy Link
-                        </button>
-                        <button id="closeEditIssueModal" class="text-gray-500 hover:text-gray-700">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                        </button>
-                    </div>
+                    <button id="closeEditIssueModal" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                 </div>
                 
                 <form id="editIssueForm">
@@ -994,73 +874,22 @@
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                            <select id="edit-issue-category"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                <option value="">Select Category</option>
-                                <option value="Technical">Technical</option>
-                                <option value="Resource">Resource</option>
-                                <option value="Risk">Risk</option>
-                                <option value="Process">Process</option>
-                                <option value="General">General</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Progress %</label>
-                            <input type="number" id="edit-issue-progress" min="0" max="100" value="0"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                        </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                        <select id="edit-issue-category"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">Select Category</option>
+                        </select>
                     </div>
                     
-                    <!-- File Attachments Section -->
-                    <div class="mb-6 border-t pt-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                            Add Attachments
-                        </label>
-                        <input type="file" id="edit-issue-attachments" multiple
-                               accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">Max 5 files, 10MB each. Supported: PDF, Word, Excel, Images, Text, CSV, ZIP</p>
-                    </div>
-
-                    <!-- Tags Section -->
-                    <div class="mb-6 border-t pt-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                            </svg>
-                            Tags
-                        </label>
-                        <div class="flex gap-2 mb-1">
-                            <select id="edit-issue-tag-select" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                <option value="">Add a tag...</option>
-                            </select>
-                            <button type="button" id="edit-issue-new-tag-btn" class="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 whitespace-nowrap text-sm">
-                                + New Tag
-                            </button>
-                        </div>
-                        <div id="edit-issue-new-tag-form" class="hidden mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            <div class="flex gap-2 items-end">
-                                <div class="flex-1">
-                                    <label class="block text-xs font-medium mb-1">Tag Name</label>
-                                    <input type="text" id="edit-issue-new-tag-name" placeholder="Enter tag name" class="w-full border rounded px-2 py-1 text-sm">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium mb-1">Color</label>
-                                    <input type="color" id="edit-issue-new-tag-color" value="#3B82F6" class="border rounded px-1 py-1 h-8">
-                                </div>
-                                <button type="button" id="edit-issue-save-tag-btn" class="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Save</button>
-                                <button type="button" id="edit-issue-cancel-tag-btn" class="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Cancel</button>
-                            </div>
-                        </div>
-                        <div id="edit-issue-selected-tags" class="flex flex-wrap gap-2 mt-3">
-                            <!-- Selected tags will appear here -->
-                        </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                        <select id="edit-issue-tags" multiple
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                style="min-height: 100px;">
+                            <option value="" disabled>Loading tags...</option>
+                        </select>
+                        <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
                     </div>
                     
                     <div class="flex justify-end gap-3">
@@ -1082,19 +911,11 @@
             <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-2xl font-bold">Edit Action Item</h2>
-                    <div class="flex items-center gap-2">
-                        <button id="copyEditActionItemLinkBtn" type="button" class="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                            </svg>
-                            Copy Link
-                        </button>
-                        <button id="closeEditActionItemModal" class="text-gray-500 hover:text-gray-700">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                        </button>
-                    </div>
+                    <button id="closeEditActionItemModal" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                 </div>
                 
                 <form id="editActionItemForm">
@@ -1127,7 +948,7 @@
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div class="grid grid-cols-3 gap-4 mb-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Priority *</label>
                             <select id="edit-action-item-priority" required
@@ -1155,53 +976,14 @@
                         </div>
                     </div>
                     
-                    <!-- File Attachments Section -->
-                    <div class="mb-6 border-t pt-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                            Add Attachments
-                        </label>
-                        <input type="file" id="edit-action-item-attachments" multiple
-                               accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">Max 5 files, 10MB each. Supported: PDF, Word, Excel, Images, Text, CSV, ZIP</p>
-                    </div>
-
-                    <!-- Tags Section -->
-                    <div class="mb-6 border-t pt-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                            </svg>
-                            Tags
-                        </label>
-                        <div class="flex gap-2 mb-1">
-                            <select id="edit-action-item-tag-select" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                <option value="">Add a tag...</option>
-                            </select>
-                            <button type="button" id="edit-action-item-new-tag-btn" class="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 whitespace-nowrap text-sm">
-                                + New Tag
-                            </button>
-                        </div>
-                        <div id="edit-action-item-new-tag-form" class="hidden mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            <div class="flex gap-2 items-end">
-                                <div class="flex-1">
-                                    <label class="block text-xs font-medium mb-1">Tag Name</label>
-                                    <input type="text" id="edit-action-item-new-tag-name" placeholder="Enter tag name" class="w-full border rounded px-2 py-1 text-sm">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium mb-1">Color</label>
-                                    <input type="color" id="edit-action-item-new-tag-color" value="#3B82F6" class="border rounded px-1 py-1 h-8">
-                                </div>
-                                <button type="button" id="edit-action-item-save-tag-btn" class="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Save</button>
-                                <button type="button" id="edit-action-item-cancel-tag-btn" class="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Cancel</button>
-                            </div>
-                        </div>
-                        <div id="edit-action-item-selected-tags" class="flex flex-wrap gap-2 mt-3">
-                            <!-- Selected tags will appear here -->
-                        </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                        <select id="edit-action-item-tags" multiple
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                style="min-height: 100px;">
+                            <option value="" disabled>Loading tags...</option>
+                        </select>
+                        <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
                     </div>
                     
                     <div class="flex justify-end gap-3">
@@ -1227,274 +1009,9 @@
                 -webkit-box-orient: vertical;
                 overflow: hidden;
             }
-            
-            /* Due date badges */
-            .due-date-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                padding: 6px 10px;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: 500;
-                margin-top: 8px;
-                border-left: 3px solid;
-            }
-            
-            /* Highlight animation for shared links */
-            @keyframes highlight-pulse {
-                0%, 100% {
-                    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-                }
-                50% {
-                    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.4);
-                }
-            }
-            
-            .highlight-card {
-                animation: highlight-pulse 2s ease-in-out 3;
-                border: 2px solid #3b82f6 !important;
-            }
-            
-            .due-date-badge i {
-                font-size: 12px;
-            }
-            
-            .due-date-badge.overdue {
-                background: #fee2e2;
-                color: #dc2626;
-                border-left-color: #dc2626;
-            }
-            
-            .due-date-badge.today {
-                background: #fef3c7;
-                color: #d97706;
-                border-left-color: #d97706;
-            }
-            
-            .due-date-badge.soon {
-                background: #fef3c7;
-                color: #f59e0b;
-            }
-            
-            /* Tag styles */
-            .tag-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                padding: 4px 12px;
-                border-radius: 16px;
-                font-size: 12px;
-                font-weight: 500;
-                border: 1px solid;
-            }
-            
-            .tag-badge .remove-tag {
-                cursor: pointer;
-                opacity: 0.7;
-                font-size: 14px;
-                margin-left: 2px;
-            }
-            
-            .tag-badge .remove-tag:hover {
-                opacity: 1;
-            }
-            
-            .card-tags {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 6px;
-                margin-top: 8px;
-                padding-top: 8px;
-                border-top: 1px solid #e5e7eb;
-                border-left-color: #f59e0b;
-            }
-            
-            .due-date-badge.future {
-                background: #dbeafe;
-                color: #2563eb;
-                border-left-color: #2563eb;
-            }
-            
-            .due-date-badge.none {
-                background: #f3f4f6;
-                color: #6b7280;
-                border-left-color: transparent;
-            }
-            
-            /* Mobile responsive */
-            @media (max-width: 768px) {
-                .due-date-badge {
-                    font-size: 11px;
-                    padding: 4px 8px;
-                    gap: 4px;
-                }
-                
-                .due-date-badge i {
-                    font-size: 10px;
-                }
-            }
-            
-            /* Card creator display */
-            .card-creator {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                margin-top: 8px;
-                padding-top: 8px;
-                border-top: 1px solid #e5e7eb;
-                font-size: 13px;
-                color: #6b7280;
-            }
-            
-            .card-creator i {
-                font-size: 14px;
-                color: #9ca3af;
-            }
-            
-            .card-creator span {
-                font-weight: 500;
-            }
-            
-            /* Mobile responsive */
-            @media (max-width: 768px) {
-                .card-creator {
-                    font-size: 12px;
-                }
-                
-                .card-creator i {
-                    font-size: 12px;
-                }
-            }
-            
-            /* Sort dropdown styles */
-            .column-sort-select {
-                font-size: 11px;
-                padding: 4px 8px;
-                border: 1px solid #d1d5db;
-                border-radius: 6px;
-                background-color: white;
-                cursor: pointer;
-                transition: all 0.2s ease;
-                max-width: 140px;
-            }
-            
-            .column-sort-select:hover {
-                border-color: #9ca3af;
-                background-color: #f9fafb;
-            }
-            
-            .column-sort-select:focus {
-                outline: none;
-                border-color: #3b82f6;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-            }
-            
-            /* Mobile responsive for sort dropdown */
-            @media (max-width: 768px) {
-                .column-sort-select {
-                    font-size: 10px;
-                    padding: 3px 6px;
-                    max-width: 120px;
-                }
-            }
-            
-            /* Phase 3: Refresh controls */
-            .sort-controls {
-                display: flex;
-                align-items: center;
-                gap: 16px;
-                margin-top: 12px;
-                margin-bottom: 12px;
-            }
-            
-            .btn-refresh {
-                padding: 8px 16px;
-                background: #3b82f6;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 14px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                transition: background 0.2s;
-            }
-            
-            .btn-refresh:hover {
-                background: #2563eb;
-            }
-            
-            .btn-refresh i {
-                font-size: 12px;
-            }
-            
-            .auto-refresh-toggle {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 14px;
-            }
-            
-            .auto-refresh-toggle label {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                cursor: pointer;
-            }
-            
-            .auto-refresh-toggle input[type="checkbox"] {
-                cursor: pointer;
-            }
-            
-            /* Phase 3: Toast notifications */
-            .toast {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                padding: 12px 20px;
-                background: #1f2937;
-                color: white;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-                opacity: 0;
-                transform: translateY(20px);
-                transition: all 0.3s;
-                z-index: 9999;
-            }
-            
-            .toast.show {
-                opacity: 1;
-                transform: translateY(0);
-            }
-            
-            .toast.toast-success {
-                background: #10b981;
-            }
-            
-            .toast.toast-info {
-                background: #3b82f6;
-            }
-            
-            /* Mobile responsive for refresh controls */
-            @media (max-width: 768px) {
-                .sort-controls {
-                    flex-direction: column;
-                    align-items: stretch;
-                    gap: 8px;
-                    width: 100%;
-                    margin-top: 12px;
-                }
-                
-                .btn-refresh {
-                    width: 100%;
-                    justify-content: center;
-                }
-            }
         </style>
-        <script src="comments.js?v=8"></script>
-        <script src="app.js?v=46"></script>
-        <script src="js/project-management.js?v=2"></script>
+        <script src="comments.js?v=1"></script>
+        <script src="app.js?v=23"></script>
+        <script src="js/project-management.js"></script>
     </body>
 </html>

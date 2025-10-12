@@ -12,8 +12,7 @@ let currentFilters = {
   status: '',
   priority: '',
   assignee: '',
-  category: '',
-  tag: ''
+  category: ''
 };
 
 // ==================== AI BADGE HELPERS ====================
@@ -94,102 +93,6 @@ function debounce(func, wait) {
   };
 }
 
-// ============= PHASE 3: AUTO-REFRESH & TOAST NOTIFICATIONS =============
-
-const AUTO_REFRESH_KEY = 'kanban-auto-refresh-enabled';
-
-// Toast notification system
-function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  
-  setTimeout(() => toast.classList.add('show'), 10);
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
-
-// Refresh all sorts (re-render Kanban board)
-function refreshAllSorts() {
-  if (currentProject) {
-    renderKanbanBoard();
-    showToast('Kanban board refreshed', 'info');
-  }
-}
-
-// Toggle auto-refresh feature
-function toggleAutoRefresh() {
-  const checkbox = document.getElementById('autoRefreshToggle');
-  const enabled = checkbox.checked;
-  
-  localStorage.setItem(AUTO_REFRESH_KEY, enabled.toString());
-  
-  if (enabled) {
-    scheduleNextMidnightRefresh();
-    showToast('Auto-refresh enabled - board will refresh daily at midnight', 'success');
-  } else {
-    showToast('Auto-refresh disabled', 'info');
-  }
-}
-
-// Schedule next midnight refresh
-function scheduleNextMidnightRefresh() {
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-  
-  const msUntilMidnight = tomorrow - now;
-  
-  setTimeout(() => {
-    console.log('Auto-refreshing Kanban sort at midnight...');
-    refreshAllSorts();
-    scheduleNextMidnightRefresh(); // Schedule next day
-  }, msUntilMidnight);
-}
-
-// Initialize auto-refresh on page load
-function initializeAutoRefresh() {
-  const enabled = localStorage.getItem(AUTO_REFRESH_KEY) !== 'false'; // Default true
-  
-  if (enabled) {
-    scheduleNextMidnightRefresh();
-  }
-}
-
-// Add refresh controls to page header
-function addRefreshControls() {
-  const projectHeader = document.querySelector('#current-project-section h2');
-  if (!projectHeader || document.getElementById('sort-controls-container')) {
-    return; // Already added or header not found
-  }
-  
-  const controlsHTML = `
-    <div id="sort-controls-container" class="sort-controls">
-      <button class="btn-refresh" onclick="refreshAllSorts()" title="Refresh all sorts now">
-        <i class="fas fa-sync-alt"></i> Refresh Sort
-      </button>
-      <div class="auto-refresh-toggle">
-        <label>
-          <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh()">
-          <span>Auto-refresh daily</span>
-        </label>
-      </div>
-    </div>
-  `;
-  
-  projectHeader.insertAdjacentHTML('afterend', controlsHTML);
-  
-  // Set initial checkbox state
-  const checkbox = document.getElementById('autoRefreshToggle');
-  if (checkbox) {
-    checkbox.checked = localStorage.getItem(AUTO_REFRESH_KEY) !== 'false';
-  }
-}
-
 // Initialize app
 document.addEventListener("DOMContentLoaded", async function () {
     console.log("Multi-Project Tracker initialized");
@@ -210,10 +113,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
     setupEventListeners();
     initializeFilters();
-    
-    // Initialize Phase 3 features
-    initializeAutoRefresh();
-    addRefreshControls();
 });
 
 // Setup event listeners (replaces inline onclick handlers)
@@ -235,9 +134,14 @@ function setupEventListeners() {
             window.location.href = `dashboard.html?projectId=${currentProject.id}`;
         }
     });
-    document.getElementById('tags-management-btn')?.addEventListener('click', () => {
+    document.getElementById('view-tags-btn')?.addEventListener('click', () => {
         if (currentProject) {
             window.location.href = `tags.html?projectId=${currentProject.id}`;
+        }
+    });
+    document.getElementById('view-risks-btn')?.addEventListener('click', () => {
+        if (currentProject) {
+            window.location.href = `risks.html?projectId=${currentProject.id}`;
         }
     });
     
@@ -265,22 +169,6 @@ function setupEventListeners() {
             const userId = e.target.getAttribute('data-user-id');
             if (userId) {
                 updateUserRole(parseInt(userId));
-            }
-        }
-        
-        // Handle edit project button
-        if (e.target.closest('.edit-project-btn')) {
-            const projectId = e.target.closest('.edit-project-btn').getAttribute('data-project-id');
-            if (projectId) {
-                openEditProjectModal(parseInt(projectId));
-            }
-        }
-        
-        // Handle archive project button
-        if (e.target.closest('.archive-project-btn')) {
-            const projectId = e.target.closest('.archive-project-btn').getAttribute('data-project-id');
-            if (projectId) {
-                archiveProject(parseInt(projectId));
             }
         }
     });
@@ -343,10 +231,7 @@ function renderProjects() {
              data-project-id="${project.id}">
             <div class="flex justify-between items-start mb-2">
                 <div data-project-click="${project.id}" class="cursor-pointer flex-1">
-                    <div class="flex items-center gap-2">
-                        <h3 class="text-lg font-semibold">${project.name}</h3>
-                        <span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">ID: ${project.id}</span>
-                    </div>
+                    <h3 class="text-lg font-semibold mb-2">${project.name}</h3>
                 </div>
                 <div class="flex gap-2">
                     <button class="edit-project-btn text-blue-600 hover:text-blue-800 p-1" data-project-id="${project.id}" title="Edit Project">
@@ -439,7 +324,7 @@ async function selectProject(projectId) {
 
     await loadProjectData(projectId);
     
-    // Check for deep-link parameters (itemId and itemType from email notifications or shared links)
+    // Check for deep-link parameters (itemId and itemType from email notifications)
     const params = new URLSearchParams(window.location.search);
     const itemId = params.get('itemId');
     const itemType = params.get('itemType');
@@ -448,10 +333,6 @@ async function selectProject(projectId) {
         // Auto-open the item detail modal
         setTimeout(() => {
             openItemDetailModal(parseInt(itemId), itemType);
-            
-            // Highlight and scroll to the card
-            highlightCard(parseInt(itemId));
-            setTimeout(() => scrollToCard(parseInt(itemId)), 300);
         }, 500); // Small delay to ensure kanban board is rendered
         
         // Clean up URL (remove itemId and itemType params)
@@ -472,7 +353,6 @@ async function loadProjectData(projectId) {
         if (currentFilters.priority) params.append('priority', currentFilters.priority);
         if (currentFilters.assignee) params.append('assignee', currentFilters.assignee);
         if (currentFilters.category) params.append('category', currentFilters.category);
-        if (currentFilters.tag) params.append('tag', currentFilters.tag);
         if (currentFilters.search) params.append('search', currentFilters.search);
         
         const [issuesResponse, actionItemsResponse] = await Promise.all([
@@ -488,7 +368,6 @@ async function loadProjectData(projectId) {
         displayActiveFilters();
         displayResultsCount();
         populateAssigneeFilter();
-        populateTagFilter();
         
         // Load review queue
         await loadReviewQueue(projectId);
@@ -506,338 +385,6 @@ async function loadTeamMembers(projectId) {
         console.error("Error loading team members:", error);
         teamMembers = [];
     }
-}
-
-// Sort items by due date (overdue → today → upcoming → no date)
-function sortByDueDate(items) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const overdue = [];
-  const dueToday = [];
-  const upcoming = [];
-  const noDate = [];
-  
-  items.forEach(item => {
-    if (!item.due_date) {
-      noDate.push(item);
-    } else {
-      const dueDate = new Date(item.due_date);
-      dueDate.setHours(0, 0, 0, 0);
-      
-      if (dueDate < today) {
-        overdue.push(item);
-      } else if (dueDate.getTime() === today.getTime()) {
-        dueToday.push(item);
-      } else {
-        upcoming.push(item);
-      }
-    }
-  });
-  
-  // Sort within groups: earliest first
-  const sortByDate = (a, b) => new Date(a.due_date) - new Date(b.due_date);
-  overdue.sort(sortByDate);
-  upcoming.sort(sortByDate);
-  
-  return [...overdue, ...dueToday, ...upcoming, ...noDate];
-}
-
-// Create due date badge with color coding
-function createDueDateBadge(dueDate) {
-  if (!dueDate) {
-    return `<div class="due-date-badge none">
-      <i class="fas fa-calendar-times"></i>
-      <span>No due date</span>
-    </div>`;
-  }
-  
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
-  
-  const diffTime = due - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  let badgeClass, icon, text;
-  
-  if (diffDays < 0) {
-    // Overdue
-    badgeClass = 'overdue';
-    icon = 'fa-exclamation-circle';
-    text = Math.abs(diffDays) === 1 ? '1 day overdue' : `${Math.abs(diffDays)} days overdue`;
-  } else if (diffDays === 0) {
-    // Due today
-    badgeClass = 'today';
-    icon = 'fa-calendar-day';
-    text = 'Due today';
-  } else if (diffDays === 1) {
-    // Due tomorrow
-    badgeClass = 'soon';
-    icon = 'fa-clock';
-    text = 'Due tomorrow';
-  } else if (diffDays <= 3) {
-    // Due soon (2-3 days)
-    badgeClass = 'soon';
-    icon = 'fa-clock';
-    text = `Due in ${diffDays} days`;
-  } else {
-    // Future
-    badgeClass = 'future';
-    icon = 'fa-calendar';
-    text = `Due in ${diffDays} days`;
-  }
-  
-  return `<div class="due-date-badge ${badgeClass}">
-    <i class="fas ${icon}"></i>
-    <span>${text}</span>
-  </div>`;
-}
-
-// ============= SORT PREFERENCES & MANUAL ORDER =============
-const SORT_PREFERENCES_KEY = 'kanban-sort-preferences';
-const MANUAL_ORDER_KEY = 'kanban-manual-order';
-
-function getSortPreferences() {
-  const stored = localStorage.getItem(SORT_PREFERENCES_KEY);
-  if (stored) {
-    return JSON.parse(stored);
-  }
-  return {};
-}
-
-function saveSortPreference(columnId, sortMode) {
-  const prefs = getSortPreferences();
-  prefs[columnId] = sortMode;
-  localStorage.setItem(SORT_PREFERENCES_KEY, JSON.stringify(prefs));
-}
-
-function getSortPreference(columnId) {
-  const prefs = getSortPreferences();
-  return prefs[columnId] || 'due-overdue-first'; // Default from Phase 1
-}
-
-function saveManualOrder(columnId, itemIds) {
-  const stored = localStorage.getItem(MANUAL_ORDER_KEY);
-  const orders = stored ? JSON.parse(stored) : {};
-  orders[columnId] = itemIds;
-  localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(orders));
-}
-
-function loadManualOrder(items, columnId) {
-  const stored = localStorage.getItem(MANUAL_ORDER_KEY);
-  if (!stored) return items;
-  
-  const orders = JSON.parse(stored);
-  const savedOrder = orders[columnId];
-  if (!savedOrder) return items;
-  
-  // Sort items based on saved order
-  const orderedItems = [];
-  const itemsMap = new Map(items.map(item => [`${item.type}-${item.id}`, item]));
-  
-  savedOrder.forEach(key => {
-    if (itemsMap.has(key)) {
-      orderedItems.push(itemsMap.get(key));
-      itemsMap.delete(key);
-    }
-  });
-  
-  // Append any new items not in saved order
-  itemsMap.forEach(item => orderedItems.push(item));
-  
-  return orderedItems;
-}
-
-// ============= PHASE 3: MULTI-CRITERIA SORT FUNCTIONS =============
-
-// Sort by Priority + Due Date (primary: priority, secondary: due date earliest)
-function sortByPriorityAndDueDate(items) {
-  const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
-  
-  return items.sort((a, b) => {
-    // Primary: Priority
-    const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
-    const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
-    
-    if (priorityA !== priorityB) {
-      return priorityA - priorityB;
-    }
-    
-    // Secondary: Due Date (earliest first)
-    if (!a.due_date && !b.due_date) return 0;
-    if (!a.due_date) return 1;
-    if (!b.due_date) return -1;
-    return new Date(a.due_date) - new Date(b.due_date);
-  });
-}
-
-// Sort by Overdue + Priority (primary: overdue status, secondary: priority)
-function sortByOverdueAndPriority(items) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
-  
-  return items.sort((a, b) => {
-    const dueDateA = a.due_date ? new Date(a.due_date) : null;
-    const dueDateB = b.due_date ? new Date(b.due_date) : null;
-    
-    const isOverdueA = dueDateA && dueDateA < today;
-    const isOverdueB = dueDateB && dueDateB < today;
-    
-    // Primary: Overdue status (overdue items first)
-    if (isOverdueA && !isOverdueB) return -1;
-    if (!isOverdueA && isOverdueB) return 1;
-    
-    // Secondary: Priority within overdue/not overdue groups
-    const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
-    const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
-    
-    return priorityA - priorityB;
-  });
-}
-
-// Calculate smart score for weighted sorting
-function calculateSmartScore(item, today, priorityWeight) {
-  let score = 0;
-  
-  // Priority component (0-8 points)
-  score += priorityWeight[item.priority?.toLowerCase()] || 0;
-  
-  // Overdue component (up to 30 points)
-  if (item.due_date) {
-    const dueDate = new Date(item.due_date);
-    dueDate.setHours(0, 0, 0, 0);
-    const daysOverdue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
-    
-    if (daysOverdue > 0) {
-      score += Math.min(daysOverdue * 3, 30); // 3 points per day overdue, max 30
-    } else if (daysOverdue === 0) {
-      score += 5; // Bonus for due today
-    }
-  }
-  
-  return score;
-}
-
-// Sort by Smart Score (weighted algorithm combining priority and due date urgency)
-function sortBySmartScore(items) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const priorityWeight = { 'critical': 8, 'high': 6, 'medium': 4, 'low': 2 };
-  
-  return items.sort((a, b) => {
-    const scoreA = calculateSmartScore(a, today, priorityWeight);
-    const scoreB = calculateSmartScore(b, today, priorityWeight);
-    
-    return scoreB - scoreA; // Higher scores first
-  });
-}
-
-// Comprehensive sort function with multiple modes
-function sortItems(items, sortMode, columnId) {
-  // Make a copy to avoid mutating original array
-  const itemsCopy = [...items];
-  
-  switch(sortMode) {
-    case 'due-overdue-first':
-      return sortByDueDate(itemsCopy); // Use existing Phase 1 function
-      
-    case 'due-earliest':
-      return itemsCopy.sort((a, b) => {
-        if (!a.due_date && !b.due_date) return 0;
-        if (!a.due_date) return 1;
-        if (!b.due_date) return -1;
-        return new Date(a.due_date) - new Date(b.due_date);
-      });
-      
-    case 'due-latest':
-      return itemsCopy.sort((a, b) => {
-        if (!a.due_date && !b.due_date) return 0;
-        if (!a.due_date) return 1;
-        if (!b.due_date) return -1;
-        return new Date(b.due_date) - new Date(a.due_date);
-      });
-      
-    case 'priority':
-      const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
-      return itemsCopy.sort((a, b) => {
-        const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
-        const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
-        return priorityA - priorityB;
-      });
-      
-    case 'created-desc':
-      return itemsCopy.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      
-    case 'updated-desc':
-      return itemsCopy.sort((a, b) => {
-        const aDate = a.updated_at || a.created_at;
-        const bDate = b.updated_at || b.created_at;
-        return new Date(bDate) - new Date(aDate);
-      });
-      
-    case 'manual':
-      // TODO: Full drag-drop reordering within column - future enhancement
-      // Currently preserves order when switching modes and moving between columns
-      return loadManualOrder(itemsCopy, columnId);
-      
-    // PHASE 3: Multi-criteria modes
-    case 'priority-due-date':
-      return sortByPriorityAndDueDate(itemsCopy);
-      
-    case 'overdue-priority':
-      return sortByOverdueAndPriority(itemsCopy);
-      
-    case 'smart-sort':
-      return sortBySmartScore(itemsCopy);
-      
-    default:
-      return sortByDueDate(itemsCopy);
-  }
-}
-
-// Save manual order from current DOM state
-// @param columnId - The logical column ID (e.g., "todo", "inprogress", "blocked", "done")
-function saveManualOrderFromDOM(columnId) {
-  // Construct DOM element ID
-  const domId = `${columnId}-column`;
-  const container = document.getElementById(domId);
-  
-  if (!container) {
-    console.warn(`Cannot save manual order: column container "${domId}" not found`);
-    return;
-  }
-  
-  const cards = container.querySelectorAll('.kanban-card');
-  const itemKeys = Array.from(cards).map(card => {
-    const itemId = card.getAttribute('data-item-id');
-    const itemType = card.getAttribute('data-item-type');
-    return `${itemType}-${itemId}`;
-  });
-  
-  saveManualOrder(columnId, itemKeys);
-}
-
-// Handle sort change from dropdown
-function handleSortChange(selectElement) {
-  const columnId = selectElement.dataset.column;
-  const sortMode = selectElement.value;
-  
-  // Save preference
-  saveSortPreference(columnId, sortMode);
-  
-  // If switching to manual mode, save current order as baseline
-  if (sortMode === 'manual') {
-    // Wait for next tick to ensure DOM is updated
-    setTimeout(() => {
-      saveManualOrderFromDOM(columnId);
-    }, 10);
-  }
-  
-  // Re-render board
-  renderKanbanBoard();
 }
 
 // Render Kanban board
@@ -890,25 +437,8 @@ async function renderKanbanBoard() {
     const columns = ["To Do", "In Progress", "Blocked", "Done"];
 
     columns.forEach((status) => {
-        const unsortedItems = allItems.filter((item) => item.status === status);
+        const columnItems = allItems.filter((item) => item.status === status);
         const columnId = status.toLowerCase().replace(/ /g, "");
-        
-        // Get user's sort preference for this column
-        const sortMode = getSortPreference(columnId);
-        const columnItems = sortItems(unsortedItems, sortMode, columnId);
-        
-        // Update item count in header
-        const countElement = document.getElementById(`${columnId}-count`);
-        if (countElement) {
-            countElement.textContent = `(${columnItems.length})`;
-        }
-        
-        // Set dropdown to saved preference
-        const selectElement = document.querySelector(`.column-sort-select[data-column="${columnId}"]`);
-        if (selectElement) {
-            selectElement.value = sortMode;
-        }
-        
         const container = document.getElementById(`${columnId}-column`);
 
         if (container) {
@@ -966,17 +496,8 @@ async function renderKanbanBoard() {
                         }
                         <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
                             <span>${item.assignee || "Unassigned"}</span>
+                            <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
                         </div>
-                        ${createDueDateBadge(item.due_date)}
-                        <div class="card-creator">
-                            <i class="fas fa-user-circle"></i>
-                            <span>Created by ${item.creator_username || 'Unknown'}</span>
-                        </div>
-                        ${item.tags && item.tags.length > 0 ? `
-                        <div class="card-tags">
-                            ${item.tags.map(tag => renderTagBadge(tag)).join('')}
-                        </div>
-                        ` : ''}
                         <div class="mt-2 pt-2 border-t border-gray-100 space-y-1">
                             <button class="manage-relationships-btn flex items-center text-xs ${relCount > 0 ? 'text-blue-600 font-medium' : 'text-gray-600'} hover:text-blue-700 transition-colors w-full" 
                                     data-item-id="${item.id}" 
@@ -996,23 +517,6 @@ async function renderKanbanBoard() {
                                 </svg>
                                 <span>Comments</span>
                                 ${commentCount > 0 ? `<span class="ml-auto px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">${commentCount}</span>` : ''}
-                            </button>
-                            <button class="view-attachments-btn flex items-center text-xs ${(item.attachment_count || 0) > 0 ? 'text-green-600 font-medium' : 'text-gray-600'} hover:text-green-700 transition-colors w-full" 
-                                    data-item-id="${item.id}" 
-                                    data-item-type="${item.type || 'issue'}">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                </svg>
-                                <span>Attachments</span>
-                                ${(item.attachment_count || 0) > 0 ? `<span class="ml-auto px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">${item.attachment_count}</span>` : ''}
-                            </button>
-                            <button class="copy-link-btn flex items-center text-xs text-gray-600 hover:text-purple-600 transition-colors w-full" 
-                                    data-item-id="${item.id}" 
-                                    data-item-type="${item.type || 'issue'}">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                                </svg>
-                                <span>Copy Link</span>
                             </button>
                             ${canEdit || canDelete ? `
                                 <div class="flex gap-1 pt-1">
@@ -1086,26 +590,6 @@ async function renderKanbanBoard() {
                 });
             });
             
-            // Add attachment button listeners
-            container.querySelectorAll('.view-attachments-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // Prevent drag start
-                    const itemId = parseInt(this.getAttribute('data-item-id'));
-                    const itemType = this.getAttribute('data-item-type');
-                    openItemDetailModal(itemId, itemType);
-                });
-            });
-            
-            // Add copy link button listeners
-            container.querySelectorAll('.copy-link-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // Prevent drag start and card click
-                    const itemId = parseInt(this.getAttribute('data-item-id'));
-                    const itemType = this.getAttribute('data-item-type');
-                    copyItemLink(itemId, itemType);
-                });
-            });
-            
             // Add edit button listeners
             container.querySelectorAll('.edit-item-btn').forEach(btn => {
                 btn.addEventListener('click', function(e) {
@@ -1176,7 +660,7 @@ async function handleDrop(e) {
     
     // Get the target column's status
     const columnElement = e.currentTarget;
-    const domColumnId = columnElement.id; // e.g., "todo-column"
+    const columnId = columnElement.id;
     
     const statusMap = {
         'todo-column': 'To Do',
@@ -1185,17 +669,9 @@ async function handleDrop(e) {
         'done-column': 'Done'
     };
     
-    const columnIdMap = {
-        'todo-column': 'todo',
-        'inprogress-column': 'inprogress',
-        'blocked-column': 'blocked',
-        'done-column': 'done'
-    };
+    const newStatus = statusMap[columnId];
     
-    const newStatus = statusMap[domColumnId];
-    const targetColumnId = columnIdMap[domColumnId];
-    
-    if (!newStatus || !targetColumnId) return;
+    if (!newStatus) return;
     
     try {
         const endpoint = draggedItem.type === 'action-item' 
@@ -1213,18 +689,7 @@ async function handleDrop(e) {
             if (item) item.status = newStatus;
         }
         
-        // Re-render board
-        await renderKanbanBoard();
-        
-        // If target column is in manual mode, save the current order
-        const sortMode = getSortPreference(targetColumnId);
-        if (sortMode === 'manual') {
-            // Use setTimeout to ensure DOM is fully updated
-            setTimeout(() => {
-                saveManualOrderFromDOM(targetColumnId);
-            }, 50);
-        }
-        
+        renderKanbanBoard();
         showSuccessMessage('Status updated successfully!');
     } catch (error) {
         console.error('Error updating status:', error);
@@ -1324,103 +789,6 @@ async function createProject(event) {
     } catch (error) {
         console.error("Error creating project:", error);
         alert("Error creating project. Please try again.");
-    }
-}
-
-// Open Edit Project Modal
-function openEditProjectModal(projectId) {
-    const project = projects.find(p => p.id === projectId);
-    if (!project) return;
-    
-    // Populate the form fields
-    document.getElementById('editProjectId').value = project.id;
-    document.getElementById('editProjectName').value = project.name;
-    document.getElementById('editProjectDescription').value = project.description || '';
-    document.getElementById('editProjectTemplate').value = project.template || 'generic';
-    document.getElementById('editProjectStartDate').value = project.start_date ? project.start_date.split('T')[0] : '';
-    document.getElementById('editProjectEndDate').value = project.end_date ? project.end_date.split('T')[0] : '';
-    
-    // Populate Teams Integration fields
-    document.getElementById('editTeamsWebhookUrl').value = project.teams_webhook_url || '';
-    document.getElementById('editTeamsNotificationsEnabled').checked = project.teams_notifications_enabled !== false;
-    
-    // Show the modal
-    document.getElementById('editProjectModal').classList.remove('hidden');
-}
-
-// Close Edit Project Modal
-document.getElementById('closeEditProjectModal')?.addEventListener('click', () => {
-    document.getElementById('editProjectModal').classList.add('hidden');
-});
-
-document.getElementById('cancelEditProject')?.addEventListener('click', () => {
-    document.getElementById('editProjectModal').classList.add('hidden');
-});
-
-// Handle Edit Project Form Submission
-document.getElementById('editProjectForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const projectId = parseInt(document.getElementById('editProjectId').value);
-    const projectData = {
-        name: document.getElementById('editProjectName').value,
-        description: document.getElementById('editProjectDescription').value,
-        template: document.getElementById('editProjectTemplate').value,
-        start_date: document.getElementById('editProjectStartDate').value || null,
-        end_date: document.getElementById('editProjectEndDate').value || null,
-        teams_webhook_url: document.getElementById('editTeamsWebhookUrl').value || null,
-        teams_notifications_enabled: document.getElementById('editTeamsNotificationsEnabled').checked
-    };
-    
-    try {
-        const response = await axios.put(`/api/projects/${projectId}`, projectData, {
-            withCredentials: true
-        });
-        
-        // Update the project in the local array
-        const index = projects.findIndex(p => p.id === projectId);
-        if (index !== -1) {
-            projects[index] = response.data;
-        }
-        
-        renderProjects();
-        document.getElementById('editProjectModal').classList.add('hidden');
-        showToast('✅ Project updated successfully', 'success');
-        
-        // If this is the current project, update it
-        if (currentProject && currentProject.id === projectId) {
-            currentProject = response.data;
-        }
-    } catch (error) {
-        console.error('Error updating project:', error);
-        showToast('❌ Failed to update project', 'error');
-    }
-});
-
-// Archive Project
-async function archiveProject(projectId) {
-    if (!confirm('Are you sure you want to archive this project?')) {
-        return;
-    }
-    
-    try {
-        await axios.post(`/api/projects/${projectId}/archive`, {}, {
-            withCredentials: true
-        });
-        
-        // Remove from projects list
-        projects = projects.filter(p => p.id !== projectId);
-        renderProjects();
-        showToast('✅ Project archived successfully', 'success');
-        
-        // If this was the current project, clear it
-        if (currentProject && currentProject.id === projectId) {
-            currentProject = null;
-            document.getElementById('project-section').classList.add('hidden');
-        }
-    } catch (error) {
-        console.error('Error archiving project:', error);
-        showToast('❌ Failed to archive project', 'error');
     }
 }
 
@@ -1547,59 +915,20 @@ function showCreateIssue() {
                 </select>
             </div>
             
-            <div class="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                    <label class="block text-sm font-medium mb-2">Due Date</label>
-                    <input type="date" id="issue-due-date"
-                           class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2">Progress %</label>
-                    <input type="number" id="issue-progress" min="0" max="100" value="0"
-                           class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                </div>
-            </div>
-            
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Attachments (Optional)</label>
-                <input type="file" id="create-issue-attachments" multiple 
-                       accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip"
+                <label class="block text-sm font-medium mb-2">Due Date</label>
+                <input type="date" id="issue-due-date"
                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                <p class="text-xs text-gray-500 mt-1">PDF, DOC, XLS, Images, ZIP (Max 10MB per file, 5 files max)</p>
             </div>
             
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">
-                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                    Tags
-                </label>
-                <div class="flex gap-2 mb-1">
-                    <select id="create-issue-tag-select" class="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                        <option value="">Add a tag...</option>
-                    </select>
-                    <button type="button" id="create-issue-new-tag-btn" class="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 whitespace-nowrap text-sm">
-                        + New Tag
-                    </button>
-                </div>
-                <div id="create-issue-new-tag-form" class="hidden mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div class="flex gap-2 items-end">
-                        <div class="flex-1">
-                            <label class="block text-xs font-medium mb-1">Tag Name</label>
-                            <input type="text" id="create-issue-new-tag-name" placeholder="Enter tag name" class="w-full border rounded px-2 py-1 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium mb-1">Color</label>
-                            <input type="color" id="create-issue-new-tag-color" value="#3B82F6" class="border rounded px-1 py-1 h-8">
-                        </div>
-                        <button type="button" id="create-issue-save-tag-btn" class="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Save</button>
-                        <button type="button" id="create-issue-cancel-tag-btn" class="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Cancel</button>
-                    </div>
-                </div>
-                <div id="create-issue-selected-tags" class="flex flex-wrap gap-2">
-                    <!-- Selected tags will appear here -->
-                </div>
+                <label class="block text-sm font-medium mb-2">Tags</label>
+                <select id="issue-tags" multiple
+                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        style="min-height: 100px;">
+                    <option value="" disabled>Loading tags...</option>
+                </select>
+                <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
             </div>
             
             <div class="flex justify-end space-x-3">
@@ -1617,88 +946,71 @@ function showCreateIssue() {
     
     showModal(modalContent);
     
+    // Load tags for issues/actions (tag_type: 'issue_action' or 'both')
+    loadTagsForIssues();
+    
     // Add event listeners
     document.getElementById('cancel-issue-btn').addEventListener('click', hideModal);
     document.getElementById('create-issue-form').addEventListener('submit', createIssue);
-    
-    // Initialize tags for create form
-    selectedIssueTags = [];
-    loadProjectTags(currentProject.id).then(() => {
-        populateTagSelect('create-issue');
-    });
-    
-    // Tag selection handler (remove old listeners to prevent duplicates)
-    const createIssueTagSelect = document.getElementById('create-issue-tag-select');
-    if (createIssueTagSelect) {
-        const newSelect = createIssueTagSelect.cloneNode(true);
-        createIssueTagSelect.replaceWith(newSelect);
-        newSelect.addEventListener('change', function(e) {
-            if (e.target.value) {
-                const tag = projectTags.find(t => t.id == e.target.value);
-                if (tag && !selectedIssueTags.find(t => t.id === tag.id)) {
-                    selectedIssueTags.push(tag);
-                    renderSelectedTags('create-issue');
-                    populateTagSelect('create-issue');
-                }
-                e.target.value = '';
-            }
-        });
+}
+
+// Load tags for issues/actions (tag_type: 'issue_action' or 'both')
+async function loadTagsForIssues() {
+    try {
+        const response = await fetch(`/api/projects/${currentProject.id}/tags`);
+        if (!response.ok) throw new Error('Failed to fetch tags');
+        
+        const allTags = await response.json();
+        
+        // Filter tags for issues/actions: 'issue_action' or 'both'
+        const filteredTags = allTags.filter(tag => 
+            tag.tag_type === 'issue_action' || tag.tag_type === 'both'
+        );
+        
+        const tagSelect = document.getElementById('issue-tags');
+        if (filteredTags.length === 0) {
+            tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+        } else {
+            tagSelect.innerHTML = filteredTags.map(tag => 
+                `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;">
+                    ${tag.name}
+                </option>`
+            ).join('');
+        }
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        const tagSelect = document.getElementById('issue-tags');
+        tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
     }
-    
-    // Setup new tag creation handlers (remove old listeners to prevent duplicates)
-    const createIssueNewTagBtn = document.getElementById('create-issue-new-tag-btn');
-    if (createIssueNewTagBtn) {
-        const newBtn = createIssueNewTagBtn.cloneNode(true);
-        createIssueNewTagBtn.replaceWith(newBtn);
-        newBtn.addEventListener('click', function() {
-            document.getElementById('create-issue-new-tag-form').classList.remove('hidden');
-        });
-    }
-    
-    const createIssueCancelTagBtn = document.getElementById('create-issue-cancel-tag-btn');
-    if (createIssueCancelTagBtn) {
-        const newBtn = createIssueCancelTagBtn.cloneNode(true);
-        createIssueCancelTagBtn.replaceWith(newBtn);
-        newBtn.addEventListener('click', function() {
-            document.getElementById('create-issue-new-tag-form').classList.add('hidden');
-            document.getElementById('create-issue-new-tag-name').value = '';
-        });
-    }
-    
-    const createIssueSaveTagBtn = document.getElementById('create-issue-save-tag-btn');
-    if (createIssueSaveTagBtn) {
-        const newBtn = createIssueSaveTagBtn.cloneNode(true);
-        createIssueSaveTagBtn.replaceWith(newBtn);
-        newBtn.addEventListener('click', async function() {
-            const tagName = document.getElementById('create-issue-new-tag-name').value.trim();
-            const tagColor = document.getElementById('create-issue-new-tag-color').value;
-            
-            if (!tagName) {
-                alert('Please enter a tag name');
-                return;
-            }
-            
-            try {
-                const response = await axios.post(`/api/projects/${currentProject.id}/tags`, {
-                    name: tagName,
-                    color: tagColor
-                }, { withCredentials: true });
-                
-                const newTag = response.data;
-                projectTags.push(newTag);
-                selectedIssueTags.push(newTag);
-                
-                document.getElementById('create-issue-new-tag-form').classList.add('hidden');
-                document.getElementById('create-issue-new-tag-name').value = '';
-                
-                renderSelectedTags('create-issue');
-                populateTagSelect('create-issue');
-                showToast('Tag created and added!', 'success');
-            } catch (error) {
-                console.error('Error creating tag:', error);
-                alert(error.response?.data?.error || 'Failed to create tag');
-            }
-        });
+}
+
+// Load tags for action items (same as issues: tag_type: 'issue_action' or 'both')
+async function loadTagsForActionItems() {
+    try {
+        const response = await fetch(`/api/projects/${currentProject.id}/tags`);
+        if (!response.ok) throw new Error('Failed to fetch tags');
+        
+        const allTags = await response.json();
+        
+        // Filter tags for issues/actions: 'issue_action' or 'both'
+        const filteredTags = allTags.filter(tag => 
+            tag.tag_type === 'issue_action' || tag.tag_type === 'both'
+        );
+        
+        const tagSelect = document.getElementById('action-item-tags');
+        if (filteredTags.length === 0) {
+            tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+        } else {
+            tagSelect.innerHTML = filteredTags.map(tag => 
+                `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;">
+                    ${tag.name}
+                </option>`
+            ).join('');
+        }
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        const tagSelect = document.getElementById('action-item-tags');
+        tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
     }
 }
 
@@ -1749,11 +1061,6 @@ function generateAssigneeOptions() {
 async function createIssue(event) {
     event.preventDefault();
     
-    if (!currentProject || !currentProject.id) {
-        showToast('❌ Please select a project first', 'error');
-        return;
-    }
-    
     const issueData = {
         title: document.getElementById('issue-title').value,
         description: document.getElementById('issue-description').value,
@@ -1763,67 +1070,51 @@ async function createIssue(event) {
         component: document.getElementById('issue-component').value,
         assignee: document.getElementById('issue-assignee').value,
         dueDate: document.getElementById('issue-due-date').value,
-        progress: parseInt(document.getElementById('issue-progress').value) || 0,
         projectId: currentProject.id,
         type: 'issue',
         status: 'To Do'
     };
     
+    // Get selected tag IDs
+    const tagSelect = document.getElementById('issue-tags');
+    const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+    
     try {
-        const response = await axios.post('/api/issues', issueData, {
-            withCredentials: true
+        const response = await fetch('/api/issues', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(issueData)
         });
         
-        const newIssue = response.data;
-        
-        // Save tags if any selected
-        if (selectedIssueTags.length > 0) {
-            for (const tag of selectedIssueTags) {
-                try {
-                    await axios.post(`/api/issues/${newIssue.id}/tags`, {
-                        tag_id: tag.id
-                    }, {
-                        withCredentials: true
-                    });
-                } catch (error) {
-                    console.error('Error adding tag:', error);
-                }
-            }
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        // Handle file uploads if any files selected
-        const fileInput = document.getElementById('create-issue-attachments');
-        if (fileInput && fileInput.files.length > 0) {
-            const formData = new FormData();
-            for (let i = 0; i < fileInput.files.length; i++) {
-                formData.append('files', fileInput.files[i]);
-            }
-            
-            try {
-                await axios.post(`/api/issues/${newIssue.id}/attachments`, formData, {
-                    withCredentials: true,
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
-                    }
-                });
-                
-                showToast(`✅ Issue "${newIssue.title}" created with ${fileInput.files.length} attachment(s)!`, 'success');
-            } catch (uploadError) {
-                console.error('Error uploading attachments:', uploadError);
-                showToast(`✅ Issue "${newIssue.title}" created but attachments failed to upload`, 'warning');
-            }
-        } else {
-            showToast(`✅ Issue "${newIssue.title}" created successfully!`, 'success');
+        const newIssue = await response.json();
+        
+        // Assign tags to the new issue
+        if (selectedTagIds.length > 0) {
+            await fetch(`/api/issues/${newIssue.id}/tags`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ tagIds: selectedTagIds })
+            });
         }
         
         issues.push(newIssue);
         renderKanbanBoard();
         hideModal();
         
+        // Show success message
+        showSuccessMessage(`Issue "${newIssue.title}" created successfully!`);
+        
     } catch (error) {
         console.error('Error creating issue:', error);
-        const errorMsg = error.response?.data?.error || error.message || 'Error creating issue. Please try again.';
-        showToast(`❌ ${errorMsg}`, 'error');
+        alert('Error creating issue. Please try again.');
     }
 }
 
@@ -1899,45 +1190,13 @@ function showCreateActionItem() {
             </div>
             
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Attachments (Optional)</label>
-                <input type="file" id="create-action-item-attachments" multiple 
-                       accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv,.zip"
-                       class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                <p class="text-xs text-gray-500 mt-1">PDF, DOC, XLS, Images, ZIP (Max 10MB per file, 5 files max)</p>
-            </div>
-            
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">
-                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                    Tags
-                </label>
-                <div class="flex gap-2 mb-1">
-                    <select id="create-action-item-tag-select" class="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                        <option value="">Add a tag...</option>
-                    </select>
-                    <button type="button" id="create-action-item-new-tag-btn" class="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 whitespace-nowrap text-sm">
-                        + New Tag
-                    </button>
-                </div>
-                <div id="create-action-item-new-tag-form" class="hidden mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div class="flex gap-2 items-end">
-                        <div class="flex-1">
-                            <label class="block text-xs font-medium mb-1">Tag Name</label>
-                            <input type="text" id="create-action-item-new-tag-name" placeholder="Enter tag name" class="w-full border rounded px-2 py-1 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium mb-1">Color</label>
-                            <input type="color" id="create-action-item-new-tag-color" value="#3B82F6" class="border rounded px-1 py-1 h-8">
-                        </div>
-                        <button type="button" id="create-action-item-save-tag-btn" class="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm">Save</button>
-                        <button type="button" id="create-action-item-cancel-tag-btn" class="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Cancel</button>
-                    </div>
-                </div>
-                <div id="create-action-item-selected-tags" class="flex flex-wrap gap-2">
-                    <!-- Selected tags will appear here -->
-                </div>
+                <label class="block text-sm font-medium mb-2">Tags</label>
+                <select id="action-item-tags" multiple
+                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        style="min-height: 100px;">
+                    <option value="" disabled>Loading tags...</option>
+                </select>
+                <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
             </div>
             
             <div class="flex justify-end space-x-3">
@@ -1955,89 +1214,12 @@ function showCreateActionItem() {
     
     showModal(modalContent);
     
+    // Load tags for action items (same as issues: 'issue_action' or 'both')
+    loadTagsForActionItems();
+    
     // Add event listeners
     document.getElementById('cancel-action-item-btn').addEventListener('click', hideModal);
     document.getElementById('create-action-item-form').addEventListener('submit', createActionItem);
-    
-    // Initialize tags for create form
-    selectedActionItemTags = [];
-    loadProjectTags(currentProject.id).then(() => {
-        populateTagSelect('create-action-item');
-    });
-    
-    // Tag selection handler (remove old listeners to prevent duplicates)
-    const createActionItemTagSelect = document.getElementById('create-action-item-tag-select');
-    if (createActionItemTagSelect) {
-        const newSelect = createActionItemTagSelect.cloneNode(true);
-        createActionItemTagSelect.replaceWith(newSelect);
-        newSelect.addEventListener('change', function(e) {
-            if (e.target.value) {
-                const tag = projectTags.find(t => t.id == e.target.value);
-                if (tag && !selectedActionItemTags.find(t => t.id === tag.id)) {
-                    selectedActionItemTags.push(tag);
-                    renderSelectedTags('create-action-item');
-                    populateTagSelect('create-action-item');
-                }
-                e.target.value = '';
-            }
-        });
-    }
-    
-    // Setup new tag creation handlers (remove old listeners to prevent duplicates)
-    const createActionItemNewTagBtn = document.getElementById('create-action-item-new-tag-btn');
-    if (createActionItemNewTagBtn) {
-        const newBtn = createActionItemNewTagBtn.cloneNode(true);
-        createActionItemNewTagBtn.replaceWith(newBtn);
-        newBtn.addEventListener('click', function() {
-            document.getElementById('create-action-item-new-tag-form').classList.remove('hidden');
-        });
-    }
-    
-    const createActionItemCancelTagBtn = document.getElementById('create-action-item-cancel-tag-btn');
-    if (createActionItemCancelTagBtn) {
-        const newBtn = createActionItemCancelTagBtn.cloneNode(true);
-        createActionItemCancelTagBtn.replaceWith(newBtn);
-        newBtn.addEventListener('click', function() {
-            document.getElementById('create-action-item-new-tag-form').classList.add('hidden');
-            document.getElementById('create-action-item-new-tag-name').value = '';
-        });
-    }
-    
-    const createActionItemSaveTagBtn = document.getElementById('create-action-item-save-tag-btn');
-    if (createActionItemSaveTagBtn) {
-        const newBtn = createActionItemSaveTagBtn.cloneNode(true);
-        createActionItemSaveTagBtn.replaceWith(newBtn);
-        newBtn.addEventListener('click', async function() {
-            const tagName = document.getElementById('create-action-item-new-tag-name').value.trim();
-            const tagColor = document.getElementById('create-action-item-new-tag-color').value;
-            
-            if (!tagName) {
-                alert('Please enter a tag name');
-                return;
-            }
-            
-            try {
-                const response = await axios.post(`/api/projects/${currentProject.id}/tags`, {
-                    name: tagName,
-                    color: tagColor
-                }, { withCredentials: true });
-                
-                const newTag = response.data;
-                projectTags.push(newTag);
-                selectedActionItemTags.push(newTag);
-                
-                document.getElementById('create-action-item-new-tag-form').classList.add('hidden');
-                document.getElementById('create-action-item-new-tag-name').value = '';
-                
-                renderSelectedTags('create-action-item');
-                populateTagSelect('create-action-item');
-                showToast('Tag created and added!', 'success');
-            } catch (error) {
-                console.error('Error creating tag:', error);
-                alert(error.response?.data?.error || 'Failed to create tag');
-            }
-        });
-    }
 }
 
 // Create action item function
@@ -2055,6 +1237,10 @@ async function createActionItem(event) {
         type: 'action-item'
     };
     
+    // Get selected tag IDs
+    const tagSelect = document.getElementById('action-item-tags');
+    const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+    
     try {
         const response = await fetch('/api/action-items', {
             method: 'POST',
@@ -2069,50 +1255,21 @@ async function createActionItem(event) {
         
         const newActionItem = await response.json();
         
-        // Save tags if any selected
-        if (selectedActionItemTags.length > 0) {
-            for (const tag of selectedActionItemTags) {
-                try {
-                    await axios.post(`/api/action-items/${newActionItem.id}/tags`, {
-                        tag_id: tag.id
-                    }, {
-                        withCredentials: true
-                    });
-                } catch (error) {
-                    console.error('Error adding tag:', error);
-                }
-            }
-        }
-        
-        // Handle file uploads if any files selected
-        const fileInput = document.getElementById('create-action-item-attachments');
-        if (fileInput && fileInput.files.length > 0) {
-            const formData = new FormData();
-            for (let i = 0; i < fileInput.files.length; i++) {
-                formData.append('files', fileInput.files[i]);
-            }
-            
-            try {
-                const uploadResponse = await fetch(`/api/action-items/${newActionItem.id}/attachments`, {
-                    method: 'POST',
-                    credentials: 'include',
-                    body: formData
-                });
-                
-                if (!uploadResponse.ok) {
-                    throw new Error('Upload failed');
-                }
-                
-                showSuccessMessage(`Action Item "${newActionItem.title}" created with ${fileInput.files.length} attachment(s)!`);
-            } catch (uploadError) {
-                console.error('Error uploading attachments:', uploadError);
-                showSuccessMessage(`Action Item "${newActionItem.title}" created but attachments failed to upload`);
-            }
-        } else {
-            showSuccessMessage(`Action Item "${newActionItem.title}" created successfully!`);
+        // Assign tags to the new action item
+        if (selectedTagIds.length > 0) {
+            await fetch(`/api/action-items/${newActionItem.id}/tags`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ tagIds: selectedTagIds })
+            });
         }
         
         hideModal();
+        
+        // Show success message
+        showSuccessMessage(`Action Item "${newActionItem.title}" created successfully!`);
         
         // Refresh the current view if needed
         if (currentProject) {
@@ -2368,16 +1525,6 @@ function initializeFilters() {
     });
   }
   
-  // Tag filter
-  const tagFilter = document.getElementById('tag-filter');
-  if (tagFilter) {
-    tagFilter.addEventListener('change', (e) => {
-      currentFilters.tag = e.target.value;
-      applyFilters();
-      updateURL();
-    });
-  }
-  
   // Clear filters button
   const clearBtn = document.getElementById('clear-filters-btn');
   if (clearBtn) {
@@ -2389,9 +1536,6 @@ function initializeFilters() {
   
   // Populate assignee dropdown
   populateAssigneeFilter();
-  
-  // Populate tag dropdown
-  populateTagFilter();
 }
 
 // Apply filters - reload data with filter params
@@ -2409,8 +1553,7 @@ function clearAllFilters() {
     status: '',
     priority: '',
     assignee: '',
-    category: '',
-    tag: ''
+    category: ''
   };
   
   // Reset form inputs
@@ -2419,14 +1562,12 @@ function clearAllFilters() {
   const statusFilter = document.getElementById('status-filter');
   const priorityFilter = document.getElementById('priority-filter');
   const assigneeFilter = document.getElementById('assignee-filter');
-  const tagFilter = document.getElementById('tag-filter');
   
   if (searchInput) searchInput.value = '';
   if (typeFilter) typeFilter.value = '';
   if (statusFilter) statusFilter.value = '';
   if (priorityFilter) priorityFilter.value = '';
   if (assigneeFilter) assigneeFilter.value = '';
-  if (tagFilter) tagFilter.value = '';
   
   // Reload data
   applyFilters();
@@ -2465,9 +1606,6 @@ function displayActiveFilters() {
   }
   if (currentFilters.category) {
     activeFilters.push({ key: 'category', label: `Category: ${currentFilters.category}` });
-  }
-  if (currentFilters.tag) {
-    activeFilters.push({ key: 'tag', label: `Tag: ${currentFilters.tag}` });
   }
   
   if (activeFilters.length === 0) {
@@ -2557,32 +1695,6 @@ function populateAssigneeFilter() {
   `;
 }
 
-// Populate tag filter dropdown with available tags
-async function populateTagFilter() {
-  const select = document.getElementById('tag-filter');
-  if (!select || !currentProject) return;
-  
-  try {
-    // Fetch tags for the current project
-    const response = await axios.get(`/api/projects/${currentProject.id}/tags`);
-    const tags = response.data;
-    
-    // Build tag options
-    const tagOptions = tags
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map(tag => `<option value="${tag.name}">${tag.name}</option>`)
-      .join('');
-    
-    // Update dropdown
-    select.innerHTML = `
-      <option value="">All Tags</option>
-      ${tagOptions}
-    `;
-  } catch (error) {
-    console.error('Error loading tags for filter:', error);
-  }
-}
-
 // Update URL with current filters (for shareable links)
 function updateURL() {
   if (!currentProject) return;
@@ -2596,7 +1708,6 @@ function updateURL() {
   if (currentFilters.priority) params.set('priority', currentFilters.priority);
   if (currentFilters.assignee) params.set('assignee', currentFilters.assignee);
   if (currentFilters.category) params.set('category', currentFilters.category);
-  if (currentFilters.tag) params.set('tag', currentFilters.tag);
   
   const newURL = `${window.location.pathname}?${params.toString()}`;
   window.history.replaceState({}, '', newURL);
@@ -2612,7 +1723,6 @@ function loadFiltersFromURL() {
   currentFilters.priority = params.get('priority') || '';
   currentFilters.assignee = params.get('assignee') || '';
   currentFilters.category = params.get('category') || '';
-  currentFilters.tag = params.get('tag') || '';
   
   // Update form inputs
   const searchInput = document.getElementById('search-input');
@@ -2620,14 +1730,12 @@ function loadFiltersFromURL() {
   const statusFilter = document.getElementById('status-filter');
   const priorityFilter = document.getElementById('priority-filter');
   const assigneeFilter = document.getElementById('assignee-filter');
-  const tagFilter = document.getElementById('tag-filter');
   
   if (searchInput && currentFilters.search) searchInput.value = currentFilters.search;
   if (typeFilter && currentFilters.type) typeFilter.value = currentFilters.type;
   if (statusFilter && currentFilters.status) statusFilter.value = currentFilters.status;
   if (priorityFilter && currentFilters.priority) priorityFilter.value = currentFilters.priority;
   if (assigneeFilter && currentFilters.assignee) assigneeFilter.value = currentFilters.assignee;
-  if (tagFilter && currentFilters.tag) tagFilter.value = currentFilters.tag;
 }
 
 // ============= RELATIONSHIP MANAGEMENT =============
@@ -3957,76 +3065,45 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-issue-id').value = item.id;
       document.getElementById('edit-issue-title').value = item.title;
       document.getElementById('edit-issue-description').value = item.description || '';
-      document.getElementById('edit-issue-assignee').value = item.assignee || '';
       document.getElementById('edit-issue-due-date').value = item.due_date ? item.due_date.split('T')[0] : '';
       document.getElementById('edit-issue-priority').value = item.priority || 'medium';
       document.getElementById('edit-issue-status').value = item.status || 'To Do';
-      document.getElementById('edit-issue-category').value = item.category || '';
-      document.getElementById('edit-issue-progress').value = item.progress || 0;
       
-      // Load team members for assignee dropdown using the item's project_id
-      if (item.project_id) {
-        await loadTeamMembersForEdit('issue', item.project_id);
-        document.getElementById('edit-issue-assignee').value = item.assignee || '';
-        
-        // Load tags for project
-        await loadProjectTags(item.project_id);
-        const itemTags = await loadItemTags(itemId, 'issue');
-        selectedIssueTags = itemTags;
-        populateTagSelect('edit-issue');
-        renderSelectedTags('edit-issue');
+      // Populate category dropdown options
+      const categorySelect = document.getElementById('edit-issue-category');
+      categorySelect.innerHTML = '<option value="">Select Category</option>' + generateCategoryOptions();
+      categorySelect.value = item.category || '';
+      
+      // Load team members for assignee dropdown
+      if (currentProject) {
+        await loadTeamMembersForEdit('issue', item.assignee || '');
       }
       
-      // Setup new tag creation handlers
-      setupEditModalTagHandlers('issue', item.project_id);
+      // Load tags and pre-select current ones
+      await loadTagsForEditIssue(item.id);
       
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
-      
-      // Setup copy link button (use onclick to avoid duplicate listeners)
-      const copyLinkBtn = document.getElementById('copyEditIssueLinkBtn');
-      if (copyLinkBtn) {
-        copyLinkBtn.onclick = function() {
-          copyItemLink(itemId, 'issue');
-        };
-      }
     } else {
       // Populate action item edit modal
       document.getElementById('edit-action-item-id').value = item.id;
       document.getElementById('edit-action-item-title').value = item.title;
       document.getElementById('edit-action-item-description').value = item.description || '';
-      document.getElementById('edit-action-item-assignee').value = item.assignee || '';
       document.getElementById('edit-action-item-due-date').value = item.due_date ? item.due_date.split('T')[0] : '';
       document.getElementById('edit-action-item-priority').value = item.priority || 'medium';
       document.getElementById('edit-action-item-status').value = item.status || 'To Do';
       document.getElementById('edit-action-item-progress').value = item.progress || 0;
       
-      // Load team members for assignee dropdown using the item's project_id
-      if (item.project_id) {
-        await loadTeamMembersForEdit('action-item', item.project_id);
-        document.getElementById('edit-action-item-assignee').value = item.assignee || '';
-        
-        // Load tags for project
-        await loadProjectTags(item.project_id);
-        const itemTags = await loadItemTags(itemId, 'action-item');
-        selectedActionItemTags = itemTags;
-        populateTagSelect('edit-action-item');
-        renderSelectedTags('edit-action-item');
+      // Load team members for assignee dropdown
+      if (currentProject) {
+        await loadTeamMembersForEdit('action-item', item.assignee || '');
       }
       
-      // Setup new tag creation handlers
-      setupEditModalTagHandlers('action-item', item.project_id);
+      // Load tags and pre-select current ones
+      await loadTagsForEditActionItem(item.id);
       
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
-      
-      // Setup copy link button (use onclick to avoid duplicate listeners)
-      const copyLinkBtn = document.getElementById('copyEditActionItemLinkBtn');
-      if (copyLinkBtn) {
-        copyLinkBtn.onclick = function() {
-          copyItemLink(itemId, 'action-item');
-        };
-      }
     }
   } catch (error) {
     console.error('Error loading item for edit:', error);
@@ -4034,101 +3111,99 @@ async function openEditModal(itemId, itemType) {
   }
 }
 
-// Setup new tag creation handlers for edit modals
-function setupEditModalTagHandlers(itemType, projectId) {
-  const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
-  
-  // New tag button handler
-  const newTagBtn = document.getElementById(`${prefix}-new-tag-btn`);
-  if (newTagBtn) {
-    newTagBtn.replaceWith(newTagBtn.cloneNode(true)); // Remove old listeners
-    document.getElementById(`${prefix}-new-tag-btn`).addEventListener('click', function() {
-      document.getElementById(`${prefix}-new-tag-form`).classList.remove('hidden');
-    });
+// Load tags for edit issue modal
+async function loadTagsForEditIssue(issueId) {
+  try {
+    // Get all available tags for issues
+    const tagsResponse = await axios.get(`/api/projects/${currentProject.id}/tags`);
+    const allTags = tagsResponse.data;
+    
+    // Filter tags for issues/actions: 'issue_action' or 'both'
+    const filteredTags = allTags.filter(tag => 
+      tag.tag_type === 'issue_action' || tag.tag_type === 'both'
+    );
+    
+    // Get current tags for this issue
+    const currentTagsResponse = await axios.get(`/api/issues/${issueId}/tags`);
+    const currentTags = currentTagsResponse.data;
+    const currentTagIds = currentTags.map(t => t.id);
+    
+    // Populate dropdown
+    const tagSelect = document.getElementById('edit-issue-tags');
+    if (filteredTags.length === 0) {
+      tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+    } else {
+      tagSelect.innerHTML = filteredTags.map(tag => 
+        `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;" ${currentTagIds.includes(tag.id) ? 'selected' : ''}>
+          ${tag.name}
+        </option>`
+      ).join('');
+    }
+  } catch (error) {
+    console.error('Error loading tags for edit:', error);
+    const tagSelect = document.getElementById('edit-issue-tags');
+    tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
   }
-  
-  // Cancel tag button handler
-  const cancelTagBtn = document.getElementById(`${prefix}-cancel-tag-btn`);
-  if (cancelTagBtn) {
-    cancelTagBtn.replaceWith(cancelTagBtn.cloneNode(true)); // Remove old listeners
-    document.getElementById(`${prefix}-cancel-tag-btn`).addEventListener('click', function() {
-      document.getElementById(`${prefix}-new-tag-form`).classList.add('hidden');
-      document.getElementById(`${prefix}-new-tag-name`).value = '';
-    });
-  }
-  
-  // Save tag button handler
-  const saveTagBtn = document.getElementById(`${prefix}-save-tag-btn`);
-  if (saveTagBtn) {
-    saveTagBtn.replaceWith(saveTagBtn.cloneNode(true)); // Remove old listeners
-    document.getElementById(`${prefix}-save-tag-btn`).addEventListener('click', async function() {
-      const tagName = document.getElementById(`${prefix}-new-tag-name`).value.trim();
-      const tagColor = document.getElementById(`${prefix}-new-tag-color`).value;
-      
-      if (!tagName) {
-        alert('Please enter a tag name');
-        return;
-      }
-      
-      try {
-        const response = await axios.post(`/api/projects/${projectId}/tags`, {
-          name: tagName,
-          color: tagColor
-        }, { withCredentials: true });
-        
-        const newTag = response.data;
-        projectTags.push(newTag);
-        
-        if (itemType === 'issue') {
-          selectedIssueTags.push(newTag);
-          renderSelectedTags('edit-issue');
-          populateTagSelect('edit-issue');
-        } else {
-          selectedActionItemTags.push(newTag);
-          renderSelectedTags('edit-action-item');
-          populateTagSelect('edit-action-item');
-        }
-        
-        document.getElementById(`${prefix}-new-tag-form`).classList.add('hidden');
-        document.getElementById(`${prefix}-new-tag-name`).value = '';
-        
-        showToast('Tag created and added!', 'success');
-      } catch (error) {
-        console.error('Error creating tag:', error);
-        alert(error.response?.data?.error || 'Failed to create tag');
-      }
-    });
+}
+
+// Load tags for edit action item modal
+async function loadTagsForEditActionItem(actionItemId) {
+  try {
+    // Get all available tags for action items
+    const tagsResponse = await axios.get(`/api/projects/${currentProject.id}/tags`);
+    const allTags = tagsResponse.data;
+    
+    // Filter tags for issues/actions: 'issue_action' or 'both'
+    const filteredTags = allTags.filter(tag => 
+      tag.tag_type === 'issue_action' || tag.tag_type === 'both'
+    );
+    
+    // Get current tags for this action item
+    const currentTagsResponse = await axios.get(`/api/action-items/${actionItemId}/tags`);
+    const currentTags = currentTagsResponse.data;
+    const currentTagIds = currentTags.map(t => t.id);
+    
+    // Populate dropdown
+    const tagSelect = document.getElementById('edit-action-item-tags');
+    if (filteredTags.length === 0) {
+      tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+    } else {
+      tagSelect.innerHTML = filteredTags.map(tag => 
+        `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;" ${currentTagIds.includes(tag.id) ? 'selected' : ''}>
+          ${tag.name}
+        </option>`
+      ).join('');
+    }
+  } catch (error) {
+    console.error('Error loading tags for edit:', error);
+    const tagSelect = document.getElementById('edit-action-item-tags');
+    tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
   }
 }
 
 // Load team members for edit modals
-async function loadTeamMembersForEdit(type, projectId) {
+async function loadTeamMembersForEdit(type, currentAssignee = '') {
   try {
-    const response = await axios.get(`/api/projects/${projectId}/team`, {
+    const response = await axios.get(`/api/projects/${currentProject.id}/team`, {
       withCredentials: true
     });
     
     const members = response.data;
-    console.log('Team members loaded:', members); // Debug log
     
     const selectId = type === 'issue' ? 'edit-issue-assignee' : 'edit-action-item-assignee';
     const select = document.getElementById(selectId);
-    
-    // Keep the current selection
-    const currentValue = select.value;
     
     // Clear and populate
     select.innerHTML = '<option value="">Select Assignee</option>';
     members.forEach(member => {
       const option = document.createElement('option');
-      // The API returns 'name' not 'username'
       option.value = member.name;
       option.textContent = member.name;
+      if (member.name === currentAssignee) {
+        option.selected = true;
+      }
       select.appendChild(option);
     });
-    
-    // Restore selection
-    select.value = currentValue;
   } catch (error) {
     console.error('Error loading team members:', error);
   }
@@ -4146,58 +3221,30 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     due_date: document.getElementById('edit-issue-due-date').value,
     priority: document.getElementById('edit-issue-priority').value,
     status: document.getElementById('edit-issue-status').value,
-    category: document.getElementById('edit-issue-category').value,
-    progress: parseInt(document.getElementById('edit-issue-progress').value) || 0
+    category: document.getElementById('edit-issue-category').value
   };
   
+  // Get selected tag IDs
+  const tagSelect = document.getElementById('edit-issue-tags');
+  const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+  
   try {
-    const response = await axios.patch(`/api/issues/${itemId}`, data, {
+    await axios.patch(`/api/issues/${itemId}`, data, {
       withCredentials: true
     });
     
-    const updatedIssue = response.data;
-    
-    // Save tags
-    const currentTags = await loadItemTags(itemId, 'issue');
-    await saveTags(itemId, 'issue', currentTags, selectedIssueTags);
-    
-    // Handle file uploads if any files are selected
-    const fileInput = document.getElementById('edit-issue-attachments');
-    if (fileInput && fileInput.files.length > 0) {
-      const formData = new FormData();
-      for (let i = 0; i < fileInput.files.length; i++) {
-        formData.append('files', fileInput.files[i]);
-      }
-      
-      try {
-        await axios.post(`/api/issues/${itemId}/attachments`, formData, {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        });
-        showToast(`Issue updated with ${fileInput.files.length} attachment(s)!`, 'success');
-      } catch (uploadError) {
-        console.error('Error uploading attachments:', uploadError);
-        showToast('Issue updated but attachment upload failed', 'warning');
-      }
-    } else {
-      showToast('Issue updated successfully!', 'success');
-    }
+    // Update tags
+    await axios.put(`/api/issues/${itemId}/tags`, { tagIds: selectedTagIds }, {
+      withCredentials: true
+    });
     
     // Close modal
     document.getElementById('editIssueModal').classList.add('hidden');
     
-    // Clear file input
-    if (fileInput) fileInput.value = '';
+    // Reload project data and refresh kanban board
+    await loadProjectData(currentProject.id);
     
-    // Reload project data using the issue's project_id
-    if (updatedIssue.project_id) {
-      await loadProjectData(updatedIssue.project_id);
-    } else if (currentProject) {
-      await loadProjectData(currentProject);
-    }
-    
+    showToast('Issue updated successfully!', 'success');
   } catch (error) {
     console.error('Error updating issue:', error);
     alert(error.response?.data?.error || 'Failed to update issue');
@@ -4219,53 +3266,25 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     progress: parseInt(document.getElementById('edit-action-item-progress').value) || 0
   };
   
+  // Get selected tag IDs
+  const tagSelect = document.getElementById('edit-action-item-tags');
+  const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+  
   try {
-    const response = await axios.patch(`/api/action-items/${itemId}`, data, {
+    await axios.patch(`/api/action-items/${itemId}`, data, {
       withCredentials: true
     });
     
-    const updatedItem = response.data;
-    
-    // Save tags
-    const currentTags = await loadItemTags(itemId, 'action-item');
-    await saveTags(itemId, 'action-item', currentTags, selectedActionItemTags);
-    
-    // Handle file uploads if any files are selected
-    const fileInput = document.getElementById('edit-action-item-attachments');
-    if (fileInput && fileInput.files.length > 0) {
-      const formData = new FormData();
-      for (let i = 0; i < fileInput.files.length; i++) {
-        formData.append('files', fileInput.files[i]);
-      }
-      
-      try {
-        await axios.post(`/api/action-items/${itemId}/attachments`, formData, {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        });
-        showToast(`Action item updated with ${fileInput.files.length} attachment(s)!`, 'success');
-      } catch (uploadError) {
-        console.error('Error uploading attachments:', uploadError);
-        showToast('Action item updated but attachment upload failed', 'warning');
-      }
-    } else {
-      showToast('Action item updated successfully!', 'success');
-    }
+    // Update tags
+    await axios.put(`/api/action-items/${itemId}/tags`, { tagIds: selectedTagIds }, {
+      withCredentials: true
+    });
     
     // Close modal
     document.getElementById('editActionItemModal').classList.add('hidden');
     
-    // Clear file input
-    if (fileInput) fileInput.value = '';
-    
-    // Reload project data using the item's project_id
-    if (updatedItem.project_id) {
-      await loadProjectData(updatedItem.project_id);
-    } else if (currentProject) {
-      await loadProjectData(currentProject);
-    }
+    // Reload project data and refresh kanban board
+    await loadProjectData(currentProject.id);
     
     showToast('Action item updated successfully!', 'success');
   } catch (error) {
@@ -4305,7 +3324,7 @@ async function confirmDeleteItem(itemId, itemType) {
       withCredentials: true
     });
     
-    // Reload project data (includes both issues and action items)
+    // Reload project data and refresh kanban board
     await loadProjectData(currentProject.id);
     
     showToast(`${itemName.charAt(0).toUpperCase() + itemName.slice(1)} deleted successfully!`, 'success');
@@ -4329,262 +3348,5 @@ function showToast(message, type = 'info') {
   setTimeout(() => {
     toast.remove();
   }, 3000);
-}
-
-// ============= TAG FUNCTIONALITY =============
-
-let projectTags = [];
-let selectedIssueTags = [];
-let selectedActionItemTags = [];
-
-// Load tags for current project
-async function loadProjectTags(projectId) {
-  try {
-    const response = await axios.get(`/api/projects/${projectId}/tags`, {
-      withCredentials: true
-    });
-    projectTags = response.data;
-    return projectTags;
-  } catch (error) {
-    console.error('Error loading project tags:', error);
-    return [];
-  }
-}
-
-// Load item tags
-async function loadItemTags(itemId, itemType) {
-  try {
-    const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
-    const response = await axios.get(`/api/${endpoint}/${itemId}/tags`, {
-      withCredentials: true
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Error loading item tags:', error);
-    return [];
-  }
-}
-
-// Populate tag select dropdown
-function populateTagSelect(itemType) {
-  const selectId = itemType.includes('issue') ? `${itemType}-tag-select` : `${itemType}-tag-select`;
-  const select = document.getElementById(selectId);
-  
-  if (!select) return;
-  
-  const selectedTags = itemType.includes('issue') ? selectedIssueTags : selectedActionItemTags;
-  const availableTags = projectTags.filter(tag => 
-    !selectedTags.find(st => st.id === tag.id)
-  );
-  
-  if (projectTags.length === 0) {
-    select.innerHTML = '<option value="">No tags available - Create tags first</option>';
-    select.disabled = true;
-  } else if (availableTags.length === 0) {
-    select.innerHTML = '<option value="">All tags already added</option>';
-    select.disabled = true;
-  } else {
-    select.disabled = false;
-    select.innerHTML = '<option value="">Add a tag...</option>';
-    availableTags.forEach(tag => {
-      const option = document.createElement('option');
-      option.value = tag.id;
-      option.textContent = tag.name;
-      select.appendChild(option);
-    });
-  }
-}
-
-// Render selected tags
-function renderSelectedTags(itemType) {
-  const containerId = itemType.includes('issue') ? `${itemType}-selected-tags` : `${itemType}-selected-tags`;
-  const container = document.getElementById(containerId);
-  
-  if (!container) return;
-  
-  const selectedTags = itemType.includes('issue') ? selectedIssueTags : selectedActionItemTags;
-  
-  container.innerHTML = selectedTags.map(tag => `
-    <span class="tag-badge" style="background-color: ${tag.color}20; color: ${tag.color}; border-color: ${tag.color}">
-      ${escapeHtml(tag.name)}
-      <span class="remove-tag" data-tag-id="${tag.id}" data-item-type="${itemType}">&times;</span>
-    </span>
-  `).join('');
-  
-  // Add event delegation for remove buttons
-  setupRemoveTagListeners(container);
-}
-
-// Setup event listeners for removing tags
-function setupRemoveTagListeners(container) {
-  // Remove old listener if exists
-  const oldContainer = container.cloneNode(true);
-  container.replaceWith(oldContainer);
-  const newContainer = document.getElementById(oldContainer.id);
-  
-  newContainer.addEventListener('click', (e) => {
-    if (e.target.classList.contains('remove-tag')) {
-      const tagId = parseInt(e.target.dataset.tagId);
-      const itemType = e.target.dataset.itemType;
-      removeTag(tagId, itemType);
-    }
-  });
-}
-
-// Add tag to item
-function addTag(tagId, itemType) {
-  const tag = projectTags.find(t => t.id == tagId);
-  if (!tag) return;
-  
-  if (itemType.includes('issue')) {
-    if (!selectedIssueTags.find(t => t.id === tag.id)) {
-      selectedIssueTags.push(tag);
-    }
-  } else {
-    if (!selectedActionItemTags.find(t => t.id === tag.id)) {
-      selectedActionItemTags.push(tag);
-    }
-  }
-  
-  renderSelectedTags(itemType);
-  populateTagSelect(itemType);
-}
-
-// Remove tag from item
-function removeTag(tagId, itemType) {
-  if (itemType.includes('issue')) {
-    selectedIssueTags = selectedIssueTags.filter(t => t.id != tagId);
-  } else {
-    selectedActionItemTags = selectedActionItemTags.filter(t => t.id != tagId);
-  }
-  
-  renderSelectedTags(itemType);
-  populateTagSelect(itemType);
-}
-
-// Save tags for item
-async function saveTags(itemId, itemType, currentTags, newTags) {
-  const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
-  
-  // Remove tags that are no longer selected
-  const tagsToRemove = currentTags.filter(ct => !newTags.find(nt => nt.id === ct.id));
-  for (const tag of tagsToRemove) {
-    try {
-      await axios.delete(`/api/${endpoint}/${itemId}/tags/${tag.id}`, {
-        withCredentials: true
-      });
-    } catch (error) {
-      console.error('Error removing tag:', error);
-    }
-  }
-  
-  // Add new tags
-  const tagsToAdd = newTags.filter(nt => !currentTags.find(ct => ct.id === nt.id));
-  for (const tag of tagsToAdd) {
-    try {
-      await axios.post(`/api/${endpoint}/${itemId}/tags`, {
-        tag_id: tag.id
-      }, {
-        withCredentials: true
-      });
-    } catch (error) {
-      console.error('Error adding tag:', error);
-    }
-  }
-}
-
-// Render tag badge HTML
-function renderTagBadge(tag) {
-  return `<span class="tag-badge" style="background-color: ${tag.color}20; color: ${tag.color}; border-color: ${tag.color}">${escapeHtml(tag.name)}</span>`;
-}
-
-// Setup tag select change handlers
-document.getElementById('edit-issue-tag-select')?.addEventListener('change', function(e) {
-  if (e.target.value) {
-    addTag(parseInt(e.target.value), 'edit-issue');
-    e.target.value = '';
-  }
-});
-
-document.getElementById('edit-action-item-tag-select')?.addEventListener('change', function(e) {
-  if (e.target.value) {
-    addTag(parseInt(e.target.value), 'edit-action-item');
-    e.target.value = '';
-  }
-});
-
-// ============= COPY LINK FEATURE =============
-
-/**
- * Copy a shareable link to an issue or action item
- * @param {number} itemId - The ID of the item
- * @param {string} itemType - 'issue' or 'action-item'
- */
-function copyItemLink(itemId, itemType) {
-  if (!currentProject) {
-    showToast('❌ No project selected', 'error');
-    return;
-  }
-  
-  // Construct the URL with project and item parameters
-  const baseUrl = window.location.origin;
-  const url = `${baseUrl}/?project=${currentProject.id}&itemId=${itemId}&itemType=${itemType}`;
-  
-  // Copy to clipboard using Clipboard API
-  navigator.clipboard.writeText(url)
-    .then(() => {
-      showToast('✅ Link copied to clipboard!', 'success');
-    })
-    .catch(err => {
-      console.error('Failed to copy link:', err);
-      // Fallback for older browsers
-      fallbackCopyToClipboard(url);
-    });
-}
-
-/**
- * Fallback copy method for older browsers
- * @param {string} text - The text to copy
- */
-function fallbackCopyToClipboard(text) {
-  const textArea = document.createElement('textarea');
-  textArea.value = text;
-  textArea.style.position = 'fixed';
-  textArea.style.left = '-999999px';
-  document.body.appendChild(textArea);
-  textArea.select();
-  
-  try {
-    document.execCommand('copy');
-    showToast('✅ Link copied to clipboard!', 'success');
-  } catch (err) {
-    console.error('Fallback copy failed:', err);
-    showToast('❌ Failed to copy link', 'error');
-  }
-  
-  document.body.removeChild(textArea);
-}
-
-/**
- * Highlight a card temporarily
- * @param {number} itemId - The ID of the item to highlight
- */
-function highlightCard(itemId) {
-  const card = document.querySelector(`[data-item-id="${itemId}"]`);
-  if (card) {
-    card.classList.add('highlighted');
-    setTimeout(() => card.classList.remove('highlighted'), 2500);
-  }
-}
-
-/**
- * Scroll to a card smoothly
- * @param {number} itemId - The ID of the item to scroll to
- */
-function scrollToCard(itemId) {
-  const card = document.querySelector(`[data-item-id="${itemId}"]`);
-  if (card) {
-    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
 }
 

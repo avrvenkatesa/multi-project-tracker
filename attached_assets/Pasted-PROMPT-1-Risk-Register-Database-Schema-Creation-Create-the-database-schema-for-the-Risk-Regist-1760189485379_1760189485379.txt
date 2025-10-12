@@ -1,0 +1,113 @@
+PROMPT 1: Risk Register - Database Schema Creation
+
+Create the database schema for the Risk Register Phase 1 implementation.
+
+REQUIREMENTS:
+1. Create 4 tables with proper indexes
+2. Use PostgreSQL GENERATED ALWAYS AS columns for risk_score and risk_level
+3. Insert 8 default risk categories
+4. Use raw SQL only (NO ORM)
+5. Include verification queries
+
+TABLES TO CREATE:
+
+1. risk_categories
+   - id (SERIAL PRIMARY KEY)
+   - project_id (INTEGER, nullable for defaults)
+   - name (VARCHAR(100), NOT NULL)
+   - description (TEXT)
+   - color (VARCHAR(7) - hex color)
+   - icon (VARCHAR(50) - emoji)
+   - is_active (BOOLEAN DEFAULT true)
+   - display_order (INTEGER DEFAULT 0)
+   - created_at (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+   - UNIQUE(project_id, name)
+
+2. risks
+   - id (SERIAL PRIMARY KEY)
+   - risk_id (VARCHAR(20) UNIQUE NOT NULL) - e.g., 'RISK-001'
+   - project_id (INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE)
+   - title (VARCHAR(255) NOT NULL)
+   - description (TEXT)
+   - category (VARCHAR(50) NOT NULL)
+   - risk_source (TEXT)
+   - tags (TEXT[])
+   - probability (INTEGER CHECK 1-5)
+   - impact (INTEGER CHECK 1-5)
+   - risk_score (INTEGER GENERATED ALWAYS AS (probability * impact) STORED)
+   - risk_level (VARCHAR(20) GENERATED ALWAYS AS CASE score STORED)
+     * Low: 1-6
+     * Medium: 8-12
+     * High: 15-20
+     * Critical: 25
+   - response_strategy (VARCHAR(20))
+   - mitigation_plan (TEXT)
+   - contingency_plan (TEXT)
+   - mitigation_cost (DECIMAL(10, 2))
+   - mitigation_effort_hours (INTEGER)
+   - risk_owner_id (INTEGER REFERENCES users(id))
+   - target_resolution_date (DATE)
+   - review_date (DATE)
+   - status (VARCHAR(20) DEFAULT 'identified')
+   - residual_probability (INTEGER CHECK 1-5)
+   - residual_impact (INTEGER CHECK 1-5)
+   - created_by (INTEGER REFERENCES users(id))
+   - created_at (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+   - updated_at (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+   - closed_at (TIMESTAMP)
+   - realized_at (TIMESTAMP)
+   - attachment_count (INTEGER DEFAULT 0)
+
+3. risk_updates
+   - id (SERIAL PRIMARY KEY)
+   - risk_id (INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE)
+   - update_type (VARCHAR(20) NOT NULL)
+   - old_value (TEXT)
+   - new_value (TEXT)
+   - notes (TEXT)
+   - old_probability (INTEGER)
+   - new_probability (INTEGER)
+   - old_impact (INTEGER)
+   - new_impact (INTEGER)
+   - created_by (INTEGER REFERENCES users(id))
+   - created_at (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+
+4. risk_assessments
+   - id (SERIAL PRIMARY KEY)
+   - risk_id (INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE)
+   - probability (INTEGER NOT NULL CHECK 1-5)
+   - impact (INTEGER NOT NULL CHECK 1-5)
+   - risk_score (INTEGER NOT NULL)
+   - risk_level (VARCHAR(20) NOT NULL)
+   - assessment_notes (TEXT)
+   - assessed_by (INTEGER REFERENCES users(id))
+   - assessed_at (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+
+INDEXES:
+- idx_risks_project ON risks(project_id)
+- idx_risks_status ON risks(status)
+- idx_risks_owner ON risks(risk_owner_id)
+- idx_risks_level ON risks(risk_level)
+- idx_risks_category ON risks(category)
+- idx_risks_score ON risks(risk_score DESC)
+- idx_risk_updates_risk ON risk_updates(risk_id)
+- idx_risk_updates_created ON risk_updates(created_at DESC)
+- idx_risk_assessments_risk ON risk_assessments(risk_id)
+- idx_risk_assessments_date ON risk_assessments(assessed_at DESC)
+
+DEFAULT CATEGORIES TO INSERT:
+1. Technical - '#3b82f6' - '⚙️' - "Technology, architecture, or technical implementation risks"
+2. Schedule - '#f59e0b' - '📅' - "Timeline and deadline risks"
+3. Budget - '#10b981' - '💰' - "Cost and financial risks"
+4. Resource - '#8b5cf6' - '👥' - "People, skills, or resource availability risks"
+5. External - '#ef4444' - '🌐' - "Third-party, vendor, or external dependency risks"
+6. Compliance - '#6366f1' - '📋' - "Regulatory or compliance risks"
+7. Security - '#dc2626' - '🔒' - "Information security or data privacy risks"
+8. Quality - '#ec4899' - '✓' - "Quality assurance or defect risks"
+
+DELIVERABLES:
+1. Complete SQL migration script wrapped in BEGIN/COMMIT transaction
+2. Verification queries to confirm schema creation
+3. Test query to verify GENERATED columns work correctly
+
+Please provide the complete SQL script ready to execute.

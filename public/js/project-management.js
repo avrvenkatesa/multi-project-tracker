@@ -36,8 +36,6 @@ async function openEditProjectModal(projectId) {
     document.getElementById('editProjectTemplate').value = project.template || 'generic';
     document.getElementById('editProjectStartDate').value = project.start_date ? project.start_date.split('T')[0] : '';
     document.getElementById('editProjectEndDate').value = project.end_date ? project.end_date.split('T')[0] : '';
-    
-    // Populate Teams integration fields
     document.getElementById('editTeamsNotificationsEnabled').checked = project.teams_notifications_enabled || false;
     document.getElementById('editTeamsWebhookUrl').value = project.teams_webhook_url || '';
     
@@ -72,9 +70,9 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
         description, 
         template, 
         start_date, 
-        end_date,
-        teams_notifications_enabled,
-        teams_webhook_url
+        end_date, 
+        teams_notifications_enabled, 
+        teams_webhook_url 
       })
     });
     

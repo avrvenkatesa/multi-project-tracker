@@ -1,38 +1,68 @@
 # Multi-Project Tracker
 
 ## Overview
-Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures.
+Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
+
+## Recent Changes (October 2025)
+- **Edit Modal Complete Fix** (October 12, 2025): Resolved all critical bugs in Edit Issue and Edit Action Item modals:
+  - **Tags Loading**: Fixed API calls to use `currentProject.id` instead of `currentProject` object
+  - **Assignee Dropdown**: Corrected property access from `member.username` to `member.name` (backend returns 'name' property)
+  - **Category Dropdown**: Added dynamic population using `generateCategoryOptions()` before setting value
+  - **Save Operation**: Fixed `loadProjectData()` function call (was calling non-existent `loadIssues()`/`fetchProjectData()`)
+  - **Action Item Progress**: Corrected field name from `progress_percentage` to `progress` to match database schema
+  - All edit modals now fully functional with complete CRUD operations, tag assignment, and proper data refresh
+  - Cache version: app.js v23
+- **Unified Tag Management System** (Complete): Implemented comprehensive tag type system supporting Issues/Actions, Risks, or Both:
+  - **Tag Types**: Added tag_type field (enum: 'issue_action', 'risk', 'both') to tags table with default 'issue_action'
+  - **Visual Indicators**: Tags display color-coded badges - Blue (Issues/Actions), Orange (Risks), Purple (Both)
+  - **Smart Filtering**: Tag Management page includes filter buttons (All, Issues/Actions, Risks, Both) with active state highlighting
+  - **Risk Junction Table**: Created risk_tags table replacing TEXT[] tags, enabling proper tag relationships for risks with foreign key constraints
+  - **Secure Backend APIs**: Complete tag assignment endpoints with project-level authorization, tag-type validation, and atomic transactions:
+    - GET/PUT `/api/issues/:issueId/tags` - Issue tag management (allows 'issue_action' and 'both' tags only)
+    - GET/PUT `/api/action-items/:actionItemId/tags` - Action item tag management (allows 'issue_action' and 'both' tags only)
+    - GET/PUT `/api/risks/:riskId/tags` - Risk tag management (allows 'risk' and 'both' tags only)
+  - **Security Pattern**: All endpoints verify project access via checkProjectAccess(), validate tag ownership, enforce tag-type constraints, and use BEGIN/COMMIT transactions
+  - **Frontend Integration**: Complete multi-select tag dropdowns in all Create/Edit modals:
+    - Issue modals: Tag selector with 'issue_action' and 'both' tags, saves via PUT endpoint after create/update
+    - Action Item modals: Tag selector with 'issue_action' and 'both' tags, saves via PUT endpoint after create/update
+    - Risk modals: Replaced text input with tag selector showing 'risk' and 'both' tags, saves via PUT endpoint after create/update
+  - Cache version: tags.html/js v10, app.js v11, risks.js updated
+- **Tag Management Complete Restoration**: Rebuilt Tag Management page to match production with full CRUD functionality:
+  - **Backend API**: Created complete tags API with GET/POST/PUT/DELETE endpoints at `/api/projects/:projectId/tags` with usage count calculations
+  - **UI Components**: Tag cards display colored badges, descriptions, usage counts, and edit/delete controls
+  - **RGB Color Picker**: Replaced fixed color palette with HTML5 color input for custom RGB color selection with preview button
+  - **Database Integration**: Tags persist to PostgreSQL tags table with proper junction table relationships to issues/action items
+- **Comprehensive Teams Notifications**: Implemented complete Microsoft Teams integration with instant notifications and daily scheduled reports:
+  - **Instant Notifications**: Real-time Teams alerts for issue/action item creation, status changes, and completions (with celebration 🎉 emoji for Done status)
+  - **Daily Scheduled Reports** (9 AM): Automated overdue alerts showing top overdue items with days-overdue count, and project health summaries with health score (0-100), completion rates, and activity metrics
+  - **Scheduler Service**: Created schedulerService.js with node-cron for reliable daily notifications at 9 AM (timezone-aware)
+  - All notifications use Microsoft Teams Adaptive Cards, respect project-level configuration (teams_webhook_url, teams_notifications_enabled), and run non-blocking
+- **Teams Notification Fix**: Fixed "Created by undefined" error in Teams notifications by implementing proper Teams webhook integration in notificationService.js. Issue creation notifications now correctly display creator username via Microsoft Teams Adaptive Cards with all issue details (priority, status, project, due date). Non-blocking notification respects project-level Teams configuration (teams_webhook_url, teams_notifications_enabled).
+- **CSP Compliance for Tags Page**: Eliminated all Content Security Policy violations on Tags page by replacing inline onclick handlers with proper event listeners and event delegation. Navigation buttons and tag card clicks now use data attributes with addEventListener instead of inline scripts.
+- **Risk Register Currency Selector**: Added multi-currency support for mitigation costs with 18 global currencies (USD, EUR, GBP, JPY, CNY, INR, AUD, CAD, CHF, SEK, NZD, SGD, HKD, NOK, KRW, MXN, BRL, ZAR). Currency selection is persisted in database and displayed with appropriate symbols.
+- **Tag System Clarification**: Risk Register tags are stored separately (TEXT[] in risks table) from Issue/Action Item tags (JSONB). The Tags page only displays Issue/Action Item tags, not Risk tags.
+- **Modal UX Improvements**: Fixed modal close buttons (X, Cancel, Close) with proper event listeners across all Risk modals.
+- **Navigation Consistency**: Unified header design across Risk Register, Tags, and Dashboard pages with intelligent "Back to Project/Projects" button toggling.
+- **Risk Register CSP Compliance** (October 12, 2025): Eliminated all Content Security Policy violations on Risk Register page by replacing inline onclick handlers with proper event listeners. All navigation buttons, modal close buttons (X, Cancel, Close), and risk action buttons (View Details, Edit, Delete) now use addEventListener pattern with event delegation instead of inline scripts. Fixed Edit button functionality by removing card.onclick handler that was intercepting all clicks - Edit button now properly opens editable Edit Risk Modal with form fields and Save button, while clicking card body shows read-only details. Cache version: risks.js v58.
+- **Toast Notifications for Risk Register** (October 12, 2025): Replaced browser alert() dialogs with elegant toast notifications matching Issues/Action Items UI pattern. Success messages (create/update) now show as green bottom-right toasts with auto-dismiss after 3 seconds and smooth fade-out transitions. Error messages display as red toasts. Cache version: risks.js v59.
+- **Icon-Based Risk Card Actions** (October 12, 2025): Redesigned Risk cards to match Project card UI pattern with icon-based actions in top-right corner. Replaced text buttons with pencil icon (Edit) and trash icon (Delete) using inline SVG. Removed "View Details" button - clicking card body now shows details. Icons are subtle (60% opacity) by default and fully visible on card hover, with color changes on hover (blue for edit, red for delete). Updated event delegation for proper click handling. Fixed delete functionality by replacing inline onclick assignment with addEventListener pattern to comply with CSP. Cache version: risks.js v61.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### UI/UX Decisions
-The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles and authentication. Key features include AI analysis capabilities (in-modal search, review queue, smart matching, relationship detection), a comprehensive comment system with markdown support and real-time @mention autocomplete, and a Project Dashboard with analytics, Chart.js visualizations, activity feed, and team performance metrics. Kanban boards include automatic due date sorting with color-coded visual indicators for urgency, attachment count badges, and multi-criteria sorting options. A comprehensive tagging system is also implemented with custom color-coded tags and a dedicated tag management interface.
+### Frontend
+The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles and authentication. Key features include AI analysis capabilities (in-modal search, review queue, smart matching, relationship detection), a comprehensive comment system with markdown support and real-time @mention autocomplete, and a Project Dashboard with analytics, Chart.js visualizations, activity feed, and team performance metrics.
 
-### Technical Implementations
-The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. File attachment functionality is implemented with Multer for secure uploads. AI-powered meeting transcript analysis leverages OpenAI. The system also includes robust PDF and CSV export capabilities.
+### Backend
+The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing.
 
-### Feature Specifications
-- **AI Meeting Analysis**: Two-phase processing (item extraction + status update detection) with in-modal search and a persistent review queue. AI-created items send assignment notifications.
-- **Role-Based Access Control (RBAC)**: A 6-tier RBAC system ensures granular permissions.
-- **Authentication**: JWT authentication with httpOnly cookie-based session management.
-- **Project Management**: Centralized tracking of issues and action items with full CRUD operations.
-- **Communication**: Comprehensive comment system with markdown and @mention autocomplete, including email notifications.
-- **File Attachments**: Upload, view, download, and delete files associated with issues and action items.
-- **Kanban Board**: Automatic and user-controlled multi-criteria sorting, color-coded visual badges, and automated daily refreshes.
-- **Tagging System**: Comprehensive tagging functionality with custom color-coded tags, dedicated tag management interface (tags.html), visual display on Kanban cards with color-coded badges, on-the-fly tag creation from all modals, tag selection for issues and action items, tag-based filtering for issues and action items, and deletion protection (tags in use cannot be deleted).
-- **Filtering & Search**: Advanced filtering system supporting search, type (Issues/Action Items), status, priority, assignee, category, and tags. Filters are composable, persist in URL for shareable links, and display as removable badges.
-- **Shareable Links**: One-click copy link functionality for issues and action items. Copy buttons available on Kanban cards and in edit modals. Shared links automatically open the item in the appropriate modal with visual highlighting (pulsing blue border animation) and smooth scroll-to-item functionality.
-- **Microsoft Teams Integration**: Comprehensive webhook-based notifications for real-time project events including issue/action item creation and completion. Automated daily cron jobs send overdue alerts (9:00 AM) and daily summaries (8:00 AM). Project-level configuration for webhook URLs and notification toggles.
-- **Toast Notification System**: User-friendly feedback messages.
+### Data Management
+A PostgreSQL database stores core entities such as Users, Projects, Issues, Action Items, Meeting Transcripts, and the Risk Register. It also handles relationships (including AI-generated), AI-specific data (Status Update Review Queue, AI analysis audit trail), collaboration data (comments, mention notifications), user preferences, and comprehensive risk management with automatic risk scoring and tracking.
 
-### System Design Choices
-- **Frontend**: Vanilla JavaScript SPA with Tailwind CSS for responsiveness and dynamic UI rendering.
-- **Backend**: Express.js RESTful API with PostgreSQL and Drizzle ORM.
-- **Data Management**: PostgreSQL stores core entities (Users, Projects, Issues, Action Items, Meeting Transcripts), relationships, and AI-specific data.
-- **Security**: Robust security measures including Helmet, CORS, rate limiting, bcryptjs for password hashing, and secure file handling.
+### Request Handling
+Express.js handles requests, incorporating `express-rate-limit` for API protection and comprehensive error handling. It supports JSON and URL-encoded data parsing.
 
 ## External Dependencies
 
@@ -64,10 +94,13 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 
 ### Email & Notifications
 - **nodemailer**: SMTP email sending library.
+- **node-cron**: Scheduled task manager for daily notifications.
 
 ### Reporting & Export
 - **pdfkit**: Server-side PDF generation for reports.
 - **csv-writer**: CSV file generation for data export.
 
 ### CDN Services
+- **Tailwind CSS CDN**: CSS framework delivery.
+- **Unpkg CDN**: JavaScript library delivery.
 - **Chart.js**: Data visualization charts for dashboard analytics.

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Risk Register - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/risks.css">
+</head>
+<body class="bg-gray-50">
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 shadow-lg">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">Multi-Project Tracker</h1>
+        <p class="text-sm text-blue-100">Risk Register</p>
+      </div>
+      <div class="flex gap-3 items-center">
+        <button id="backToProjectBtn" class="bg-blue-800 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition-all flex items-center gap-2" style="display: none;">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+          Back to Project
+        </button>
+        <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
+          Back to Projects
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="risks-container">
+    <!-- Header -->
+    <div class="risks-header">
+      <div>
+        <h1>Risk Register</h1>
+      </div>
+      <div style="display: flex; gap: 16px; align-items: center;">
+        <select id="projectSelector" class="project-selector">
+          <option value="">Select a project...</option>
+        </select>
+        <button id="btnNewRisk" class="btn-new-risk" style="display: none;">
+          <span>+</span>
+          New Risk
+        </button>
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>Status</label>
+          <select id="filterStatus">
+            <option value="">All Statuses</option>
+            <option value="identified">Identified</option>
+            <option value="analyzing">Analyzing</option>
+            <option value="mitigating">Mitigating</option>
+            <option value="monitoring">Monitoring</option>
+            <option value="closed">Closed</option>
+            <option value="realized">Realized</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Category</label>
+          <select id="filterCategory">
+            <option value="">All Categories</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Risk Level</label>
+          <select id="filterLevel">
+            <option value="">All Levels</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Owner</label>
+          <select id="filterOwner">
+            <option value="">All Owners</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Sort By</label>
+          <select id="sortBy">
+            <option value="score_desc">Score (High to Low)</option>
+            <option value="score_asc">Score (Low to High)</option>
+            <option value="date_desc">Date (Newest)</option>
+            <option value="date_asc">Date (Oldest)</option>
+            <option value="title_asc">Title (A-Z)</option>
+            <option value="title_desc">Title (Z-A)</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>&nbsp;</label>
+          <button id="btnClearFilters" class="btn-clear-filters">Clear Filters</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="loading-state" style="display: none;">
+      <div class="loading-spinner"></div>
+      <p>Loading risks...</p>
+    </div>
+
+    <!-- Risks List -->
+    <div id="risksList" class="risks-list"></div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <div class="empty-state-icon">📋</div>
+      <h3>No Risks Found</h3>
+      <p>There are no risks in this project yet. Create your first risk to get started.</p>
+      <button id="btnNewRiskEmpty" class="btn-new-risk" style="display: none; margin: 0 auto;">
+        <span>+</span>
+        Create First Risk
+      </button>
+    </div>
+  </div>
+
+  <!-- Create/Edit Risk Modal -->
+  <div id="riskModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Create New Risk</h2>
+        <button class="modal-close" id="closeRiskModalX">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modalError" class="error-message" style="display: none;"></div>
+        
+        <form id="riskForm">
+          <div class="form-grid">
+            <!-- Title -->
+            <div class="form-group full-width">
+              <label class="required">Title</label>
+              <input type="text" id="riskTitle" required maxlength="255">
+            </div>
+
+            <!-- Description -->
+            <div class="form-group full-width">
+              <label>Description</label>
+              <textarea id="riskDescription" rows="3"></textarea>
+            </div>
+
+            <!-- Category -->
+            <div class="form-group">
+              <label class="required">Category</label>
+              <select id="riskCategory" required>
+                <option value="">Select category...</option>
+              </select>
+            </div>
+
+            <!-- Risk Source -->
+            <div class="form-group">
+              <label>Risk Source</label>
+              <input type="text" id="riskSource">
+            </div>
+
+            <!-- Tags -->
+            <div class="form-group full-width">
+              <label>Tags</label>
+              <select id="riskTags" multiple style="min-height: 100px;">
+                <option value="" disabled>Loading tags...</option>
+              </select>
+              <small>Hold Ctrl/Cmd to select multiple tags</small>
+            </div>
+
+            <!-- Probability & Impact -->
+            <div class="form-group full-width">
+              <div class="risk-score-calculator">
+                <h4>Risk Assessment</h4>
+                
+                <div class="form-group">
+                  <label>Probability (Likelihood)</label>
+                  <div class="scale-input">
+                    <div class="scale-options">
+                      <div class="scale-option">
+                        <input type="radio" name="probability" id="prob1" value="1">
+                        <label for="prob1">1<br><small>Very Low</small></label>
+                      </div>
+                      <div class="scale-option">
+                        <input type="radio" name="probability" id="prob2" value="2">
+                        <label for="prob2">2<br><small>Low</small></label>
+                      </div>
+                      <div class="scale-option">
+                        <input type="radio" name="probability" id="prob3" value="3">
+                        <label for="prob3">3<br><small>Medium</small></label>
+                      </div>
+                      <div class="scale-option">
+                        <input type="radio" name="probability" id="prob4" value="4">
+                        <label for="prob4">4<br><small>High</small></label>
+                      </div>
+                      <div class="scale-option">
+                        <input type="radio" name="probability" id="prob5" value="5">
+                        <label for="prob5">5<br><small>Very High</small></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Impact (Consequence)</label>
+                  <div class="scale-input">
+                    <div class="scale-options">
+                      <div class="scale-option">
+                        <input type="radio" name="impact" id="impact1" value="1">
+                        <label for="impact1">1<br><small>Negligible</small></label>
+                      </div>
+                      <div class="scale-option">
+                        <input type="radio" name="impact" id="impact2" value="2">
+                        <label for="impact2">2<br><small>Minor</small></label>
+                      </div>
+                      <div class="scale-option">
+                        <input type="radio" name="impact" id="impact3" value="3">
+                        <label for="impact3">3<br><small>Moderate</small></label>
+                      </div>
+                      <div class="scale-option">
+                        <input type="radio" name="impact" id="impact4" value="4">
+                        <label for="impact4">4<br><small>Major</small></label>
+                      </div>
+                      <div class="scale-option">
+                        <input type="radio" name="impact" id="impact5" value="5">
+                        <label for="impact5">5<br><small>Catastrophic</small></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="score-display">
+                  <div>
+                    <small style="color: #6b7280;">Risk Score</small>
+                    <div class="score-value" id="riskScoreValue">0</div>
+                  </div>
+                  <div>
+                    <small style="color: #6b7280;">Risk Level</small>
+                    <div class="score-level" id="riskLevelBadge" style="background: #9ca3af;">
+                      <span id="riskLevelValue">Not Assessed</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Response Strategy -->
+            <div class="form-group">
+              <label>Response Strategy</label>
+              <select id="riskResponseStrategy">
+                <option value="">Select strategy...</option>
+                <option value="Avoid">Avoid</option>
+                <option value="Mitigate">Mitigate</option>
+                <option value="Transfer">Transfer</option>
+                <option value="Accept">Accept</option>
+                <option value="Exploit">Exploit</option>
+                <option value="Share">Share</option>
+                <option value="Enhance">Enhance</option>
+              </select>
+            </div>
+
+            <!-- Status -->
+            <div class="form-group">
+              <label>Status</label>
+              <select id="riskStatus">
+                <option value="identified">Identified</option>
+                <option value="analyzing">Analyzing</option>
+                <option value="mitigating">Mitigating</option>
+                <option value="monitoring">Monitoring</option>
+                <option value="closed">Closed</option>
+                <option value="realized">Realized</option>
+              </select>
+            </div>
+
+            <!-- Mitigation Plan -->
+            <div class="form-group full-width">
+              <label>Mitigation Plan</label>
+              <textarea id="riskMitigationPlan" rows="3"></textarea>
+            </div>
+
+            <!-- Contingency Plan -->
+            <div class="form-group full-width">
+              <label>Contingency Plan</label>
+              <textarea id="riskContingencyPlan" rows="3"></textarea>
+            </div>
+
+            <!-- Mitigation Cost -->
+            <div class="form-group">
+              <label>Mitigation Cost</label>
+              <div style="display: flex; gap: 8px;">
+                <select id="riskCostCurrency" style="width: 100px;">
+                  <option value="USD">USD $</option>
+                  <option value="EUR">EUR €</option>
+                  <option value="GBP">GBP £</option>
+                  <option value="JPY">JPY ¥</option>
+                  <option value="CNY">CNY ¥</option>
+                  <option value="INR">INR ₹</option>
+                  <option value="AUD">AUD $</option>
+                  <option value="CAD">CAD $</option>
+                  <option value="CHF">CHF ₣</option>
+                  <option value="SEK">SEK kr</option>
+                  <option value="NZD">NZD $</option>
+                  <option value="SGD">SGD $</option>
+                  <option value="HKD">HKD $</option>
+                  <option value="NOK">NOK kr</option>
+                  <option value="KRW">KRW ₩</option>
+                  <option value="MXN">MXN $</option>
+                  <option value="BRL">BRL R$</option>
+                  <option value="ZAR">ZAR R</option>
+                </select>
+                <input type="number" id="riskMitigationCost" min="0" step="0.01" style="flex: 1;">
+              </div>
+            </div>
+
+            <!-- Mitigation Effort Hours -->
+            <div class="form-group">
+              <label>Mitigation Effort (hours)</label>
+              <input type="number" id="riskMitigationEffort" min="0" step="0.5">
+            </div>
+
+            <!-- Risk Owner -->
+            <div class="form-group">
+              <label>Risk Owner</label>
+              <select id="riskOwner">
+                <option value="">Select owner...</option>
+              </select>
+            </div>
+
+            <!-- Target Resolution Date -->
+            <div class="form-group">
+              <label>Target Resolution Date</label>
+              <input type="date" id="riskTargetDate">
+            </div>
+
+            <!-- Review Date -->
+            <div class="form-group">
+              <label>Review Date</label>
+              <input type="date" id="riskReviewDate">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cancelRiskModal">Cancel</button>
+        <button type="submit" form="riskForm" class="btn btn-primary" id="btnSaveRisk">
+          <span id="saveButtonText">Create Risk</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Risk Detail Modal -->
+  <div id="detailModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="detailModalTitle">Risk Details</h2>
+        <button class="modal-close" id="closeDetailModalX">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="detailContent"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="closeDetailModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="modal">
+    <div class="modal-content confirmation-dialog">
+      <div class="modal-body">
+        <div class="confirmation-icon">⚠️</div>
+        <h3>Delete Risk?</h3>
+        <p>Are you sure you want to delete this risk? This action cannot be undone.</p>
+        <div style="display: flex; gap: 12px; justify-content: center;">
+          <button type="button" class="btn btn-secondary" id="closeDeleteModal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="btnConfirmDelete">Delete Risk</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/risks.js?v=61"></script>
+</body>
+</html>
