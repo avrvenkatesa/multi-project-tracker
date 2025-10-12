@@ -3253,11 +3253,9 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     // Close modal
     document.getElementById('editIssueModal').classList.add('hidden');
     
-    // Reload issues and refresh kanban board
-    console.log('Reloading issues...');
-    await loadIssues(currentProject);
-    console.log('Rendering kanban board...');
-    await renderKanbanBoard();
+    // Reload project data and refresh kanban board
+    console.log('Reloading project data...');
+    await fetchProjectData(currentProject);
     
     showToast('Issue updated successfully!', 'success');
   } catch (error) {
@@ -3301,9 +3299,8 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     // Close modal
     document.getElementById('editActionItemModal').classList.add('hidden');
     
-    // Reload action items and refresh kanban board
-    await loadActionItems(currentProject);
-    await renderKanbanBoard();
+    // Reload project data and refresh kanban board
+    await fetchProjectData(currentProject);
     
     showToast('Action item updated successfully!', 'success');
   } catch (error) {
@@ -3343,13 +3340,8 @@ async function confirmDeleteItem(itemId, itemType) {
       withCredentials: true
     });
     
-    // Reload items and refresh kanban board
-    if (itemType === 'issue') {
-      await loadIssues(currentProject);
-    } else {
-      await loadActionItems(currentProject);
-    }
-    await renderKanbanBoard();
+    // Reload project data and refresh kanban board
+    await fetchProjectData(currentProject);
     
     showToast(`${itemName.charAt(0).toUpperCase() + itemName.slice(1)} deleted successfully!`, 'success');
   } catch (error) {
