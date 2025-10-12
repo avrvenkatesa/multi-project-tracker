@@ -131,6 +131,38 @@
   margin-bottom: 12px;
 }
 
+.risk-card-actions {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.risk-card:hover .risk-card-actions {
+  opacity: 1;
+}
+
+.risk-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: #6b7280;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.risk-icon-btn:hover {
+  background: #f3f4f6;
+  color: #2563eb;
+}
+
+.risk-icon-btn-delete:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 .risk-id {
   font-size: 12px;
   font-weight: 600;
