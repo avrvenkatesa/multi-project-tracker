@@ -4,12 +4,16 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
-- **Tag Display Implementation** (October 12, 2025): Implemented complete tag display across all UI components:
+- **Tag Display Implementation** (October 12, 2025): Implemented complete tag display across all UI components with dynamic updates:
   - **Kanban Cards**: Tags now display below assignee/due date as colored badges matching tag colors
-  - **Edit Modals**: Multi-select dropdowns load and pre-select current tags (tags already implemented via loadTagsForEditIssue/loadTagsForEditActionItem)
+  - **Edit Modals**: Enhanced tag UI with two-part display and real-time updates:
+    - **Selected Tags Badges**: Currently assigned tags shown as colored badges with checkmarks above dropdown for instant visual clarity
+    - **Dynamic Badge Updates**: Badges update in real-time as users select/deselect tags via change event listeners
+    - **Data-Driven Architecture**: Tag metadata (color, name) stored in option data attributes, eliminating stale-state bugs
+    - **Shared Helper Function**: `updateSelectedTagBadges(containerId, selectElement)` handles badge regeneration for both modals using only select.selectedOptions data attributes
   - **Backend Integration**: GET /api/issues and GET /api/action-items return tags array (id, name, color) via json_agg
   - Save handlers correctly extract selected tag IDs and save via PUT endpoints
-  - Cache version: app.js v24
+  - Cache version: app.js v27
 - **Edit Modal Tag Update Fix** (October 12, 2025): Fixed Edit Issue and Edit Action Item modals' tag update functionality by adding missing PUT endpoints with proper atomic transactions:
   - Added `PUT /api/issues/:issueId/tags` - Replaces all tags for an issue atomically
   - Added `PUT /api/action-items/:actionItemId/tags` - Replaces all tags for an action item atomically

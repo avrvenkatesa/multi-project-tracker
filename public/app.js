@@ -3120,6 +3120,35 @@ async function openEditModal(itemId, itemType) {
   }
 }
 
+// Helper function to update selected tag badges dynamically
+function updateSelectedTagBadges(containerId, selectElement) {
+  const container = document.getElementById(containerId);
+  const selectedOptions = Array.from(selectElement.selectedOptions);
+  
+  if (selectedOptions.length > 0) {
+    // Build badges from data attributes stored in options
+    container.innerHTML = `
+      <div class="flex flex-wrap gap-2 mb-2">
+        ${selectedOptions.map(opt => {
+          const color = opt.dataset.color;
+          const name = opt.dataset.name;
+          return `
+            <span class="px-3 py-1 text-sm rounded-full font-medium flex items-center gap-1" 
+                  style="background-color: ${color}20; color: ${color}; border: 1px solid ${color}40;">
+              ${name}
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+            </span>
+          `;
+        }).join('')}
+      </div>
+    `;
+  } else {
+    container.innerHTML = '<p class="text-sm text-gray-500 mb-2">No tags assigned</p>';
+  }
+}
+
 // Load tags for edit issue modal
 async function loadTagsForEditIssue(issueId) {
   try {
@@ -3137,16 +3166,46 @@ async function loadTagsForEditIssue(issueId) {
     const currentTags = currentTagsResponse.data;
     const currentTagIds = currentTags.map(t => t.id);
     
-    // Populate dropdown
+    // Display selected tags as badges
+    const selectedTagsContainer = document.getElementById('edit-issue-selected-tags');
+    if (currentTags.length > 0) {
+      selectedTagsContainer.innerHTML = `
+        <div class="flex flex-wrap gap-2 mb-2">
+          ${currentTags.map(tag => `
+            <span class="px-3 py-1 text-sm rounded-full font-medium flex items-center gap-1" 
+                  style="background-color: ${tag.color}20; color: ${tag.color}; border: 1px solid ${tag.color}40;">
+              ${tag.name}
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+            </span>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      selectedTagsContainer.innerHTML = '<p class="text-sm text-gray-500 mb-2">No tags assigned</p>';
+    }
+    
+    // Populate dropdown with data attributes for color/name
     const tagSelect = document.getElementById('edit-issue-tags');
     if (filteredTags.length === 0) {
       tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
     } else {
-      tagSelect.innerHTML = filteredTags.map(tag => 
-        `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;" ${currentTagIds.includes(tag.id) ? 'selected' : ''}>
+      tagSelect.innerHTML = filteredTags.map(tag => {
+        const isSelected = currentTagIds.includes(tag.id);
+        return `<option value="${tag.id}" 
+                        data-color="${tag.color}" 
+                        data-name="${tag.name}" 
+                        style="background-color: ${tag.color}20; color: #000;" 
+                        ${isSelected ? 'selected' : ''}>
           ${tag.name}
-        </option>`
-      ).join('');
+        </option>`;
+      }).join('');
+      
+      // Add change listener to update badges dynamically
+      tagSelect.addEventListener('change', function() {
+        updateSelectedTagBadges('edit-issue-selected-tags', tagSelect);
+      });
     }
   } catch (error) {
     console.error('Error loading tags for edit:', error);
@@ -3172,16 +3231,46 @@ async function loadTagsForEditActionItem(actionItemId) {
     const currentTags = currentTagsResponse.data;
     const currentTagIds = currentTags.map(t => t.id);
     
-    // Populate dropdown
+    // Display selected tags as badges
+    const selectedTagsContainer = document.getElementById('edit-action-item-selected-tags');
+    if (currentTags.length > 0) {
+      selectedTagsContainer.innerHTML = `
+        <div class="flex flex-wrap gap-2 mb-2">
+          ${currentTags.map(tag => `
+            <span class="px-3 py-1 text-sm rounded-full font-medium flex items-center gap-1" 
+                  style="background-color: ${tag.color}20; color: ${tag.color}; border: 1px solid ${tag.color}40;">
+              ${tag.name}
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+            </span>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      selectedTagsContainer.innerHTML = '<p class="text-sm text-gray-500 mb-2">No tags assigned</p>';
+    }
+    
+    // Populate dropdown with data attributes for color/name
     const tagSelect = document.getElementById('edit-action-item-tags');
     if (filteredTags.length === 0) {
       tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
     } else {
-      tagSelect.innerHTML = filteredTags.map(tag => 
-        `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;" ${currentTagIds.includes(tag.id) ? 'selected' : ''}>
+      tagSelect.innerHTML = filteredTags.map(tag => {
+        const isSelected = currentTagIds.includes(tag.id);
+        return `<option value="${tag.id}" 
+                        data-color="${tag.color}" 
+                        data-name="${tag.name}" 
+                        style="background-color: ${tag.color}20; color: #000;" 
+                        ${isSelected ? 'selected' : ''}>
           ${tag.name}
-        </option>`
-      ).join('');
+        </option>`;
+      }).join('');
+      
+      // Add change listener to update badges dynamically
+      tagSelect.addEventListener('change', function() {
+        updateSelectedTagBadges('edit-action-item-selected-tags', tagSelect);
+      });
     }
   } catch (error) {
     console.error('Error loading tags for edit:', error);
