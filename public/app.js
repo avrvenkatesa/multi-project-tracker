@@ -3196,16 +3196,14 @@ async function loadTeamMembersForEdit(type, currentAssignee = '') {
     select.innerHTML = '<option value="">Select Assignee</option>';
     members.forEach(member => {
       const option = document.createElement('option');
-      option.value = member.username;
-      option.textContent = member.username;
-      if (member.username === currentAssignee) {
+      option.value = member.name;
+      option.textContent = member.name;
+      if (member.name === currentAssignee) {
         option.selected = true;
       }
       select.appendChild(option);
     });
     console.log('Populated dropdown with', members.length, 'members');
-    console.log('Dropdown HTML after population:', select.innerHTML);
-    console.log('Dropdown children count:', select.children.length);
   } catch (error) {
     console.error('Error loading team members:', error);
   }
