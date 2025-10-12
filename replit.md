@@ -4,7 +4,14 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
-- **Tags Page API Fix** (October 12, 2025): Fixed "Error loading project" issue on Tags page by adding missing `GET /api/projects/:id` endpoint. Tags page now successfully loads project details and displays project name in header.
+- **Edit Modal Tag Update Fix** (October 12, 2025): Fixed Edit Issue and Edit Action Item modals' tag update functionality by adding missing PUT endpoints with proper atomic transactions:
+  - Added `PUT /api/issues/:issueId/tags` - Replaces all tags for an issue atomically
+  - Added `PUT /api/action-items/:actionItemId/tags` - Replaces all tags for an action item atomically
+  - Both endpoints use dedicated database client (pool.connect()) for true atomic transactions with BEGIN/COMMIT/ROLLBACK
+  - Include project access authorization, tag ownership validation, and tag type enforcement ('issue_action' and 'both' only)
+  - Array validation for tagIds parameter with proper error handling
+  - Client release in finally block ensures proper connection cleanup
+- **Tags Page API Fix** (October 12, 2025): Fixed "Error loading project" issue on Tags page by adding missing `GET /api/projects/:id` endpoint with project-level authorization using checkProjectAccess(). Tags page now successfully loads project details and displays project name in header.
 - **Deployment Syntax Error Fix** (October 12, 2025): Resolved critical server.js syntax error causing deployment failures. Removed duplicate/unclosed `app.get("*")` route at line 6891-6894 that was missing closing `});`. Server now starts successfully on port 5000 with all services initialized.
 - **Edit Modal Complete Fix** (October 12, 2025): Resolved all critical bugs in Edit Issue and Edit Action Item modals:
   - **Tags Loading**: Fixed API calls to use `currentProject.id` instead of `currentProject` object

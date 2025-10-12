@@ -2696,6 +2696,84 @@ app.delete('/api/issues/:issueId/tags/:tagId', authenticateToken, requireRole('T
   }
 });
 
+// Update all tags for an issue (replaces existing tags)
+app.put('/api/issues/:issueId/tags', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { issueId } = req.params;
+    const { tagIds } = req.body; // Array of tag IDs
+    
+    // Validate tagIds is an array
+    if (tagIds !== undefined && tagIds !== null && !Array.isArray(tagIds)) {
+      return res.status(400).json({ error: 'tagIds must be an array' });
+    }
+    
+    // Verify issue exists and get project_id for authorization
+    const issueResult = await pool.query('SELECT project_id FROM issues WHERE id = $1', [issueId]);
+    if (issueResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    const projectId = issueResult.rows[0].project_id;
+    
+    // Check project access
+    const hasAccess = await checkProjectAccess(req.user.id, projectId, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+    
+    // Validate that all tags belong to the same project and are appropriate type
+    if (tagIds && tagIds.length > 0) {
+      const tagsResult = await pool.query(
+        `SELECT id, tag_type FROM tags 
+         WHERE id = ANY($1) AND project_id = $2`,
+        [tagIds, projectId]
+      );
+      
+      if (tagsResult.rows.length !== tagIds.length) {
+        return res.status(400).json({ error: 'Some tags do not belong to this project' });
+      }
+      
+      // Verify all tags are either 'issue_action' or 'both'
+      const invalidTags = tagsResult.rows.filter(t => t.tag_type !== 'issue_action' && t.tag_type !== 'both');
+      if (invalidTags.length > 0) {
+        return res.status(400).json({ error: 'Only issue/action tags can be assigned to issues' });
+      }
+    }
+    
+    // Use transaction on dedicated client to replace tags atomically
+    await client.query('BEGIN');
+    
+    try {
+      // Remove all existing tags
+      await client.query('DELETE FROM issue_tags WHERE issue_id = $1', [issueId]);
+      
+      // Add new tags
+      if (tagIds && tagIds.length > 0) {
+        for (const tagId of tagIds) {
+          await client.query(
+            `INSERT INTO issue_tags (issue_id, tag_id, created_at)
+             VALUES ($1, $2, CURRENT_TIMESTAMP)`,
+            [issueId, tagId]
+          );
+        }
+      }
+      
+      await client.query('COMMIT');
+      res.json({ message: 'Issue tags updated successfully' });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error updating issue tags:', error);
+    res.status(500).json({ error: 'Failed to update issue tags' });
+  } finally {
+    client.release();
+  }
+});
+
 // Get action item tags
 app.get('/api/action-items/:actionItemId/tags', authenticateToken, async (req, res) => {
   try {
@@ -2741,6 +2819,84 @@ app.delete('/api/action-items/:actionItemId/tags/:tagId', authenticateToken, req
   } catch (error) {
     console.error('Error removing tag from action item:', error);
     res.status(500).json({ error: 'Failed to remove tag' });
+  }
+});
+
+// Update all tags for an action item (replaces existing tags)
+app.put('/api/action-items/:actionItemId/tags', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { actionItemId } = req.params;
+    const { tagIds } = req.body; // Array of tag IDs
+    
+    // Validate tagIds is an array
+    if (tagIds !== undefined && tagIds !== null && !Array.isArray(tagIds)) {
+      return res.status(400).json({ error: 'tagIds must be an array' });
+    }
+    
+    // Verify action item exists and get project_id for authorization
+    const actionItemResult = await pool.query('SELECT project_id FROM action_items WHERE id = $1', [actionItemId]);
+    if (actionItemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    const projectId = actionItemResult.rows[0].project_id;
+    
+    // Check project access
+    const hasAccess = await checkProjectAccess(req.user.id, projectId, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+    
+    // Validate that all tags belong to the same project and are appropriate type
+    if (tagIds && tagIds.length > 0) {
+      const tagsResult = await pool.query(
+        `SELECT id, tag_type FROM tags 
+         WHERE id = ANY($1) AND project_id = $2`,
+        [tagIds, projectId]
+      );
+      
+      if (tagsResult.rows.length !== tagIds.length) {
+        return res.status(400).json({ error: 'Some tags do not belong to this project' });
+      }
+      
+      // Verify all tags are either 'issue_action' or 'both'
+      const invalidTags = tagsResult.rows.filter(t => t.tag_type !== 'issue_action' && t.tag_type !== 'both');
+      if (invalidTags.length > 0) {
+        return res.status(400).json({ error: 'Only issue/action tags can be assigned to action items' });
+      }
+    }
+    
+    // Use transaction on dedicated client to replace tags atomically
+    await client.query('BEGIN');
+    
+    try {
+      // Remove all existing tags
+      await client.query('DELETE FROM action_item_tags WHERE action_item_id = $1', [actionItemId]);
+      
+      // Add new tags
+      if (tagIds && tagIds.length > 0) {
+        for (const tagId of tagIds) {
+          await client.query(
+            `INSERT INTO action_item_tags (action_item_id, tag_id, created_at)
+             VALUES ($1, $2, CURRENT_TIMESTAMP)`,
+            [actionItemId, tagId]
+          );
+        }
+      }
+      
+      await client.query('COMMIT');
+      res.json({ message: 'Action item tags updated successfully' });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error updating action item tags:', error);
+    res.status(500).json({ error: 'Failed to update action item tags' });
+  } finally {
+    client.release();
   }
 });
 
