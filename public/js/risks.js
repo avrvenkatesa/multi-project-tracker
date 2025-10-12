@@ -862,13 +862,30 @@ function getCurrencySymbol(currency) {
 }
 
 function showError(message) {
-  // You could implement a toast notification here
-  alert('Error: ' + message);
+  showToast(message, 'error');
 }
 
 function showSuccess(message) {
-  // You could implement a toast notification here
-  alert(message);
+  showToast(message, 'success');
+}
+
+// Toast notification helper
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 ${
+    type === 'success' ? 'bg-green-500' : 
+    type === 'error' ? 'bg-red-500' : 
+    'bg-blue-500'
+  }`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  // Auto-remove after 3 seconds
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 // Load tags for risks (tag_type: 'risk' or 'both')
