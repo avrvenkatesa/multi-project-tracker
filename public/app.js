@@ -3204,6 +3204,8 @@ async function loadTeamMembersForEdit(type, currentAssignee = '') {
       select.appendChild(option);
     });
     console.log('Populated dropdown with', members.length, 'members');
+    console.log('Dropdown HTML after population:', select.innerHTML);
+    console.log('Dropdown children count:', select.children.length);
   } catch (error) {
     console.error('Error loading team members:', error);
   }
