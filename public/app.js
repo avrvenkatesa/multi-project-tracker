@@ -3092,7 +3092,7 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-action-item-due-date').value = item.due_date ? item.due_date.split('T')[0] : '';
       document.getElementById('edit-action-item-priority').value = item.priority || 'medium';
       document.getElementById('edit-action-item-status').value = item.status || 'To Do';
-      document.getElementById('edit-action-item-progress').value = item.progress_percentage || 0;
+      document.getElementById('edit-action-item-progress').value = item.progress || 0;
       
       // Load team members for assignee dropdown
       if (currentProject) {
@@ -3279,7 +3279,7 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     due_date: document.getElementById('edit-action-item-due-date').value,
     priority: document.getElementById('edit-action-item-priority').value,
     status: document.getElementById('edit-action-item-status').value,
-    progress_percentage: parseInt(document.getElementById('edit-action-item-progress').value) || 0
+    progress: parseInt(document.getElementById('edit-action-item-progress').value) || 0
   };
   
   // Get selected tag IDs
