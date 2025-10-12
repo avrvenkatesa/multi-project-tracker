@@ -3228,14 +3228,20 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     category: document.getElementById('edit-issue-category').value
   };
   
+  console.log('Saving issue with ID:', itemId);
+  console.log('Issue data:', data);
+  
   // Get selected tag IDs
   const tagSelect = document.getElementById('edit-issue-tags');
   const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+  console.log('Selected tag IDs:', selectedTagIds);
   
   try {
+    console.log('Sending PATCH request to:', `/api/issues/${itemId}`);
     await axios.patch(`/api/issues/${itemId}`, data, {
       withCredentials: true
     });
+    console.log('PATCH request successful');
     
     // Update tags
     await axios.put(`/api/issues/${itemId}/tags`, { tagIds: selectedTagIds }, {
