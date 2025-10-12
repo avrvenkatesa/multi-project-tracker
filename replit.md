@@ -4,7 +4,14 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
-- **Tag Loading Bug Fix** (October 12, 2025): Fixed "Error loading tags" issue in Edit Issue and Edit Action Item modals by correcting API calls to use `currentProjectId` (integer) instead of `currentProject` (object). Also fixed team members loading error in edit modals. This eliminated the "[object Object]" database errors and now tags load properly in all edit modals.
+- **Edit Modal Complete Fix** (October 12, 2025): Resolved all critical bugs in Edit Issue and Edit Action Item modals:
+  - **Tags Loading**: Fixed API calls to use `currentProject.id` instead of `currentProject` object
+  - **Assignee Dropdown**: Corrected property access from `member.username` to `member.name` (backend returns 'name' property)
+  - **Category Dropdown**: Added dynamic population using `generateCategoryOptions()` before setting value
+  - **Save Operation**: Fixed `loadProjectData()` function call (was calling non-existent `loadIssues()`/`fetchProjectData()`)
+  - **Action Item Progress**: Corrected field name from `progress_percentage` to `progress` to match database schema
+  - All edit modals now fully functional with complete CRUD operations, tag assignment, and proper data refresh
+  - Cache version: app.js v23
 - **Unified Tag Management System** (Complete): Implemented comprehensive tag type system supporting Issues/Actions, Risks, or Both:
   - **Tag Types**: Added tag_type field (enum: 'issue_action', 'risk', 'both') to tags table with default 'issue_action'
   - **Visual Indicators**: Tags display color-coded badges - Blue (Issues/Actions), Orange (Risks), Purple (Both)

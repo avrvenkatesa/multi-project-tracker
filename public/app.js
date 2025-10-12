@@ -3184,17 +3184,14 @@ async function loadTagsForEditActionItem(actionItemId) {
 // Load team members for edit modals
 async function loadTeamMembersForEdit(type, currentAssignee = '') {
   try {
-    console.log('Loading team members for type:', type, 'current assignee:', currentAssignee);
     const response = await axios.get(`/api/projects/${currentProject.id}/team`, {
       withCredentials: true
     });
     
     const members = response.data;
-    console.log('Received team members:', members);
     
     const selectId = type === 'issue' ? 'edit-issue-assignee' : 'edit-action-item-assignee';
     const select = document.getElementById(selectId);
-    console.log('Select element found:', select ? 'yes' : 'no', 'ID:', selectId);
     
     // Clear and populate
     select.innerHTML = '<option value="">Select Assignee</option>';
@@ -3207,7 +3204,6 @@ async function loadTeamMembersForEdit(type, currentAssignee = '') {
       }
       select.appendChild(option);
     });
-    console.log('Populated dropdown with', members.length, 'members');
   } catch (error) {
     console.error('Error loading team members:', error);
   }
@@ -3228,41 +3224,29 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     category: document.getElementById('edit-issue-category').value
   };
   
-  console.log('Saving issue with ID:', itemId);
-  console.log('Issue data:', data);
-  
   // Get selected tag IDs
   const tagSelect = document.getElementById('edit-issue-tags');
   const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
-  console.log('Selected tag IDs:', selectedTagIds);
   
   try {
-    console.log('Sending PATCH request to:', `/api/issues/${itemId}`);
     await axios.patch(`/api/issues/${itemId}`, data, {
       withCredentials: true
     });
-    console.log('PATCH request successful');
     
     // Update tags
-    console.log('Updating tags...');
     await axios.put(`/api/issues/${itemId}/tags`, { tagIds: selectedTagIds }, {
       withCredentials: true
     });
-    console.log('Tags update successful');
     
     // Close modal
     document.getElementById('editIssueModal').classList.add('hidden');
     
     // Reload project data and refresh kanban board
-    console.log('Reloading project data...');
     await loadProjectData(currentProject.id);
     
     showToast('Issue updated successfully!', 'success');
   } catch (error) {
     console.error('Error updating issue:', error);
-    console.error('Error response:', error.response?.data);
-    console.error('Error status:', error.response?.status);
-    console.error('Error message:', error.message);
     alert(error.response?.data?.error || 'Failed to update issue');
   }
 });
