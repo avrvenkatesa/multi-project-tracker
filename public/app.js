@@ -3065,13 +3065,12 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-issue-id').value = item.id;
       document.getElementById('edit-issue-title').value = item.title;
       document.getElementById('edit-issue-description').value = item.description || '';
-      document.getElementById('edit-issue-assignee').value = item.assignee || '';
       document.getElementById('edit-issue-due-date').value = item.due_date ? item.due_date.split('T')[0] : '';
       document.getElementById('edit-issue-priority').value = item.priority || 'medium';
       document.getElementById('edit-issue-status').value = item.status || 'To Do';
       document.getElementById('edit-issue-category').value = item.category || '';
       
-      // Load team members for assignee dropdown
+      // Load team members for assignee dropdown, then set assignee
       if (currentProject) {
         await loadTeamMembersForEdit('issue');
         document.getElementById('edit-issue-assignee').value = item.assignee || '';
@@ -3087,13 +3086,12 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-action-item-id').value = item.id;
       document.getElementById('edit-action-item-title').value = item.title;
       document.getElementById('edit-action-item-description').value = item.description || '';
-      document.getElementById('edit-action-item-assignee').value = item.assignee || '';
       document.getElementById('edit-action-item-due-date').value = item.due_date ? item.due_date.split('T')[0] : '';
       document.getElementById('edit-action-item-priority').value = item.priority || 'medium';
       document.getElementById('edit-action-item-status').value = item.status || 'To Do';
       document.getElementById('edit-action-item-progress').value = item.progress_percentage || 0;
       
-      // Load team members for assignee dropdown
+      // Load team members for assignee dropdown, then set assignee
       if (currentProject) {
         await loadTeamMembersForEdit('action-item');
         document.getElementById('edit-action-item-assignee').value = item.assignee || '';
@@ -3192,9 +3190,6 @@ async function loadTeamMembersForEdit(type) {
     const selectId = type === 'issue' ? 'edit-issue-assignee' : 'edit-action-item-assignee';
     const select = document.getElementById(selectId);
     
-    // Keep the current selection
-    const currentValue = select.value;
-    
     // Clear and populate
     select.innerHTML = '<option value="">Select Assignee</option>';
     members.forEach(member => {
@@ -3203,9 +3198,6 @@ async function loadTeamMembersForEdit(type) {
       option.textContent = member.username;
       select.appendChild(option);
     });
-    
-    // Restore selection
-    select.value = currentValue;
   } catch (error) {
     console.error('Error loading team members:', error);
   }
