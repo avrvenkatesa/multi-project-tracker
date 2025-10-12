@@ -173,3 +173,33 @@ export const projectInvitations = pgTable('project_invitations', {
   expiresAt: timestamp('expires_at').notNull(),
   respondedAt: timestamp('responded_at'),
 });
+
+export const tags = pgTable('tags', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  color: varchar('color', { length: 50 }).notNull(),
+  description: text('description'),
+  tagType: varchar('tag_type', { length: 20 }).notNull().default('issue_action'),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const issueTags = pgTable('issue_tags', {
+  id: serial('id').primaryKey(),
+  issueId: integer('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  tagId: integer('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
+});
+
+export const actionItemTags = pgTable('action_item_tags', {
+  id: serial('id').primaryKey(),
+  actionItemId: integer('action_item_id').notNull().references(() => actionItems.id, { onDelete: 'cascade' }),
+  tagId: integer('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
+});
+
+export const riskTags = pgTable('risk_tags', {
+  id: serial('id').primaryKey(),
+  riskId: integer('risk_id').notNull(),
+  tagId: integer('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
+});

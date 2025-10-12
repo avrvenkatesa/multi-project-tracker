@@ -51,6 +51,22 @@
         </button>
       </div>
       
+      <!-- Filter Buttons -->
+      <div class="flex gap-2 mb-6">
+        <button class="filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all bg-blue-600 text-white" data-filter="all">
+          All Tags
+        </button>
+        <button class="filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all bg-gray-100 text-gray-700 hover:bg-gray-200" data-filter="issue_action">
+          Issues/Actions
+        </button>
+        <button class="filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all bg-gray-100 text-gray-700 hover:bg-gray-200" data-filter="risk">
+          Risks
+        </button>
+        <button class="filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all bg-gray-100 text-gray-700 hover:bg-gray-200" data-filter="both">
+          Both
+        </button>
+      </div>
+      
       <div id="tags-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <!-- Tags will be loaded here -->
       </div>
@@ -87,6 +103,25 @@
         </div>
         
         <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Tag Type *</label>
+          <div class="flex gap-4">
+            <label class="flex items-center cursor-pointer">
+              <input type="radio" name="tagType" value="issue_action" checked class="w-4 h-4 text-blue-600">
+              <span class="ml-2 text-sm text-gray-700">Issues/Actions</span>
+            </label>
+            <label class="flex items-center cursor-pointer">
+              <input type="radio" name="tagType" value="risk" class="w-4 h-4 text-blue-600">
+              <span class="ml-2 text-sm text-gray-700">Risks</span>
+            </label>
+            <label class="flex items-center cursor-pointer">
+              <input type="radio" name="tagType" value="both" class="w-4 h-4 text-blue-600">
+              <span class="ml-2 text-sm text-gray-700">Both</span>
+            </label>
+          </div>
+          <p class="mt-1 text-xs text-gray-500">Select where this tag can be used</p>
+        </div>
+        
+        <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-2">Color *</label>
           <div class="flex gap-3 items-center">
             <input type="color" id="tagColor" value="#3b82f6" 
@@ -116,6 +151,6 @@
     </div>
   </div>
 
-  <script src="/js/tags.js?v=8"></script>
+  <script src="/js/tags.js?v=10"></script>
 </body>
 </html>

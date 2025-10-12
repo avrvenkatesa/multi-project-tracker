@@ -2443,10 +2443,17 @@ app.get("/api/projects/:projectId/tags", authenticateToken, async (req, res) => 
 app.post("/api/projects/:projectId/tags", authenticateToken, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { name, color, description } = req.body;
+    const { name, color, description, tag_type } = req.body;
     
     if (!name || !color) {
       return res.status(400).json({ error: 'Name and color are required' });
+    }
+    
+    // Validate tag_type
+    const validTypes = ['issue_action', 'risk', 'both'];
+    const tagType = tag_type || 'issue_action';
+    if (!validTypes.includes(tagType)) {
+      return res.status(400).json({ error: 'Invalid tag type' });
     }
     
     // Check if tag already exists
@@ -2460,10 +2467,10 @@ app.post("/api/projects/:projectId/tags", authenticateToken, async (req, res) =>
     }
     
     const result = await pool.query(
-      `INSERT INTO tags (project_id, name, color, description, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      `INSERT INTO tags (project_id, name, color, description, tag_type, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
        RETURNING *`,
-      [projectId, name, color, description || null, req.user.id]
+      [projectId, name, color, description || null, tagType, req.user.id]
     );
     
     res.status(201).json(result.rows[0]);
@@ -2477,18 +2484,24 @@ app.post("/api/projects/:projectId/tags", authenticateToken, async (req, res) =>
 app.put("/api/projects/:projectId/tags/:tagId", authenticateToken, async (req, res) => {
   try {
     const { tagId } = req.params;
-    const { name, color, description } = req.body;
+    const { name, color, description, tag_type } = req.body;
     
     if (!name || !color) {
       return res.status(400).json({ error: 'Name and color are required' });
     }
     
+    // Validate tag_type if provided
+    const validTypes = ['issue_action', 'risk', 'both'];
+    if (tag_type && !validTypes.includes(tag_type)) {
+      return res.status(400).json({ error: 'Invalid tag type' });
+    }
+    
     const result = await pool.query(
       `UPDATE tags 
-       SET name = $1, color = $2, description = $3, updated_at = NOW()
-       WHERE id = $4
+       SET name = $1, color = $2, description = $3, tag_type = COALESCE($4, tag_type), updated_at = NOW()
+       WHERE id = $5
        RETURNING *`,
-      [name, color, description || null, tagId]
+      [name, color, description || null, tag_type, tagId]
     );
     
     if (result.rows.length === 0) {

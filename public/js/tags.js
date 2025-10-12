@@ -2,6 +2,8 @@
 let currentProjectId = null;
 let currentProject = null;
 let allTags = [];
+let filteredTags = [];
+let currentFilter = 'all';
 let selectedColor = '#3b82f6';
 let editingTagId = null;
 
@@ -43,8 +45,38 @@ function setupEventListeners() {
     showColorPreview();
   });
   
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentFilter = btn.dataset.filter;
+      updateFilterButtons();
+      applyFilter();
+    });
+  });
+  
   // Form submit
   document.getElementById('tagForm')?.addEventListener('submit', handleTagSubmit);
+}
+
+// Update filter button styles
+function updateFilterButtons() {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    if (btn.dataset.filter === currentFilter) {
+      btn.className = 'filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all bg-blue-600 text-white';
+    } else {
+      btn.className = 'filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all bg-gray-100 text-gray-700 hover:bg-gray-200';
+    }
+  });
+}
+
+// Apply filter
+function applyFilter() {
+  if (currentFilter === 'all') {
+    filteredTags = [...allTags];
+  } else {
+    filteredTags = allTags.filter(tag => tag.tag_type === currentFilter);
+  }
+  renderTags();
 }
 
 // Load project details
@@ -78,7 +110,7 @@ async function loadTags() {
     }
     
     allTags = await response.json();
-    renderTags();
+    applyFilter(); // This will set filteredTags and call renderTags()
   } catch (error) {
     console.error('Error loading tags:', error);
     alert('Error loading tags');
@@ -90,7 +122,7 @@ function renderTags() {
   const container = document.getElementById('tags-list');
   const emptyState = document.getElementById('empty-state');
   
-  if (allTags.length === 0) {
+  if (filteredTags.length === 0) {
     container.classList.add('hidden');
     emptyState.classList.remove('hidden');
     return;
@@ -99,23 +131,28 @@ function renderTags() {
   container.classList.remove('hidden');
   emptyState.classList.add('hidden');
   
-  container.innerHTML = allTags.map(tag => {
+  container.innerHTML = filteredTags.map(tag => {
     const totalCount = parseInt(tag.issue_count || 0) + parseInt(tag.action_item_count || 0);
+    const tagType = tag.tag_type || 'issue_action';
+    const tagTypeBadge = getTagTypeBadge(tagType);
+    
     return `
     <div class="tag-card bg-white border border-gray-200 rounded-lg p-4 relative group">
       <div class="flex items-start justify-between mb-3">
-        <div class="flex-1">
+        <div class="flex-1 flex items-center gap-2">
           <span class="inline-block px-3 py-1 rounded-full text-sm font-medium text-white" 
                 style="background-color: ${tag.color}">
             ${escapeHtml(tag.name)}
           </span>
+          ${tagTypeBadge}
         </div>
         <div class="flex gap-2">
           <button class="edit-tag-btn text-gray-400 hover:text-blue-600" 
                   data-tag-id="${tag.id}"
                   data-tag-name="${escapeHtml(tag.name)}"
                   data-tag-description="${escapeHtml(tag.description || '')}"
-                  data-tag-color="${tag.color}">
+                  data-tag-color="${tag.color}"
+                  data-tag-type="${tagType}">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
             </svg>
@@ -140,6 +177,16 @@ function renderTags() {
   setupTagEventListeners();
 }
 
+// Get tag type badge HTML
+function getTagTypeBadge(tagType) {
+  const badges = {
+    'issue_action': '<span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Issues/Actions</span>',
+    'risk': '<span class="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded">Risks</span>',
+    'both': '<span class="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded">Both</span>'
+  };
+  return badges[tagType] || badges['issue_action'];
+}
+
 // Setup tag event listeners
 function setupTagEventListeners() {
   document.querySelectorAll('.edit-tag-btn').forEach(btn => {
@@ -149,7 +196,8 @@ function setupTagEventListeners() {
       const name = btn.dataset.tagName;
       const description = btn.dataset.tagDescription;
       const color = btn.dataset.tagColor;
-      openEditModal(id, name, description, color);
+      const tagType = btn.dataset.tagType;
+      openEditModal(id, name, description, color, tagType);
     });
   });
   
@@ -172,13 +220,20 @@ function openCreateModal() {
 }
 
 // Open edit modal
-function openEditModal(id, name, description, color) {
+function openEditModal(id, name, description, color, tagType = 'issue_action') {
   editingTagId = id;
   document.getElementById('modalTitle').textContent = 'Edit Tag';
   document.getElementById('tagName').value = name;
   document.getElementById('tagDescription').value = description;
   document.getElementById('tagColor').value = color;
   selectedColor = color;
+  
+  // Set tag type radio button
+  const radioBtn = document.querySelector(`input[name="tagType"][value="${tagType}"]`);
+  if (radioBtn) {
+    radioBtn.checked = true;
+  }
+  
   document.getElementById('tagModal').classList.remove('hidden');
 }
 
@@ -207,6 +262,7 @@ async function handleTagSubmit(e) {
   const name = document.getElementById('tagName').value.trim();
   const description = document.getElementById('tagDescription').value.trim();
   const color = document.getElementById('tagColor').value;
+  const tagType = document.querySelector('input[name="tagType"]:checked').value;
   
   if (!name) {
     alert('Tag name is required');
@@ -222,7 +278,7 @@ async function handleTagSubmit(e) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name, description, color })
+        body: JSON.stringify({ name, description, color, tag_type: tagType })
       });
     } else {
       // Create new tag
@@ -230,7 +286,7 @@ async function handleTagSubmit(e) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name, description, color })
+        body: JSON.stringify({ name, description, color, tag_type: tagType })
       });
     }
     
