@@ -699,8 +699,9 @@ function canPerformRiskAction(user, action, risk = null) {
 app.get("/api/health", (req, res) => {
   res.json({
     status: "OK",
-    message: "Multi-Project Tracker API is running",
-
+    message: "Multi-Project Tracker API is running"
+  });
+});
 
 // Get user notification preferences
 app.get('/api/notifications/preferences', authenticateToken, async (req, res) => {
@@ -6886,11 +6887,6 @@ app.delete('/api/risks/:riskId', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete risk' });
   }
 });
-
-// Serve frontend
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-
 
 // Get mismatched assignee names
 app.get('/api/admin/assignee-mismatches', authenticateToken, async (req, res) => {
