@@ -3255,7 +3255,7 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     
     // Reload project data and refresh kanban board
     console.log('Reloading project data...');
-    await fetchProjectData(currentProject);
+    await loadProjectData(currentProject.id);
     
     showToast('Issue updated successfully!', 'success');
   } catch (error) {
@@ -3300,7 +3300,7 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     document.getElementById('editActionItemModal').classList.add('hidden');
     
     // Reload project data and refresh kanban board
-    await fetchProjectData(currentProject);
+    await loadProjectData(currentProject.id);
     
     showToast('Action item updated successfully!', 'success');
   } catch (error) {
@@ -3341,7 +3341,7 @@ async function confirmDeleteItem(itemId, itemType) {
     });
     
     // Reload project data and refresh kanban board
-    await fetchProjectData(currentProject);
+    await loadProjectData(currentProject.id);
     
     showToast(`${itemName.charAt(0).toUpperCase() + itemName.slice(1)} deleted successfully!`, 'success');
   } catch (error) {
