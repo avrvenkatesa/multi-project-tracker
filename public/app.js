@@ -3070,10 +3070,9 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-issue-status').value = item.status || 'To Do';
       document.getElementById('edit-issue-category').value = item.category || '';
       
-      // Load team members for assignee dropdown, then set assignee
+      // Load team members for assignee dropdown
       if (currentProject) {
-        await loadTeamMembersForEdit('issue');
-        document.getElementById('edit-issue-assignee').value = item.assignee || '';
+        await loadTeamMembersForEdit('issue', item.assignee || '');
       }
       
       // Load tags and pre-select current ones
@@ -3091,10 +3090,9 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-action-item-status').value = item.status || 'To Do';
       document.getElementById('edit-action-item-progress').value = item.progress_percentage || 0;
       
-      // Load team members for assignee dropdown, then set assignee
+      // Load team members for assignee dropdown
       if (currentProject) {
-        await loadTeamMembersForEdit('action-item');
-        document.getElementById('edit-action-item-assignee').value = item.assignee || '';
+        await loadTeamMembersForEdit('action-item', item.assignee || '');
       }
       
       // Load tags and pre-select current ones
@@ -3180,15 +3178,19 @@ async function loadTagsForEditActionItem(actionItemId) {
 }
 
 // Load team members for edit modals
-async function loadTeamMembersForEdit(type) {
+async function loadTeamMembersForEdit(type, currentAssignee = '') {
   try {
+    console.log('Loading team members for type:', type, 'current assignee:', currentAssignee);
     const response = await axios.get(`/api/projects/${currentProject.id}/team`, {
       withCredentials: true
     });
     
     const members = response.data;
+    console.log('Received team members:', members);
+    
     const selectId = type === 'issue' ? 'edit-issue-assignee' : 'edit-action-item-assignee';
     const select = document.getElementById(selectId);
+    console.log('Select element found:', select ? 'yes' : 'no', 'ID:', selectId);
     
     // Clear and populate
     select.innerHTML = '<option value="">Select Assignee</option>';
@@ -3196,8 +3198,12 @@ async function loadTeamMembersForEdit(type) {
       const option = document.createElement('option');
       option.value = member.username;
       option.textContent = member.username;
+      if (member.username === currentAssignee) {
+        option.selected = true;
+      }
       select.appendChild(option);
     });
+    console.log('Populated dropdown with', members.length, 'members');
   } catch (error) {
     console.error('Error loading team members:', error);
   }
