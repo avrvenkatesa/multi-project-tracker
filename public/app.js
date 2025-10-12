@@ -498,6 +498,15 @@ async function renderKanbanBoard() {
                             <span>${item.assignee || "Unassigned"}</span>
                             <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
                         </div>
+                        ${item.tags && item.tags.length > 0 ? `
+                            <div class="flex flex-wrap gap-1 mb-2">
+                                ${item.tags.map(tag => `
+                                    <span class="px-2 py-0.5 text-xs rounded-full font-medium" style="background-color: ${tag.color}20; color: ${tag.color}; border: 1px solid ${tag.color}40;">
+                                        ${tag.name}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
                         <div class="mt-2 pt-2 border-t border-gray-100 space-y-1">
                             <button class="manage-relationships-btn flex items-center text-xs ${relCount > 0 ? 'text-blue-600 font-medium' : 'text-gray-600'} hover:text-blue-700 transition-colors w-full" 
                                     data-item-id="${item.id}" 
