@@ -43,6 +43,7 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 - **Tag System Clarification**: Risk Register tags are stored separately (TEXT[] in risks table) from Issue/Action Item tags (JSONB). The Tags page only displays Issue/Action Item tags, not Risk tags.
 - **Modal UX Improvements**: Fixed modal close buttons (X, Cancel, Close) with proper event listeners across all Risk modals.
 - **Navigation Consistency**: Unified header design across Risk Register, Tags, and Dashboard pages with intelligent "Back to Project/Projects" button toggling.
+- **Risk Register CSP Compliance** (October 12, 2025): Eliminated all Content Security Policy violations on Risk Register page by replacing inline onclick handlers with proper event listeners. All navigation buttons, modal close buttons (X, Cancel, Close), and risk action buttons now use addEventListener pattern instead of inline scripts. Cache version: risks.js v56.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

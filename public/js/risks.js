@@ -124,6 +124,14 @@ function setupEventListeners() {
       goBackToProject();
     });
   }
+  
+  // Back to Projects button
+  const backToProjectsBtn = document.getElementById('backToProjectsBtn');
+  if (backToProjectsBtn) {
+    backToProjectsBtn.addEventListener('click', function() {
+      window.location.href = 'index.html';
+    });
+  }
 }
 
 // Go back to project

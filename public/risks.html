@@ -16,13 +16,13 @@
         <p class="text-sm text-blue-100">Risk Register</p>
       </div>
       <div class="flex gap-3 items-center">
-        <button onclick="goBackToProject()" id="backToProjectBtn" class="bg-blue-800 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition-all flex items-center gap-2" style="display: none;">
+        <button id="backToProjectBtn" class="bg-blue-800 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition-all flex items-center gap-2" style="display: none;">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>
           Back to Project
         </button>
-        <button onclick="window.location.href='index.html'" id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
+        <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
           Back to Projects
         </button>
       </div>
@@ -128,7 +128,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h2 id="modalTitle">Create New Risk</h2>
-        <button class="modal-close" onclick="closeRiskModal()">&times;</button>
+        <button class="modal-close" id="closeRiskModalX">&times;</button>
       </div>
       <div class="modal-body">
         <div id="modalError" class="error-message" style="display: none;"></div>
@@ -343,7 +343,7 @@
         </form>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeRiskModal()">Cancel</button>
+        <button type="button" class="btn btn-secondary" id="cancelRiskModal">Cancel</button>
         <button type="submit" form="riskForm" class="btn btn-primary" id="btnSaveRisk">
           <span id="saveButtonText">Create Risk</span>
         </button>
@@ -356,13 +356,13 @@
     <div class="modal-content">
       <div class="modal-header">
         <h2 id="detailModalTitle">Risk Details</h2>
-        <button class="modal-close" onclick="closeDetailModal()">&times;</button>
+        <button class="modal-close" id="closeDetailModalX">&times;</button>
       </div>
       <div class="modal-body">
         <div id="detailContent"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeDetailModal()">Close</button>
+        <button type="button" class="btn btn-secondary" id="closeDetailModal">Close</button>
       </div>
     </div>
   </div>
@@ -375,13 +375,13 @@
         <h3>Delete Risk?</h3>
         <p>Are you sure you want to delete this risk? This action cannot be undone.</p>
         <div style="display: flex; gap: 12px; justify-content: center;">
-          <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+          <button type="button" class="btn btn-secondary" id="closeDeleteModal">Cancel</button>
           <button type="button" class="btn btn-danger" id="btnConfirmDelete">Delete Risk</button>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="/js/risks.js?v=55"></script>
+  <script src="/js/risks.js?v=56"></script>
 </body>
 </html>
