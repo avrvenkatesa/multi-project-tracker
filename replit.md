@@ -4,12 +4,23 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
+- **Unified Tag Management System** (In Progress): Implemented comprehensive tag type system supporting Issues/Actions, Risks, or Both:
+  - **Tag Types**: Added tag_type field (enum: 'issue_action', 'risk', 'both') to tags table with default 'issue_action'
+  - **Visual Indicators**: Tags display color-coded badges - Blue (Issues/Actions), Orange (Risks), Purple (Both)
+  - **Smart Filtering**: Tag Management page includes filter buttons (All, Issues/Actions, Risks, Both) with active state highlighting
+  - **Risk Junction Table**: Created risk_tags table replacing TEXT[] tags, enabling proper tag relationships for risks with foreign key constraints
+  - **Secure Backend APIs**: Complete tag assignment endpoints with project-level authorization, tag-type validation, and atomic transactions:
+    - GET/PUT `/api/issues/:issueId/tags` - Issue tag management (allows 'issue_action' and 'both' tags only)
+    - GET/PUT `/api/action-items/:actionItemId/tags` - Action item tag management (allows 'issue_action' and 'both' tags only)
+    - GET/PUT `/api/risks/:riskId/tags` - Risk tag management (allows 'risk' and 'both' tags only)
+  - **Security Pattern**: All endpoints verify project access via checkProjectAccess(), validate tag ownership, enforce tag-type constraints, and use BEGIN/COMMIT transactions
+  - **Frontend Integration**: Pending - modals need tag selector UI with tag_type filtering
+  - Cache version: tags.html/js v10
 - **Tag Management Complete Restoration**: Rebuilt Tag Management page to match production with full CRUD functionality:
   - **Backend API**: Created complete tags API with GET/POST/PUT/DELETE endpoints at `/api/projects/:projectId/tags` with usage count calculations
   - **UI Components**: Tag cards display colored badges, descriptions, usage counts, and edit/delete controls
   - **RGB Color Picker**: Replaced fixed color palette with HTML5 color input for custom RGB color selection with preview button
   - **Database Integration**: Tags persist to PostgreSQL tags table with proper junction table relationships to issues/action items
-  - Cache version: tags.html/js v8
 - **Comprehensive Teams Notifications**: Implemented complete Microsoft Teams integration with instant notifications and daily scheduled reports:
   - **Instant Notifications**: Real-time Teams alerts for issue/action item creation, status changes, and completions (with celebration 🎉 emoji for Done status)
   - **Daily Scheduled Reports** (9 AM): Automated overdue alerts showing top overdue items with days-overdue count, and project health summaries with health score (0-100), completion rates, and activity metrics
