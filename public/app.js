@@ -3068,7 +3068,11 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-issue-due-date').value = item.due_date ? item.due_date.split('T')[0] : '';
       document.getElementById('edit-issue-priority').value = item.priority || 'medium';
       document.getElementById('edit-issue-status').value = item.status || 'To Do';
-      document.getElementById('edit-issue-category').value = item.category || '';
+      
+      // Populate category dropdown options
+      const categorySelect = document.getElementById('edit-issue-category');
+      categorySelect.innerHTML = '<option value="">Select Category</option>' + generateCategoryOptions();
+      categorySelect.value = item.category || '';
       
       // Load team members for assignee dropdown
       if (currentProject) {
@@ -3248,6 +3252,8 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     showToast('Issue updated successfully!', 'success');
   } catch (error) {
     console.error('Error updating issue:', error);
+    console.error('Error response:', error.response?.data);
+    console.error('Error status:', error.response?.status);
     alert(error.response?.data?.error || 'Failed to update issue');
   }
 });
