@@ -132,6 +132,26 @@ function setupEventListeners() {
       window.location.href = 'index.html';
     });
   }
+  
+  // Event delegation for risk action buttons (View, Edit, Delete)
+  document.getElementById('risksList').addEventListener('click', function(e) {
+    const button = e.target.closest('[data-action]');
+    if (!button) return;
+    
+    e.stopPropagation();
+    const action = button.dataset.action;
+    
+    if (action === 'view') {
+      const riskData = JSON.parse(button.dataset.risk);
+      showRiskDetails(riskData);
+    } else if (action === 'edit') {
+      const riskData = JSON.parse(button.dataset.risk);
+      openEditModal(riskData);
+    } else if (action === 'delete') {
+      const riskId = parseInt(button.dataset.riskId);
+      confirmDelete(riskId);
+    }
+  });
 }
 
 // Go back to project
@@ -370,17 +390,17 @@ function createRiskCard(risk) {
         <strong>Mitigation:</strong> ${escapeHtml(risk.mitigation_plan).substring(0, 100)}${risk.mitigation_plan.length > 100 ? '...' : ''}
       </div>
     ` : ''}
-    <div class="risk-actions" onclick="event.stopPropagation()">
-      <button class="btn-view-details" onclick="showRiskDetails(${JSON.stringify(risk).replace(/"/g, '&quot;')})">
+    <div class="risk-actions">
+      <button class="btn-view-details" data-action="view" data-risk='${JSON.stringify(risk).replace(/'/g, "&#39;")}'>
         View Details
       </button>
       ${canEditRisk(currentUser, risk) ? `
-        <button class="btn-edit-risk" onclick="openEditModal(${JSON.stringify(risk).replace(/"/g, '&quot;')})">
+        <button class="btn-edit-risk" data-action="edit" data-risk='${JSON.stringify(risk).replace(/'/g, "&#39;")}'>
           Edit
         </button>
       ` : ''}
       ${canDeleteRisk(currentUser) ? `
-        <button class="btn-delete-risk" onclick="confirmDelete(${risk.id})">
+        <button class="btn-delete-risk" data-action="delete" data-risk-id="${risk.id}">
           Delete
         </button>
       ` : ''}
