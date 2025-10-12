@@ -164,8 +164,10 @@
             <!-- Tags -->
             <div class="form-group full-width">
               <label>Tags</label>
-              <input type="text" id="riskTags" placeholder="Comma-separated tags">
-              <small>Enter tags separated by commas</small>
+              <select id="riskTags" multiple style="min-height: 100px;">
+                <option value="" disabled>Loading tags...</option>
+              </select>
+              <small>Hold Ctrl/Cmd to select multiple tags</small>
             </div>
 
             <!-- Probability & Impact -->

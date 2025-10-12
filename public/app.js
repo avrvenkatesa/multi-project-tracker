@@ -921,6 +921,16 @@ function showCreateIssue() {
                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
             </div>
             
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Tags</label>
+                <select id="issue-tags" multiple
+                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        style="min-height: 100px;">
+                    <option value="" disabled>Loading tags...</option>
+                </select>
+                <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
+            </div>
+            
             <div class="flex justify-end space-x-3">
                 <button type="button" id="cancel-issue-btn" 
                         class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
@@ -936,9 +946,72 @@ function showCreateIssue() {
     
     showModal(modalContent);
     
+    // Load tags for issues/actions (tag_type: 'issue_action' or 'both')
+    loadTagsForIssues();
+    
     // Add event listeners
     document.getElementById('cancel-issue-btn').addEventListener('click', hideModal);
     document.getElementById('create-issue-form').addEventListener('submit', createIssue);
+}
+
+// Load tags for issues/actions (tag_type: 'issue_action' or 'both')
+async function loadTagsForIssues() {
+    try {
+        const response = await fetch(`/api/projects/${currentProject.id}/tags`);
+        if (!response.ok) throw new Error('Failed to fetch tags');
+        
+        const allTags = await response.json();
+        
+        // Filter tags for issues/actions: 'issue_action' or 'both'
+        const filteredTags = allTags.filter(tag => 
+            tag.tag_type === 'issue_action' || tag.tag_type === 'both'
+        );
+        
+        const tagSelect = document.getElementById('issue-tags');
+        if (filteredTags.length === 0) {
+            tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+        } else {
+            tagSelect.innerHTML = filteredTags.map(tag => 
+                `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;">
+                    ${tag.name}
+                </option>`
+            ).join('');
+        }
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        const tagSelect = document.getElementById('issue-tags');
+        tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
+    }
+}
+
+// Load tags for action items (same as issues: tag_type: 'issue_action' or 'both')
+async function loadTagsForActionItems() {
+    try {
+        const response = await fetch(`/api/projects/${currentProject.id}/tags`);
+        if (!response.ok) throw new Error('Failed to fetch tags');
+        
+        const allTags = await response.json();
+        
+        // Filter tags for issues/actions: 'issue_action' or 'both'
+        const filteredTags = allTags.filter(tag => 
+            tag.tag_type === 'issue_action' || tag.tag_type === 'both'
+        );
+        
+        const tagSelect = document.getElementById('action-item-tags');
+        if (filteredTags.length === 0) {
+            tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+        } else {
+            tagSelect.innerHTML = filteredTags.map(tag => 
+                `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;">
+                    ${tag.name}
+                </option>`
+            ).join('');
+        }
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        const tagSelect = document.getElementById('action-item-tags');
+        tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
+    }
 }
 
 // Helper functions for dynamic dropdowns
@@ -1002,6 +1075,10 @@ async function createIssue(event) {
         status: 'To Do'
     };
     
+    // Get selected tag IDs
+    const tagSelect = document.getElementById('issue-tags');
+    const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+    
     try {
         const response = await fetch('/api/issues', {
             method: 'POST',
@@ -1016,6 +1093,18 @@ async function createIssue(event) {
         }
         
         const newIssue = await response.json();
+        
+        // Assign tags to the new issue
+        if (selectedTagIds.length > 0) {
+            await fetch(`/api/issues/${newIssue.id}/tags`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ tagIds: selectedTagIds })
+            });
+        }
+        
         issues.push(newIssue);
         renderKanbanBoard();
         hideModal();
@@ -1100,6 +1189,16 @@ function showCreateActionItem() {
                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
             </div>
             
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Tags</label>
+                <select id="action-item-tags" multiple
+                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                        style="min-height: 100px;">
+                    <option value="" disabled>Loading tags...</option>
+                </select>
+                <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
+            </div>
+            
             <div class="flex justify-end space-x-3">
                 <button type="button" id="cancel-action-item-btn" 
                         class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
@@ -1114,6 +1213,9 @@ function showCreateActionItem() {
     `;
     
     showModal(modalContent);
+    
+    // Load tags for action items (same as issues: 'issue_action' or 'both')
+    loadTagsForActionItems();
     
     // Add event listeners
     document.getElementById('cancel-action-item-btn').addEventListener('click', hideModal);
@@ -1135,6 +1237,10 @@ async function createActionItem(event) {
         type: 'action-item'
     };
     
+    // Get selected tag IDs
+    const tagSelect = document.getElementById('action-item-tags');
+    const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+    
     try {
         const response = await fetch('/api/action-items', {
             method: 'POST',
@@ -1148,6 +1254,18 @@ async function createActionItem(event) {
         }
         
         const newActionItem = await response.json();
+        
+        // Assign tags to the new action item
+        if (selectedTagIds.length > 0) {
+            await fetch(`/api/action-items/${newActionItem.id}/tags`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ tagIds: selectedTagIds })
+            });
+        }
+        
         hideModal();
         
         // Show success message
@@ -2959,6 +3077,9 @@ async function openEditModal(itemId, itemType) {
         document.getElementById('edit-issue-assignee').value = item.assignee || '';
       }
       
+      // Load tags and pre-select current ones
+      await loadTagsForEditIssue(item.id);
+      
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
     } else {
@@ -2978,12 +3099,85 @@ async function openEditModal(itemId, itemType) {
         document.getElementById('edit-action-item-assignee').value = item.assignee || '';
       }
       
+      // Load tags and pre-select current ones
+      await loadTagsForEditActionItem(item.id);
+      
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
     }
   } catch (error) {
     console.error('Error loading item for edit:', error);
     alert('Failed to load item data. Please try again.');
+  }
+}
+
+// Load tags for edit issue modal
+async function loadTagsForEditIssue(issueId) {
+  try {
+    // Get all available tags for issues
+    const tagsResponse = await axios.get(`/api/projects/${currentProject}/tags`);
+    const allTags = tagsResponse.data;
+    
+    // Filter tags for issues/actions: 'issue_action' or 'both'
+    const filteredTags = allTags.filter(tag => 
+      tag.tag_type === 'issue_action' || tag.tag_type === 'both'
+    );
+    
+    // Get current tags for this issue
+    const currentTagsResponse = await axios.get(`/api/issues/${issueId}/tags`);
+    const currentTags = currentTagsResponse.data;
+    const currentTagIds = currentTags.map(t => t.id);
+    
+    // Populate dropdown
+    const tagSelect = document.getElementById('edit-issue-tags');
+    if (filteredTags.length === 0) {
+      tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+    } else {
+      tagSelect.innerHTML = filteredTags.map(tag => 
+        `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;" ${currentTagIds.includes(tag.id) ? 'selected' : ''}>
+          ${tag.name}
+        </option>`
+      ).join('');
+    }
+  } catch (error) {
+    console.error('Error loading tags for edit:', error);
+    const tagSelect = document.getElementById('edit-issue-tags');
+    tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
+  }
+}
+
+// Load tags for edit action item modal
+async function loadTagsForEditActionItem(actionItemId) {
+  try {
+    // Get all available tags for action items
+    const tagsResponse = await axios.get(`/api/projects/${currentProject}/tags`);
+    const allTags = tagsResponse.data;
+    
+    // Filter tags for issues/actions: 'issue_action' or 'both'
+    const filteredTags = allTags.filter(tag => 
+      tag.tag_type === 'issue_action' || tag.tag_type === 'both'
+    );
+    
+    // Get current tags for this action item
+    const currentTagsResponse = await axios.get(`/api/action-items/${actionItemId}/tags`);
+    const currentTags = currentTagsResponse.data;
+    const currentTagIds = currentTags.map(t => t.id);
+    
+    // Populate dropdown
+    const tagSelect = document.getElementById('edit-action-item-tags');
+    if (filteredTags.length === 0) {
+      tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+    } else {
+      tagSelect.innerHTML = filteredTags.map(tag => 
+        `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;" ${currentTagIds.includes(tag.id) ? 'selected' : ''}>
+          ${tag.name}
+        </option>`
+      ).join('');
+    }
+  } catch (error) {
+    console.error('Error loading tags for edit:', error);
+    const tagSelect = document.getElementById('edit-action-item-tags');
+    tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
   }
 }
 
@@ -3032,8 +3226,17 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     category: document.getElementById('edit-issue-category').value
   };
   
+  // Get selected tag IDs
+  const tagSelect = document.getElementById('edit-issue-tags');
+  const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+  
   try {
     await axios.patch(`/api/issues/${itemId}`, data, {
+      withCredentials: true
+    });
+    
+    // Update tags
+    await axios.put(`/api/issues/${itemId}/tags`, { tagIds: selectedTagIds }, {
       withCredentials: true
     });
     
@@ -3066,8 +3269,17 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     progress_percentage: parseInt(document.getElementById('edit-action-item-progress').value) || 0
   };
   
+  // Get selected tag IDs
+  const tagSelect = document.getElementById('edit-action-item-tags');
+  const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+  
   try {
     await axios.patch(`/api/action-items/${itemId}`, data, {
+      withCredentials: true
+    });
+    
+    // Update tags
+    await axios.put(`/api/action-items/${itemId}/tags`, { tagIds: selectedTagIds }, {
       withCredentials: true
     });
     

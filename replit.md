@@ -4,7 +4,7 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
-- **Unified Tag Management System** (In Progress): Implemented comprehensive tag type system supporting Issues/Actions, Risks, or Both:
+- **Unified Tag Management System** (Complete): Implemented comprehensive tag type system supporting Issues/Actions, Risks, or Both:
   - **Tag Types**: Added tag_type field (enum: 'issue_action', 'risk', 'both') to tags table with default 'issue_action'
   - **Visual Indicators**: Tags display color-coded badges - Blue (Issues/Actions), Orange (Risks), Purple (Both)
   - **Smart Filtering**: Tag Management page includes filter buttons (All, Issues/Actions, Risks, Both) with active state highlighting
@@ -14,8 +14,11 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
     - GET/PUT `/api/action-items/:actionItemId/tags` - Action item tag management (allows 'issue_action' and 'both' tags only)
     - GET/PUT `/api/risks/:riskId/tags` - Risk tag management (allows 'risk' and 'both' tags only)
   - **Security Pattern**: All endpoints verify project access via checkProjectAccess(), validate tag ownership, enforce tag-type constraints, and use BEGIN/COMMIT transactions
-  - **Frontend Integration**: Pending - modals need tag selector UI with tag_type filtering
-  - Cache version: tags.html/js v10
+  - **Frontend Integration**: Complete multi-select tag dropdowns in all Create/Edit modals:
+    - Issue modals: Tag selector with 'issue_action' and 'both' tags, saves via PUT endpoint after create/update
+    - Action Item modals: Tag selector with 'issue_action' and 'both' tags, saves via PUT endpoint after create/update
+    - Risk modals: Replaced text input with tag selector showing 'risk' and 'both' tags, saves via PUT endpoint after create/update
+  - Cache version: tags.html/js v10, app.js v11, risks.js updated
 - **Tag Management Complete Restoration**: Rebuilt Tag Management page to match production with full CRUD functionality:
   - **Backend API**: Created complete tags API with GET/POST/PUT/DELETE endpoints at `/api/projects/:projectId/tags` with usage count calculations
   - **UI Components**: Tag cards display colored badges, descriptions, usage counts, and edit/delete controls

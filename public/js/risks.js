@@ -410,11 +410,14 @@ function openCreateModal() {
   document.getElementById('riskLevelValue').textContent = 'Not Assessed';
   document.getElementById('riskLevelBadge').style.backgroundColor = '#9ca3af';
   
+  // Load tags for risks (tag_type: 'risk' or 'both')
+  loadTagsForRisks();
+  
   document.getElementById('riskModal').classList.add('active');
 }
 
 // Open edit modal
-function openEditModal(risk) {
+async function openEditModal(risk) {
   editingRiskId = risk.id;
   document.getElementById('modalTitle').textContent = 'Edit Risk';
   document.getElementById('saveButtonText').textContent = 'Update Risk';
@@ -425,7 +428,9 @@ function openEditModal(risk) {
   document.getElementById('riskDescription').value = risk.description || '';
   document.getElementById('riskCategory').value = risk.category || '';
   document.getElementById('riskSource').value = risk.risk_source || '';
-  document.getElementById('riskTags').value = risk.tags?.join(', ') || '';
+  
+  // Load tags and pre-select current ones
+  await loadTagsForEditRisk(risk.id);
   
   // Set probability and impact
   if (risk.probability) {
@@ -502,8 +507,11 @@ async function handleRiskSubmit(e) {
   const description = document.getElementById('riskDescription').value.trim();
   const category = document.getElementById('riskCategory').value;
   const riskSource = document.getElementById('riskSource').value.trim();
-  const tagsInput = document.getElementById('riskTags').value.trim();
-  const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()) : [];
+  
+  // Get selected tag IDs from multi-select
+  const tagSelect = document.getElementById('riskTags');
+  const selectedTagIds = Array.from(tagSelect.selectedOptions).map(option => parseInt(option.value));
+  
   const probability = parseInt(document.querySelector('input[name="probability"]:checked')?.value) || null;
   const impact = parseInt(document.querySelector('input[name="impact"]:checked')?.value) || null;
   const responseStrategy = document.getElementById('riskResponseStrategy').value;
@@ -529,7 +537,6 @@ async function handleRiskSubmit(e) {
     description,
     category,
     risk_source: riskSource || null,
-    tags: tags.length > 0 ? tags : null,
     probability,
     impact,
     response_strategy: responseStrategy || null,
@@ -566,6 +573,17 @@ async function handleRiskSubmit(e) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to save risk');
     }
+    
+    const savedRisk = await response.json();
+    const riskId = editingRiskId || savedRisk.id;
+    
+    // Save tags
+    await fetch(`/api/risks/${riskId}/tags`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ tagIds: selectedTagIds })
+    });
     
     closeRiskModal();
     await loadRisks();
@@ -811,4 +829,76 @@ function showError(message) {
 function showSuccess(message) {
   // You could implement a toast notification here
   alert(message);
+}
+
+// Load tags for risks (tag_type: 'risk' or 'both')
+async function loadTagsForRisks() {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/tags`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Failed to fetch tags');
+    
+    const allTags = await response.json();
+    
+    // Filter tags for risks: 'risk' or 'both'
+    const filteredTags = allTags.filter(tag => 
+      tag.tag_type === 'risk' || tag.tag_type === 'both'
+    );
+    
+    const tagSelect = document.getElementById('riskTags');
+    if (filteredTags.length === 0) {
+      tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+    } else {
+      tagSelect.innerHTML = filteredTags.map(tag => 
+        `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;">
+          ${tag.name}
+        </option>`
+      ).join('');
+    }
+  } catch (error) {
+    console.error('Error loading tags:', error);
+    const tagSelect = document.getElementById('riskTags');
+    tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
+  }
+}
+
+// Load tags for edit risk modal
+async function loadTagsForEditRisk(riskId) {
+  try {
+    // Get all available tags for risks
+    const tagsResponse = await fetch(`/api/projects/${currentProjectId}/tags`, {
+      credentials: 'include'
+    });
+    const allTags = await tagsResponse.json();
+    
+    // Filter tags for risks: 'risk' or 'both'
+    const filteredTags = allTags.filter(tag => 
+      tag.tag_type === 'risk' || tag.tag_type === 'both'
+    );
+    
+    // Get current tags for this risk
+    const currentTagsResponse = await fetch(`/api/risks/${riskId}/tags`, {
+      credentials: 'include'
+    });
+    const currentTags = await currentTagsResponse.json();
+    const currentTagIds = currentTags.map(t => t.id);
+    
+    // Populate dropdown
+    const tagSelect = document.getElementById('riskTags');
+    if (filteredTags.length === 0) {
+      tagSelect.innerHTML = '<option value="" disabled>No tags available</option>';
+    } else {
+      tagSelect.innerHTML = filteredTags.map(tag => 
+        `<option value="${tag.id}" style="background-color: ${tag.color}20; color: #000;" ${currentTagIds.includes(tag.id) ? 'selected' : ''}>
+          ${tag.name}
+        </option>`
+      ).join('');
+    }
+  } catch (error) {
+    console.error('Error loading tags for edit:', error);
+    const tagSelect = document.getElementById('riskTags');
+    tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
+  }
 }
