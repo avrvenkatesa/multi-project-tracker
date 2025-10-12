@@ -785,7 +785,14 @@ window.closeDetailModal = closeDetailModal;
 // Confirm delete
 function confirmDelete(riskId) {
   const deleteBtn = document.getElementById('btnConfirmDelete');
-  deleteBtn.onclick = () => deleteRisk(riskId);
+  
+  // Remove any existing event listeners by cloning the button
+  const newDeleteBtn = deleteBtn.cloneNode(true);
+  deleteBtn.parentNode.replaceChild(newDeleteBtn, deleteBtn);
+  
+  // Add new event listener
+  newDeleteBtn.addEventListener('click', () => deleteRisk(riskId));
+  
   document.getElementById('deleteModal').classList.add('active');
 }
 
