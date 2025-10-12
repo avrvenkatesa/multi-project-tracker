@@ -3244,15 +3244,19 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     console.log('PATCH request successful');
     
     // Update tags
+    console.log('Updating tags...');
     await axios.put(`/api/issues/${itemId}/tags`, { tagIds: selectedTagIds }, {
       withCredentials: true
     });
+    console.log('Tags update successful');
     
     // Close modal
     document.getElementById('editIssueModal').classList.add('hidden');
     
     // Reload issues and refresh kanban board
+    console.log('Reloading issues...');
     await loadIssues(currentProject);
+    console.log('Rendering kanban board...');
     await renderKanbanBoard();
     
     showToast('Issue updated successfully!', 'success');
@@ -3260,6 +3264,7 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     console.error('Error updating issue:', error);
     console.error('Error response:', error.response?.data);
     console.error('Error status:', error.response?.status);
+    console.error('Error message:', error.message);
     alert(error.response?.data?.error || 'Failed to update issue');
   }
 });
