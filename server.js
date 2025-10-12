@@ -2523,6 +2523,7 @@ app.delete("/api/projects/:projectId/tags/:tagId", authenticateToken, async (req
     // Delete tag associations first
     await pool.query(`DELETE FROM issue_tags WHERE tag_id = $1`, [tagId]);
     await pool.query(`DELETE FROM action_item_tags WHERE tag_id = $1`, [tagId]);
+    await pool.query(`DELETE FROM risk_tags WHERE tag_id = $1`, [tagId]);
     
     // Delete the tag
     const result = await pool.query(
@@ -2538,6 +2539,190 @@ app.delete("/api/projects/:projectId/tags/:tagId", authenticateToken, async (req
   } catch (error) {
     console.error('Error deleting tag:', error);
     res.status(500).json({ error: 'Failed to delete tag' });
+  }
+});
+
+// Get tags for a specific issue
+app.get("/api/issues/:issueId/tags", authenticateToken, async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    
+    // Get issue and verify access
+    const issue = await pool.query('SELECT project_id FROM issues WHERE id = $1', [issueId]);
+    if (issue.rows.length === 0) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    const hasAccess = await checkProjectAccess(req.user.id, issue.rows[0].project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const tags = await pool.query(
+      `SELECT t.* FROM tags t
+       JOIN issue_tags it ON t.id = it.tag_id
+       WHERE it.issue_id = $1
+       ORDER BY t.name ASC`,
+      [issueId]
+    );
+    
+    res.json(tags.rows);
+  } catch (error) {
+    console.error('Error fetching issue tags:', error);
+    res.status(500).json({ error: 'Failed to fetch issue tags' });
+  }
+});
+
+// Assign tags to an issue
+app.put("/api/issues/:issueId/tags", authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { issueId } = req.params;
+    const { tagIds } = req.body;
+    
+    // Get issue and verify access
+    const issue = await client.query('SELECT project_id FROM issues WHERE id = $1', [issueId]);
+    if (issue.rows.length === 0) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    const hasAccess = await checkProjectAccess(req.user.id, issue.rows[0].project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Validate tags belong to same project and have correct type
+    if (tagIds && tagIds.length > 0) {
+      const tagCheck = await client.query(
+        `SELECT id FROM tags 
+         WHERE id = ANY($1) 
+         AND project_id = $2 
+         AND tag_type IN ('issue_action', 'both')`,
+        [tagIds, issue.rows[0].project_id]
+      );
+      
+      if (tagCheck.rows.length !== tagIds.length) {
+        return res.status(400).json({ error: 'Invalid tags or tag types for issue' });
+      }
+    }
+    
+    await client.query('BEGIN');
+    
+    // Delete existing tags
+    await client.query(`DELETE FROM issue_tags WHERE issue_id = $1`, [issueId]);
+    
+    // Insert new tags
+    if (tagIds && tagIds.length > 0) {
+      const values = tagIds.map((tagId, index) => 
+        `($1, $${index + 2})`
+      ).join(', ');
+      
+      await client.query(
+        `INSERT INTO issue_tags (issue_id, tag_id) VALUES ${values}`,
+        [issueId, ...tagIds]
+      );
+    }
+    
+    await client.query('COMMIT');
+    res.json({ message: 'Tags updated successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error updating issue tags:', error);
+    res.status(500).json({ error: 'Failed to update issue tags' });
+  } finally {
+    client.release();
+  }
+});
+
+// Get tags for a specific action item
+app.get("/api/action-items/:actionItemId/tags", authenticateToken, async (req, res) => {
+  try {
+    const { actionItemId } = req.params;
+    
+    // Get action item and verify access
+    const actionItem = await pool.query('SELECT project_id FROM action_items WHERE id = $1', [actionItemId]);
+    if (actionItem.rows.length === 0) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    const hasAccess = await checkProjectAccess(req.user.id, actionItem.rows[0].project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const tags = await pool.query(
+      `SELECT t.* FROM tags t
+       JOIN action_item_tags ait ON t.id = ait.tag_id
+       WHERE ait.action_item_id = $1
+       ORDER BY t.name ASC`,
+      [actionItemId]
+    );
+    
+    res.json(tags.rows);
+  } catch (error) {
+    console.error('Error fetching action item tags:', error);
+    res.status(500).json({ error: 'Failed to fetch action item tags' });
+  }
+});
+
+// Assign tags to an action item
+app.put("/api/action-items/:actionItemId/tags", authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { actionItemId } = req.params;
+    const { tagIds } = req.body;
+    
+    // Get action item and verify access
+    const actionItem = await client.query('SELECT project_id FROM action_items WHERE id = $1', [actionItemId]);
+    if (actionItem.rows.length === 0) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    const hasAccess = await checkProjectAccess(req.user.id, actionItem.rows[0].project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Validate tags belong to same project and have correct type
+    if (tagIds && tagIds.length > 0) {
+      const tagCheck = await client.query(
+        `SELECT id FROM tags 
+         WHERE id = ANY($1) 
+         AND project_id = $2 
+         AND tag_type IN ('issue_action', 'both')`,
+        [tagIds, actionItem.rows[0].project_id]
+      );
+      
+      if (tagCheck.rows.length !== tagIds.length) {
+        return res.status(400).json({ error: 'Invalid tags or tag types for action item' });
+      }
+    }
+    
+    await client.query('BEGIN');
+    
+    // Delete existing tags
+    await client.query(`DELETE FROM action_item_tags WHERE action_item_id = $1`, [actionItemId]);
+    
+    // Insert new tags
+    if (tagIds && tagIds.length > 0) {
+      const values = tagIds.map((tagId, index) => 
+        `($1, $${index + 2})`
+      ).join(', ');
+      
+      await client.query(
+        `INSERT INTO action_item_tags (action_item_id, tag_id) VALUES ${values}`,
+        [actionItemId, ...tagIds]
+      );
+    }
+    
+    await client.query('COMMIT');
+    res.json({ message: 'Tags updated successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error updating action item tags:', error);
+    res.status(500).json({ error: 'Failed to update action item tags' });
+  } finally {
+    client.release();
   }
 });
 
@@ -5922,6 +6107,98 @@ app.get('/api/risks/:riskId', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching risk:', error);
     res.status(500).json({ error: 'Failed to fetch risk' });
+  }
+});
+
+// Get tags for a specific risk
+app.get("/api/risks/:riskId/tags", authenticateToken, async (req, res) => {
+  try {
+    const { riskId } = req.params;
+    
+    // Get risk and verify access
+    const risk = await pool.query('SELECT project_id FROM risks WHERE id = $1', [riskId]);
+    if (risk.rows.length === 0) {
+      return res.status(404).json({ error: 'Risk not found' });
+    }
+    
+    const hasAccess = await checkProjectAccess(req.user.id, risk.rows[0].project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const tags = await pool.query(
+      `SELECT t.* FROM tags t
+       JOIN risk_tags rt ON t.id = rt.tag_id
+       WHERE rt.risk_id = $1
+       ORDER BY t.name ASC`,
+      [riskId]
+    );
+    
+    res.json(tags.rows);
+  } catch (error) {
+    console.error('Error fetching risk tags:', error);
+    res.status(500).json({ error: 'Failed to fetch risk tags' });
+  }
+});
+
+// Assign tags to a risk
+app.put("/api/risks/:riskId/tags", authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { riskId } = req.params;
+    const { tagIds } = req.body;
+    
+    // Get risk and verify access
+    const risk = await client.query('SELECT project_id FROM risks WHERE id = $1', [riskId]);
+    if (risk.rows.length === 0) {
+      return res.status(404).json({ error: 'Risk not found' });
+    }
+    
+    const hasAccess = await checkProjectAccess(req.user.id, risk.rows[0].project_id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Validate tags belong to same project and have correct type
+    if (tagIds && tagIds.length > 0) {
+      const tagCheck = await client.query(
+        `SELECT id FROM tags 
+         WHERE id = ANY($1) 
+         AND project_id = $2 
+         AND tag_type IN ('risk', 'both')`,
+        [tagIds, risk.rows[0].project_id]
+      );
+      
+      if (tagCheck.rows.length !== tagIds.length) {
+        return res.status(400).json({ error: 'Invalid tags or tag types for risk' });
+      }
+    }
+    
+    await client.query('BEGIN');
+    
+    // Delete existing tags
+    await client.query(`DELETE FROM risk_tags WHERE risk_id = $1`, [riskId]);
+    
+    // Insert new tags
+    if (tagIds && tagIds.length > 0) {
+      const values = tagIds.map((tagId, index) => 
+        `($1, $${index + 2})`
+      ).join(', ');
+      
+      await client.query(
+        `INSERT INTO risk_tags (risk_id, tag_id) VALUES ${values}`,
+        [riskId, ...tagIds]
+      );
+    }
+    
+    await client.query('COMMIT');
+    res.json({ message: 'Tags updated successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error updating risk tags:', error);
+    res.status(500).json({ error: 'Failed to update risk tags' });
+  } finally {
+    client.release();
   }
 });
 
