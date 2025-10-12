@@ -3115,7 +3115,7 @@ async function openEditModal(itemId, itemType) {
 async function loadTagsForEditIssue(issueId) {
   try {
     // Get all available tags for issues
-    const tagsResponse = await axios.get(`/api/projects/${currentProject}/tags`);
+    const tagsResponse = await axios.get(`/api/projects/${currentProjectId}/tags`);
     const allTags = tagsResponse.data;
     
     // Filter tags for issues/actions: 'issue_action' or 'both'
@@ -3150,7 +3150,7 @@ async function loadTagsForEditIssue(issueId) {
 async function loadTagsForEditActionItem(actionItemId) {
   try {
     // Get all available tags for action items
-    const tagsResponse = await axios.get(`/api/projects/${currentProject}/tags`);
+    const tagsResponse = await axios.get(`/api/projects/${currentProjectId}/tags`);
     const allTags = tagsResponse.data;
     
     // Filter tags for issues/actions: 'issue_action' or 'both'
@@ -3184,7 +3184,7 @@ async function loadTagsForEditActionItem(actionItemId) {
 // Load team members for edit modals
 async function loadTeamMembersForEdit(type) {
   try {
-    const response = await axios.get(`/api/projects/${currentProject}/team`, {
+    const response = await axios.get(`/api/projects/${currentProjectId}/team`, {
       withCredentials: true
     });
     
