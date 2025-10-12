@@ -931,6 +931,33 @@ app.get("/api/projects", authenticateToken, async (req, res) => {
   }
 });
 
+// Get single project by ID
+app.get("/api/projects/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if user has access to this project
+    const hasAccess = await checkProjectAccess(req.user.id, id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+    
+    const [project] = await sql`
+      SELECT * FROM projects 
+      WHERE id = ${id}
+    `;
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    res.json(project);
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    res.status(500).json({ error: 'Failed to fetch project' });
+  }
+});
+
 // Create project (PM or higher)
 app.post("/api/projects", authenticateToken, requireRole('Project Manager'), async (req, res) => {
   try {
