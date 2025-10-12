@@ -133,23 +133,35 @@ function setupEventListeners() {
     });
   }
   
-  // Event delegation for risk action buttons (View, Edit, Delete)
+  // Event delegation for risk cards and action buttons
   document.getElementById('risksList').addEventListener('click', function(e) {
+    // Check if a button with data-action was clicked
     const button = e.target.closest('[data-action]');
-    if (!button) return;
+    if (button) {
+      e.stopPropagation();
+      const action = button.dataset.action;
+      
+      if (action === 'view') {
+        const riskData = JSON.parse(button.dataset.risk);
+        showRiskDetails(riskData);
+      } else if (action === 'edit') {
+        const riskData = JSON.parse(button.dataset.risk);
+        openEditModal(riskData);
+      } else if (action === 'delete') {
+        const riskId = parseInt(button.dataset.riskId);
+        confirmDelete(riskId);
+      }
+      return;
+    }
     
-    e.stopPropagation();
-    const action = button.dataset.action;
-    
-    if (action === 'view') {
-      const riskData = JSON.parse(button.dataset.risk);
-      showRiskDetails(riskData);
-    } else if (action === 'edit') {
-      const riskData = JSON.parse(button.dataset.risk);
-      openEditModal(riskData);
-    } else if (action === 'delete') {
-      const riskId = parseInt(button.dataset.riskId);
-      confirmDelete(riskId);
+    // Otherwise, check if the card itself was clicked (for showing details)
+    const card = e.target.closest('.risk-card');
+    if (card && card.dataset.risk) {
+      // Don't trigger if clicking on the actions area
+      if (!e.target.closest('.risk-actions')) {
+        const riskData = JSON.parse(card.dataset.risk);
+        showRiskDetails(riskData);
+      }
     }
   });
 }
@@ -336,7 +348,7 @@ function displayRisks(risks) {
 function createRiskCard(risk) {
   const card = document.createElement('div');
   card.className = 'risk-card';
-  card.onclick = () => showRiskDetails(risk);
+  card.dataset.risk = JSON.stringify(risk);
   
   const levelClass = `risk-level-${risk.risk_level?.toLowerCase() || 'low'}`;
   const statusClass = `status-${risk.status?.toLowerCase() || 'identified'}`;
