@@ -1901,6 +1901,13 @@ function initializeFilters() {
     clearBtn.addEventListener('click', clearAllFilters);
   }
   
+  // Sort dropdowns for Kanban columns
+  document.querySelectorAll('.column-sort-select').forEach(select => {
+    select.addEventListener('change', function() {
+      handleSortChange(this);
+    });
+  });
+  
   // Load filters from URL on page load
   loadFiltersFromURL();
   

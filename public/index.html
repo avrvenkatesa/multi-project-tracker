@@ -333,33 +333,89 @@
                         <!-- Kanban Board -->
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div class="bg-gray-100 rounded-lg p-4">
-                                <h4 class="font-semibold mb-3 text-gray-700">
-                                    To Do
-                                </h4>
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="font-semibold text-gray-700">
+                                        To Do <span id="todo-count" class="text-sm text-gray-500">(0)</span>
+                                    </h4>
+                                    <select class="column-sort-select text-xs px-2 py-1 border border-gray-300 rounded" data-column="todo">
+                                        <option value="overdue-first">Overdue First</option>
+                                        <option value="earliest">Earliest</option>
+                                        <option value="latest">Latest</option>
+                                        <option value="priority">Priority</option>
+                                        <option value="recent">Recent</option>
+                                        <option value="updated">Updated</option>
+                                        <option value="manual">Manual</option>
+                                        <option value="priority+due-date">Priority+Due Date</option>
+                                        <option value="overdue+priority">Overdue+Priority</option>
+                                        <option value="smart-sort">Smart Sort</option>
+                                    </select>
+                                </div>
                                 <div id="todo-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
                             </div>
                             <div class="bg-blue-50 rounded-lg p-4">
-                                <h4 class="font-semibold mb-3 text-blue-700">
-                                    In Progress
-                                </h4>
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="font-semibold text-blue-700">
+                                        In Progress <span id="inprogress-count" class="text-sm text-blue-500">(0)</span>
+                                    </h4>
+                                    <select class="column-sort-select text-xs px-2 py-1 border border-gray-300 rounded" data-column="inprogress">
+                                        <option value="overdue-first">Overdue First</option>
+                                        <option value="earliest">Earliest</option>
+                                        <option value="latest">Latest</option>
+                                        <option value="priority">Priority</option>
+                                        <option value="recent">Recent</option>
+                                        <option value="updated">Updated</option>
+                                        <option value="manual">Manual</option>
+                                        <option value="priority+due-date">Priority+Due Date</option>
+                                        <option value="overdue+priority">Overdue+Priority</option>
+                                        <option value="smart-sort">Smart Sort</option>
+                                    </select>
+                                </div>
                                 <div id="inprogress-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
                             </div>
                             <div class="bg-yellow-50 rounded-lg p-4">
-                                <h4 class="font-semibold mb-3 text-yellow-700">
-                                    Blocked
-                                </h4>
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="font-semibold text-yellow-700">
+                                        Blocked <span id="blocked-count" class="text-sm text-yellow-600">(0)</span>
+                                    </h4>
+                                    <select class="column-sort-select text-xs px-2 py-1 border border-gray-300 rounded" data-column="blocked">
+                                        <option value="overdue-first">Overdue First</option>
+                                        <option value="earliest">Earliest</option>
+                                        <option value="latest">Latest</option>
+                                        <option value="priority">Priority</option>
+                                        <option value="recent">Recent</option>
+                                        <option value="updated">Updated</option>
+                                        <option value="manual">Manual</option>
+                                        <option value="priority+due-date">Priority+Due Date</option>
+                                        <option value="overdue+priority">Overdue+Priority</option>
+                                        <option value="smart-sort">Smart Sort</option>
+                                    </select>
+                                </div>
                                 <div id="blocked-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
                             </div>
                             <div class="bg-green-50 rounded-lg p-4">
-                                <h4 class="font-semibold mb-3 text-green-700">
-                                    Done
-                                </h4>
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="font-semibold text-green-700">
+                                        Done <span id="done-count" class="text-sm text-green-600">(0)</span>
+                                    </h4>
+                                    <select class="column-sort-select text-xs px-2 py-1 border border-gray-300 rounded" data-column="done">
+                                        <option value="overdue-first">Overdue First</option>
+                                        <option value="earliest">Earliest</option>
+                                        <option value="latest">Latest</option>
+                                        <option value="priority">Priority</option>
+                                        <option value="recent">Recent</option>
+                                        <option value="updated">Updated</option>
+                                        <option value="manual">Manual</option>
+                                        <option value="priority+due-date">Priority+Due Date</option>
+                                        <option value="overdue+priority">Overdue+Priority</option>
+                                        <option value="smart-sort">Smart Sort</option>
+                                    </select>
+                                </div>
                                 <div id="done-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
                                 </div>
@@ -1017,7 +1073,7 @@
             }
         </style>
         <script src="comments.js?v=1"></script>
-        <script src="app.js?v=28"></script>
+        <script src="app.js?v=29"></script>
         <script src="js/project-management.js"></script>
     </body>
 </html>

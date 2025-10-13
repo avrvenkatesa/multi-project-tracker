@@ -3,6 +3,15 @@
 ## Overview
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
+## Recent Changes (October 2025)
+- **Kanban Sorting & Copy Link UI Restoration** (October 13, 2025): Fixed missing sort dropdown UI that prevented sorting functionality from being visible:
+  - **Sort Dropdown UI**: Added sort dropdown controls to all four Kanban column headers (To Do, In Progress, Blocked, Done) with 10 sort modes
+  - **Event Listeners**: Integrated handleSortChange() event listeners in initializeFilters() for real-time dropdown interaction
+  - **Sorting Functions**: All sorting algorithms confirmed working (sortByDueDate, sortByPriorityAndDueDate, sortByOverdueAndPriority, sortBySmartScore)
+  - **Copy Link**: Copy Link feature confirmed operational with clipboard API and toast notifications
+  - Both features were implemented Oct 9, deleted Oct 11 in risk register commit, code restored Oct 12, UI completed Oct 13
+  - Cache version: index.html v29, app.js v29
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
