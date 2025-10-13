@@ -93,6 +93,332 @@ function debounce(func, wait) {
   };
 }
 
+// ============= KANBAN SORTING FUNCTIONS =============
+
+// Sort items by due date (overdue → today → upcoming → no date)
+function sortByDueDate(items) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const overdue = [];
+  const dueToday = [];
+  const upcoming = [];
+  const noDate = [];
+  
+  items.forEach(item => {
+    if (!item.due_date) {
+      noDate.push(item);
+    } else {
+      const dueDate = new Date(item.due_date);
+      dueDate.setHours(0, 0, 0, 0);
+      
+      if (dueDate < today) {
+        overdue.push(item);
+      } else if (dueDate.getTime() === today.getTime()) {
+        dueToday.push(item);
+      } else {
+        upcoming.push(item);
+      }
+    }
+  });
+  
+  // Sort within groups: earliest first
+  const sortByDate = (a, b) => new Date(a.due_date) - new Date(b.due_date);
+  overdue.sort(sortByDate);
+  upcoming.sort(sortByDate);
+  
+  return [...overdue, ...dueToday, ...upcoming, ...noDate];
+}
+
+// Sort by Priority + Due Date (primary: priority, secondary: due date earliest)
+function sortByPriorityAndDueDate(items) {
+  const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+  
+  return items.sort((a, b) => {
+    // Primary: Priority
+    const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+    const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+    
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+    
+    // Secondary: Due Date (earliest first)
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date) - new Date(b.due_date);
+  });
+}
+
+// Sort by Overdue + Priority (primary: overdue status, secondary: priority)
+function sortByOverdueAndPriority(items) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+  
+  return items.sort((a, b) => {
+    const dueDateA = a.due_date ? new Date(a.due_date) : null;
+    const dueDateB = b.due_date ? new Date(b.due_date) : null;
+    
+    const isOverdueA = dueDateA && dueDateA < today;
+    const isOverdueB = dueDateB && dueDateB < today;
+    
+    // Primary: Overdue status (overdue items first)
+    if (isOverdueA && !isOverdueB) return -1;
+    if (!isOverdueA && isOverdueB) return 1;
+    
+    // Secondary: Priority within overdue/not overdue groups
+    const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+    const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+    
+    return priorityA - priorityB;
+  });
+}
+
+// Calculate smart score for weighted sorting
+function calculateSmartScore(item, today, priorityWeight) {
+  let score = 0;
+  
+  // Priority component (0-8 points)
+  score += priorityWeight[item.priority?.toLowerCase()] || 0;
+  
+  // Overdue component (up to 30 points)
+  if (item.due_date) {
+    const dueDate = new Date(item.due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    const daysOverdue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysOverdue > 0) {
+      score += Math.min(daysOverdue * 3, 30); // 3 points per day overdue, max 30
+    } else if (daysOverdue === 0) {
+      score += 5; // Bonus for due today
+    }
+  }
+  
+  return score;
+}
+
+// Sort by Smart Score (weighted algorithm combining priority and due date urgency)
+function sortBySmartScore(items) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const priorityWeight = { 'critical': 8, 'high': 6, 'medium': 4, 'low': 2 };
+  
+  return items.sort((a, b) => {
+    const scoreA = calculateSmartScore(a, today, priorityWeight);
+    const scoreB = calculateSmartScore(b, today, priorityWeight);
+    
+    return scoreB - scoreA; // Higher scores first
+  });
+}
+
+// ============= SORT PREFERENCES & MANUAL ORDER =============
+const SORT_PREFERENCES_KEY = 'kanban-sort-preferences';
+const MANUAL_ORDER_KEY = 'kanban-manual-order';
+
+function getSortPreferences() {
+  const stored = localStorage.getItem(SORT_PREFERENCES_KEY);
+  if (stored) {
+    return JSON.parse(stored);
+  }
+  return {};
+}
+
+function getSortPreference(columnId) {
+  const prefs = getSortPreferences();
+  return prefs[columnId] || 'due-overdue-first'; // Default sorting mode
+}
+
+function saveSortPreference(columnId, sortMode) {
+  const prefs = getSortPreferences();
+  prefs[columnId] = sortMode;
+  localStorage.setItem(SORT_PREFERENCES_KEY, JSON.stringify(prefs));
+}
+
+function saveManualOrder(columnId, itemIds) {
+  const stored = localStorage.getItem(MANUAL_ORDER_KEY);
+  const orders = stored ? JSON.parse(stored) : {};
+  orders[columnId] = itemIds;
+  localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(orders));
+}
+
+function loadManualOrder(items, columnId) {
+  const stored = localStorage.getItem(MANUAL_ORDER_KEY);
+  if (!stored) return items;
+  
+  const orders = JSON.parse(stored);
+  const savedOrder = orders[columnId];
+  if (!savedOrder) return items;
+  
+  // Sort items based on saved order
+  const orderedItems = [];
+  const itemsMap = new Map(items.map(item => [`${item.type}-${item.id}`, item]));
+  
+  savedOrder.forEach(key => {
+    if (itemsMap.has(key)) {
+      orderedItems.push(itemsMap.get(key));
+      itemsMap.delete(key);
+    }
+  });
+  
+  // Append any new items not in saved order
+  itemsMap.forEach(item => orderedItems.push(item));
+  
+  return orderedItems;
+}
+
+// Save manual order from current DOM state
+function saveManualOrderFromDOM(columnId) {
+  const domId = `${columnId}-column`;
+  const container = document.getElementById(domId);
+  
+  if (!container) {
+    console.warn(`Cannot save manual order: column container "${domId}" not found`);
+    return;
+  }
+  
+  const cards = container.querySelectorAll('.kanban-card');
+  const itemKeys = Array.from(cards).map(card => {
+    const itemId = card.getAttribute('data-item-id');
+    const itemType = card.getAttribute('data-item-type');
+    return `${itemType}-${itemId}`;
+  });
+  
+  saveManualOrder(columnId, itemKeys);
+}
+
+// Comprehensive sort function with multiple modes
+function sortItems(items, sortMode, columnId) {
+  // Make a copy to avoid mutating original array
+  const itemsCopy = [...items];
+  
+  switch(sortMode) {
+    case 'due-overdue-first':
+      return sortByDueDate(itemsCopy);
+      
+    case 'due-earliest':
+      return itemsCopy.sort((a, b) => {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return new Date(a.due_date) - new Date(b.due_date);
+      });
+      
+    case 'due-latest':
+      return itemsCopy.sort((a, b) => {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return new Date(b.due_date) - new Date(a.due_date);
+      });
+      
+    case 'priority':
+      const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+      return itemsCopy.sort((a, b) => {
+        const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 4;
+        const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 4;
+        return priorityA - priorityB;
+      });
+      
+    case 'created-desc':
+      return itemsCopy.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+    case 'updated-desc':
+      return itemsCopy.sort((a, b) => {
+        const aDate = a.updated_at || a.created_at;
+        const bDate = b.updated_at || b.created_at;
+        return new Date(bDate) - new Date(aDate);
+      });
+      
+    case 'manual':
+      return loadManualOrder(itemsCopy, columnId);
+      
+    case 'priority-due-date':
+      return sortByPriorityAndDueDate(itemsCopy);
+      
+    case 'overdue-priority':
+      return sortByOverdueAndPriority(itemsCopy);
+      
+    case 'smart-sort':
+      return sortBySmartScore(itemsCopy);
+      
+    default:
+      return sortByDueDate(itemsCopy);
+  }
+}
+
+// Handle sort change from dropdown
+function handleSortChange(selectElement) {
+  const columnId = selectElement.dataset.column;
+  const sortMode = selectElement.value;
+  
+  // Save preference
+  saveSortPreference(columnId, sortMode);
+  
+  // If switching to manual mode, save current order as baseline
+  if (sortMode === 'manual') {
+    setTimeout(() => {
+      saveManualOrderFromDOM(columnId);
+    }, 10);
+  }
+  
+  // Re-render board
+  renderKanbanBoard();
+}
+
+// ============= COPY LINK FEATURE =============
+
+/**
+ * Copy a shareable link to an issue or action item
+ * @param {number} itemId - The ID of the item
+ * @param {string} itemType - 'issue' or 'action-item'
+ */
+function copyItemLink(itemId, itemType) {
+  if (!currentProject) {
+    showToast('❌ No project selected', 'error');
+    return;
+  }
+  
+  // Construct the URL with project and item parameters
+  const baseUrl = window.location.origin;
+  const url = `${baseUrl}/?project=${currentProject.id}&itemId=${itemId}&itemType=${itemType}`;
+  
+  // Copy to clipboard using Clipboard API
+  navigator.clipboard.writeText(url)
+    .then(() => {
+      showToast('✅ Link copied to clipboard!', 'success');
+    })
+    .catch(err => {
+      console.error('Failed to copy link:', err);
+      // Fallback for older browsers
+      fallbackCopyToClipboard(url);
+    });
+}
+
+/**
+ * Fallback copy method for older browsers
+ * @param {string} text - The text to copy
+ */
+function fallbackCopyToClipboard(text) {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-999999px';
+  document.body.appendChild(textArea);
+  textArea.select();
+  
+  try {
+    document.execCommand('copy');
+    showToast('✅ Link copied to clipboard!', 'success');
+  } catch (err) {
+    console.error('Fallback copy failed:', err);
+    showToast('❌ Failed to copy link', 'error');
+  }
+  
+  document.body.removeChild(textArea);
+}
+
 // Initialize app
 document.addEventListener("DOMContentLoaded", async function () {
     console.log("Multi-Project Tracker initialized");
