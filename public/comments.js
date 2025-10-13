@@ -299,7 +299,7 @@ async function deleteComment(commentId, itemType) {
 
 async function loadProjectMembers(projectId) {
   try {
-    const response = await axios.get(`/api/projects/${projectId}/members`, { withCredentials: true });
+    const response = await axios.get(`/api/projects/${projectId}/team`, { withCredentials: true });
     projectMembers = response.data;
   } catch (error) {
     console.error('Error loading project members:', error);
@@ -324,7 +324,7 @@ function setupMentionAutocomplete(textareaId, dropdownId) {
       
       if (searchTerm.length > 0 && !searchTerm.includes(' ')) {
         const matches = projectMembers.filter(m => 
-          m.username.toLowerCase().startsWith(searchTerm)
+          m.name.toLowerCase().startsWith(searchTerm)
         );
         
         if (matches.length > 0) {
@@ -346,7 +346,7 @@ function showMentionDropdown(dropdown, matches, textarea, atPosition) {
   if (!dropdown) return;
   
   dropdown.innerHTML = matches.map(member => {
-    const username = escapeHtml(member.username);
+    const username = escapeHtml(member.name);
     const email = escapeHtml(member.email);
     return `
       <div 

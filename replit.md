@@ -4,6 +4,13 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
+- **@Mention Autocomplete Fix** (October 13, 2025): Fixed broken @mention autocomplete in comment fields that prevented team member dropdown from appearing:
+  - **Root Cause**: Frontend was calling non-existent `/api/projects/:projectId/members` endpoint
+  - **Solution**: Updated to use existing `/api/projects/:projectId/team` endpoint
+  - **Field Name Alignment**: Changed all references from `member.username` to `member.name` to match backend response structure
+  - **Files Updated**: comments.js (loadProjectMembers, setupMentionAutocomplete, showMentionDropdown)
+  - Typing "@" followed by team member names now correctly displays autocomplete dropdown with matching users
+  - Cache version: comments.js v2
 - **Kanban Sorting & Copy Link UI Restoration** (October 13, 2025): Fixed missing sort dropdown UI that prevented sorting functionality from being visible:
   - **Sort Dropdown UI**: Added sort dropdown controls to all four Kanban column headers (To Do, In Progress, Blocked, Done) with 10 sort modes
   - **Event Listeners**: Integrated handleSortChange() event listeners in initializeFilters() for real-time dropdown interaction
