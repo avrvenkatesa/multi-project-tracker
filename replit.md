@@ -4,6 +4,15 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
+- **Kanban Sorting & Copy Link Restoration** (October 13, 2025): Successfully restored accidentally deleted features from commit 3082040:
+  - **Kanban Sorting**: Restored comprehensive sorting system with 10 sort modes (Overdue First, Earliest, Latest, Priority, Recent, Updated, Manual, Priority+Due Date, Overdue+Priority, Smart Sort)
+  - **Sorting Functions**: sortByDueDate (overdue → today → upcoming), sortByPriorityAndDueDate, sortByOverdueAndPriority, sortBySmartScore with weighted algorithm
+  - **Sort Preferences**: localStorage persistence with getSortPreferences(), saveSortPreference(), loadManualOrder(), saveManualOrder()
+  - **Sort Integration**: renderKanbanBoard applies sorting via sortItems() and syncs dropdown values with saved preferences
+  - **Copy Link Feature**: Restored copyItemLink() and fallbackCopyToClipboard() with clipboard API for shareable deep-links
+  - **UI Integration**: Copy Link button added to all kanban cards with purple hover state and proper event listeners
+  - Both features were implemented Oct 9, deleted Oct 11 in risk register commit, now fully operational
+  - Cache version: index.html v28, app.js v28
 - **Tag Display Implementation** (October 12, 2025): Implemented complete tag display across all UI components with dynamic updates:
   - **Kanban Cards**: Tags now display below assignee/due date as colored badges matching tag colors
   - **Edit Modals**: Enhanced tag UI with two-part display and real-time updates:
