@@ -32,8 +32,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   currentUser = AuthManager.currentUser;
   
-  // Setup navigation
-  document.getElementById('backToKanbanLink').href = `index.html?project=${currentProjectId}`;
+  // Display user info
+  const userDisplay = document.getElementById('userDisplay');
+  if (userDisplay && currentUser) {
+    userDisplay.textContent = `${currentUser.username} (${currentUser.role})`;
+  }
   
   // Setup event listeners
   setupEventListeners();
@@ -44,15 +47,131 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Setup event listeners
 function setupEventListeners() {
-  const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => AuthManager.logout());
-  }
-  
   const retryBtn = document.getElementById('retryBtn');
   if (retryBtn) {
     retryBtn.addEventListener('click', () => loadDashboard());
   }
+  
+  // Back to Projects button
+  const backToProjectsBtn = document.getElementById('backToProjectsBtn');
+  if (backToProjectsBtn) {
+    backToProjectsBtn.addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+  }
+  
+  // View dropdown navigation
+  document.getElementById('dashboard-btn')?.addEventListener('click', () => {
+    window.location.href = `dashboard.html?projectId=${currentProjectId}`;
+  });
+  document.getElementById('ai-analysis-btn')?.addEventListener('click', () => {
+    window.location.href = `index.html?project=${currentProjectId}#ai-analysis`;
+  });
+  document.getElementById('view-transcripts-btn')?.addEventListener('click', () => {
+    window.location.href = `index.html?project=${currentProjectId}#transcripts`;
+  });
+  document.getElementById('view-checklists-btn')?.addEventListener('click', () => {
+    window.location.href = `checklists.html?project=${currentProjectId}`;
+  });
+  document.getElementById('view-tags-btn')?.addEventListener('click', () => {
+    window.location.href = `tags.html?projectId=${currentProjectId}`;
+  });
+  document.getElementById('view-risks-btn')?.addEventListener('click', () => {
+    window.location.href = `risks.html?projectId=${currentProjectId}`;
+  });
+  
+  // Create dropdown navigation
+  document.getElementById('create-issue-btn')?.addEventListener('click', () => {
+    window.location.href = `index.html?project=${currentProjectId}#create-issue`;
+  });
+  document.getElementById('create-action-item-btn')?.addEventListener('click', () => {
+    window.location.href = `index.html?project=${currentProjectId}#create-action`;
+  });
+  
+  // Dropdown menu functionality
+  const viewDropdownBtn = document.getElementById('view-dropdown-btn');
+  const viewDropdownMenu = document.getElementById('view-dropdown-menu');
+  const createDropdownBtn = document.getElementById('create-dropdown-btn');
+  const createDropdownMenu = document.getElementById('create-dropdown-menu');
+  
+  function openDropdown(btn, menu, otherBtn, otherMenu) {
+    menu?.classList.remove('hidden');
+    otherMenu?.classList.add('hidden');
+    btn?.setAttribute('aria-expanded', 'true');
+    otherBtn?.setAttribute('aria-expanded', 'false');
+    const firstItem = menu?.querySelector('button[role="menuitem"]');
+    firstItem?.focus();
+  }
+  
+  function closeDropdown(btn, menu) {
+    menu?.classList.add('hidden');
+    btn?.setAttribute('aria-expanded', 'false');
+  }
+  
+  function closeAllDropdowns() {
+    closeDropdown(viewDropdownBtn, viewDropdownMenu);
+    closeDropdown(createDropdownBtn, createDropdownMenu);
+  }
+  
+  // Toggle View dropdown
+  viewDropdownBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = !viewDropdownMenu?.classList.contains('hidden');
+    if (isOpen) {
+      closeDropdown(viewDropdownBtn, viewDropdownMenu);
+    } else {
+      openDropdown(viewDropdownBtn, viewDropdownMenu, createDropdownBtn, createDropdownMenu);
+    }
+  });
+  
+  // Toggle Create dropdown
+  createDropdownBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = !createDropdownMenu?.classList.contains('hidden');
+    if (isOpen) {
+      closeDropdown(createDropdownBtn, createDropdownMenu);
+    } else {
+      openDropdown(createDropdownBtn, createDropdownMenu, viewDropdownBtn, viewDropdownMenu);
+    }
+  });
+  
+  // Close dropdowns on outside click
+  document.addEventListener('click', closeAllDropdowns);
+  
+  // Keyboard navigation for dropdowns
+  [viewDropdownMenu, createDropdownMenu].forEach(menu => {
+    menu?.addEventListener('keydown', (e) => {
+      const items = Array.from(menu.querySelectorAll('button[role="menuitem"]'));
+      const currentIndex = items.indexOf(document.activeElement);
+      
+      switch(e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          const nextIndex = (currentIndex + 1) % items.length;
+          items[nextIndex]?.focus();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          const prevIndex = (currentIndex - 1 + items.length) % items.length;
+          items[prevIndex]?.focus();
+          break;
+        case 'Home':
+          e.preventDefault();
+          items[0]?.focus();
+          break;
+        case 'End':
+          e.preventDefault();
+          items[items.length - 1]?.focus();
+          break;
+        case 'Escape':
+          e.preventDefault();
+          const isInView = menu === viewDropdownMenu;
+          closeDropdown(isInView ? viewDropdownBtn : createDropdownBtn, menu);
+          (isInView ? viewDropdownBtn : createDropdownBtn)?.focus();
+          break;
+      }
+    });
+  });
 }
 
 // Load all dashboard data
