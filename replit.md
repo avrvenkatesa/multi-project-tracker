@@ -4,6 +4,20 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
+- **Done Column Delivery Performance Badges** (October 14, 2025): Implemented status history tracking and delivery performance badges for completed items:
+  - **Status History Table**: Created `status_history` table to track all status transitions with audit trail (item_type, item_id, from_status, to_status, changed_by, changed_at)
+  - **Backend Logging**: Both Issues and Action Items PATCH endpoints now log status changes to history table when status field changes
+  - **Completion Timestamp**: GET endpoints use LEFT JOIN LATERAL to fetch most recent 'Done' status change as `completed_at` field
+  - **Badge Logic Enhancement**: Updated `createDueDateBadge()` to show delivery performance for Done items:
+    - **On Time** (green) - Completed on due date
+    - **X days early** (blue) - Completed before due date
+    - **X days late** (red) - Completed after due date
+    - **Completed** (gray) - No due date or completion timestamp
+  - **Non-Done Items**: Continue showing urgency badges (overdue, due today, due soon, future)
+  - **CSS Styles**: Added 4 new badge variants with distinct color coding for delivery performance
+  - **User Value**: Done column now provides meaningful delivery metrics instead of confusing urgency indicators
+  - **Performance**: LATERAL join efficiently returns single row per item without N+1 queries
+  - Cache version: app.js v32, Files updated: schema.ts, server.js, app.js, index.html
 - **@Mention Dropdown Positioning Fix** (October 14, 2025): Fixed @mention autocomplete dropdown not appearing in Item Detail Modal comments:
   - **Root Cause**: Dropdown with absolute positioning lacked proper relative positioning context in parent container
   - **Solution**: Wrapped textarea and dropdown in dedicated `<div class="relative">` container, separate from flex button row
