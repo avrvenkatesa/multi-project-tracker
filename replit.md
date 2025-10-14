@@ -9,11 +9,10 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes (October 2025)
 - **Project-Aware Checklist Navigation** (October 14, 2025): Enhanced checklist page to maintain project context when navigating from project pages:
   - **Smart Navigation**: When accessing checklists from a project, the project is pre-selected in the filter dropdown
-  - **Auto-Filtered Templates**: Template dropdown automatically shows only templates belonging to the selected project
-  - **Modal Integration**: Create Checklist modal pre-selects the project and filters templates accordingly
-  - **Dynamic Updates**: Template filter updates in real-time when user changes project selection
-  - **User Control**: Users can still switch to "All Projects" to see all templates and checklists
-  - **Files**: public/app.js (navigation with project parameter), public/js/checklists.js (URL detection, filtering logic)
+  - **Project Pre-Selection**: Modal automatically pre-selects the project when creating new checklists
+  - **Global Templates**: Templates are system-wide and available to all projects (not project-specific)
+  - **Simplified UX**: Reduced clicks by pre-filling project information based on navigation context
+  - **Files**: public/app.js (navigation with project parameter), public/js/checklists.js (URL detection, project pre-selection)
 - **Checklist Page Layout Consistency** (October 14, 2025): Updated checklist page to match the consistent layout of other pages (Tags, Risks, Dashboard):
   - **Navigation Cleanup**: Removed navigation tabs (Dashboard, Issues & Actions, Checklists, Risks, Tags) and replaced with simple "← Back to Projects" button
   - **Header Redesign**: Updated header to match gradient styling and subtitle format used in Tags/Risks pages
