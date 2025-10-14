@@ -58,6 +58,18 @@ async function loadProjects() {
     const projectId = urlParams.get('projectId');
     if (projectId) {
       selector.value = projectId;
+      
+      // Display project name
+      const project = projects.find(p => p.id === parseInt(projectId));
+      if (project) {
+        const projectContext = document.getElementById('project-context');
+        const projectNameEl = document.getElementById('project-name');
+        if (projectContext && projectNameEl) {
+          projectNameEl.textContent = project.name;
+          projectContext.classList.remove('hidden');
+        }
+      }
+      
       await onProjectChange();
     }
   } catch (error) {

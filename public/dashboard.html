@@ -9,26 +9,27 @@
 <body class="bg-gray-50">
     <div id="app">
         <!-- Header -->
-        <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 shadow-lg">
-            <div class="max-w-7xl mx-auto flex justify-between items-center">
-                <div>
-                    <h1 class="text-2xl font-bold">Project Dashboard</h1>
-                    <p class="text-sm text-blue-100" id="projectNameHeader">
-                        Loading project...
-                    </p>
-                </div>
-                
-                <div class="flex gap-3 items-center">
-                    <span id="userDisplay" class="text-sm"></span>
+        <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-6 px-6 shadow-lg">
+            <div class="max-w-7xl mx-auto">
+                <p class="text-sm text-blue-100 mb-1">Multi-Project Tracker</p>
+                <div class="flex justify-between items-center mb-2">
+                    <h1 class="text-3xl font-bold">Dashboard</h1>
                     <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
                         ← Back to Projects
                     </button>
                 </div>
+                <p class="text-sm text-blue-100">Track project progress, team performance, and delivery metrics</p>
             </div>
         </header>
 
         <!-- Main Content -->
         <main class="max-w-7xl mx-auto px-4 py-8">
+            <!-- Project Context -->
+            <div class="mb-6">
+                <p class="text-sm text-gray-600">Managing dashboard for:</p>
+                <h2 id="projectNameHeader" class="text-xl font-bold text-gray-800">Loading project...</h2>
+            </div>
+
             <!-- View & Create Dropdowns -->
             <div class="bg-white rounded-lg shadow-md p-4 mb-6">
                 <div class="flex items-center gap-4">

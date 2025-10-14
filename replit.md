@@ -7,6 +7,13 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
+- **Consistent Header Design** (October 14, 2025): Standardized headers across all project-aware pages for unified branding and navigation:
+  - **Header Structure**: All pages now follow consistent 3-line pattern: "Multi-Project Tracker" (app name) → Page name (Dashboard/Checklists/Tags/Risks) → Page description
+  - **Blue Gradient**: All headers use `bg-gradient-to-r from-blue-600 to-blue-700` with white text and consistent padding (py-6)
+  - **Page Descriptions**: Dashboard: "Track project progress, team performance, and delivery metrics" | Checklists: "Verify your work and deliver with quality" | Tags: "Organize your issues and action items with color-coded tags" | Risks: "Identify, assess, and monitor project risks"
+  - **Project Context**: Added "Managing [content] for: [Project Name]" section below header on all pages, displayed when project is selected from URL parameters
+  - **Navigation**: "← Back to Projects" button consistently positioned in top-right of header across all pages
+  - **Files**: dashboard.html/js, checklists.html/js, risks.html/js, tags.html/js
 - **Universal Dropdown Navigation** (October 14, 2025): Extended dropdown navigation to all project-aware pages for consistent user experience:
   - **Page Coverage**: Implemented on dashboard.html, checklists.html, risks.html, and tags.html - all project-aware pages now have identical navigation
   - **Simplified Headers**: Removed redundant navigation links, streamlined headers to show project name/info with "Back to Projects" button
