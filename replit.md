@@ -7,6 +7,20 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
+- **Universal Dropdown Navigation** (October 14, 2025): Extended dropdown navigation to all project-aware pages for consistent user experience:
+  - **Page Coverage**: Implemented on dashboard.html, checklists.html, risks.html, and tags.html - all project-aware pages now have identical navigation
+  - **Simplified Headers**: Removed redundant navigation links, streamlined headers to show project name/info with "Back to Projects" button
+  - **Dropdown Position**: Positioned View/Create dropdowns below header in dedicated section for consistency across all pages
+  - **Project Context**: All dropdown links preserve project context using URL parameters (projectId or project) for seamless navigation
+  - **Complete Implementation**: Each page includes full dropdown logic (openDropdown, closeDropdown, toggle handlers, keyboard nav, outside-click dismissal)
+  - **Files**: dashboard.html/js, checklists.html/js, risks.html/js, tags.html/js
+- **Dropdown Navigation UI** (October 14, 2025): Consolidated cluttered navigation from 8 buttons to 2 accessible dropdown menus on main project page:
+  - **UI Cleanup**: Replaced 8 individual buttons (Dashboard, AI Analysis, Transcripts, Checklists, Tags, Risks, + Issue, + Action Item) with 2 dropdown menus ("View" with 6 items, "+ Create" with 2 items)
+  - **Accessibility Compliance**: Full WCAG compliance with ARIA attributes (aria-haspopup, aria-expanded, aria-controls, role="menu/menuitem")
+  - **Keyboard Navigation**: Complete keyboard support - Enter/Space to toggle, Arrow keys for navigation, Escape to close, Home/End for first/last item
+  - **Focus Management**: Auto-focus first item on open, return focus to button on close, proper ARIA state synchronization when switching dropdowns
+  - **User Experience**: Cleaner interface while maintaining all functionality, click-outside-to-close, hover states with colored backgrounds matching original button themes
+  - **Files**: public/index.html (dropdown structure), public/app.js (interaction logic)
 - **Project-Aware Checklist Navigation** (October 14, 2025): Enhanced checklist page to maintain project context when navigating from project pages:
   - **Smart Navigation**: When accessing checklists from a project, the project is pre-selected in the filter dropdown
   - **Project Pre-Selection**: Modal automatically pre-selects the project when creating new checklists
@@ -18,13 +32,6 @@ Preferred communication style: Simple, everyday language.
   - **Header Redesign**: Updated header to match gradient styling and subtitle format used in Tags/Risks pages
   - **Button Positioning**: Moved "+ New Checklist" button to right side of content area (consistent with other pages)
   - **Files**: public/checklists.html (header structure), public/js/checklists.js (back button handler)
-- **Dropdown Navigation UI** (October 14, 2025): Consolidated cluttered navigation from 8 buttons to 2 accessible dropdown menus:
-  - **UI Cleanup**: Replaced 8 individual buttons (Dashboard, AI Analysis, Transcripts, Checklists, Tags, Risks, + Issue, + Action Item) with 2 dropdown menus ("View" with 6 items, "+ Create" with 2 items)
-  - **Accessibility Compliance**: Full WCAG compliance with ARIA attributes (aria-haspopup, aria-expanded, aria-controls, role="menu/menuitem")
-  - **Keyboard Navigation**: Complete keyboard support - Enter/Space to toggle, Arrow keys for navigation, Escape to close, Home/End for first/last item
-  - **Focus Management**: Auto-focus first item on open, return focus to button on close, proper ARIA state synchronization when switching dropdowns
-  - **User Experience**: Cleaner interface while maintaining all functionality, click-outside-to-close, hover states with colored backgrounds matching original button themes
-  - **Files**: public/index.html (dropdown structure), public/app.js (interaction logic)
 - **Progress Tracking Fix** (October 14, 2025): Fixed data format mismatch preventing progress updates when completing checklist items:
   - **Issue**: Frontend sent separate `response_value`/`response_boolean`/`response_date` fields without `is_completed` flag; backend expected `value`, `type`, and `is_completed`
   - **Root Cause**: Backend only counts items where `is_completed = true`, but frontend never sent this field (always defaulted to false)
