@@ -7,6 +7,10 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
+- **Checklist ID Schema Fix** (October 14, 2025): Fixed database schema mismatch causing 500 error when creating checklists:
+  - **Issue**: Generated checklist IDs (CHK-{timestamp}-{random}) were 21+ characters but column was varchar(20)
+  - **Fix**: Increased checklist_id column from varchar(20) to varchar(30) using ALTER TABLE
+  - **Files**: schema.ts (updated definition), database (column altered directly)
 - **CSP Compliance Enhancement** (October 14, 2025): Eliminated all Content Security Policy violations by implementing event delegation pattern across the entire application:
   - **HTML Files**: Removed all inline event handlers (onclick, onchange, oninput) from index.html, checklists.html, and checklist-fill.html
   - **Navigation Buttons**: Fixed Checklists button in index.html - removed inline onclick handler, added addEventListener in app.js setupEventListeners()

@@ -255,7 +255,7 @@ export const checklistTemplateItems = pgTable('checklist_template_items', {
 
 export const checklists = pgTable('checklists', {
   id: serial('id').primaryKey(),
-  checklistId: varchar('checklist_id', { length: 20 }).notNull().unique(),
+  checklistId: varchar('checklist_id', { length: 30 }).notNull().unique(),
   templateId: integer('template_id').notNull().references(() => checklistTemplates.id),
   projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   title: varchar('title', { length: 255 }).notNull(),
