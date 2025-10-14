@@ -4,6 +4,13 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
+- **@Mention Dropdown Positioning Fix** (October 14, 2025): Fixed @mention autocomplete dropdown not appearing in Item Detail Modal comments:
+  - **Root Cause**: Dropdown with absolute positioning lacked proper relative positioning context in parent container
+  - **Solution**: Wrapped textarea and dropdown in dedicated `<div class="relative">` container, separate from flex button row
+  - **Previous Oct 13 Fix**: Backend endpoint and field names were correct (`/api/projects/:projectId/team`, `member.name`)
+  - **CSS Structure Fix**: Ensured dropdown anchors directly to textarea without interference from sibling flex layouts
+  - **Result**: @mention typing now correctly displays team member autocomplete dropdown below textarea
+  - Files updated: index.html (lines 676-698)
 - **Item Detail Modal Due Date Display** (October 14, 2025): Added due date display with urgency badge to Issue and Action Item detail modals:
   - **createDueDateBadge() Function**: Added to comments.js to provide same badge functionality as Kanban cards
   - **Modal Enhancement**: Detail modal now displays due date section below Status/Priority/Assigned To/Created grid
