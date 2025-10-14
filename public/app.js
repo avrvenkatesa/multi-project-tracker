@@ -891,8 +891,8 @@ async function renderKanbanBoard() {
                         }
                         <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
                             <span>${item.assignee || "Unassigned"}</span>
-                            <span>${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : ""}</span>
                         </div>
+                        ${createDueDateBadge(item.dueDate)}
                         ${item.tags && item.tags.length > 0 ? `
                             <div class="flex flex-wrap gap-1 mb-2">
                                 ${item.tags.map(tag => `
