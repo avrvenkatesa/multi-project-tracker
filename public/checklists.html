@@ -139,21 +139,5 @@
   </div>
 
   <script src="js/checklists.js"></script>
-  <script>
-    // Check authentication
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then(r => {
-        if (r.status === 401) {
-          window.location.href = 'index.html';
-          return null;
-        }
-        return r.json();
-      })
-      .then(user => {
-        if (user) {
-          document.getElementById('userDisplay').textContent = `${user.username} (${user.role})`;
-        }
-      });
-  </script>
 </body>
 </html>

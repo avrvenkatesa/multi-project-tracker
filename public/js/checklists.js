@@ -14,11 +14,39 @@ let users = [];
 document.addEventListener('DOMContentLoaded', () => {
   const currentPage = window.location.pathname;
   
-  if (currentPage.includes('checklists.html')) {
-    initChecklistsListPage();
-  } else if (currentPage.includes('checklist-fill.html')) {
-    // Handled by inline script in HTML
-  }
+  // Check authentication for all checklist pages
+  fetch('/api/auth/me', { credentials: 'include' })
+    .then(r => {
+      if (r.status === 401) {
+        window.location.href = 'index.html';
+        return null;
+      }
+      return r.json();
+    })
+    .then(user => {
+      if (!user) return;
+      
+      // Update user display if element exists
+      const userDisplay = document.getElementById('userDisplay');
+      if (userDisplay) {
+        userDisplay.textContent = `${user.username} (${user.role})`;
+      }
+      
+      // Initialize appropriate page
+      if (currentPage.includes('checklists.html')) {
+        initChecklistsListPage();
+      } else if (currentPage.includes('checklist-fill.html')) {
+        // Load checklist from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const checklistId = urlParams.get('id');
+        if (checklistId) {
+          loadChecklistForFilling(checklistId);
+        } else {
+          alert('No checklist ID provided');
+          window.location.href = 'checklists.html';
+        }
+      }
+    });
 });
 
 async function initChecklistsListPage() {
