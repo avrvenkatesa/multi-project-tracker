@@ -474,6 +474,49 @@ function setupEventListeners() {
         window.location.href = 'checklists.html';
     });
     
+    // Dropdown menu functionality
+    const viewDropdownBtn = document.getElementById('view-dropdown-btn');
+    const viewDropdownMenu = document.getElementById('view-dropdown-menu');
+    const createDropdownBtn = document.getElementById('create-dropdown-btn');
+    const createDropdownMenu = document.getElementById('create-dropdown-menu');
+    
+    // Toggle View dropdown
+    viewDropdownBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        viewDropdownMenu?.classList.toggle('hidden');
+        createDropdownMenu?.classList.add('hidden');
+    });
+    
+    // Toggle Create dropdown
+    createDropdownBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        createDropdownMenu?.classList.toggle('hidden');
+        viewDropdownMenu?.classList.add('hidden');
+    });
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!viewDropdownBtn?.contains(e.target) && !viewDropdownMenu?.contains(e.target)) {
+            viewDropdownMenu?.classList.add('hidden');
+        }
+        if (!createDropdownBtn?.contains(e.target) && !createDropdownMenu?.contains(e.target)) {
+            createDropdownMenu?.classList.add('hidden');
+        }
+    });
+    
+    // Close dropdowns when a menu item is clicked
+    viewDropdownMenu?.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            viewDropdownMenu.classList.add('hidden');
+        });
+    });
+    
+    createDropdownMenu?.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            createDropdownMenu.classList.add('hidden');
+        });
+    });
+    
     // Relationship modal buttons
     document.getElementById('close-relationship-modal-btn')?.addEventListener('click', closeRelationshipModal);
     document.getElementById('add-relationship-btn')?.addEventListener('click', addRelationship);
