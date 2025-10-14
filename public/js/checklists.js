@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Initialize appropriate page
       if (currentPage.includes('checklists.html')) {
         initChecklistsListPage();
+        setupChecklistsPageListeners();
       } else if (currentPage.includes('checklist-fill.html')) {
         // Load checklist from URL parameter
         const urlParams = new URLSearchParams(window.location.search);
@@ -45,9 +46,154 @@ document.addEventListener('DOMContentLoaded', () => {
           alert('No checklist ID provided');
           window.location.href = 'checklists.html';
         }
+        setupChecklistFillPageListeners();
       }
     });
 });
+
+// =====================================================
+// EVENT LISTENERS SETUP
+// =====================================================
+
+function setupChecklistsPageListeners() {
+  // Create checklist button
+  const createBtn = document.getElementById('createChecklistBtn');
+  if (createBtn) {
+    createBtn.addEventListener('click', showCreateChecklistModal);
+  }
+  
+  // Logout button
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', logout);
+  }
+  
+  // Filter selects
+  const projectFilter = document.getElementById('projectFilter');
+  if (projectFilter) {
+    projectFilter.addEventListener('change', loadChecklists);
+  }
+  
+  const statusFilter = document.getElementById('statusFilter');
+  if (statusFilter) {
+    statusFilter.addEventListener('change', loadChecklists);
+  }
+  
+  const templateFilter = document.getElementById('templateFilter');
+  if (templateFilter) {
+    templateFilter.addEventListener('change', loadChecklists);
+  }
+  
+  // Modal close buttons
+  const closeModalBtn = document.getElementById('closeModalBtn');
+  if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', closeCreateChecklistModal);
+  }
+  
+  const cancelModalBtn = document.getElementById('cancelModalBtn');
+  if (cancelModalBtn) {
+    cancelModalBtn.addEventListener('click', closeCreateChecklistModal);
+  }
+  
+  // Form submit
+  const createForm = document.getElementById('createChecklistForm');
+  if (createForm) {
+    createForm.addEventListener('submit', createChecklist);
+  }
+  
+  // Event delegation for dynamically created checklist cards
+  const checklistsGrid = document.getElementById('checklistsGrid');
+  if (checklistsGrid) {
+    checklistsGrid.addEventListener('click', (e) => {
+      const card = e.target.closest('.checklist-card');
+      const openBtn = e.target.closest('.open-checklist-btn');
+      const deleteBtn = e.target.closest('.delete-checklist-btn');
+      
+      if (deleteBtn) {
+        e.stopPropagation();
+        const checklistId = deleteBtn.dataset.checklistId;
+        deleteChecklist(checklistId);
+      } else if (openBtn) {
+        e.stopPropagation();
+        const checklistId = openBtn.dataset.checklistId;
+        openChecklist(checklistId);
+      } else if (card) {
+        const checklistId = card.dataset.checklistId;
+        openChecklist(checklistId);
+      }
+    });
+  }
+}
+
+function setupChecklistFillPageListeners() {
+  // Save progress button
+  const saveBtn = document.getElementById('saveProgressBtn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveProgress);
+  }
+  
+  // Back to list button
+  const backBtn = document.getElementById('backToListBtn');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      window.location.href = 'checklists.html';
+    });
+  }
+  
+  // Add comment button
+  const addCommentBtn = document.getElementById('addCommentBtn');
+  if (addCommentBtn) {
+    addCommentBtn.addEventListener('click', addComment);
+  }
+  
+  // Event delegation for section toggles
+  const sectionsContainer = document.getElementById('checklistSections');
+  if (sectionsContainer) {
+    sectionsContainer.addEventListener('click', (e) => {
+      const sectionHeader = e.target.closest('.section-header');
+      if (sectionHeader) {
+        const sectionId = sectionHeader.dataset.sectionId;
+        toggleSection(sectionId);
+      }
+    });
+    
+    // Event delegation for field inputs
+    sectionsContainer.addEventListener('change', (e) => {
+      const checkbox = e.target.closest('.checkbox-field');
+      const dateField = e.target.closest('.date-field');
+      const radioField = e.target.closest('.radio-field');
+      const selectField = e.target.closest('.select-field');
+      
+      if (checkbox) {
+        const itemId = checkbox.dataset.itemId;
+        saveResponse(itemId, checkbox.checked, 'checkbox');
+      } else if (dateField) {
+        const itemId = dateField.dataset.itemId;
+        saveResponse(itemId, dateField.value, 'date');
+      } else if (radioField) {
+        const itemId = radioField.dataset.itemId;
+        saveResponse(itemId, radioField.value, 'radio');
+      } else if (selectField) {
+        const itemId = selectField.dataset.itemId;
+        saveResponse(itemId, selectField.value, 'dropdown');
+      }
+    });
+    
+    // Event delegation for text fields with debouncing
+    sectionsContainer.addEventListener('input', (e) => {
+      const textField = e.target.closest('.text-field');
+      const textareaField = e.target.closest('.textarea-field');
+      
+      if (textField) {
+        const itemId = textField.dataset.itemId;
+        debouncedSave(itemId, textField.value, 'text');
+      } else if (textareaField) {
+        const itemId = textareaField.dataset.itemId;
+        debouncedSave(itemId, textareaField.value, 'textarea');
+      }
+    });
+  }
+}
 
 async function initChecklistsListPage() {
   await Promise.all([
@@ -159,7 +305,7 @@ function createChecklistCard(checklist) {
     : '';
   
   return `
-    <div class="checklist-card" onclick="openChecklist('${checklist.id}')">
+    <div class="checklist-card" data-checklist-id="${checklist.id}">
       <div class="checklist-card-header">
         <div class="flex items-start justify-between">
           <div class="flex items-center gap-2">
@@ -198,10 +344,10 @@ function createChecklistCard(checklist) {
       </div>
       
       <div class="checklist-card-footer">
-        <button onclick="event.stopPropagation(); openChecklist('${checklist.id}')" class="btn-primary btn-sm">
+        <button class="open-checklist-btn btn-primary btn-sm" data-checklist-id="${checklist.id}">
           Open
         </button>
-        <button onclick="event.stopPropagation(); deleteChecklist('${checklist.id}')" class="btn-danger btn-sm">
+        <button class="delete-checklist-btn btn-danger btn-sm" data-checklist-id="${checklist.id}">
           Delete
         </button>
       </div>
@@ -397,7 +543,7 @@ function renderSection(section, directSubsections, allSections, level = 0) {
   
   let html = `
     <div class="checklist-section" style="margin-left: ${level * 20}px">
-      <div class="section-header" onclick="toggleSection('${sectionId}')">
+      <div class="section-header" data-section-id="${sectionId}">
         <div class="flex items-center gap-2">
           <span class="section-toggle" id="${sectionId}-toggle">▼</span>
           <h3 class="section-title">${section.section_number} ${escapeHtml(section.title)}</h3>
@@ -452,22 +598,22 @@ function renderField(item) {
   switch(item.field_type) {
     case 'checkbox':
       return `<input type="checkbox" ${boolValue ? 'checked' : ''} 
-              onchange="saveResponse(${item.id}, this.checked, 'checkbox')" 
+              data-item-id="${item.id}"
               class="checkbox-field">`;
     
     case 'text':
       return `<input type="text" value="${escapeHtml(value)}" 
-              oninput="debouncedSave(${item.id}, this.value, 'text')" 
+              data-item-id="${item.id}"
               class="text-field">`;
     
     case 'textarea':
       return `<textarea rows="3" 
-              oninput="debouncedSave(${item.id}, this.value, 'textarea')" 
+              data-item-id="${item.id}"
               class="textarea-field">${escapeHtml(value)}</textarea>`;
     
     case 'date':
       return `<input type="date" value="${dateValue}" 
-              onchange="saveResponse(${item.id}, this.value, 'date')" 
+              data-item-id="${item.id}"
               class="date-field">`;
     
     case 'radio':
@@ -476,7 +622,7 @@ function renderField(item) {
         <label class="radio-label">
           <input type="radio" name="item_${item.id}" value="${escapeHtml(opt)}" 
                  ${value === opt ? 'checked' : ''}
-                 onchange="saveResponse(${item.id}, this.value, 'radio')"
+                 data-item-id="${item.id}"
                  class="radio-field">
           ${escapeHtml(opt)}
         </label>
@@ -484,7 +630,7 @@ function renderField(item) {
     
     case 'dropdown':
       const dropOptions = item.field_options ? JSON.parse(item.field_options) : [];
-      return `<select onchange="saveResponse(${item.id}, this.value, 'dropdown')" class="select-field">
+      return `<select data-item-id="${item.id}" class="select-field">
         <option value="">Select...</option>
         ${dropOptions.map(opt => 
           `<option value="${escapeHtml(opt)}" ${value === opt ? 'selected' : ''}>${escapeHtml(opt)}</option>`
@@ -492,7 +638,7 @@ function renderField(item) {
       </select>`;
     
     default:
-      return `<input type="text" value="${escapeHtml(value)}" class="text-field">`;
+      return `<input type="text" value="${escapeHtml(value)}" data-item-id="${item.id}" class="text-field">`;
   }
 }
 

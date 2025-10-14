@@ -15,7 +15,7 @@
         <h1 class="text-3xl font-bold">📋 Multi-Project Tracker</h1>
         <div class="flex items-center gap-4">
           <span id="userDisplay" class="text-sm"></span>
-          <button onclick="logout()" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg transition">
+          <button id="logoutBtn" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg transition">
             🚪 Logout
           </button>
         </div>
@@ -49,18 +49,18 @@
   <main class="main-content">
     <div class="content-header">
       <h2>Checklists</h2>
-      <button onclick="showCreateChecklistModal()" class="btn-primary">
+      <button id="createChecklistBtn" class="btn-primary">
         + New Checklist
       </button>
     </div>
 
     <!-- Filters -->
     <div class="filters-bar">
-      <select id="projectFilter" onchange="loadChecklists()">
+      <select id="projectFilter">
         <option value="">All Projects</option>
       </select>
       
-      <select id="statusFilter" onchange="loadChecklists()">
+      <select id="statusFilter">
         <option value="">All Statuses</option>
         <option value="not-started">Not Started</option>
         <option value="in-progress">In Progress</option>
@@ -68,7 +68,7 @@
         <option value="approved">Approved</option>
       </select>
       
-      <select id="templateFilter" onchange="loadChecklists()">
+      <select id="templateFilter">
         <option value="">All Templates</option>
       </select>
     </div>
@@ -89,9 +89,9 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3>Create New Checklist</h3>
-        <button onclick="closeCreateChecklistModal()" class="close-btn">&times;</button>
+        <button id="closeModalBtn" class="close-btn">&times;</button>
       </div>
-      <form id="createChecklistForm" onsubmit="createChecklist(event)">
+      <form id="createChecklistForm">
         <div class="form-group">
           <label>Template *</label>
           <select id="templateSelect" required>
@@ -129,7 +129,7 @@
         </div>
         
         <div class="modal-actions">
-          <button type="button" onclick="closeCreateChecklistModal()" class="btn-secondary">
+          <button type="button" id="cancelModalBtn" class="btn-secondary">
             Cancel
           </button>
           <button type="submit" class="btn-primary">Create Checklist</button>

@@ -14,10 +14,10 @@
       <div class="flex justify-between items-center flex-wrap gap-4">
         <h1 class="text-3xl font-bold">📋 Multi-Project Tracker</h1>
         <div class="flex items-center gap-3">
-          <button onclick="saveProgress()" class="btn-primary">
+          <button id="saveProgressBtn" class="btn-primary">
             💾 Save Progress
           </button>
-          <button onclick="window.location.href='checklists.html'" class="btn-secondary">
+          <button id="backToListBtn" class="btn-secondary">
             ← Back to List
           </button>
         </div>
@@ -63,7 +63,7 @@
       </div>
       <div class="add-comment">
         <textarea id="newComment" placeholder="Add a comment..." rows="2"></textarea>
-        <button onclick="addComment()" class="btn-primary">Post Comment</button>
+        <button id="addCommentBtn" class="btn-primary">Post Comment</button>
       </div>
     </div>
   </main>
