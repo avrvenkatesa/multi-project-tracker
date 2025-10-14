@@ -9,46 +9,24 @@
 </head>
 <body class="bg-gray-50">
   <!-- Header -->
-  <header class="bg-blue-600 text-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 py-6">
-      <div class="flex justify-between items-center">
-        <h1 class="text-3xl font-bold">📋 Multi-Project Tracker</h1>
-        <div class="flex items-center gap-4">
-          <span id="userDisplay" class="text-sm"></span>
-          <button id="logoutBtn" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg transition">
-            🚪 Logout
-          </button>
-        </div>
+  <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 shadow-lg">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">Checklists</h1>
+        <p class="text-sm text-blue-100">Manage project checklists and track completion</p>
+      </div>
+      <div class="flex gap-3 items-center">
+        <span id="userDisplay" class="text-sm"></span>
+        <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
+          ← Back to Projects
+        </button>
       </div>
     </div>
-    
-    <!-- Navigation -->
-    <nav class="bg-blue-700">
-      <div class="max-w-7xl mx-auto px-4">
-        <div class="flex space-x-1">
-          <a href="dashboard.html" class="px-4 py-3 hover:bg-blue-600 transition rounded-t-lg">
-            📊 Dashboard
-          </a>
-          <a href="index.html" class="px-4 py-3 hover:bg-blue-600 transition rounded-t-lg">
-            🐛 Issues & Actions
-          </a>
-          <a href="checklists.html" class="px-4 py-3 bg-blue-800 transition rounded-t-lg">
-            📋 Checklists
-          </a>
-          <a href="risks.html" class="px-4 py-3 hover:bg-blue-600 transition rounded-t-lg">
-            ⚠️ Risks
-          </a>
-          <a href="tags.html" class="px-4 py-3 hover:bg-blue-600 transition rounded-t-lg">
-            🏷️ Tags
-          </a>
-        </div>
-      </div>
-    </nav>
   </header>
 
   <main class="main-content">
     <div class="content-header">
-      <h2>Checklists</h2>
+      <h2>All Checklists</h2>
       <button id="createChecklistBtn" class="btn-primary">
         + New Checklist
       </button>

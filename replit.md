@@ -7,6 +7,11 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
+- **Checklist Page Layout Consistency** (October 14, 2025): Updated checklist page to match the consistent layout of other pages (Tags, Risks, Dashboard):
+  - **Navigation Cleanup**: Removed navigation tabs (Dashboard, Issues & Actions, Checklists, Risks, Tags) and replaced with simple "← Back to Projects" button
+  - **Header Redesign**: Updated header to match gradient styling and subtitle format used in Tags/Risks pages
+  - **Button Positioning**: Moved "+ New Checklist" button to right side of content area (consistent with other pages)
+  - **Files**: public/checklists.html (header structure), public/js/checklists.js (back button handler)
 - **Dropdown Navigation UI** (October 14, 2025): Consolidated cluttered navigation from 8 buttons to 2 accessible dropdown menus:
   - **UI Cleanup**: Replaced 8 individual buttons (Dashboard, AI Analysis, Transcripts, Checklists, Tags, Risks, + Issue, + Action Item) with 2 dropdown menus ("View" with 6 items, "+ Create" with 2 items)
   - **Accessibility Compliance**: Full WCAG compliance with ARIA attributes (aria-haspopup, aria-expanded, aria-controls, role="menu/menuitem")

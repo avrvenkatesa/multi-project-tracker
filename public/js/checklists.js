@@ -62,10 +62,12 @@ function setupChecklistsPageListeners() {
     createBtn.addEventListener('click', showCreateChecklistModal);
   }
   
-  // Logout button
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', logout);
+  // Back to Projects button
+  const backBtn = document.getElementById('backToProjectsBtn');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
   }
   
   // Filter selects
