@@ -713,6 +713,58 @@ async function loadTeamMembers(projectId) {
     }
 }
 
+// Create due date badge with color coding
+function createDueDateBadge(dueDate) {
+  if (!dueDate) {
+    return `<div class="due-date-badge none">
+      <i class="fas fa-calendar-times"></i>
+      <span>No due date</span>
+    </div>`;
+  }
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  
+  const diffTime = due - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  let badgeClass, icon, text;
+  
+  if (diffDays < 0) {
+    // Overdue
+    badgeClass = 'overdue';
+    icon = 'fa-exclamation-circle';
+    text = Math.abs(diffDays) === 1 ? '1 day overdue' : `${Math.abs(diffDays)} days overdue`;
+  } else if (diffDays === 0) {
+    // Due today
+    badgeClass = 'today';
+    icon = 'fa-calendar-day';
+    text = 'Due today';
+  } else if (diffDays === 1) {
+    // Due tomorrow
+    badgeClass = 'soon';
+    icon = 'fa-clock';
+    text = 'Due tomorrow';
+  } else if (diffDays <= 3) {
+    // Due soon (2-3 days)
+    badgeClass = 'soon';
+    icon = 'fa-clock';
+    text = `Due in ${diffDays} days`;
+  } else {
+    // Future
+    badgeClass = 'future';
+    icon = 'fa-calendar';
+    text = `Due in ${diffDays} days`;
+  }
+  
+  return `<div class="due-date-badge ${badgeClass}">
+    <i class="fas ${icon}"></i>
+    <span>${text}</span>
+  </div>`;
+}
+
 // Render Kanban board
 async function renderKanbanBoard() {
     // Filter by type if selected
