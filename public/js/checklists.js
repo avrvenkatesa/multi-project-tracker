@@ -136,16 +136,6 @@ function setupChecklistsPageListeners() {
       window.location.href = `dashboard.html?projectId=${currentProjectId}`;
     }
   });
-  document.getElementById('ai-analysis-btn')?.addEventListener('click', () => {
-    if (currentProjectId) {
-      window.location.href = `index.html?project=${currentProjectId}#ai-analysis`;
-    }
-  });
-  document.getElementById('view-transcripts-btn')?.addEventListener('click', () => {
-    if (currentProjectId) {
-      window.location.href = `index.html?project=${currentProjectId}#transcripts`;
-    }
-  });
   document.getElementById('view-checklists-btn')?.addEventListener('click', () => {
     if (currentProjectId) {
       window.location.href = `checklists.html?project=${currentProjectId}`;

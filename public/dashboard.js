@@ -64,12 +64,6 @@ function setupEventListeners() {
   document.getElementById('dashboard-btn')?.addEventListener('click', () => {
     window.location.href = `dashboard.html?projectId=${currentProjectId}`;
   });
-  document.getElementById('ai-analysis-btn')?.addEventListener('click', () => {
-    window.location.href = `index.html?project=${currentProjectId}#ai-analysis`;
-  });
-  document.getElementById('view-transcripts-btn')?.addEventListener('click', () => {
-    window.location.href = `index.html?project=${currentProjectId}#transcripts`;
-  });
   document.getElementById('view-checklists-btn')?.addEventListener('click', () => {
     window.location.href = `checklists.html?project=${currentProjectId}`;
   });

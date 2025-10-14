@@ -454,7 +454,6 @@ function setupEventListeners() {
     document.getElementById('viewArchivedBtn')?.addEventListener('click', () => window.viewArchivedProjects());
     document.getElementById('create-issue-btn')?.addEventListener('click', showCreateIssue);
     document.getElementById('create-action-item-btn')?.addEventListener('click', showCreateActionItem);
-    document.getElementById('ai-analysis-btn')?.addEventListener('click', showAIAnalysisModal);
     document.getElementById('dashboard-btn')?.addEventListener('click', () => {
         if (currentProject) {
             window.location.href = `dashboard.html?projectId=${currentProject.id}`;
@@ -3469,11 +3468,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // Transcripts modal event listeners
-  const viewTranscriptsBtn = document.getElementById('view-transcripts-btn');
-  if (viewTranscriptsBtn) {
-    viewTranscriptsBtn.addEventListener('click', openTranscriptsModal);
-  }
-  
   const closeTranscriptsBtn = document.getElementById('close-transcripts-modal-btn');
   if (closeTranscriptsBtn) {
     closeTranscriptsBtn.addEventListener('click', closeTranscriptsModal);
