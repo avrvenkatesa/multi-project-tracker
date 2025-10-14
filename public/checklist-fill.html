@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fill Checklist - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/checklists.css">
+</head>
+<body class="bg-gray-50">
+  <!-- Header -->
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-6">
+      <div class="flex justify-between items-center flex-wrap gap-4">
+        <h1 class="text-3xl font-bold">📋 Multi-Project Tracker</h1>
+        <div class="flex items-center gap-3">
+          <button onclick="saveProgress()" class="btn-primary">
+            💾 Save Progress
+          </button>
+          <button onclick="window.location.href='checklists.html'" class="btn-secondary">
+            ← Back to List
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <!-- Checklist Header -->
+    <div class="checklist-header">
+      <h2 id="checklistTitle">Loading...</h2>
+      <div class="checklist-meta">
+        <span id="checklistId"></span>
+        <span id="projectName"></span>
+        <span id="assignedTo"></span>
+      </div>
+    </div>
+
+    <!-- Progress Summary -->
+    <div class="progress-summary">
+      <div class="progress-circle">
+        <div class="circle-value" id="progressPercentage">0%</div>
+      </div>
+      <div class="progress-stats">
+        <p><strong id="completedItems">0</strong> of <strong id="totalItems">0</strong> items complete</p>
+        <p id="dueDate"></p>
+      </div>
+      <div class="progress-bar-container" style="flex: 1; min-width: 200px;">
+        <div class="progress-bar-fill" id="progressBarFill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Checklist Sections -->
+    <div id="checklistSections" class="checklist-sections">
+      <div class="loading-spinner">Loading checklist...</div>
+    </div>
+
+    <!-- Comments Section -->
+    <div class="comments-section">
+      <h3>Comments</h3>
+      <div id="commentsList">
+        <p class="text-gray-500 text-sm">No comments yet</p>
+      </div>
+      <div class="add-comment">
+        <textarea id="newComment" placeholder="Add a comment..." rows="2"></textarea>
+        <button onclick="addComment()" class="btn-primary">Post Comment</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/checklists.js"></script>
+  <script>
+    // Check authentication first
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => {
+        if (r.status === 401) {
+          window.location.href = 'index.html';
+          return null;
+        }
+        return r.json();
+      })
+      .then(user => {
+        if (user) {
+          // Load checklist on page load
+          const urlParams = new URLSearchParams(window.location.search);
+          const checklistId = urlParams.get('id');
+          if (checklistId) {
+            loadChecklistForFilling(checklistId);
+          } else {
+            alert('No checklist ID provided');
+            window.location.href = 'checklists.html';
+          }
+        }
+      });
+  </script>
+</body>
+</html>

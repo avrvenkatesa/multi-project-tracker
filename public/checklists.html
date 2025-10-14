@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checklists - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/checklists.css">
+</head>
+<body class="bg-gray-50">
+  <!-- Header -->
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-6">
+      <div class="flex justify-between items-center">
+        <h1 class="text-3xl font-bold">📋 Multi-Project Tracker</h1>
+        <div class="flex items-center gap-4">
+          <span id="userDisplay" class="text-sm"></span>
+          <button onclick="logout()" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg transition">
+            🚪 Logout
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Navigation -->
+    <nav class="bg-blue-700">
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="flex space-x-1">
+          <a href="dashboard.html" class="px-4 py-3 hover:bg-blue-600 transition rounded-t-lg">
+            📊 Dashboard
+          </a>
+          <a href="index.html" class="px-4 py-3 hover:bg-blue-600 transition rounded-t-lg">
+            🐛 Issues & Actions
+          </a>
+          <a href="checklists.html" class="px-4 py-3 bg-blue-800 transition rounded-t-lg">
+            📋 Checklists
+          </a>
+          <a href="risks.html" class="px-4 py-3 hover:bg-blue-600 transition rounded-t-lg">
+            ⚠️ Risks
+          </a>
+          <a href="tags.html" class="px-4 py-3 hover:bg-blue-600 transition rounded-t-lg">
+            🏷️ Tags
+          </a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main class="main-content">
+    <div class="content-header">
+      <h2>Checklists</h2>
+      <button onclick="showCreateChecklistModal()" class="btn-primary">
+        + New Checklist
+      </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <select id="projectFilter" onchange="loadChecklists()">
+        <option value="">All Projects</option>
+      </select>
+      
+      <select id="statusFilter" onchange="loadChecklists()">
+        <option value="">All Statuses</option>
+        <option value="not-started">Not Started</option>
+        <option value="in-progress">In Progress</option>
+        <option value="completed">Completed</option>
+        <option value="approved">Approved</option>
+      </select>
+      
+      <select id="templateFilter" onchange="loadChecklists()">
+        <option value="">All Templates</option>
+      </select>
+    </div>
+
+    <!-- Checklists Grid -->
+    <div id="checklistsGrid" class="checklists-grid">
+      <!-- Checklist cards will be loaded here -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <p>No checklists found. Create one to get started!</p>
+    </div>
+  </main>
+
+  <!-- Create Checklist Modal -->
+  <div id="createChecklistModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Create New Checklist</h3>
+        <button onclick="closeCreateChecklistModal()" class="close-btn">&times;</button>
+      </div>
+      <form id="createChecklistForm" onsubmit="createChecklist(event)">
+        <div class="form-group">
+          <label>Template *</label>
+          <select id="templateSelect" required>
+            <option value="">Select template...</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Project *</label>
+          <select id="projectSelect" required>
+            <option value="">Select project...</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Title *</label>
+          <input type="text" id="checklistTitle" required placeholder="Enter checklist title">
+        </div>
+        
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="checklistDescription" rows="3" placeholder="Optional description"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>Assign To</label>
+          <select id="assignedToSelect">
+            <option value="">Unassigned</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Due Date</label>
+          <input type="date" id="dueDate">
+        </div>
+        
+        <div class="modal-actions">
+          <button type="button" onclick="closeCreateChecklistModal()" class="btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" class="btn-primary">Create Checklist</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/checklists.js"></script>
+  <script>
+    // Check authentication
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => {
+        if (r.status === 401) {
+          window.location.href = 'index.html';
+          return null;
+        }
+        return r.json();
+      })
+      .then(user => {
+        if (user) {
+          document.getElementById('userDisplay').textContent = `${user.username} (${user.role})`;
+        }
+      });
+  </script>
+</body>
+</html>

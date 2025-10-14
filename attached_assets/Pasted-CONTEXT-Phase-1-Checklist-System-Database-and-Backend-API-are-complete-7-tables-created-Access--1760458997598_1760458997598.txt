@@ -1,0 +1,366 @@
+CONTEXT:
+Phase 1 Checklist System - Database and Backend API are complete.
+
+7 tables created
+Access Verification template seeded
+6 API endpoints functional
+
+TASK:
+Create frontend UI for checklist list view and checklist filling interface.
+REQUIREMENTS:
+
+CREATE FILES:
+
+
+public/checklists.html
+public/checklist-fill.html
+public/js/checklists.js
+public/css/checklists.css
+
+
+UPDATE NAVIGATION:
+Add checklist link to ALL existing HTML pages (dashboard.html, issues.html, action-items.html, projects.html):
+
+html<nav class="main-nav">
+  <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
+  <a href="issues.html" class="nav-link">🐛 Issues</a>
+  <a href="action-items.html" class="nav-link">✅ Action Items</a>
+  <a href="checklists.html" class="nav-link">📋 Checklists</a>
+  <a href="projects.html" class="nav-link">📁 Projects</a>
+</nav>
+
+CHECKLISTS.HTML - List View:
+
+html<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checklists - Multi-Project Tracker</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/checklists.css">
+</head>
+<body>
+  <!-- Header with navigation -->
+  <header class="app-header">
+    <div class="header-content">
+      <h1>📋 Multi-Project Tracker</h1>
+      <div class="header-actions">
+        <span id="userDisplay"></span>
+        <button onclick="logout()" class="logout-btn">🚪 Logout</button>
+      </div>
+    </div>
+    <nav class="main-nav">
+      <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
+      <a href="issues.html" class="nav-link">🐛 Issues</a>
+      <a href="action-items.html" class="nav-link">✅ Action Items</a>
+      <a href="checklists.html" class="nav-link active">📋 Checklists</a>
+      <a href="projects.html" class="nav-link">📁 Projects</a>
+    </nav>
+  </header>
+
+  <main class="main-content">
+    <div class="content-header">
+      <h2>Checklists</h2>
+      <button onclick="showCreateChecklistModal()" class="btn-primary">
+        + New Checklist
+      </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <select id="projectFilter" onchange="loadChecklists()">
+        <option value="">All Projects</option>
+      </select>
+      
+      <select id="statusFilter" onchange="loadChecklists()">
+        <option value="">All Statuses</option>
+        <option value="not-started">Not Started</option>
+        <option value="in-progress">In Progress</option>
+        <option value="completed">Completed</option>
+        <option value="approved">Approved</option>
+      </select>
+      
+      <select id="templateFilter" onchange="loadChecklists()">
+        <option value="">All Templates</option>
+      </select>
+    </div>
+
+    <!-- Checklists Grid -->
+    <div id="checklistsGrid" class="checklists-grid">
+      <!-- Checklist cards will be loaded here -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <p>No checklists found. Create one to get started!</p>
+    </div>
+  </main>
+
+  <!-- Create Checklist Modal -->
+  <div id="createChecklistModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Create New Checklist</h3>
+        <button onclick="closeCreateChecklistModal()" class="close-btn">&times;</button>
+      </div>
+      <form id="createChecklistForm" onsubmit="createChecklist(event)">
+        <div class="form-group">
+          <label>Template *</label>
+          <select id="templateSelect" required>
+            <option value="">Select template...</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Project *</label>
+          <select id="projectSelect" required>
+            <option value="">Select project...</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Title *</label>
+          <input type="text" id="checklistTitle" required>
+        </div>
+        
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="checklistDescription" rows="3"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>Assign To</label>
+          <select id="assignedToSelect">
+            <option value="">Unassigned</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Due Date</label>
+          <input type="date" id="dueDate">
+        </div>
+        
+        <div class="modal-actions">
+          <button type="button" onclick="closeCreateChecklistModal()" class="btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" class="btn-primary">Create Checklist</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script src="js/checklists.js"></script>
+</body>
+</html>
+
+CHECKLIST-FILL.HTML - Filling Interface:
+
+html<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fill Checklist - Multi-Project Tracker</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/checklists.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-content">
+      <h1>📋 Multi-Project Tracker</h1>
+      <div class="header-actions">
+        <button onclick="saveProgress()" class="btn-primary">💾 Save Progress</button>
+        <button onclick="window.location.href='checklists.html'" class="btn-secondary">
+          ← Back to List
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <!-- Checklist Header -->
+    <div class="checklist-header">
+      <h2 id="checklistTitle"></h2>
+      <div class="checklist-meta">
+        <span id="checklistId"></span>
+        <span id="projectName"></span>
+        <span id="assignedTo"></span>
+      </div>
+    </div>
+
+    <!-- Progress Summary -->
+    <div class="progress-summary">
+      <div class="progress-circle">
+        <div class="circle-value" id="progressPercentage">0%</div>
+      </div>
+      <div class="progress-stats">
+        <p><strong id="completedItems">0</strong> of <strong id="totalItems">0</strong> items complete</p>
+        <p id="dueDate"></p>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progressBarFill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Checklist Sections -->
+    <div id="checklistSections" class="checklist-sections">
+      <!-- Sections will be loaded here -->
+    </div>
+
+    <!-- Comments Section -->
+    <div class="comments-section">
+      <h3>Comments</h3>
+      <div id="commentsList"></div>
+      <div class="add-comment">
+        <textarea id="newComment" placeholder="Add a comment..." rows="2"></textarea>
+        <button onclick="addComment()" class="btn-primary">Post Comment</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/auth.js"></script>
+  <script src="js/checklists.js"></script>
+  <script>
+    // Load checklist on page load
+    const urlParams = new URLSearchParams(window.location.search);
+    const checklistId = urlParams.get('id');
+    if (checklistId) {
+      loadChecklistForFilling(checklistId);
+    } else {
+      alert('No checklist ID provided');
+      window.location.href = 'checklists.html';
+    }
+  </script>
+</body>
+</html>
+
+JS/CHECKLISTS.JS:
+
+CRITICAL FEATURES:
+
+Load checklists with filtering
+Create new checklist from template
+Load checklist filling interface with all sections
+Collapsible sections
+Auto-save responses (debounced)
+Real-time progress updates
+Handle all field types (checkbox, text, textarea, date, radio, dropdown)
+Delete with confirmation
+Comments functionality
+
+FIELD TYPE RENDERING:
+javascriptfunction renderField(item, response) {
+  const value = response?.response_value || response?.response_boolean || response?.response_date || '';
+  
+  switch(item.field_type) {
+    case 'checkbox':
+      return `<input type="checkbox" ${value ? 'checked' : ''} 
+              onchange="saveResponse(${item.item_id}, this.checked, 'checkbox')">`;
+    
+    case 'text':
+      return `<input type="text" value="${value}" 
+              oninput="debouncedSave(${item.item_id}, this.value, 'text')">`;
+    
+    case 'textarea':
+      return `<textarea rows="3" 
+              oninput="debouncedSave(${item.item_id}, this.value, 'textarea')">${value}</textarea>`;
+    
+    case 'date':
+      return `<input type="date" value="${value}" 
+              onchange="saveResponse(${item.item_id}, this.value, 'date')">`;
+    
+    case 'radio':
+      const options = JSON.parse(item.field_options || '[]');
+      return options.map(opt => `
+        <label>
+          <input type="radio" name="item_${item.item_id}" value="${opt}" 
+                 ${value === opt ? 'checked' : ''}
+                 onchange="saveResponse(${item.item_id}, this.value, 'radio')">
+          ${opt}
+        </label>
+      `).join('');
+    
+    case 'dropdown':
+      const dropOptions = JSON.parse(item.field_options || '[]');
+      return `<select onchange="saveResponse(${item.item_id}, this.value, 'dropdown')">
+        <option value="">Select...</option>
+        ${dropOptions.map(opt => 
+          `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`
+        ).join('')}
+      </select>`;
+    
+    default:
+      return `<input type="text" value="${value}">`;
+  }
+}
+
+CSS/CHECKLISTS.CSS:
+
+CRITICAL STYLING:
+
+Checklist cards with progress bars
+Status badges (color-coded)
+Collapsible sections
+Responsive grid layout
+Progress circle/bar
+Field styling for all types
+Mobile-responsive
+
+STATUS COLORS:
+
+not-started: gray (#6b7280)
+in-progress: blue (#3b82f6)
+completed: green (#10b981)
+approved: purple (#8b5cf6)
+
+REQUIREMENTS:
+
+Use existing CSS variables from styles.css
+Mobile-first responsive design
+Smooth transitions for collapsing sections
+Clear visual hierarchy
+Accessible (proper contrast, focus states)
+
+CRITICAL FRONTEND REQUIREMENTS:
+
+ALL fetch calls must include credentials: 'include'
+Use cookie-based authentication (NO localStorage)
+Handle 401/403 responses by redirecting to login
+Show loading states during async operations
+Display user-friendly error messages
+Auto-save with debounce (500ms)
+Progress updates in real-time
+
+TESTING CHECKLIST:
+
+ Create checklist from Access Verification template
+ Sections display correctly
+ All field types render properly
+ Checkboxes save immediately
+ Text fields debounce and save
+ Progress bar updates correctly
+ Sections collapse/expand
+ Delete works with confirmation
+ Filters work on list view
+ Mobile responsive
+ Permission errors handled gracefully
+
+OUTPUT:
+
+Confirmation all 4 files created
+Confirmation navigation updated in all HTML files
+Screenshots or description of UI
+Confirmation that you can:
+
+See checklist list
+Create new checklist
+Fill out checklist with all field types
+Progress updates automatically
+Sections collapse/expand
+
+
+
+Let me know when frontend is complete and ready for testing!
