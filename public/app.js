@@ -480,40 +480,119 @@ function setupEventListeners() {
     const createDropdownBtn = document.getElementById('create-dropdown-btn');
     const createDropdownMenu = document.getElementById('create-dropdown-menu');
     
+    function openDropdown(btn, menu, otherBtn, otherMenu) {
+        menu?.classList.remove('hidden');
+        otherMenu?.classList.add('hidden');
+        btn?.setAttribute('aria-expanded', 'true');
+        otherBtn?.setAttribute('aria-expanded', 'false');
+        // Focus first menu item
+        const firstItem = menu?.querySelector('button[role="menuitem"]');
+        firstItem?.focus();
+    }
+    
+    function closeDropdown(btn, menu) {
+        menu?.classList.add('hidden');
+        btn?.setAttribute('aria-expanded', 'false');
+    }
+    
+    function closeAllDropdowns() {
+        closeDropdown(viewDropdownBtn, viewDropdownMenu);
+        closeDropdown(createDropdownBtn, createDropdownMenu);
+    }
+    
     // Toggle View dropdown
     viewDropdownBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
-        viewDropdownMenu?.classList.toggle('hidden');
-        createDropdownMenu?.classList.add('hidden');
+        const isOpen = !viewDropdownMenu?.classList.contains('hidden');
+        if (isOpen) {
+            closeDropdown(viewDropdownBtn, viewDropdownMenu);
+        } else {
+            openDropdown(viewDropdownBtn, viewDropdownMenu, createDropdownBtn, createDropdownMenu);
+        }
     });
     
     // Toggle Create dropdown
     createDropdownBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
-        createDropdownMenu?.classList.toggle('hidden');
-        viewDropdownMenu?.classList.add('hidden');
+        const isOpen = !createDropdownMenu?.classList.contains('hidden');
+        if (isOpen) {
+            closeDropdown(createDropdownBtn, createDropdownMenu);
+        } else {
+            openDropdown(createDropdownBtn, createDropdownMenu, viewDropdownBtn, viewDropdownMenu);
+        }
+    });
+    
+    // Keyboard navigation for dropdown buttons
+    [viewDropdownBtn, createDropdownBtn].forEach(btn => {
+        btn?.addEventListener('keydown', (e) => {
+            const menu = btn === viewDropdownBtn ? viewDropdownMenu : createDropdownMenu;
+            const otherBtn = btn === viewDropdownBtn ? createDropdownBtn : viewDropdownBtn;
+            const otherMenu = btn === viewDropdownBtn ? createDropdownMenu : viewDropdownMenu;
+            
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const isOpen = !menu?.classList.contains('hidden');
+                if (isOpen) {
+                    closeDropdown(btn, menu);
+                } else {
+                    openDropdown(btn, menu, otherBtn, otherMenu);
+                }
+            } else if (e.key === 'Escape') {
+                closeDropdown(btn, menu);
+                btn?.focus();
+            }
+        });
+    });
+    
+    // Keyboard navigation within menus
+    [viewDropdownMenu, createDropdownMenu].forEach(menu => {
+        menu?.addEventListener('keydown', (e) => {
+            const items = Array.from(menu.querySelectorAll('button[role="menuitem"]'));
+            const currentIndex = items.indexOf(document.activeElement);
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const nextIndex = (currentIndex + 1) % items.length;
+                items[nextIndex]?.focus();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prevIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                items[prevIndex]?.focus();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                const btn = menu === viewDropdownMenu ? viewDropdownBtn : createDropdownBtn;
+                closeDropdown(btn, menu);
+                btn?.focus();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                items[0]?.focus();
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                items[items.length - 1]?.focus();
+            }
+        });
     });
     
     // Close dropdowns when clicking outside
     document.addEventListener('click', (e) => {
         if (!viewDropdownBtn?.contains(e.target) && !viewDropdownMenu?.contains(e.target)) {
-            viewDropdownMenu?.classList.add('hidden');
+            closeDropdown(viewDropdownBtn, viewDropdownMenu);
         }
         if (!createDropdownBtn?.contains(e.target) && !createDropdownMenu?.contains(e.target)) {
-            createDropdownMenu?.classList.add('hidden');
+            closeDropdown(createDropdownBtn, createDropdownMenu);
         }
     });
     
     // Close dropdowns when a menu item is clicked
     viewDropdownMenu?.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
-            viewDropdownMenu.classList.add('hidden');
+            closeDropdown(viewDropdownBtn, viewDropdownMenu);
         });
     });
     
     createDropdownMenu?.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
-            createDropdownMenu.classList.add('hidden');
+            closeDropdown(createDropdownBtn, createDropdownMenu);
         });
     });
     
