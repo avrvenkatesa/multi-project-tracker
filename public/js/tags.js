@@ -212,7 +212,13 @@ async function loadProject() {
     }
     
     currentProject = await response.json();
-    document.getElementById('project-name').textContent = currentProject.name;
+    const projectNameEl = document.getElementById('project-name');
+    const projectContext = document.getElementById('project-context');
+    
+    if (projectNameEl && projectContext) {
+      projectNameEl.textContent = currentProject.name;
+      projectContext.classList.remove('hidden');
+    }
   } catch (error) {
     console.error('Error loading project:', error);
     alert('Error loading project');
