@@ -2957,6 +2957,7 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
         i.*,
         u.username as creator_username,
         u.email as creator_email,
+        sh.changed_at as completed_at,
         COALESCE(
           json_agg(
             json_build_object('id', t.id, 'name', t.name, 'color', t.color)
@@ -2968,8 +2969,17 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
       LEFT JOIN users u ON i.created_by = u.id::text
       LEFT JOIN issue_tags it ON i.id = it.issue_id
       LEFT JOIN tags t ON it.tag_id = t.id
+      LEFT JOIN LATERAL (
+        SELECT changed_at 
+        FROM status_history 
+        WHERE item_type = 'issue' 
+          AND item_id = i.id 
+          AND to_status = 'Done'
+        ORDER BY changed_at DESC 
+        LIMIT 1
+      ) sh ON true
       ${whereClause} 
-      GROUP BY i.id, u.username, u.email
+      GROUP BY i.id, u.username, u.email, sh.changed_at
       ORDER BY i.created_at DESC
     `;
     
@@ -3216,6 +3226,19 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     
     console.log('Updated issue:', updatedIssue);
     
+    // Log status change to history table
+    if (status !== undefined && issue.status !== status) {
+      try {
+        await pool.query(`
+          INSERT INTO status_history (item_type, item_id, project_id, from_status, to_status, changed_by)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, ['issue', updatedIssue.id, updatedIssue.project_id, issue.status, status, req.user.id]);
+        console.log('Status change logged to history:', { from: issue.status, to: status });
+      } catch (err) {
+        console.error('Error logging status change to history:', err);
+      }
+    }
+    
     // Send status change notification if status changed
     if (status !== undefined && issue.status !== status && updatedIssue.assignee && updatedIssue.assignee.trim() !== '') {
       try {
@@ -3420,6 +3443,7 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
         a.*,
         u.username as creator_username,
         u.email as creator_email,
+        sh.changed_at as completed_at,
         COALESCE(
           json_agg(
             json_build_object('id', t.id, 'name', t.name, 'color', t.color)
@@ -3431,8 +3455,17 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
       LEFT JOIN users u ON a.created_by = u.id::text
       LEFT JOIN action_item_tags ait ON a.id = ait.action_item_id
       LEFT JOIN tags t ON ait.tag_id = t.id
+      LEFT JOIN LATERAL (
+        SELECT changed_at 
+        FROM status_history 
+        WHERE item_type = 'action_item' 
+          AND item_id = a.id 
+          AND to_status = 'Done'
+        ORDER BY changed_at DESC 
+        LIMIT 1
+      ) sh ON true
       ${whereClause} 
-      GROUP BY a.id, u.username, u.email
+      GROUP BY a.id, u.username, u.email, sh.changed_at
       ORDER BY a.created_at DESC
     `;
     
@@ -3657,6 +3690,19 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     
     const result = await pool.query(query, values);
     const updatedItem = result.rows[0];
+    
+    // Log status change to history table
+    if (status !== undefined && item.status !== status) {
+      try {
+        await pool.query(`
+          INSERT INTO status_history (item_type, item_id, project_id, from_status, to_status, changed_by)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, ['action_item', updatedItem.id, updatedItem.project_id, item.status, status, req.user.id]);
+        console.log('Status change logged to history:', { from: item.status, to: status });
+      } catch (err) {
+        console.error('Error logging status change to history:', err);
+      }
+    }
     
     // Send status change notification if status changed
     if (status !== undefined && item.status !== status && updatedItem.assignee && updatedItem.assignee.trim() !== '') {

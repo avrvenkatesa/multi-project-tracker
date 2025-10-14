@@ -63,6 +63,17 @@ export const actionItems = pgTable('action_items', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+export const statusHistory = pgTable('status_history', {
+  id: serial('id').primaryKey(),
+  itemType: varchar('item_type', { length: 50 }).notNull(),
+  itemId: integer('item_id').notNull(),
+  projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  fromStatus: varchar('from_status', { length: 50 }),
+  toStatus: varchar('to_status', { length: 50 }).notNull(),
+  changedBy: integer('changed_by').references(() => users.id),
+  changedAt: timestamp('changed_at').defaultNow(),
+});
+
 export const meetingTranscripts = pgTable('meeting_transcripts', {
   id: serial('id').primaryKey(),
   projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),

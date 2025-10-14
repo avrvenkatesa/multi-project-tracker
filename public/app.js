@@ -714,7 +714,51 @@ async function loadTeamMembers(projectId) {
 }
 
 // Create due date badge with color coding
-function createDueDateBadge(dueDate) {
+function createDueDateBadge(dueDate, status, completedAt) {
+  // For Done items, show delivery performance
+  if (status === 'Done' && completedAt && dueDate) {
+    const completed = new Date(completedAt);
+    completed.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    
+    const diffTime = due - completed;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    let badgeClass, icon, text;
+    
+    if (diffDays > 0) {
+      // Completed early
+      badgeClass = 'early';
+      icon = 'fa-check-circle';
+      text = diffDays === 1 ? '1 day early' : `${diffDays} days early`;
+    } else if (diffDays === 0) {
+      // Completed on time
+      badgeClass = 'on-time';
+      icon = 'fa-check';
+      text = 'On time';
+    } else {
+      // Completed late
+      badgeClass = 'late';
+      icon = 'fa-exclamation-triangle';
+      text = Math.abs(diffDays) === 1 ? '1 day late' : `${Math.abs(diffDays)} days late`;
+    }
+    
+    return `<div class="due-date-badge ${badgeClass}">
+      <i class="fas ${icon}"></i>
+      <span>${text}</span>
+    </div>`;
+  }
+  
+  // For Done items without due date or completed_at
+  if (status === 'Done') {
+    return `<div class="due-date-badge completed">
+      <i class="fas fa-check-circle"></i>
+      <span>Completed</span>
+    </div>`;
+  }
+  
+  // For non-Done items, show urgency (existing logic)
   if (!dueDate) {
     return `<div class="due-date-badge none">
       <i class="fas fa-calendar-times"></i>
@@ -892,7 +936,7 @@ async function renderKanbanBoard() {
                         <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
                             <span>${item.assignee || "Unassigned"}</span>
                         </div>
-                        ${createDueDateBadge(item.due_date)}
+                        ${createDueDateBadge(item.due_date, item.status, item.completed_at)}
                         ${item.tags && item.tags.length > 0 ? `
                             <div class="flex flex-wrap gap-1 mb-2">
                                 ${item.tags.map(tag => `
