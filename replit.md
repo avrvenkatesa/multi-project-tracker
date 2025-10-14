@@ -6,6 +6,22 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (October 2025)
+- **Dropdown Navigation UI** (October 14, 2025): Consolidated cluttered navigation from 8 buttons to 2 accessible dropdown menus:
+  - **UI Cleanup**: Replaced 8 individual buttons (Dashboard, AI Analysis, Transcripts, Checklists, Tags, Risks, + Issue, + Action Item) with 2 dropdown menus ("View" with 6 items, "+ Create" with 2 items)
+  - **Accessibility Compliance**: Full WCAG compliance with ARIA attributes (aria-haspopup, aria-expanded, aria-controls, role="menu/menuitem")
+  - **Keyboard Navigation**: Complete keyboard support - Enter/Space to toggle, Arrow keys for navigation, Escape to close, Home/End for first/last item
+  - **Focus Management**: Auto-focus first item on open, return focus to button on close, proper ARIA state synchronization when switching dropdowns
+  - **User Experience**: Cleaner interface while maintaining all functionality, click-outside-to-close, hover states with colored backgrounds matching original button themes
+  - **Files**: public/index.html (dropdown structure), public/app.js (interaction logic)
+- **Progress Tracking Fix** (October 14, 2025): Fixed data format mismatch preventing progress updates when completing checklist items:
+  - **Issue**: Frontend sent separate `response_value`/`response_boolean`/`response_date` fields without `is_completed` flag; backend expected `value`, `type`, and `is_completed`
+  - **Root Cause**: Backend only counts items where `is_completed = true`, but frontend never sent this field (always defaulted to false)
+  - **Fix**: Updated saveResponse() to send correct format: `{template_item_id, value, type, is_completed}` with smart completion detection
+  - **Completion Logic**: Checkbox (checked=true), text/textarea (has content), date (has value), radio/dropdown (has selection)
+  - **Result**: Progress circle, completed count, and status transitions now update in real-time as items are filled
+  - **Files**: public/js/checklists.js (saveResponse function)
+
 ## System Architecture
 
 ### Frontend
