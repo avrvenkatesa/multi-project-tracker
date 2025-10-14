@@ -73,7 +73,10 @@ function setupChecklistsPageListeners() {
   // Filter selects
   const projectFilter = document.getElementById('projectFilter');
   if (projectFilter) {
-    projectFilter.addEventListener('change', loadChecklists);
+    projectFilter.addEventListener('change', (e) => {
+      updateTemplateFilter(e.target.value);
+      loadChecklists();
+    });
   }
   
   const statusFilter = document.getElementById('statusFilter');
@@ -201,10 +204,27 @@ async function initChecklistsListPage() {
   await Promise.all([
     loadTemplates(),
     loadProjects(),
-    loadUsers(),
-    loadChecklists()
+    loadUsers()
   ]);
   populateFilters();
+  
+  // Check for project parameter in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const projectId = urlParams.get('project');
+  
+  if (projectId) {
+    // Pre-select the project in filter
+    const projectFilter = document.getElementById('projectFilter');
+    if (projectFilter) {
+      projectFilter.value = projectId;
+    }
+    
+    // Filter templates based on selected project
+    updateTemplateFilter(projectId);
+  }
+  
+  // Now load checklists (after filters are set)
+  await loadChecklists();
 }
 
 // =====================================================
@@ -375,20 +395,48 @@ function showCreateChecklistModal() {
   const modal = document.getElementById('createChecklistModal');
   modal.style.display = 'flex';
   
-  // Populate template select
-  const templateSelect = document.getElementById('templateSelect');
-  templateSelect.innerHTML = '<option value="">Select template...</option>' +
-    templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+  // Check for project parameter in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const projectId = urlParams.get('project');
   
   // Populate project select
   const projectSelect = document.getElementById('projectSelect');
   projectSelect.innerHTML = '<option value="">Select project...</option>' +
     projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
   
+  // Pre-select project if available
+  if (projectId) {
+    projectSelect.value = projectId;
+  }
+  
+  // Populate template select based on selected project
+  const templateSelect = document.getElementById('templateSelect');
+  if (projectId) {
+    const projectTemplates = templates.filter(t => t.project_id === parseInt(projectId));
+    templateSelect.innerHTML = '<option value="">Select template...</option>' +
+      projectTemplates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+  } else {
+    templateSelect.innerHTML = '<option value="">Select template...</option>' +
+      templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+  }
+  
   // Populate assigned to select
   const assignedToSelect = document.getElementById('assignedToSelect');
   assignedToSelect.innerHTML = '<option value="">Unassigned</option>' +
     users.map(u => `<option value="${u.id}">${escapeHtml(u.username)}</option>`).join('');
+  
+  // Add event listener to project select to update templates
+  projectSelect.onchange = function() {
+    const selectedProjectId = this.value;
+    if (selectedProjectId) {
+      const projectTemplates = templates.filter(t => t.project_id === parseInt(selectedProjectId));
+      templateSelect.innerHTML = '<option value="">Select template...</option>' +
+        projectTemplates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    } else {
+      templateSelect.innerHTML = '<option value="">Select template...</option>' +
+        templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    }
+  };
 }
 
 function closeCreateChecklistModal() {
@@ -803,11 +851,27 @@ function populateFilters() {
       projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
   }
   
-  // Template filter
+  // Template filter - initially show all
   const templateFilter = document.getElementById('templateFilter');
   if (templateFilter) {
     templateFilter.innerHTML = '<option value="">All Templates</option>' +
       templates.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+  }
+}
+
+function updateTemplateFilter(projectId) {
+  const templateFilter = document.getElementById('templateFilter');
+  if (!templateFilter) return;
+  
+  if (!projectId || projectId === '') {
+    // Show all templates
+    templateFilter.innerHTML = '<option value="">All Templates</option>' +
+      templates.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+  } else {
+    // Filter templates by project
+    const projectTemplates = templates.filter(t => t.project_id === parseInt(projectId));
+    templateFilter.innerHTML = '<option value="">All Templates</option>' +
+      projectTemplates.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
   }
 }
 
