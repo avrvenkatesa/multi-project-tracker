@@ -470,6 +470,9 @@ function setupEventListeners() {
             window.location.href = `risks.html?projectId=${currentProject.id}`;
         }
     });
+    document.getElementById('view-checklists-btn')?.addEventListener('click', () => {
+        window.location.href = 'checklists.html';
+    });
     
     // Relationship modal buttons
     document.getElementById('close-relationship-modal-btn')?.addEventListener('click', closeRelationshipModal);
@@ -581,8 +584,7 @@ function renderProjects() {
                     </p>
                     ${isLong ? `
                         <button class="text-blue-600 hover:text-blue-800 text-xs mt-1 font-medium" 
-                                data-toggle-description="${project.id}"
-                                onclick="event.stopPropagation();">
+                                data-toggle-description="${project.id}">
                             More
                         </button>
                     ` : ''}
@@ -623,7 +625,8 @@ function renderProjects() {
 
     // Add toggle listeners for long descriptions
     document.querySelectorAll("[data-toggle-description]").forEach((button) => {
-        button.addEventListener("click", function () {
+        button.addEventListener("click", function (e) {
+            e.stopPropagation(); // Prevent project card click
             const projectId = this.dataset.toggleDescription;
             const descriptionEl = document.querySelector(`[data-description-text="${projectId}"]`);
             const isExpanded = !descriptionEl.classList.contains('line-clamp-5');
