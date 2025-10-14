@@ -1,4 +1,5 @@
-import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb, date } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -213,4 +214,102 @@ export const riskTags = pgTable('risk_tags', {
   id: serial('id').primaryKey(),
   riskId: integer('risk_id').notNull(),
   tagId: integer('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
+});
+
+// Checklist System Tables
+export const checklistTemplates = pgTable('checklist_templates', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description'),
+  category: varchar('category', { length: 100 }),
+  icon: varchar('icon', { length: 50 }),
+  isActive: boolean('is_active').default(true),
+  isSystem: boolean('is_system').default(false),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const checklistTemplateSections = pgTable('checklist_template_sections', {
+  id: serial('id').primaryKey(),
+  templateId: integer('template_id').notNull().references(() => checklistTemplates.id, { onDelete: 'cascade' }),
+  parentSectionId: integer('parent_section_id').references(() => checklistTemplateSections.id),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description'),
+  sectionNumber: varchar('section_number', { length: 20 }),
+  displayOrder: integer('display_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const checklistTemplateItems = pgTable('checklist_template_items', {
+  id: serial('id').primaryKey(),
+  sectionId: integer('section_id').notNull().references(() => checklistTemplateSections.id, { onDelete: 'cascade' }),
+  itemText: text('item_text').notNull(),
+  fieldType: varchar('field_type', { length: 50 }).notNull(),
+  fieldOptions: text('field_options'),
+  isRequired: boolean('is_required').default(false),
+  helpText: text('help_text'),
+  displayOrder: integer('display_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const checklists = pgTable('checklists', {
+  id: serial('id').primaryKey(),
+  checklistId: varchar('checklist_id', { length: 20 }).notNull().unique(),
+  templateId: integer('template_id').notNull().references(() => checklistTemplates.id),
+  projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description'),
+  status: varchar('status', { length: 50 }).default('not-started'),
+  relatedIssueId: integer('related_issue_id').references(() => issues.id),
+  relatedActionId: integer('related_action_id').references(() => actionItems.id),
+  assignedTo: integer('assigned_to').references(() => users.id),
+  dueDate: date('due_date'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  approvedAt: timestamp('approved_at'),
+  approvedBy: integer('approved_by').references(() => users.id),
+  totalItems: integer('total_items').default(0),
+  completedItems: integer('completed_items').default(0),
+  completionPercentage: integer('completion_percentage').generatedAlwaysAs(
+    sql`CASE WHEN total_items > 0 THEN (completed_items * 100 / total_items) ELSE 0 END`
+  ),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const checklistResponses = pgTable('checklist_responses', {
+  id: serial('id').primaryKey(),
+  checklistId: integer('checklist_id').notNull().references(() => checklists.id, { onDelete: 'cascade' }),
+  templateItemId: integer('template_item_id').notNull().references(() => checklistTemplateItems.id),
+  responseValue: text('response_value'),
+  responseDate: date('response_date'),
+  responseBoolean: boolean('response_boolean'),
+  notes: text('notes'),
+  isCompleted: boolean('is_completed').default(false),
+  completedBy: integer('completed_by').references(() => users.id),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const checklistComments = pgTable('checklist_comments', {
+  id: serial('id').primaryKey(),
+  checklistId: integer('checklist_id').notNull().references(() => checklists.id, { onDelete: 'cascade' }),
+  responseId: integer('response_id').references(() => checklistResponses.id),
+  comment: text('comment').notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const checklistSignoffs = pgTable('checklist_signoffs', {
+  id: serial('id').primaryKey(),
+  checklistId: integer('checklist_id').notNull().references(() => checklists.id, { onDelete: 'cascade' }),
+  role: varchar('role', { length: 100 }).notNull(),
+  signedBy: integer('signed_by').references(() => users.id),
+  signedAt: timestamp('signed_at'),
+  signature: text('signature'),
+  comments: text('comments'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
