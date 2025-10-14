@@ -695,6 +695,44 @@ function canPerformRiskAction(user, action, risk = null) {
   return false;
 }
 
+// =====================================================
+// CHECKLIST UTILITY FUNCTIONS
+// =====================================================
+
+/**
+ * Generate unique checklist ID
+ */
+function generateChecklistId() {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000);
+  return `CHK-${timestamp}-${random}`;
+}
+
+/**
+ * Get user's accessible projects for permission checking
+ */
+async function getUserProjectIds(userId) {
+  const result = await pool.query(
+    `SELECT project_id FROM project_members WHERE user_id = $1 AND status = 'active'`,
+    [userId]
+  );
+  return result.rows.map(row => row.project_id);
+}
+
+/**
+ * Check if user has access to checklist
+ */
+async function canAccessChecklist(userId, checklistId) {
+  const result = await pool.query(
+    `SELECT c.id 
+     FROM checklists c
+     INNER JOIN project_members pm ON c.project_id = pm.project_id
+     WHERE c.id = $1 AND pm.user_id = $2 AND pm.status = 'active'`,
+    [checklistId, userId]
+  );
+  return result.rows.length > 0;
+}
+
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({
@@ -7114,6 +7152,434 @@ app.delete('/api/risks/:riskId', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error deleting risk:', error);
     res.status(500).json({ error: 'Failed to delete risk' });
+  }
+});
+
+// ========================================
+// CHECKLIST API ENDPOINTS
+// ========================================
+
+// GET /api/checklists - List all checklists with filtering
+app.get('/api/checklists', authenticateToken, async (req, res) => {
+  try {
+    const { project_id, status, template_id, assigned_to } = req.query;
+    const userId = req.user.id;
+    
+    // Get user's accessible projects
+    const projectIds = await getUserProjectIds(userId);
+    
+    if (projectIds.length === 0) {
+      return res.json([]);
+    }
+    
+    // Build query with filters
+    let query = `
+      SELECT 
+        c.*,
+        ct.name as template_name,
+        ct.icon as template_icon,
+        p.name as project_name,
+        u.name as assigned_to_name,
+        creator.name as created_by_name
+      FROM checklists c
+      INNER JOIN checklist_templates ct ON c.template_id = ct.id
+      INNER JOIN projects p ON c.project_id = p.id
+      LEFT JOIN users u ON c.assigned_to = u.id
+      LEFT JOIN users creator ON c.created_by = creator.id
+      WHERE c.project_id = ANY($1)
+    `;
+    
+    const params = [projectIds];
+    let paramIndex = 2;
+    
+    if (project_id) {
+      query += ` AND c.project_id = $${paramIndex}`;
+      params.push(project_id);
+      paramIndex++;
+    }
+    
+    if (status) {
+      query += ` AND c.status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+    
+    if (template_id) {
+      query += ` AND c.template_id = $${paramIndex}`;
+      params.push(template_id);
+      paramIndex++;
+    }
+    
+    if (assigned_to) {
+      query += ` AND c.assigned_to = $${paramIndex}`;
+      params.push(assigned_to);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY c.created_at DESC`;
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching checklists:', error);
+    res.status(500).json({ error: 'Failed to fetch checklists' });
+  }
+});
+
+// GET /api/checklists/:id - Get checklist details with responses
+app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    
+    // Check access
+    const hasAccess = await canAccessChecklist(userId, checklistId);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get checklist details
+    const checklistResult = await pool.query(
+      `SELECT 
+        c.*,
+        ct.name as template_name,
+        ct.icon as template_icon,
+        ct.category as template_category,
+        p.name as project_name,
+        u.name as assigned_to_name,
+        creator.name as created_by_name
+      FROM checklists c
+      INNER JOIN checklist_templates ct ON c.template_id = ct.id
+      INNER JOIN projects p ON c.project_id = p.id
+      LEFT JOIN users u ON c.assigned_to = u.id
+      LEFT JOIN users creator ON c.created_by = creator.id
+      WHERE c.id = $1`,
+      [checklistId]
+    );
+    
+    if (checklistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    const checklist = checklistResult.rows[0];
+    
+    // Get template structure with responses
+    const sectionsResult = await pool.query(
+      `SELECT 
+        cts.id,
+        cts.title,
+        cts.description,
+        cts.section_number,
+        cts.display_order,
+        cts.parent_section_id
+      FROM checklist_template_sections cts
+      WHERE cts.template_id = $1
+      ORDER BY cts.display_order`,
+      [checklist.template_id]
+    );
+    
+    // Get items with responses
+    const itemsResult = await pool.query(
+      `SELECT 
+        cti.id as item_id,
+        cti.section_id,
+        cti.item_text,
+        cti.field_type,
+        cti.field_options,
+        cti.is_required,
+        cti.help_text,
+        cti.display_order,
+        cr.response_value,
+        cr.response_date,
+        cr.response_boolean,
+        cr.notes,
+        cr.is_completed,
+        cr.completed_by,
+        cr.completed_at
+      FROM checklist_template_items cti
+      LEFT JOIN checklist_responses cr ON (
+        cti.id = cr.template_item_id AND cr.checklist_id = $1
+      )
+      WHERE cti.section_id IN (
+        SELECT id FROM checklist_template_sections WHERE template_id = $2
+      )
+      ORDER BY cti.display_order`,
+      [checklistId, checklist.template_id]
+    );
+    
+    // Organize data
+    const sections = sectionsResult.rows.map(section => ({
+      ...section,
+      items: itemsResult.rows.filter(item => item.section_id === section.id)
+    }));
+    
+    // Get comments
+    const commentsResult = await pool.query(
+      `SELECT 
+        cc.*,
+        u.name as commenter_name
+      FROM checklist_comments cc
+      LEFT JOIN users u ON cc.created_by = u.id
+      WHERE cc.checklist_id = $1
+      ORDER BY cc.created_at DESC`,
+      [checklistId]
+    );
+    
+    // Get signoffs
+    const signoffsResult = await pool.query(
+      `SELECT 
+        cs.*,
+        u.name as signer_name
+      FROM checklist_signoffs cs
+      LEFT JOIN users u ON cs.signed_by = u.id
+      WHERE cs.checklist_id = $1
+      ORDER BY cs.created_at`,
+      [checklistId]
+    );
+    
+    res.json({
+      ...checklist,
+      sections,
+      comments: commentsResult.rows,
+      signoffs: signoffsResult.rows
+    });
+    
+  } catch (error) {
+    console.error('Error fetching checklist details:', error);
+    res.status(500).json({ error: 'Failed to fetch checklist details' });
+  }
+});
+
+// POST /api/checklists - Create new checklist from template
+app.post('/api/checklists', authenticateToken, async (req, res) => {
+  try {
+    const {
+      template_id,
+      project_id,
+      title,
+      description,
+      assigned_to,
+      due_date
+    } = req.body;
+    
+    const userId = req.user.id;
+    
+    // Check project access
+    const projectIds = await getUserProjectIds(userId);
+    if (!projectIds.includes(parseInt(project_id))) {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+    
+    // Get template to calculate total items
+    const itemsCount = await pool.query(
+      `SELECT COUNT(*) as count
+       FROM checklist_template_items cti
+       INNER JOIN checklist_template_sections cts ON cti.section_id = cts.id
+       WHERE cts.template_id = $1`,
+      [template_id]
+    );
+    
+    const totalItems = parseInt(itemsCount.rows[0].count);
+    const checklistId = generateChecklistId();
+    
+    // Create checklist
+    const result = await pool.query(
+      `INSERT INTO checklists (
+        checklist_id, template_id, project_id, title, description,
+        assigned_to, due_date, total_items, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *`,
+      [
+        checklistId,
+        template_id,
+        project_id,
+        title,
+        description,
+        assigned_to || null,
+        due_date || null,
+        totalItems,
+        userId
+      ]
+    );
+    
+    res.status(201).json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Error creating checklist:', error);
+    res.status(500).json({ error: 'Failed to create checklist' });
+  }
+});
+
+// PUT /api/checklists/:id - Update checklist metadata
+app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    
+    // Check access
+    const hasAccess = await canAccessChecklist(userId, checklistId);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const {
+      title,
+      description,
+      status,
+      assigned_to,
+      due_date
+    } = req.body;
+    
+    const result = await pool.query(
+      `UPDATE checklists
+       SET 
+         title = COALESCE($1, title),
+         description = COALESCE($2, description),
+         status = COALESCE($3, status),
+         assigned_to = COALESCE($4, assigned_to),
+         due_date = COALESCE($5, due_date),
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6
+       RETURNING *`,
+      [title, description, status, assigned_to, due_date, checklistId]
+    );
+    
+    res.json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Error updating checklist:', error);
+    res.status(500).json({ error: 'Failed to update checklist' });
+  }
+});
+
+// POST /api/checklists/:id/responses - Save checklist responses
+app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    const { responses } = req.body; // Array of {template_item_id, value, type}
+    
+    // Check access
+    const hasAccess = await canAccessChecklist(userId, checklistId);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Update responses in transaction
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      for (const response of responses) {
+        const { template_item_id, value, type, notes, is_completed } = response;
+        
+        // Determine which field to use based on type
+        let responseValue = null;
+        let responseDate = null;
+        let responseBoolean = null;
+        
+        if (type === 'checkbox' || type === 'radio') {
+          responseBoolean = value === true || value === 'true';
+        } else if (type === 'date') {
+          responseDate = value;
+        } else {
+          responseValue = value;
+        }
+        
+        await client.query(
+          `INSERT INTO checklist_responses (
+            checklist_id, template_item_id, response_value, response_date,
+            response_boolean, notes, is_completed, completed_by, completed_at,
+            updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+          ON CONFLICT (checklist_id, template_item_id)
+          DO UPDATE SET
+            response_value = EXCLUDED.response_value,
+            response_date = EXCLUDED.response_date,
+            response_boolean = EXCLUDED.response_boolean,
+            notes = EXCLUDED.notes,
+            is_completed = EXCLUDED.is_completed,
+            completed_by = EXCLUDED.completed_by,
+            completed_at = EXCLUDED.completed_at,
+            updated_at = CURRENT_TIMESTAMP`,
+          [
+            checklistId,
+            template_item_id,
+            responseValue,
+            responseDate,
+            responseBoolean,
+            notes || null,
+            is_completed || false,
+            userId,
+            is_completed ? new Date() : null
+          ]
+        );
+      }
+      
+      // Update completed_items count
+      const completedCount = await client.query(
+        `SELECT COUNT(*) as count
+         FROM checklist_responses
+         WHERE checklist_id = $1 AND is_completed = true`,
+        [checklistId]
+      );
+      
+      await client.query(
+        `UPDATE checklists
+         SET 
+           completed_items = $1,
+           updated_at = CURRENT_TIMESTAMP,
+           status = CASE 
+             WHEN $1 = 0 THEN 'not-started'
+             WHEN $1 = total_items THEN 'completed'
+             ELSE 'in-progress'
+           END
+         WHERE id = $2`,
+        [parseInt(completedCount.rows[0].count), checklistId]
+      );
+      
+      await client.query('COMMIT');
+      
+      res.json({ 
+        success: true,
+        completed_items: parseInt(completedCount.rows[0].count)
+      });
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('Error saving responses:', error);
+    res.status(500).json({ error: 'Failed to save responses' });
+  }
+});
+
+// DELETE /api/checklists/:id - Delete checklist
+app.delete('/api/checklists/:id', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    
+    // Check access
+    const hasAccess = await canAccessChecklist(userId, checklistId);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Delete (cascades to responses, comments, signoffs)
+    await pool.query('DELETE FROM checklists WHERE id = $1', [checklistId]);
+    
+    res.json({ success: true, message: 'Checklist deleted successfully' });
+    
+  } catch (error) {
+    console.error('Error deleting checklist:', error);
+    res.status(500).json({ error: 'Failed to delete checklist' });
   }
 });
 
