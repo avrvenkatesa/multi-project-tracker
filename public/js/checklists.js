@@ -578,9 +578,9 @@ function renderItem(item) {
   const requiredMark = item.is_required ? '<span class="text-red-500">*</span>' : '';
   
   return `
-    <div class="checklist-item" data-item-id="${item.id}">
+    <div class="checklist-item" data-item-id="${item.item_id}">
       <div class="item-label">
-        ${escapeHtml(item.label)} ${requiredMark}
+        ${escapeHtml(item.item_text)} ${requiredMark}
         ${item.help_text ? `<span class="item-help-text">${escapeHtml(item.help_text)}</span>` : ''}
       </div>
       <div class="item-field">
@@ -598,31 +598,31 @@ function renderField(item) {
   switch(item.field_type) {
     case 'checkbox':
       return `<input type="checkbox" ${boolValue ? 'checked' : ''} 
-              data-item-id="${item.id}"
+              data-item-id="${item.item_id}"
               class="checkbox-field">`;
     
     case 'text':
       return `<input type="text" value="${escapeHtml(value)}" 
-              data-item-id="${item.id}"
+              data-item-id="${item.item_id}"
               class="text-field">`;
     
     case 'textarea':
       return `<textarea rows="3" 
-              data-item-id="${item.id}"
+              data-item-id="${item.item_id}"
               class="textarea-field">${escapeHtml(value)}</textarea>`;
     
     case 'date':
       return `<input type="date" value="${dateValue}" 
-              data-item-id="${item.id}"
+              data-item-id="${item.item_id}"
               class="date-field">`;
     
     case 'radio':
       const radioOptions = item.field_options ? JSON.parse(item.field_options) : [];
       return radioOptions.map(opt => `
         <label class="radio-label">
-          <input type="radio" name="item_${item.id}" value="${escapeHtml(opt)}" 
+          <input type="radio" name="item_${item.item_id}" value="${escapeHtml(opt)}" 
                  ${value === opt ? 'checked' : ''}
-                 data-item-id="${item.id}"
+                 data-item-id="${item.item_id}"
                  class="radio-field">
           ${escapeHtml(opt)}
         </label>
@@ -630,7 +630,7 @@ function renderField(item) {
     
     case 'dropdown':
       const dropOptions = item.field_options ? JSON.parse(item.field_options) : [];
-      return `<select data-item-id="${item.id}" class="select-field">
+      return `<select data-item-id="${item.item_id}" class="select-field">
         <option value="">Select...</option>
         ${dropOptions.map(opt => 
           `<option value="${escapeHtml(opt)}" ${value === opt ? 'selected' : ''}>${escapeHtml(opt)}</option>`
@@ -638,7 +638,7 @@ function renderField(item) {
       </select>`;
     
     default:
-      return `<input type="text" value="${escapeHtml(value)}" data-item-id="${item.id}" class="text-field">`;
+      return `<input type="text" value="${escapeHtml(value)}" data-item-id="${item.item_id}" class="text-field">`;
   }
 }
 

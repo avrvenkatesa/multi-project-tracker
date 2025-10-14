@@ -7,6 +7,11 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
+- **Checklist Items Display Fix** (October 14, 2025): Fixed field name mismatch preventing checklist items from rendering:
+  - **Issue**: Backend returns `item_id` and `item_text`, but frontend expected `id` and `label`
+  - **Fix**: Updated renderItem() and renderField() functions to use correct field names (`item.item_id`, `item.item_text`)
+  - **Result**: All 303 checklist items now display properly with correct labels and field types
+  - **Files**: public/js/checklists.js (renderItem, renderField functions)
 - **Checklist ID Schema Fix** (October 14, 2025): Fixed database schema mismatch causing 500 error when creating checklists:
   - **Issue**: Generated checklist IDs (CHK-{timestamp}-{random}) were 21+ characters but column was varchar(20)
   - **Fix**: Increased checklist_id column from varchar(20) to varchar(30) using ALTER TABLE
