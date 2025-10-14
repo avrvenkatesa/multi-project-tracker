@@ -2,12 +2,29 @@ const axios = require('axios');
 
 /**
  * Get the application base URL
+ * Priority: 1. Custom APP_URL, 2. Deployment domain, 3. Workspace URL (dev only)
  */
 function getAppUrl() {
-  if (process.env.REPL_SLUG && process.env.REPL_OWNER) {
-    return `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+  // First priority: Custom APP_URL for production deployments
+  if (process.env.APP_URL) {
+    return process.env.APP_URL;
   }
-  return process.env.APP_URL || 'http://localhost:5000';
+  
+  // Second priority: Replit deployment domain (autoscale/vm deployments)
+  if (process.env.REPLIT_DEPLOYMENT === '1' && process.env.REPLIT_DOMAINS) {
+    const domains = process.env.REPLIT_DOMAINS.split(',');
+    if (domains.length > 0) {
+      return `https://${domains[0].trim()}`;
+    }
+  }
+  
+  // Third priority: Development workspace URL
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  
+  // Fallback: localhost
+  return 'http://localhost:5000';
 }
 
 /**

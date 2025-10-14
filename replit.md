@@ -4,6 +4,16 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
+- **Teams Notification URL Fix** (October 14, 2025): Fixed Teams notification links pointing to incorrect workspace URL instead of production deployment:
+  - **Root Cause**: getAppUrl() functions in three service files prioritized workspace URL over deployment URL
+  - **Services Updated**: teamsNotifications.js, schedulerService.js, notificationService.js
+  - **URL Priority Logic**: 
+    1. Custom APP_URL environment variable (for production)
+    2. REPLIT_DOMAINS (automatic for deployed apps)
+    3. REPLIT_DEV_DOMAIN (development workspace)
+    4. Localhost fallback
+  - **Production Setup**: Set APP_URL environment variable to your production domain (e.g., `https://your-app.repl.co`)
+  - All "View Action" and "View Issue" buttons in Teams notifications now correctly link to production deployment
 - **Due Date Badge Restoration & Fix** (October 14, 2025): Restored visual due date badges on Kanban cards that were accidentally deleted in Risk Register commit:
   - **createDueDateBadge() Function**: Restored function with color-coded badges for different urgency levels
   - **Badge Variants**: 
