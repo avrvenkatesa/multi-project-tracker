@@ -6,6 +6,34 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (October 2025)
+- **Checklist System Phase 2 - Backend API** (October 14, 2025): Implemented 6 RESTful API endpoints for checklist CRUD operations with secure permission handling:
+  - **Critical Bug Fix**: Fixed SQL queries referencing non-existent `u.name` column - changed to `u.username` in 6 locations (list, details, comments, signoffs)
+  - **Security Fix**: Added `status = 'active'` filters to prevent inactive project members from accessing checklists
+  - **Utility Functions**: generateChecklistId(), getUserProjectIds(), canAccessChecklist() with active member filtering
+  - **GET /api/checklists**: List checklists with filtering by project_id, status, template_id, assigned_to (only accessible projects)
+  - **GET /api/checklists/:id**: Retrieve full checklist with template structure, responses, comments, signoffs
+  - **POST /api/checklists**: Create checklist from template with total_items calculation and unique ID generation
+  - **PUT /api/checklists/:id**: Update checklist metadata (title, description, status, assigned_to, due_date) with COALESCE for partial updates
+  - **POST /api/checklists/:id/responses**: Save responses with transaction handling (BEGIN/COMMIT/ROLLBACK), auto-updates completed_items and status
+  - **DELETE /api/checklists/:id**: Delete checklist with CASCADE to responses, comments, signoffs
+  - **Permission Model**: All endpoints verify active project membership before data access
+  - **Transaction Safety**: Response endpoint uses database transactions for atomic multi-step operations
+  - **Field Routing**: checkbox/radio → response_boolean, date → response_date, text/textarea → response_value
+  - **Status Auto-Update**: Checklist status auto-transitions: not-started (0 items) → in-progress (partial) → completed (all items)
+  - Files updated: server.js
+- **Checklist System Phase 1** (October 14, 2025): Implemented comprehensive checklist system database schema and seeded Access Verification template for S4Carlisle Cloud Migration:
+  - **7 Database Tables Created**: checklist_templates, checklist_template_sections, checklist_template_items, checklists, checklist_responses, checklist_comments, checklist_signoffs
+  - **Schema Strategy**: Added Drizzle ORM definitions to schema.ts for documentation; used raw SQL CREATE TABLE statements for actual table creation to avoid migration conflicts with orphaned tables
+  - **Key Features**: Hierarchical section structure with parent_section_id, GENERATED ALWAYS AS completion_percentage column, UNIQUE constraint on (checklist_id, template_item_id), CASCADE deletes for referential integrity
+  - **Field Types Supported**: checkbox, text, textarea, date, radio, dropdown with JSON field_options
+  - **Indexes Created**: 6 performance indexes on project_id, status, assigned_to, checklist_id, template_id, section_id
+  - **Access Verification Template**: Seeded with 10 main sections (Server Access, Access Methods, Admin Credentials, Access Levels, Security, Documentation, Validation, Security Considerations, Deliverables, Sign-Off)
+  - **Template Statistics**: 1 template, 55 total sections (10 main + 45 subsections), 303 checklist items with proper field types and validation rules
+  - **Sample Section 1.1**: Pathfinder Application Servers with 8 items (hostname, access confirmed, RDP tested, credentials validated, access level radio, tested by, date, notes)
+  - **Seed Script**: seed-checklist.js uses @neondatabase/serverless for template population
+  - Files: schema.ts, seed-checklist.js
+
 ## System Architecture
 
 ### Frontend

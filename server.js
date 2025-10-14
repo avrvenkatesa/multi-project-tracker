@@ -7179,8 +7179,8 @@ app.get('/api/checklists', authenticateToken, async (req, res) => {
         ct.name as template_name,
         ct.icon as template_icon,
         p.name as project_name,
-        u.name as assigned_to_name,
-        creator.name as created_by_name
+        u.username as assigned_to_name,
+        creator.username as created_by_name
       FROM checklists c
       INNER JOIN checklist_templates ct ON c.template_id = ct.id
       INNER JOIN projects p ON c.project_id = p.id
@@ -7247,8 +7247,8 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
         ct.icon as template_icon,
         ct.category as template_category,
         p.name as project_name,
-        u.name as assigned_to_name,
-        creator.name as created_by_name
+        u.username as assigned_to_name,
+        creator.username as created_by_name
       FROM checklists c
       INNER JOIN checklist_templates ct ON c.template_id = ct.id
       INNER JOIN projects p ON c.project_id = p.id
@@ -7318,7 +7318,7 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
     const commentsResult = await pool.query(
       `SELECT 
         cc.*,
-        u.name as commenter_name
+        u.username as commenter_name
       FROM checklist_comments cc
       LEFT JOIN users u ON cc.created_by = u.id
       WHERE cc.checklist_id = $1
@@ -7330,7 +7330,7 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
     const signoffsResult = await pool.query(
       `SELECT 
         cs.*,
-        u.name as signer_name
+        u.username as signer_name
       FROM checklist_signoffs cs
       LEFT JOIN users u ON cs.signed_by = u.id
       WHERE cs.checklist_id = $1
