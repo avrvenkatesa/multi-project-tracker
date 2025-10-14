@@ -7159,6 +7159,21 @@ app.delete('/api/risks/:riskId', authenticateToken, async (req, res) => {
 // CHECKLIST API ENDPOINTS
 // ========================================
 
+// GET /api/checklist-templates - List all checklist templates
+app.get('/api/checklist-templates', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name, description, icon, category, created_at
+       FROM checklist_templates
+       ORDER BY name`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching checklist templates:', error);
+    res.status(500).json({ error: 'Failed to fetch templates' });
+  }
+});
+
 // GET /api/checklists - List all checklists with filtering
 app.get('/api/checklists', authenticateToken, async (req, res) => {
   try {
@@ -7548,9 +7563,16 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
       
       await client.query('COMMIT');
       
+      // Get updated checklist data
+      const updatedChecklist = await client.query(
+        `SELECT * FROM checklists WHERE id = $1`,
+        [checklistId]
+      );
+      
       res.json({ 
         success: true,
-        completed_items: parseInt(completedCount.rows[0].count)
+        completed_items: parseInt(completedCount.rows[0].count),
+        checklist: updatedChecklist.rows[0]
       });
       
     } catch (error) {
@@ -7563,6 +7585,35 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
   } catch (error) {
     console.error('Error saving responses:', error);
     res.status(500).json({ error: 'Failed to save responses' });
+  }
+});
+
+// POST /api/checklists/:id/comments - Add comment to checklist
+app.post('/api/checklists/:id/comments', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const { comment } = req.body;
+    const userId = req.user.id;
+    
+    // Check access
+    const hasAccess = await canAccessChecklist(userId, checklistId);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Add comment
+    const result = await pool.query(
+      `INSERT INTO checklist_comments (checklist_id, created_by, comment)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [checklistId, userId, comment]
+    );
+    
+    res.status(201).json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    res.status(500).json({ error: 'Failed to add comment' });
   }
 });
 
