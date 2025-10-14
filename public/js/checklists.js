@@ -654,21 +654,24 @@ function debouncedSave(itemId, value, fieldType) {
 }
 
 async function saveResponse(itemId, value, fieldType) {
+  // Determine if item is completed based on field type and value
+  let isCompleted = false;
+  if (fieldType === 'checkbox') {
+    isCompleted = value === true;
+  } else if (fieldType === 'text' || fieldType === 'textarea') {
+    isCompleted = value && value.trim().length > 0;
+  } else if (fieldType === 'date') {
+    isCompleted = value && value.length > 0;
+  } else if (fieldType === 'radio' || fieldType === 'dropdown') {
+    isCompleted = value && value.length > 0;
+  }
+  
   const responseData = {
     template_item_id: itemId,
-    response_value: null,
-    response_boolean: null,
-    response_date: null
+    value: value,
+    type: fieldType,
+    is_completed: isCompleted
   };
-  
-  // Route to correct field
-  if (fieldType === 'checkbox' || fieldType === 'radio') {
-    responseData.response_boolean = fieldType === 'checkbox' ? value : (value ? true : false);
-  } else if (fieldType === 'date') {
-    responseData.response_date = value;
-  } else {
-    responseData.response_value = value;
-  }
   
   try {
     const response = await fetch(`/api/checklists/${currentChecklistId}/responses`, {
