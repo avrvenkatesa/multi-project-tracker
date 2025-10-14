@@ -7367,6 +7367,12 @@ app.post('/api/checklists', authenticateToken, async (req, res) => {
     
     // Check project access
     const projectIds = await getUserProjectIds(userId);
+    console.log('[CHECKLIST_CREATE] User ID:', userId);
+    console.log('[CHECKLIST_CREATE] Accessible project IDs:', projectIds);
+    console.log('[CHECKLIST_CREATE] Requested project ID:', project_id, 'Type:', typeof project_id);
+    console.log('[CHECKLIST_CREATE] Parsed project ID:', parseInt(project_id));
+    console.log('[CHECKLIST_CREATE] Includes check:', projectIds.includes(parseInt(project_id)));
+    
     if (!projectIds.includes(parseInt(project_id))) {
       return res.status(403).json({ error: 'Access denied to this project' });
     }
