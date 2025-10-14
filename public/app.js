@@ -471,7 +471,11 @@ function setupEventListeners() {
         }
     });
     document.getElementById('view-checklists-btn')?.addEventListener('click', () => {
-        window.location.href = 'checklists.html';
+        if (currentProject) {
+            window.location.href = `checklists.html?project=${currentProject.id}`;
+        } else {
+            window.location.href = 'checklists.html';
+        }
     });
     
     // Dropdown menu functionality
