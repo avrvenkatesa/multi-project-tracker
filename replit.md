@@ -4,7 +4,7 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
-- **Due Date Badge Restoration** (October 14, 2025): Restored visual due date badges on Kanban cards that were accidentally deleted in Risk Register commit:
+- **Due Date Badge Restoration & Fix** (October 14, 2025): Restored visual due date badges on Kanban cards that were accidentally deleted in Risk Register commit:
   - **createDueDateBadge() Function**: Restored function with color-coded badges for different urgency levels
   - **Badge Variants**: 
     - Overdue (red) - "X days overdue" with exclamation icon
@@ -15,8 +15,9 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
     - No Due Date (gray) - "No due date" with calendar-times icon
   - **CSS Styles**: Added complete badge styling with border-left accents and mobile responsive design
   - **Card Integration**: Replaced plain date display with badge rendering in Kanban board
+  - **Critical Bug Fix**: Fixed field name mismatch where badge was using camelCase `item.dueDate` instead of database snake_case `item.due_date`, causing "No due date" to display for valid dates
   - Badges provide instant visual urgency indicators for better task prioritization
-  - Cache version: app.js v30
+  - Cache version: app.js v31
 - **@Mention Autocomplete Fix** (October 13, 2025): Fixed broken @mention autocomplete in comment fields that prevented team member dropdown from appearing:
   - **Root Cause**: Frontend was calling non-existent `/api/projects/:projectId/members` endpoint
   - **Solution**: Updated to use existing `/api/projects/:projectId/team` endpoint
