@@ -4,6 +4,12 @@
 Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, thereby enhancing project oversight and efficiency.
 
 ## Recent Changes (October 2025)
+- **Item Detail Modal Due Date Display** (October 14, 2025): Added due date display with urgency badge to Issue and Action Item detail modals:
+  - **createDueDateBadge() Function**: Added to comments.js to provide same badge functionality as Kanban cards
+  - **Modal Enhancement**: Detail modal now displays due date section below Status/Priority/Assigned To/Created grid
+  - **Visual Urgency Indicators**: Same color-coded badges (overdue in red, today in orange, soon in yellow, future in blue, none in gray)
+  - **User Request**: Users can now see due date urgency at a glance when viewing item details and comments
+  - Cache version: comments.js v3
 - **Teams Notification URL Fix** (October 14, 2025): Fixed Teams notification links pointing to incorrect workspace URL instead of production deployment:
   - **Root Cause**: getAppUrl() functions in three service files prioritized workspace URL over deployment URL
   - **Services Updated**: teamsNotifications.js, schedulerService.js, notificationService.js
