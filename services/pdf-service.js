@@ -295,30 +295,34 @@ async function addChecklistContent(doc, checklistData, format, includeComments) 
       doc.text(symbol, 70, itemY);
       doc.text(item.item_text || item.text, 95, itemY, { width: 445 });
       
-      // Get the appropriate response value based on field type
-      let responseValue = null;
-      if (item.field_type === 'checkbox' || item.field_type === 'radio') {
-        responseValue = item.response_boolean ? 'Yes' : null;
-      } else if (item.field_type === 'date') {
-        responseValue = item.response_date;
-      } else {
-        responseValue = item.response_value;
-      }
+      // Display response based on field type
+      // For checkboxes: [X] or [ ] symbol is enough, only show notes if present
+      // For dates: show the date
+      // For text fields: show the text value
       
-      // Show notes if they exist
-      if (item.notes) {
-        responseValue = item.notes;
-      }
-      
-      // Response value if exists
-      if (responseValue) {
+      if (item.field_type === 'date' && item.response_date) {
+        // Show date response
         doc.moveDown(0.2);
         doc.fontSize(9)
            .fillColor('#6b7280')
            .font('Helvetica');
-        
-        const responseLabel = getFieldTypeLabel(item.field_type);
-        doc.text(`${responseLabel}: ${formatResponseValue(responseValue, item.field_type)}`, 85, doc.y);
+        doc.text(`Date: ${formatResponseValue(item.response_date, 'date')}`, 85, doc.y);
+      } else if (item.field_type === 'text' && item.response_value) {
+        // Show text response
+        doc.moveDown(0.2);
+        doc.fontSize(9)
+           .fillColor('#6b7280')
+           .font('Helvetica');
+        doc.text(`Response: ${item.response_value}`, 85, doc.y, { width: 450 });
+      }
+      
+      // Show notes if they exist (separate from the checkbox/date/text response)
+      if (item.notes && item.notes.trim() !== '') {
+        doc.moveDown(0.2);
+        doc.fontSize(9)
+           .fillColor('#6b7280')
+           .font('Helvetica');
+        doc.text(`Notes: ${item.notes}`, 85, doc.y, { width: 450 });
       }
       
       // Comments if exist and included
