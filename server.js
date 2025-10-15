@@ -8091,14 +8091,15 @@ app.get('/api/checklists/:id/export/pdf', authenticateToken, async (req, res) =>
         cti.display_order,
         cr.response_value,
         cr.updated_at as response_date,
+        cr.id as response_id,
         (SELECT json_agg(json_build_object(
           'user', u.username,
-          'comment', cc.comment_text,
+          'comment', cc.comment,
           'created_at', cc.created_at
         ))
         FROM checklist_comments cc
-        LEFT JOIN users u ON cc.user_id = u.id
-        WHERE cc.checklist_id = $1 AND cc.item_id = cti.id) as comments
+        LEFT JOIN users u ON cc.created_by = u.id
+        WHERE cc.checklist_id = $1 AND cc.response_id = cr.id) as comments
       FROM checklist_template_items cti
       INNER JOIN checklist_template_sections cts ON cti.section_id = cts.id
       LEFT JOIN checklist_responses cr ON cr.template_item_id = cti.id AND cr.checklist_id = $1
