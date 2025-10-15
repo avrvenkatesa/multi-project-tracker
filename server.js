@@ -7853,7 +7853,7 @@ app.post('/api/checklists/confirm-generated', authenticateToken, async (req, res
             preview.title,
             preview.description || 'AI-generated checklist template',
             'ai-generated',
-            'sparkles',
+            '✨',
             false,
             false,  // NOT REUSABLE - hidden from main template list
             userId
