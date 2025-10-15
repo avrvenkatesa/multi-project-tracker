@@ -8153,17 +8153,50 @@ app.get('/api/checklists/:id/export/pdf', authenticateToken, async (req, res) =>
       include_metadata: include_metadata === 'true'
     });
     
-    // Set response headers with proper security
-    const safeTitle = (checklist.title || 'Checklist').replace(/[^a-zA-Z0-9\s-]/g, '').substring(0, 50);
-    const filename = `${safeTitle.replace(/\s+/g, '_')}_Report.pdf`;
+    // Validate PDF structure
+    if (!pdfBuffer || pdfBuffer.length < 100) {
+      throw new Error('Generated PDF is too small or empty');
+    }
     
+    // Check PDF magic bytes (should start with %PDF-)
+    const header = pdfBuffer.toString('utf-8', 0, 5);
+    if (!header.startsWith('%PDF-')) {
+      throw new Error('Generated file is not a valid PDF');
+    }
+    
+    // Check PDF trailer exists
+    const trailer = pdfBuffer.toString('utf-8', Math.max(0, pdfBuffer.length - 200));
+    if (!trailer.includes('%%EOF')) {
+      throw new Error('PDF structure is incomplete');
+    }
+    
+    // Sanitize filename (remove special characters that trigger AV)
+    const sanitizeFilename = (name) => {
+      return name
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .replace(/__+/g, '_')
+        .substring(0, 100);
+    };
+    
+    const checklistName = sanitizeFilename(checklist.title || 'Checklist');
+    const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const filename = `Checklist_${checklistName}_${timestamp}.pdf`;
+    
+    // Set comprehensive security headers
     res.setHeader('Content-Type', 'application/pdf; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', pdfBuffer.length);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    
+    // Security headers to indicate safe download
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('X-Download-Options', 'noopen');
+    
+    // Cache control
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
     
     // Send PDF
     res.send(pdfBuffer);
