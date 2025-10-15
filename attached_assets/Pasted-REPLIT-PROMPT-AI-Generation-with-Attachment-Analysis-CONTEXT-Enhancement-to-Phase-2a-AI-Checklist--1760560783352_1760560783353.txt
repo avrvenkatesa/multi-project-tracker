@@ -1,0 +1,1556 @@
+REPLIT PROMPT: AI Generation with Attachment Analysis
+CONTEXT:
+Enhancement to Phase 2a AI Checklist Generation. Currently generates from issue/action descriptions only. Now adding capability to analyze attachments (PDFs, DOCX, TXT) along with descriptions for more comprehensive checklist generation.
+
+TASK:
+Allow users to select which source materials AI should analyze:
+- Issue/Action description only
+- One or more attachments only  
+- Combination of description + selected attachments
+
+ESTIMATED TIME: 4-6 hours
+
+---
+
+## REQUIREMENTS
+
+### 1. Database Schema Updates
+
+**Verify/Add attachments support:**
+```sql
+-- Check if attachments table exists
+SELECT table_name FROM information_schema.tables 
+WHERE table_name = 'attachments';
+
+-- If attachments table doesn't exist, create it
+CREATE TABLE IF NOT EXISTS attachments (
+  id SERIAL PRIMARY KEY,
+  filename VARCHAR(255) NOT NULL,
+  original_filename VARCHAR(255) NOT NULL,
+  file_path VARCHAR(500) NOT NULL,
+  file_size INTEGER,
+  mime_type VARCHAR(100),
+  
+  -- Polymorphic relationship
+  related_to_type VARCHAR(50), -- 'issue', 'action-item', 'checklist'
+  related_to_id INTEGER,
+  
+  uploaded_by INTEGER REFERENCES users(id),
+  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  -- For AI processing
+  is_processed BOOLEAN DEFAULT false,
+  extracted_text TEXT,
+  processing_error TEXT,
+  
+  CONSTRAINT fk_uploaded_by FOREIGN KEY (uploaded_by) 
+    REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_attachments_related ON attachments(related_to_type, related_to_id);
+CREATE INDEX idx_attachments_processed ON attachments(is_processed);
+
+-- Track which attachments were used for AI generation
+CREATE TABLE IF NOT EXISTS checklist_generation_sources (
+  id SERIAL PRIMARY KEY,
+  checklist_id INTEGER REFERENCES checklists(id) ON DELETE CASCADE,
+  
+  -- Source content
+  used_description BOOLEAN DEFAULT false,
+  description_text TEXT,
+  
+  -- Attachments used
+  attachment_ids INTEGER[],
+  
+  generation_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_generation_sources ON checklist_generation_sources(checklist_id);
+
+-- Add columns to checklists table to track attachment usage
+ALTER TABLE checklists 
+ADD COLUMN IF NOT EXISTS used_attachments INTEGER[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS used_description BOOLEAN DEFAULT true;
+
+COMMENT ON COLUMN checklists.used_attachments IS 'IDs of attachments analyzed during AI generation';
+COMMENT ON COLUMN checklists.used_description IS 'Whether description text was used in generation';
+```
+
+### 2. Install File Processing Dependencies
+```bash
+# PDF processing
+npm install pdf-parse
+
+# DOCX processing  
+npm install mammoth
+
+# Image OCR (optional, for future image support)
+npm install tesseract.js
+
+# File upload handling (if not already installed)
+npm install multer
+
+# File type validation
+npm install file-type
+```
+
+### 3. File Processing Service
+
+**Create server/file-processor.js:**
+```javascript
+const fs = require('fs').promises;
+const pdf = require('pdf-parse');
+const mammoth = require('mammoth');
+const path = require('path');
+
+/**
+ * Extract text from various file types
+ */
+async function extractTextFromFile(filePath, mimeType) {
+  try {
+    console.log(`Extracting text from: ${filePath} (${mimeType})`);
+    
+    if (mimeType === 'application/pdf') {
+      return await extractFromPDF(filePath);
+    } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      return await extractFromDOCX(filePath);
+    } else if (mimeType === 'application/msword') {
+      return await extractFromDOC(filePath);
+    } else if (mimeType === 'text/plain') {
+      return await extractFromTXT(filePath);
+    } else if (mimeType.startsWith('image/')) {
+      // TODO: Implement OCR for images if needed
+      return '[Image file - text extraction not yet supported. OCR coming soon.]';
+    } else {
+      return `[Unsupported file type: ${mimeType}]`;
+    }
+  } catch (error) {
+    console.error('Text extraction error:', error);
+    throw new Error(`Failed to extract text: ${error.message}`);
+  }
+}
+
+/**
+ * Extract text from PDF
+ */
+async function extractFromPDF(filePath) {
+  try {
+    const dataBuffer = await fs.readFile(filePath);
+    const data = await pdf(dataBuffer);
+    
+    if (!data.text || data.text.trim().length === 0) {
+      throw new Error('PDF appears to be empty or contains only images');
+    }
+    
+    return data.text;
+  } catch (error) {
+    if (error.message.includes('empty')) {
+      throw error;
+    }
+    throw new Error(`PDF extraction failed: ${error.message}`);
+  }
+}
+
+/**
+ * Extract text from DOCX
+ */
+async function extractFromDOCX(filePath) {
+  try {
+    const result = await mammoth.extractRawText({ path: filePath });
+    
+    if (!result.value || result.value.trim().length === 0) {
+      throw new Error('DOCX appears to be empty');
+    }
+    
+    // Log any messages/warnings from mammoth
+    if (result.messages && result.messages.length > 0) {
+      console.log('Mammoth extraction messages:', result.messages);
+    }
+    
+    return result.value;
+  } catch (error) {
+    throw new Error(`DOCX extraction failed: ${error.message}`);
+  }
+}
+
+/**
+ * Extract text from DOC (older Word format)
+ */
+async function extractFromDOC(filePath) {
+  // Mammoth can handle some .doc files, but not all
+  try {
+    return await extractFromDOCX(filePath);
+  } catch (error) {
+    throw new Error('Old .doc format not fully supported. Please save as .docx');
+  }
+}
+
+/**
+ * Extract text from TXT
+ */
+async function extractFromTXT(filePath) {
+  try {
+    const text = await fs.readFile(filePath, 'utf-8');
+    
+    if (!text || text.trim().length === 0) {
+      throw new Error('Text file is empty');
+    }
+    
+    return text;
+  } catch (error) {
+    throw new Error(`Text file reading failed: ${error.message}`);
+  }
+}
+
+/**
+ * Truncate text to token limit (rough estimation: 4 chars = 1 token)
+ */
+function truncateToTokenLimit(text, maxTokens = 4000) {
+  const maxChars = maxTokens * 4;
+  
+  if (text.length <= maxChars) {
+    return text;
+  }
+  
+  // Truncate at sentence boundary if possible
+  const truncated = text.substring(0, maxChars);
+  const lastPeriod = truncated.lastIndexOf('.');
+  const lastNewline = truncated.lastIndexOf('\n');
+  const cutPoint = Math.max(lastPeriod, lastNewline);
+  
+  const finalText = cutPoint > maxChars * 0.9 
+    ? truncated.substring(0, cutPoint + 1)
+    : truncated;
+  
+  return finalText + '\n\n[... document truncated due to length ...]';
+}
+
+/**
+ * Validate file size (max 10MB)
+ */
+function validateFileSize(fileSize, maxSizeMB = 10) {
+  const maxSizeBytes = maxSizeMB * 1024 * 1024;
+  return fileSize <= maxSizeBytes;
+}
+
+/**
+ * Get supported mime types
+ */
+function getSupportedMimeTypes() {
+  return [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
+    'text/plain'
+  ];
+}
+
+/**
+ * Check if file type is supported
+ */
+function isFileTypeSupported(mimeType) {
+  return getSupportedMimeTypes().includes(mimeType);
+}
+
+module.exports = {
+  extractTextFromFile,
+  truncateToTokenLimit,
+  validateFileSize,
+  getSupportedMimeTypes,
+  isFileTypeSupported
+};
+```
+
+### 4. Update AI Service
+
+**Update server/ai-service.js to handle attachments:**
+```javascript
+const { extractTextFromFile, truncateToTokenLimit } = require('./file-processor');
+const pool = require('./db'); // Make sure you export pool from your db connection file
+
+/**
+ * Generate checklist with attachment analysis
+ */
+async function generateChecklistWithAttachments(sourceData, attachmentIds = []) {
+  const { type, data } = sourceData; // type: 'issue' or 'action-item'
+  
+  // Build prompt with source selection
+  let contextText = '';
+  
+  // Add description if selected
+  if (data.use_description) {
+    contextText += buildDescriptionContext(type, data);
+  }
+  
+  // Add attachment content if selected
+  if (attachmentIds.length > 0) {
+    const attachmentContent = await getAttachmentContent(attachmentIds);
+    contextText += '\n\n' + attachmentContent;
+  }
+  
+  if (!contextText.trim()) {
+    throw new Error('No source content provided for generation');
+  }
+  
+  // Generate prompt
+  const prompt = buildEnhancedPrompt(type, data, contextText);
+  
+  // Call AI
+  return await callAI(prompt, type);
+}
+
+/**
+ * Build context from description
+ */
+function buildDescriptionContext(type, data) {
+  if (type === 'issue') {
+    return `
+====================================
+SOURCE: Issue Description
+====================================
+
+Issue Title: ${data.title}
+Description: ${data.description || 'No description provided'}
+Type: ${data.type || 'Unknown'}
+Priority: ${data.priority || 'Medium'}
+Status: ${data.status || 'Open'}
+Labels: ${data.labels || 'None'}
+
+`;
+  } else {
+    return `
+====================================
+SOURCE: Action Item Description
+====================================
+
+Title: ${data.title}
+Description: ${data.description || 'No description provided'}
+Priority: ${data.priority || 'Medium'}
+Status: ${data.status || 'Open'}
+Due Date: ${data.due_date || 'Not set'}
+Assigned To: ${data.assigned_to_name || 'Unassigned'}
+
+`;
+  }
+}
+
+/**
+ * Get and process attachment content
+ */
+async function getAttachmentContent(attachmentIds) {
+  const result = await pool.query(
+    `SELECT id, original_filename, file_path, mime_type, extracted_text, file_size
+     FROM attachments 
+     WHERE id = ANY($1)
+     ORDER BY id`,
+    [attachmentIds]
+  );
+  
+  if (result.rows.length === 0) {
+    throw new Error('No attachments found with provided IDs');
+  }
+  
+  let content = '\n====================================\n';
+  content += 'SOURCE: Attached Documents\n';
+  content += '====================================\n\n';
+  
+  for (const attachment of result.rows) {
+    // Check file size
+    if (attachment.file_size > 10 * 1024 * 1024) {
+      content += `--- Document: ${attachment.original_filename} ---\n`;
+      content += '[File too large to process (>10MB)]\n\n';
+      continue;
+    }
+    
+    // Try to use cached extracted text
+    let text = attachment.extracted_text;
+    
+    // If not cached, extract now
+    if (!text) {
+      try {
+        console.log(`Extracting text from attachment ${attachment.id}: ${attachment.original_filename}`);
+        text = await extractTextFromFile(attachment.file_path, attachment.mime_type);
+        
+        // Cache the extracted text
+        await pool.query(
+          `UPDATE attachments 
+           SET extracted_text = $1, 
+               is_processed = true,
+               processing_error = NULL
+           WHERE id = $2`,
+          [text, attachment.id]
+        );
+      } catch (error) {
+        console.error(`Failed to extract text from ${attachment.original_filename}:`, error);
+        
+        // Log error to database
+        await pool.query(
+          `UPDATE attachments 
+           SET processing_error = $1,
+               is_processed = false
+           WHERE id = $2`,
+          [error.message, attachment.id]
+        );
+        
+        text = `[Could not extract text from ${attachment.original_filename}: ${error.message}]`;
+      }
+    }
+    
+    // Truncate if too long (3000 tokens per document)
+    text = truncateToTokenLimit(text, 3000);
+    
+    content += `--- Document: ${attachment.original_filename} ---\n${text}\n\n`;
+  }
+  
+  return content;
+}
+
+/**
+ * Build enhanced prompt with context
+ */
+function buildEnhancedPrompt(type, data, contextText) {
+  const sourceLabel = type === 'issue' ? 'issue' : 'action item';
+  
+  return `You are a project management expert. Based on the following ${sourceLabel} information and attached documents, generate a comprehensive checklist.
+
+${contextText}
+
+====================================
+INSTRUCTIONS
+====================================
+
+1. Analyze ALL the provided information carefully
+2. If documents are included, extract key requirements, tasks, and deliverables from them
+3. Create a checklist that covers everything mentioned in the source materials
+4. Organize into logical sections (3-7 sections based on complexity)
+5. Create specific, actionable items (5-15 per section)
+6. Use appropriate field types for each item
+7. Mark critical items as required
+
+For documents (like SOWs, requirements docs, specifications):
+- Capture all major deliverables and milestones
+- Include validation/verification steps for each deliverable
+- Cover dependencies and prerequisites
+- Address acceptance criteria and quality standards
+- Include sign-off points where appropriate
+
+Field types to use:
+- "checkbox" for yes/no confirmations and completion checks
+- "text" for capturing specific values, names, IDs, hostnames
+- "textarea" for detailed notes, observations, descriptions
+- "date" for deadlines, milestones, and timestamps
+- "radio" for multiple choice selections (include 2-5 options in field_options array)
+
+IMPORTANT TEMPLATE MATCHING:
+- If this ${sourceLabel} is about verifying server access, checking credentials, or validating permissions/connectivity, set use_template=true and template_id=1 (Access Verification Checklist)
+- Otherwise, generate a custom checklist structure with use_template=false and template_id=null
+
+Respond ONLY with valid JSON (no markdown, no code blocks, no extra text):
+{
+  "title": "Clear, action-oriented checklist title",
+  "description": "Brief description of checklist purpose and scope",
+  "use_template": true or false,
+  "template_id": 1 or null,
+  "confidence": 85,
+  "sections": [
+    {
+      "title": "Section name (e.g., 'Initial Setup', 'Validation Steps')",
+      "description": "Brief description of this section's purpose",
+      "items": [
+        {
+          "text": "Clear, actionable item description",
+          "field_type": "checkbox|text|textarea|date|radio",
+          "field_options": ["Option 1", "Option 2", "Option 3"] or null,
+          "is_required": true or false,
+          "help_text": "Optional guidance for completing this item"
+        }
+      ]
+    }
+  ],
+  "reasoning": "1-2 sentence explanation of why this checklist structure was chosen based on the provided materials"
+}
+
+REQUIREMENTS:
+- Minimum 20 total items if documents provided, minimum 10 if only description
+- Comprehensive coverage of all source materials
+- Specific references to document content where applicable
+- Professional, clear language
+- Logical organization and flow`;
+}
+
+// Update exports
+module.exports = {
+  generateChecklistFromIssue,
+  generateChecklistFromActionItem,
+  generateChecklistWithAttachments, // NEW
+  checkRateLimit
+};
+```
+
+### 5. Update API Endpoints
+
+**Update server.js with new endpoint:**
+```javascript
+const { generateChecklistWithAttachments } = require('./server/ai-service');
+
+// POST /api/checklists/generate-with-options - Enhanced generation with source selection
+app.post('/api/checklists/generate-with-options', authenticateToken, async (req, res) => {
+  try {
+    const { 
+      source_type,        // 'issue' or 'action-item'
+      source_id, 
+      use_description,    // boolean
+      attachment_ids,     // array of attachment IDs
+      custom_instructions 
+    } = req.body;
+    
+    const userId = req.user.id;
+    
+    // Validation
+    if (!source_type || !source_id) {
+      return res.status(400).json({ error: 'source_type and source_id are required' });
+    }
+    
+    if (!use_description && (!attachment_ids || attachment_ids.length === 0)) {
+      return res.status(400).json({ 
+        error: 'Must select either description, attachments, or both' 
+      });
+    }
+    
+    // Rate limiting
+    const rateLimit = checkRateLimit(userId);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({ 
+        error: 'Rate limit exceeded',
+        message: `Maximum 10 generations per hour. Try again in ${rateLimit.minutesUntilReset} minutes.`
+      });
+    }
+    
+    // Get source data
+    let sourceData;
+    if (source_type === 'issue') {
+      const result = await pool.query(
+        `SELECT i.*, p.id as project_id, p.name as project_name
+         FROM issues i
+         INNER JOIN projects p ON i.project_id = p.id
+         WHERE i.id = $1`,
+        [source_id]
+      );
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Issue not found' });
+      }
+      
+      sourceData = { type: 'issue', data: result.rows[0] };
+      
+    } else if (source_type === 'action-item') {
+      const result = await pool.query(
+        `SELECT ai.*, p.id as project_id, p.name as project_name, u.name as assigned_to_name
+         FROM action_items ai
+         INNER JOIN projects p ON ai.project_id = p.id
+         LEFT JOIN users u ON ai.assigned_to = u.id
+         WHERE ai.id = $1`,
+        [source_id]
+      );
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Action item not found' });
+      }
+      
+      sourceData = { type: 'action-item', data: result.rows[0] };
+    } else {
+      return res.status(400).json({ error: 'Invalid source_type. Must be "issue" or "action-item"' });
+    }
+    
+    // Check project access
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [sourceData.data.project_id, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+    
+    // If attachments selected, verify they belong to this source
+    if (attachment_ids && attachment_ids.length > 0) {
+      const attachmentCheck = await pool.query(
+        `SELECT id FROM attachments 
+         WHERE id = ANY($1) 
+         AND related_to_type = $2 
+         AND related_to_id = $3`,
+        [attachment_ids, source_type, source_id]
+      );
+      
+      if (attachmentCheck.rows.length !== attachment_ids.length) {
+        return res.status(400).json({ 
+          error: 'Some attachments do not belong to this source',
+          details: `Expected ${attachment_ids.length} attachments, found ${attachmentCheck.rows.length}`
+        });
+      }
+      
+      // Check if all attachments are processable
+      const attachmentDetails = await pool.query(
+        `SELECT id, original_filename, mime_type, file_size, processing_error
+         FROM attachments
+         WHERE id = ANY($1)`,
+        [attachment_ids]
+      );
+      
+      const unsupportedFiles = attachmentDetails.rows.filter(att => 
+        !['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(att.mime_type)
+      );
+      
+      if (unsupportedFiles.length > 0) {
+        return res.status(400).json({
+          error: 'Some files are not supported',
+          unsupported: unsupportedFiles.map(f => f.original_filename),
+          supported_types: 'PDF, DOCX, TXT'
+        });
+      }
+    }
+    
+    // Add flags
+    sourceData.data.use_description = use_description;
+    sourceData.data.custom_instructions = custom_instructions;
+    
+    // Generate with attachments
+    console.log(`Generating checklist with options:`, {
+      source_type,
+      source_id,
+      use_description,
+      attachment_count: attachment_ids?.length || 0
+    });
+    
+    const checklistPreview = await generateChecklistWithAttachments(
+      sourceData, 
+      attachment_ids || []
+    );
+    
+    // Add metadata
+    checklistPreview.source_id = source_id;
+    checklistPreview.source_type = source_type;
+    checklistPreview.project_id = sourceData.data.project_id;
+    checklistPreview.project_name = sourceData.data.project_name;
+    checklistPreview.source_title = sourceData.data.title;
+    checklistPreview.used_description = use_description;
+    checklistPreview.used_attachments = attachment_ids || [];
+    checklistPreview.generated_at = new Date().toISOString();
+    checklistPreview.rate_limit_remaining = rateLimit.remaining;
+    
+    res.json(checklistPreview);
+    
+  } catch (error) {
+    console.error('Error generating checklist with options:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate checklist',
+      message: error.message 
+    });
+  }
+});
+
+// GET /api/attachments/:source_type/:source_id - Get attachments for source
+app.get('/api/attachments/:source_type/:source_id', authenticateToken, async (req, res) => {
+  try {
+    const { source_type, source_id } = req.params;
+    const userId = req.user.id;
+    
+    // Validate source_type
+    if (!['issue', 'action-item'].includes(source_type)) {
+      return res.status(400).json({ error: 'Invalid source_type' });
+    }
+    
+    // Verify access to source
+    let projectId;
+    if (source_type === 'issue') {
+      const result = await pool.query(
+        'SELECT project_id FROM issues WHERE id = $1',
+        [source_id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Issue not found' });
+      }
+      projectId = result.rows[0].project_id;
+    } else if (source_type === 'action-item') {
+      const result = await pool.query(
+        'SELECT project_id FROM action_items WHERE id = $1',
+        [source_id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Action item not found' });
+      }
+      projectId = result.rows[0].project_id;
+    }
+    
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get attachments
+    const attachments = await pool.query(
+      `SELECT 
+        id, 
+        original_filename, 
+        file_size, 
+        mime_type, 
+        uploaded_at,
+        uploaded_by,
+        is_processed,
+        processing_error
+      FROM attachments
+      WHERE related_to_type = $1 AND related_to_id = $2
+      ORDER BY uploaded_at DESC`,
+      [source_type, source_id]
+    );
+    
+    res.json(attachments.rows);
+    
+  } catch (error) {
+    console.error('Error fetching attachments:', error);
+    res.status(500).json({ error: 'Failed to fetch attachments' });
+  }
+});
+
+// Update the confirm endpoint to save attachment usage
+app.post('/api/checklists/confirm-generated', authenticateToken, async (req, res) => {
+  try {
+    const { preview, source_id, source_type, project_id } = req.body;
+    const userId = req.user.id;
+    
+    // ... existing validation code ...
+    
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // ... existing template and checklist creation code ...
+      
+      // After creating checklist, save generation sources
+      if (preview.used_attachments && preview.used_attachments.length > 0) {
+        await client.query(
+          `INSERT INTO checklist_generation_sources (
+            checklist_id, used_description, attachment_ids
+          ) VALUES ($1, $2, $3)`,
+          [
+            checklistResult.rows[0].id,
+            preview.used_description || false,
+            preview.used_attachments
+          ]
+        );
+        
+        // Update checklist with attachment info
+        await client.query(
+          `UPDATE checklists 
+           SET used_attachments = $1, used_description = $2
+           WHERE id = $3`,
+          [
+            preview.used_attachments,
+            preview.used_description || false,
+            checklistResult.rows[0].id
+          ]
+        );
+      }
+      
+      await client.query('COMMIT');
+      
+      res.status(201).json({
+        success: true,
+        checklist: checklistResult.rows[0],
+        template_id: templateId,
+        is_new_template: !preview.use_template,
+        message: 'Checklist created successfully'
+      });
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('Error confirming checklist:', error);
+    res.status(500).json({ 
+      error: 'Failed to create checklist',
+      message: error.message 
+    });
+  }
+});
+```
+
+### 6. Frontend Implementation
+
+**Update public/js/ai-checklist.js:**
+```javascript
+// Global state for attachment selection
+let availableAttachments = [];
+let selectedAttachments = [];
+
+/**
+ * Generate checklist with source selection
+ */
+async function generateChecklistWithOptions(sourceType, sourceId) {
+  // Show source selection modal
+  await showSourceSelectionModal(sourceType, sourceId);
+}
+
+/**
+ * Show modal to select sources (description and/or attachments)
+ */
+async function showSourceSelectionModal(sourceType, sourceId) {
+  try {
+    // Fetch available attachments
+    const response = await fetch(`/api/attachments/${sourceType}/${sourceId}`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch attachments');
+    }
+    
+    availableAttachments = await response.json();
+    
+    // Show selection modal
+    const modal = document.getElementById('sourceSelectionModal') || createSourceSelectionModal();
+    
+    const sourceLabel = sourceType === 'issue' ? 'Issue' : 'Action Item';
+    
+    modal.querySelector('.modal-body').innerHTML = `
+      <div class="source-selection">
+        <h4>Select what AI should analyze:</h4>
+        <p class="help-text">Choose at least one source for AI to analyze when generating your checklist.</p>
+        
+        <div class="source-option">
+          <label class="source-checkbox">
+            <input type="checkbox" id="useDescription" checked>
+            <div class="option-content">
+              <strong>📝 ${sourceLabel} Description</strong>
+              <p class="text-muted">Use the title and description text</p>
+            </div>
+          </label>
+        </div>
+        
+        ${availableAttachments.length > 0 ? `
+          <div class="source-option">
+            <div class="option-header">
+              <strong>📎 Attached Documents (${availableAttachments.length})</strong>
+              <p class="text-muted">Select documents for AI to analyze</p>
+            </div>
+            
+            <div class="attachments-list">
+              ${availableAttachments.map(att => `
+                <label class="attachment-checkbox ${att.processing_error ? 'disabled' : ''}">
+                  <input 
+                    type="checkbox" 
+                    class="attachment-select" 
+                    data-attachment-id="${att.id}"
+                    ${att.processing_error ? 'disabled' : ''}
+                  >
+                  <div class="attachment-info">
+                    <div class="attachment-name">
+                      ${getFileIcon(att.mime_type)} ${att.original_filename}
+                    </div>
+                    <div class="attachment-meta">
+                      ${formatFileSize(att.file_size)}
+                      ${att.is_processed ? 
+                        ' • <span class="status-success">✅ Ready</span>' : 
+                        ' • <span class="status-pending">⏳ Not processed</span>'
+                      }
+                      ${att.processing_error ? 
+                        `<br><span class="error-text">❌ ${att.processing_error}</span>` : 
+                        ''
+                      }
+                    </div>
+                  </div>
+                </label>
+              `).join('')}
+            </div>
+            
+            <div class="select-actions">
+              <button onclick="selectAllAttachments()" class="btn-link">Select All</button>
+              <button onclick="deselectAllAttachments()" class="btn-link">Deselect All</button>
+            </div>
+          </div>
+        ` : `
+          <div class="no-attachments">
+            <p class="text-muted">📎 No attachments available for this ${sourceLabel.toLowerCase()}</p>
+            <p class="help-text">You can still generate a checklist from the description.</p>
+          </div>
+        `}
+        
+        <div class="selection-summary" id="selectionSummary">
+          <strong>AI will analyze:</strong>
+          <ul id="summaryList"></ul>
+        </div>
+        
+        <div class="modal-actions">
+          <button onclick="proceedWithGeneration('${sourceType}', ${sourceId})" class="btn-primary" id="generateBtn">
+            🤖 Generate Checklist
+          </button>
+          <button onclick="hideSourceSelectionModal()" class="btn-secondary">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+    
+    modal.style.display = 'block';
+    
+    // Add event listeners
+    document.getElementById('useDescription')?.addEventListener('change', updateSelectionSummary);
+    document.querySelectorAll('.attachment-select').forEach(checkbox => {
+      checkbox.addEventListener('change', updateSelectionSummary);
+    });
+    
+    // Initial summary update
+    updateSelectionSummary();
+    
+  } catch (error) {
+    console.error('Error showing source selection:', error);
+    showToast('Failed to load source selection options', 'error');
+  }
+}
+
+/**
+ * Create source selection modal
+ */
+function createSourceSelectionModal() {
+  const modalHTML = `
+    <div id="sourceSelectionModal" class="modal">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3>🤖 Select Sources for AI Analysis</h3>
+          <button onclick="hideSourceSelectionModal()" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <!-- Content inserted dynamically -->
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  return document.getElementById('sourceSelectionModal');
+}
+
+/**
+ * Hide source selection modal
+ */
+function hideSourceSelectionModal() {
+  const modal = document.getElementById('sourceSelectionModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+  selectedAttachments = [];
+}
+
+/**
+ * Update selection summary
+ */
+function updateSelectionSummary() {
+  const useDescription = document.getElementById('useDescription')?.checked;
+  const selectedCheckboxes = document.querySelectorAll('.attachment-select:checked');
+  selectedAttachments = Array.from(selectedCheckboxes).map(cb => parseInt(cb.dataset.attachmentId));
+  
+  const summaryList = document.getElementById('summaryList');
+  const generateBtn = document.getElementById('generateBtn');
+  
+  let items = [];
+  
+  if (useDescription) {
+    items.push('<li>📝 Description text</li>');
+  }
+  
+  if (selectedAttachments.length > 0) {
+    const attachmentNames = availableAttachments
+      .filter(a => selectedAttachments.includes(a.id))
+      .map(a => a.original_filename)
+      .slice(0, 3)
+      .join(', ');
+    
+    const remaining = selectedAttachments.length > 3 ? ` and ${selectedAttachments.length - 3} more` : '';
+    items.push(`<li>📎 ${attachmentNames}${remaining}</li>`);
+  }
+  
+  if (items.length === 0) {
+    summaryList.innerHTML = '<li class="text-warning">⚠️ Please select at least one source</li>';
+    generateBtn.disabled = true;
+  } else {
+    summaryList.innerHTML = items.join('');
+    generateBtn.disabled = false;
+  }
+}
+
+/**
+ * Select all attachments
+ */
+function selectAllAttachments() {
+  document.querySelectorAll('.attachment-select:not(:disabled)').forEach(cb => {
+    cb.checked = true;
+  });
+  updateSelectionSummary();
+}
+
+/**
+ * Deselect all attachments
+ */
+function deselectAllAttachments() {
+  document.querySelectorAll('.attachment-select').forEach(cb => {
+    cb.checked = false;
+  });
+  updateSelectionSummary();
+}
+
+/**
+ * Proceed with generation using selected sources
+ */
+async function proceedWithGeneration(sourceType, sourceId) {
+  const useDescription = document.getElementById('useDescription')?.checked;
+  
+  if (!useDescription && selectedAttachments.length === 0) {
+    showToast('Please select at least one source', 'error');
+    return;
+  }
+  
+  // Hide selection modal
+  hideSourceSelectionModal();
+  
+  // Show generation modal
+  showAIGenerationModal(sourceType);
+  
+  try {
+    const response = await fetch('/api/checklists/generate-with-options', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_type: sourceType,
+        source_id: sourceId,
+        use_description: useDescription,
+        attachment_ids: selectedAttachments
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || error.error);
+    }
+    
+    currentPreview = await response.json();
+    displayChecklistPreview(currentPreview);
+    
+  } catch (error) {
+    console.error('Generation error:', error);
+    hideAIGenerationModal();
+    showToast(`Failed to generate: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Get file icon based on mime type
+ */
+function getFileIcon(mimeType) {
+  if (mimeType.includes('pdf')) return '📄';
+  if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
+  if (mimeType.includes('text')) return '📃';
+  if (mimeType.includes('image')) return '🖼️';
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
+  return '📎';
+}
+
+/**
+ * Format file size
+ */
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/**
+ * Update displayChecklistPreview to show sources used
+ */
+function displayChecklistPreview(preview) {
+  const totalItems = preview.sections.reduce((sum, section) => 
+    sum + section.items.length, 0
+  );
+  
+  const sourceLabel = preview.source_type === 'issue' ? 'Issue' : 'Action Item';
+  const sourceIcon = preview.source_type === 'issue' ? '🐛' : '✅';
+  
+  // Build sources used section
+  const sourcesUsed = [];
+  if (preview.used_description) {
+    sourcesUsed.push('📝 Description text');
+  }
+  if (preview.used_attachments && preview.used_attachments.length > 0) {
+    const attachmentNames = availableAttachments
+      .filter(a => preview.used_attachments.includes(a.id))
+      .map(a => a.original_filename)
+      .slice(0, 3);
+    
+    const remaining = preview.used_attachments.length > 3 
+      ? ` and ${preview.used_attachments.length - 3} more` 
+      : '';
+    
+    sourcesUsed.push(`📎 ${attachmentNames.join(', ')}${remaining}`);
+  }
+  
+  const html = `
+    <div class="preview-container">
+      <div class="preview-header">
+        <div class="preview-meta">
+          <span class="badge badge-success">✨ AI Generated</span>
+          <span class="badge badge-info">Confidence: ${preview.confidence}%</span>
+          <span class="badge badge-secondary">${totalItems} items</span>
+          <span class="badge badge-purple">${sourceIcon} From ${sourceLabel}</span>
+        </div>
+        <h4>${preview.title}</h4>
+        <p>${preview.description}</p>
+        
+        <div class="preview-source">
+          <strong>Source:</strong> ${preview.source_title}
+        </div>
+        
+        ${sourcesUsed.length > 0 ? `
+          <div class="preview-sources-used">
+            <strong>📚 Sources Analyzed by AI:</strong>
+            <ul>
+              ${sourcesUsed.map(s => `<li>${s}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        
+        ${preview.use_template ? 
+          '<div class="alert alert-info">📋 Using existing template: <strong>Access Verification Checklist</strong></div>' : 
+          '<div class="alert alert-warning">✨ Custom checklist generated specifically for this ' + sourceLabel.toLowerCase() + '</div>'
+        }
+        
+        ${preview.rate_limit_remaining !== undefined ?
+          `<div class="rate-limit-info">
+            <small>💡 ${preview.rate_limit_remaining} AI generations remaining this hour</small>
+          </div>` : ''
+        }
+      </div>
+      
+      <div class="preview-reasoning">
+        <strong>🤔 AI Reasoning:</strong>
+        <p>${preview.reasoning}</p>
+      </div>
+      
+      <div class="preview-sections">
+        <h5>📋 Checklist Structure Preview:</h5>
+        ${preview.sections.map((section, idx) => `
+          <div class="preview-section">
+            <div class="section-header">
+              <h6>${idx + 1}. ${section.title}</h6>
+              <span class="item-count">${section.items.length} items</span>
+            </div>
+            ${section.description ? 
+              `<p class="section-description">${section.description}</p>` : 
+              ''
+            }
+            <ul class="preview-items">
+              ${section.items.slice(0, 5).map(item => `
+                <li>
+                  <span class="field-type-badge field-type-${item.field_type}">${item.field_type}</span>
+                  <span class="item-text">${item.text}</span>
+                  ${item.is_required ? '<span class="required" title="Required">*</span>' : ''}
+                  ${item.help_text ? `<div class="help-text">${item.help_text}</div>` : ''}
+                </li>
+              `).join('')}
+              ${section.items.length > 5 ? 
+                `<li class="more-items">
+                  <span class="text-muted">... and ${section.items.length - 5} more items</span>
+                </li>` : 
+                ''
+              }
+            </ul>
+          </div>
+        `).join('')}
+      </div>
+      
+      <div class="preview-actions">
+        <button onclick="confirmGeneratedChecklist()" class="btn-primary btn-large">
+          ✅ Create This Checklist
+        </button>
+        <button onclick="hideAIGenerationModal()" class="btn-secondary">
+          ❌ Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('aiModalBody').innerHTML = html;
+}
+
+// Update the button handlers to use new function
+function generateChecklistFromIssue() {
+  const issueId = getIssueIdFromURL();
+  if (!issueId) {
+    showToast('No issue selected', 'error');
+    return;
+  }
+  generateChecklistWithOptions('issue', issueId);
+}
+
+function generateChecklistFromAction() {
+  const actionId = getActionIdFromURL();
+  if (!actionId) {
+    showToast('No action item selected', 'error');
+    return;
+  }
+  generateChecklistWithOptions('action-item', actionId);
+}
+```
+
+### 7. CSS Styling
+
+**Add to public/css/checklists.css:**
+```css
+/* Source Selection Modal */
+.source-selection {
+  padding: 20px;
+}
+
+.source-selection h4 {
+  margin-bottom: 10px;
+  color: #1f2937;
+}
+
+.source-selection .help-text {
+  color: #6b7280;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.source-option {
+  margin-bottom: 25px;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 10px;
+  border: 2px solid #e5e7eb;
+}
+
+.option-header {
+  margin-bottom: 15px;
+}
+
+.option-header strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #1f2937;
+}
+
+.source-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  cursor: pointer;
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  border: 2px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.source-checkbox:hover {
+  border-color: #667eea;
+  background: #f8f9fa;
+}
+
+.source-checkbox input[type="checkbox"] {
+  margin-top: 4px;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.option-content {
+  flex: 1;
+}
+
+.option-content strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #1f2937;
+}
+
+.option-content .text-muted {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.attachments-list {
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+}
+
+.attachment-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.attachment-checkbox:hover:not(.disabled) {
+  border-color: #667eea;
+  background: white;
+}
+
+.attachment-checkbox.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f3f4f6;
+}
+
+.attachment-checkbox input[type="checkbox"] {
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.attachment-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment-name {
+  font-weight: 500;
+  color: #1f2937;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.attachment-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.status-success {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.status-pending {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.error-text {
+  color: #ef4444;
+  font-weight: 500;
+  display: block;
+  margin-top: 4px;
+}
+
+.select-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 15px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 5px 10px;
+  font-size: 13px;
+  transition: color 0.2s;
+}
+
+.btn-link:hover {
+  color: #5568d3;
+  text-decoration: underline;
+}
+
+.no-attachments {
+  text-align: center;
+  padding: 30px;
+  color: #6b7280;
+}
+
+.no-attachments .help-text {
+  margin-top: 10px;
+}
+
+.selection-summary {
+  margin: 25px 0;
+  padding: 20px;
+  background: #eff6ff;
+  border-radius: 8px;
+  border-left: 4px solid #3b82f6;
+}
+
+.selection-summary strong {
+  display: block;
+  margin-bottom: 10px;
+  color: #1e40af;
+  font-size: 14px;
+}
+
+.selection-summary ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.selection-summary li {
+  padding: 5px 0;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.text-warning {
+  color: #f59e0b !important;
+}
+
+/* Preview Sources Used */
+.preview-sources-used {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f0f9ff;
+  border-radius: 6px;
+  border-left: 4px solid #3b82f6;
+}
+
+.preview-sources-used strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #1e40af;
+}
+
+.preview-sources-used ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.preview-sources-used li {
+  padding: 4px 0;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .source-selection {
+    padding: 15px;
+  }
+  
+  .attachments-list {
+    max-height: 200px;
+  }
+  
+  .select-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+```
+
+---
+
+## TESTING
+
+**Test Scenarios:**
+
+1. **Description Only:**
+   - Generate checklist using only description
+   - Verify no attachments analyzed
+   - Check preview shows correct sources
+
+2. **Single PDF Attachment:**
+   - Upload PDF to issue
+   - Select only PDF (uncheck description)
+   - Verify checklist generated from PDF content
+
+3. **Multiple Attachments:**
+   - Upload PDF + DOCX + TXT
+   - Select all 3 for generation
+   - Verify comprehensive checklist from all sources
+
+4. **Description + Attachments:**
+   - Select both description and 2 attachments
+   - Verify combined analysis
+
+5. **Large Document:**
+   - Upload 50-page PDF
+   - Verify truncation works
+   - Check generation completes
+
+6. **Unsupported File:**
+   - Upload Excel or image
+   - Verify shows as "not supported"
+   - Cannot select for generation
+
+7. **No Selection Error:**
+   - Uncheck everything
+   - Try to generate
+   - Verify validation prevents it
+
+8. **Attachment Processing:**
+   - First generation extracts and caches text
+   - Second generation uses cached text (faster)
+
+---
+
+## DELIVERABLES
+
+1. ✅ Database tables for attachments and generation tracking
+2. ✅ File processor service (PDF, DOCX, TXT extraction)
+3. ✅ Enhanced AI service with attachment support
+4. ✅ New API endpoint: /api/checklists/generate-with-options
+5. ✅ Attachments fetch endpoint: /api/attachments/:source_type/:source_id
+6. ✅ Source selection modal UI
+7. ✅ Attachment selection with checkboxes
+8. ✅ Updated preview showing sources used
+9. ✅ CSS styling for attachment UI
+10. ✅ Error handling for file processing
+
+---
+
+## CRITICAL NOTES
+
+1. **File Size Limits:** 10MB per file recommended
+2. **Token Limits:** Truncate large documents to ~3000 tokens each
+3. **Caching:** Cache extracted text in database to avoid reprocessing
+4. **Error Handling:** Gracefully handle unsupported/corrupted files
+5. **Security:** Validate file ownership before allowing in generation
+6. **Performance:** File extraction can take 5-30 seconds depending on size
+
+---
+
+Let me know when implementation is complete!
+
+This is the complete design for attachment analysis in AI checklist generation! It includes:
+✅ Full file processing (PDF, DOCX, TXT)
+✅ Source selection UI (pick description and/or attachments)
+✅ Text extraction & caching (avoid reprocessing)
+✅ Multiple attachment support (analyze up to 10+ documents)
+✅ Error handling (unsupported files, corrupted documents)
+✅ Database tracking (which attachments were used)
+✅ Complete frontend (checkboxes, preview, validation)
+Ready to implement! 🚀
