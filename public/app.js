@@ -4488,8 +4488,10 @@ async function confirmAIChecklistCreation() {
     if (response.data.is_new_template && response.data.template_id) {
       showTemplatePromotionPrompt(response.data.template_id);
     } else {
-      // Navigate to checklists page
-      navigateToChecklists();
+      // Navigate to checklists page after delay to show toast
+      setTimeout(() => {
+        navigateToChecklists();
+      }, 2000);
     }
     
   } catch (error) {
@@ -4554,7 +4556,10 @@ async function promoteTemplate(templateId) {
     await axios.post(`/api/templates/${templateId}/promote`, {}, { withCredentials: true });
     showToast('Template promoted to reusable!', 'success');
     dismissPromotionPrompt();
-    navigateToChecklists();
+    // Delay navigation to show toast
+    setTimeout(() => {
+      navigateToChecklists();
+    }, 2000);
   } catch (error) {
     console.error('Error promoting template:', error);
     showToast(error.response?.data?.error || 'Failed to promote template', 'error');
@@ -4566,7 +4571,10 @@ function dismissPromotionPrompt() {
   if (toast) {
     toast.remove();
   }
-  navigateToChecklists();
+  // Delay navigation after dismissing prompt
+  setTimeout(() => {
+    navigateToChecklists();
+  }, 500);
 }
 
 function navigateToChecklists() {
