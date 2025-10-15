@@ -1,11 +1,7 @@
 const PDFDocument = require('pdfkit');
-const streamBuffers = require('stream-buffers');
-
-// Chart generation disabled due to system library issues
-// const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 
 /**
- * Generate PDF from checklist data
+ * Generate PDF from checklist data (using same approach as dashboard reports)
  */
 async function generateChecklistPDF(checklistData, options = {}) {
   const {
@@ -15,100 +11,70 @@ async function generateChecklistPDF(checklistData, options = {}) {
     include_metadata = true
   } = options;
   
-  // Create PDF document with security-compliant metadata
-  const doc = new PDFDocument({
-    size: 'LETTER',
-    margins: {
-      top: 50,
-      bottom: 50,
-      left: 50,
-      right: 50
-    },
-    
-    // PDF/A compliance mode (archive standard - more trusted)
-    pdfVersion: '1.7',
-    
-    // Clean, complete metadata
-    info: {
-      Title: checklistData.title || 'Checklist Report',
-      Author: 'Multi-Project Tracker System',
-      Subject: 'Project Checklist Report',
-      Keywords: 'checklist, report, compliance, verification, project',
-      Creator: 'Multi-Project Tracker v1.0',
-      Producer: 'PDFKit (Node.js)',
-      CreationDate: new Date(),
-      ModDate: new Date(),
-      Trapped: 'False'
-    },
-    
-    // Security permissions (read-only, printable)
-    permissions: {
-      printing: 'highResolution',
-      modifying: false,
-      copying: true,
-      annotating: false,
-      fillingForms: false,
-      contentAccessibility: true,
-      documentAssembly: false
-    },
-    
-    // Compression for smaller, cleaner files
-    compress: true,
-    
-    // Auto-close on finish
-    autoFirstPage: true
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Create PDF document with same settings as dashboard reports
+      const doc = new PDFDocument({ 
+        size: 'A4', 
+        margin: 50,
+        info: {
+          Title: checklistData.title || 'Checklist Report',
+          Author: 'Multi-Project Tracker System',
+          Subject: `Project Checklist Report`,
+          Keywords: 'checklist, report, compliance, verification, project',
+          Creator: 'Multi-Project Tracker v1.0',
+          Producer: 'PDFKit Library',
+          CreationDate: new Date(),
+          ModDate: new Date()
+        }
+      });
+      
+      const chunks = [];
+      
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+      
+      // Header
+      await addHeader(doc, checklistData);
+      
+      // Metadata section
+      if (include_metadata) {
+        await addMetadata(doc, checklistData);
+      }
+      
+      // Progress chart
+      if (include_charts) {
+        await addProgressChart(doc, checklistData);
+      }
+      
+      // Checklist sections and items
+      await addChecklistContent(doc, checklistData, format, include_comments);
+      
+      // Sign-off section
+      await addSignOffSection(doc, checklistData);
+      
+      // Add page numbers to all pages
+      const range = doc.bufferedPageRange();
+      const pageCount = range.count;
+      
+      for (let i = 0; i < pageCount; i++) {
+        doc.switchToPage(range.start + i);
+        doc.fontSize(9).fillColor('#666666').font('Helvetica').text(
+          `Page ${range.start + i + 1} of ${range.start + pageCount}`,
+          50,
+          doc.page.height - 50,
+          { align: 'center' }
+        );
+      }
+      
+      doc.end();
+      
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      reject(new Error(`Failed to generate PDF: ${error.message}`));
+    }
   });
-  
-  // Use stream buffer to capture PDF
-  const outputBuffer = new streamBuffers.WritableStreamBuffer();
-  doc.pipe(outputBuffer);
-  
-  try {
-    // Header
-    await addHeader(doc, checklistData);
-    
-    // Metadata section
-    if (include_metadata) {
-      await addMetadata(doc, checklistData);
-    }
-    
-    // Progress chart
-    if (include_charts) {
-      await addProgressChart(doc, checklistData);
-    }
-    
-    // Checklist sections and items
-    await addChecklistContent(doc, checklistData, format, include_comments);
-    
-    // Sign-off section
-    await addSignOffSection(doc, checklistData);
-    
-    // Add simple footer on last page
-    doc.moveDown(2);
-    doc.fontSize(8)
-       .fillColor('#9ca3af')
-       .font('Helvetica')
-       .text(
-         `Generated: ${formatDate(new Date())} | Multi-Project Tracker`,
-         50,
-         doc.page.height - 50,
-         { align: 'center', width: doc.page.width - 100 }
-       );
-    
-    // Finalize PDF
-    doc.end();
-    
-    // Wait for PDF to finish
-    await new Promise((resolve) => {
-      outputBuffer.on('finish', resolve);
-    });
-    
-    return outputBuffer.getContents();
-    
-  } catch (error) {
-    console.error('PDF generation error:', error);
-    throw new Error(`Failed to generate PDF: ${error.message}`);
-  }
 }
 
 /**
