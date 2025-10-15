@@ -1145,6 +1145,22 @@
                         <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
                     </div>
                     
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Attachments</label>
+                        <div id="edit-issue-attachments-list" class="mb-3 space-y-2">
+                            <!-- Attachments will be displayed here -->
+                        </div>
+                        <input type="file" id="edit-issue-file-input" multiple accept=".pdf,.docx,.doc,.txt,.xlsx,.xls,.png,.jpg,.jpeg" class="hidden">
+                        <button type="button" id="edit-issue-upload-btn" 
+                                class="w-full border-2 border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                            <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                            Click to upload files
+                        </button>
+                        <small class="text-gray-500">Supported: PDF, DOCX, TXT, XLSX, images. Max 10MB per file.</small>
+                    </div>
+                    
                     <div class="flex justify-end gap-3">
                         <button type="button" id="cancelEditIssue"
                                 class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
@@ -1240,6 +1256,22 @@
                             <option value="" disabled>Loading tags...</option>
                         </select>
                         <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Attachments</label>
+                        <div id="edit-action-item-attachments-list" class="mb-3 space-y-2">
+                            <!-- Attachments will be displayed here -->
+                        </div>
+                        <input type="file" id="edit-action-item-file-input" multiple accept=".pdf,.docx,.doc,.txt,.xlsx,.xls,.png,.jpg,.jpeg" class="hidden">
+                        <button type="button" id="edit-action-item-upload-btn" 
+                                class="w-full border-2 border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                            <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                            Click to upload files
+                        </button>
+                        <small class="text-gray-500">Supported: PDF, DOCX, TXT, XLSX, images. Max 10MB per file.</small>
                     </div>
                     
                     <div class="flex justify-end gap-3">
