@@ -19,6 +19,7 @@ const teamsNotifications = require('./services/teamsNotifications');
 const { generateChecklistFromIssue, generateChecklistFromActionItem, checkRateLimit } = require('./services/ai-service');
 const { initializeDailyJobs } = require('./jobs/dailyNotifications');
 const { generateChecklistPDF } = require('./services/pdf-service');
+const { validateChecklist, getValidationStatus } = require('./services/validation-service');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -8190,6 +8191,228 @@ app.get('/api/checklists/:id/export/pdf', authenticateToken, async (req, res) =>
       error: 'Failed to generate PDF',
       message: error.message 
     });
+  }
+});
+
+// ========================================
+// VALIDATION ENDPOINTS
+// ========================================
+
+// POST /api/checklists/:id/validate - Run validation
+app.post('/api/checklists/:id/validate', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    const { validation_type = 'manual' } = req.body;
+    
+    // Get checklist with all items and responses
+    const checklistResult = await pool.query(
+      `SELECT 
+        c.*,
+        ct.name as template_name
+      FROM checklists c
+      LEFT JOIN checklist_templates ct ON c.template_id = ct.id
+      WHERE c.id = $1`,
+      [checklistId]
+    );
+    
+    if (checklistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    const checklist = checklistResult.rows[0];
+    
+    // Check access
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [checklist.project_id, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get all items with responses
+    const itemsResult = await pool.query(
+      `SELECT 
+        cti.id,
+        cti.item_text,
+        cti.field_type,
+        cti.is_required,
+        cts.title as section_title,
+        cts.section_number,
+        cr.response_value,
+        cr.response_date,
+        cr.response_boolean,
+        cr.is_completed,
+        cr.notes,
+        (SELECT json_agg(json_build_object(
+          'user', u.username,
+          'comment', cc.comment
+        ))
+        FROM checklist_comments cc
+        LEFT JOIN users u ON cc.created_by = u.id
+        WHERE cc.checklist_id = $1 AND cc.response_id = cr.id) as comments
+      FROM checklist_template_items cti
+      INNER JOIN checklist_template_sections cts ON cti.section_id = cts.id
+      LEFT JOIN checklist_responses cr ON cr.template_item_id = cti.id AND cr.checklist_id = $1
+      WHERE cts.template_id = $2
+      ORDER BY cts.display_order, cti.display_order`,
+      [checklistId, checklist.template_id]
+    );
+    
+    checklist.items = itemsResult.rows;
+    
+    // Run validation
+    const validationResult = await validateChecklist(checklist);
+    
+    // Save validation to database
+    const validationStatus = getValidationStatus(validationResult.quality_score, validationResult.error_count);
+    
+    const insertResult = await pool.query(
+      `INSERT INTO checklist_validations (
+        checklist_id, is_valid, quality_score, completeness_score,
+        consistency_score, quality_rating, error_count, warning_count,
+        errors, warnings, recommendations, validated_by, validation_type
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id`,
+      [
+        checklistId,
+        validationResult.is_valid,
+        validationResult.quality_score,
+        validationResult.completeness_score,
+        validationResult.consistency_score,
+        validationResult.quality_rating,
+        validationResult.error_count,
+        validationResult.warning_count,
+        JSON.stringify(validationResult.errors),
+        JSON.stringify(validationResult.warnings),
+        validationResult.recommendations,
+        userId,
+        validation_type
+      ]
+    );
+    
+    // Update checklist validation status
+    await pool.query(
+      `UPDATE checklists 
+       SET 
+         last_validation_score = $1,
+         last_validated_at = CURRENT_TIMESTAMP,
+         validation_status = $2,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3`,
+      [validationResult.quality_score, validationStatus, checklistId]
+    );
+    
+    res.json({
+      validation_id: insertResult.rows[0].id,
+      ...validationResult,
+      validation_status: validationStatus
+    });
+    
+  } catch (error) {
+    console.error('Validation error:', error);
+    res.status(500).json({ 
+      error: 'Failed to validate checklist',
+      message: error.message 
+    });
+  }
+});
+
+// GET /api/checklists/:id/validations - Get validation history
+app.get('/api/checklists/:id/validations', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    
+    // Check access
+    const checklistResult = await pool.query(
+      'SELECT project_id FROM checklists WHERE id = $1',
+      [checklistId]
+    );
+    
+    if (checklistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [checklistResult.rows[0].project_id, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get validation history
+    const validations = await pool.query(
+      `SELECT 
+        v.*,
+        u.username as validated_by_name
+      FROM checklist_validations v
+      LEFT JOIN users u ON v.validated_by = u.id
+      WHERE v.checklist_id = $1
+      ORDER BY v.validated_at DESC
+      LIMIT 10`,
+      [checklistId]
+    );
+    
+    res.json(validations.rows);
+    
+  } catch (error) {
+    console.error('Error fetching validations:', error);
+    res.status(500).json({ error: 'Failed to fetch validations' });
+  }
+});
+
+// GET /api/checklists/:id/validation/latest - Get latest validation
+app.get('/api/checklists/:id/validation/latest', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    
+    // Check access
+    const checklistResult = await pool.query(
+      'SELECT project_id FROM checklists WHERE id = $1',
+      [checklistId]
+    );
+    
+    if (checklistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [checklistResult.rows[0].project_id, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get latest validation
+    const validation = await pool.query(
+      `SELECT 
+        v.*,
+        u.username as validated_by_name
+      FROM checklist_validations v
+      LEFT JOIN users u ON v.validated_by = u.id
+      WHERE v.checklist_id = $1
+      ORDER BY v.validated_at DESC
+      LIMIT 1`,
+      [checklistId]
+    );
+    
+    if (validation.rows.length === 0) {
+      return res.status(404).json({ error: 'No validation found' });
+    }
+    
+    res.json(validation.rows[0]);
+    
+  } catch (error) {
+    console.error('Error fetching latest validation:', error);
+    res.status(500).json({ error: 'Failed to fetch latest validation' });
   }
 });
 
