@@ -7,15 +7,17 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
-- **PDF Export for Checklists - Phase 2a - COMPLETE** (October 15, 2025):
-  - **Backend**: Comprehensive PDF service (services/pdf-service.js) using pdfkit, chartjs-node-canvas, and stream-buffers
+- **PDF Export for Checklists - Phase 2a - COMPLETE & ANTIVIRUS FIXED** (October 15, 2025):
+  - **Backend**: Comprehensive PDF service (services/pdf-service.js) using pdfkit and stream-buffers with native progress bar rendering
   - **API**: GET /api/checklists/:id/export/pdf endpoint with format and inclusion query parameters
   - **Frontend**: Export button on checklist detail page, modal with format selection (full/summary/completed-only) and inclusion options (comments/charts/metadata)
-  - **PDF Features**: Professional formatting with header/footer, metadata section, progress doughnut chart, checklist items with responses, sign-off section with signatures or placeholders, page numbers on all pages
+  - **PDF Features**: Professional formatting with header/footer, metadata section, native progress bar (replaced chartjs to avoid antivirus false positives), checklist items with responses, sign-off section with signatures or placeholders
   - **Format Options**: Full Report (all data), Summary (key info only), Completed Items Only (filtered view)
   - **Inclusion Options**: Toggle comments, progress charts, and metadata sections
-  - **File Management**: Auto-generated filenames with checklist ID and timestamp, proper content-disposition headers for downloads
-  - **Error Handling**: Authentication checks, project access validation, graceful chart generation failures
+  - **File Management**: Clean filenames using checklist title (e.g., "Checklist_Title_Report.pdf"), enhanced security headers (X-Content-Type-Options, Cache-Control), proper content-disposition headers for downloads
+  - **Download Mechanism**: Improved browser compatibility with delayed triggers, fallback to open-in-tab if download blocked
+  - **Error Handling**: Authentication checks, project access validation, graceful error handling
+  - **Antivirus Fix**: Removed problematic chartjs-node-canvas library (failed libuuid.so.1 dependency), replaced with native PDFKit drawing for progress visualization, eliminated corrupted binary data that triggered false positives
   - **Deliverables**: TESTING_PDF_EXPORT.md (comprehensive testing guide with 10 manual test cases)
   - **Files**: services/pdf-service.js, server.js, public/checklist-fill.html, public/js/checklists.js, TESTING_PDF_EXPORT.md
 
@@ -81,10 +83,10 @@ The system integrates with Microsoft Teams for instant notifications (issue/acti
 - **node-cron**: Scheduled task manager for daily notifications.
 
 ### Reporting & Export
-- **pdfkit**: Server-side PDF generation for reports and checklist exports.
-- **chartjs-node-canvas**: Server-side chart rendering for PDF reports (progress charts, analytics).
+- **pdfkit**: Server-side PDF generation for reports and checklist exports with native drawing capabilities for progress bars and visualizations.
 - **stream-buffers**: Buffer management for PDF generation and streaming.
 - **csv-writer**: CSV file generation for data export.
+- **Note**: chartjs-node-canvas removed due to system library conflicts (libuuid.so.1) that caused antivirus false positives; replaced with native PDFKit drawing.
 
 ### CDN Services
 - **Chart.js**: Data visualization charts for dashboard analytics.

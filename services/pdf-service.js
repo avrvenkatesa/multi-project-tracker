@@ -1,6 +1,8 @@
 const PDFDocument = require('pdfkit');
-const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 const streamBuffers = require('stream-buffers');
+
+// Chart generation disabled due to system library issues
+// const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 
 /**
  * Generate PDF from checklist data
@@ -175,69 +177,64 @@ function addMetadata(doc, checklistData) {
 }
 
 /**
- * Add progress chart
+ * Add progress chart (text-based progress bar)
  */
 async function addProgressChart(doc, checklistData) {
   try {
-    const width = 500;
-    const height = 200;
+    const completed = checklistData.completed_items || 0;
+    const total = checklistData.total_items || 0;
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     
-    // Create chart
-    const chartCallback = (ChartJS) => {
-      ChartJS.defaults.font.family = 'Helvetica';
-    };
+    // Add section title
+    doc.fontSize(14)
+       .fillColor('#1f2937')
+       .font('Helvetica-Bold')
+       .text('Progress Overview', { align: 'center' });
     
-    const chartJSNodeCanvas = new ChartJSNodeCanvas({ 
-      width, 
-      height, 
-      chartCallback 
-    });
+    doc.moveDown(0.5);
     
-    const completed = checklistData.completed_items;
-    const remaining = checklistData.total_items - completed;
+    // Add progress stats
+    doc.fontSize(12)
+       .fillColor('#374151')
+       .font('Helvetica')
+       .text(`${completed} of ${total} items completed (${percentage}%)`, { align: 'center' });
     
-    const configuration = {
-      type: 'doughnut',
-      data: {
-        labels: ['Completed', 'Remaining'],
-        datasets: [{
-          data: [completed, remaining],
-          backgroundColor: ['#10b981', '#e5e7eb'],
-          borderWidth: 0
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              font: { size: 12 },
-              padding: 15
-            }
-          },
-          title: {
-            display: true,
-            text: 'Checklist Progress',
-            font: { size: 16, weight: 'bold' },
-            padding: { bottom: 20 }
-          }
-        }
-      }
-    };
+    doc.moveDown(0.8);
     
-    const imageBuffer = await chartJSNodeCanvas.renderToBuffer(configuration);
+    // Draw progress bar
+    const barWidth = 400;
+    const barHeight = 30;
+    const startX = (doc.page.width - barWidth) / 2;
+    const startY = doc.y;
     
-    // Add chart to PDF
-    doc.image(imageBuffer, 80, doc.y, { width: 450, align: 'center' });
-    doc.moveDown(8); // Space after chart
+    // Background (light gray)
+    doc.rect(startX, startY, barWidth, barHeight)
+       .fillAndStroke('#e5e7eb', '#d1d5db');
+    
+    // Completed portion (green)
+    if (completed > 0) {
+      const completedWidth = (completed / total) * barWidth;
+      doc.rect(startX, startY, completedWidth, barHeight)
+         .fillAndStroke('#10b981', '#059669');
+    }
+    
+    // Percentage text on bar
+    doc.fontSize(12)
+       .fillColor('#ffffff')
+       .font('Helvetica-Bold')
+       .text(`${percentage}%`, startX, startY + 8, {
+         width: barWidth,
+         align: 'center'
+       });
+    
+    doc.moveDown(3);
     
   } catch (error) {
-    console.error('Chart generation error:', error);
-    // Continue without chart
+    console.error('Progress bar generation error:', error);
+    // Continue without progress visualization
     doc.fontSize(10)
        .fillColor('#6b7280')
-       .text('[Chart generation unavailable]', { align: 'center' });
+       .text('Progress data unavailable', { align: 'center' });
     doc.moveDown(1);
   }
   
