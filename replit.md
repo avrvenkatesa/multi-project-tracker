@@ -6,6 +6,34 @@ The Multi-Project Tracker is an AI-powered issue tracking system designed to cen
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (October 2025)
+
+- **Comprehensive Extraction AI Enhancement** (October 15, 2025):
+  - **Extraction-Focused Prompts**: Changed from "summarization" to "comprehensive extraction" approach in buildEnhancedPrompt()
+  - **Document-Size-Based Targets**: 
+    - Small documents (1-10 pages): 30-60 checklist items minimum
+    - Medium documents (10-30 pages): 60-100 items minimum
+    - Large documents (30-100+ pages): 100-200+ items minimum
+    - Complex SOWs/specifications: 150-250+ items for complete coverage
+  - **Granular Task Decomposition**: Breaks complex tasks into atomic, single-action steps with pre/during/post validation
+  - **Enhanced Section Generation**: 5-12 comprehensive sections for complex documents, 8-20 items per section (up from 5-15)
+  - **Extraction Rules**: Emphasizes granularity, decomposition, completeness, validation steps, and logical phases (Planning → Preparation → Execution → Validation → Documentation)
+  - **Increased Token Limits**: 16000 tokens for OpenAI (up from 2000), 8000 for Anthropic to handle larger responses
+  - **Quality Emphasis**: "MORE IS BETTER - EXTRACT DON'T SUMMARIZE" approach for exhaustive coverage
+  - **Example**: "Migrate Active Directory" now generates 12+ specific items instead of 1 generic item
+  - **Files Modified**: services/ai-service.js (buildEnhancedPrompt and callAI functions)
+
+- **Attachment Management for Issues & Action Items** (October 15, 2025):
+  - **UI Added**: Attachment upload sections in Edit Issue and Edit Action Item modals
+  - **Full Management**: Upload, download, and delete attachments with file previews
+  - **Supported Formats**: PDF, DOCX, TXT, XLSX, images (max 10MB per file)
+  - **Integration**: Seamlessly integrates with AI checklist generation from attachments
+
+- **Toast Message Fix** (October 15, 2025):
+  - **Fixed**: Missing "AI Checklist created successfully!" toast (now visible for 2 seconds before navigation)
+  - **Fixed**: Missing "Template promoted to reusable!" toast (now visible for 2 seconds before navigation)
+  - **Enhancement**: Added delays before page navigation to ensure toast visibility
+
 ## System Architecture
 
 ### Frontend
