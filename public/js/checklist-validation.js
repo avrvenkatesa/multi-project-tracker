@@ -150,7 +150,7 @@ function displayValidationResults(validation) {
                   <div class="text-sm text-blue-600 mt-1">💡 ${error.suggestion}</div>
                 </div>
                 ${error.item_id ? `
-                  <button onclick="jumpToItem(${error.item_id})" class="text-blue-600 hover:text-blue-800 text-sm font-medium ml-2">
+                  <button class="jump-to-item text-blue-600 hover:text-blue-800 text-sm font-medium ml-2" data-item-id="${error.item_id}">
                     Jump →
                   </button>
                 ` : ''}
@@ -175,7 +175,7 @@ function displayValidationResults(validation) {
                   <div class="text-sm text-blue-600 mt-1">💡 ${warning.suggestion}</div>
                 </div>
                 ${warning.item_id ? `
-                  <button onclick="jumpToItem(${warning.item_id})" class="text-blue-600 hover:text-blue-800 text-sm font-medium ml-2">
+                  <button class="jump-to-item text-blue-600 hover:text-blue-800 text-sm font-medium ml-2" data-item-id="${warning.item_id}">
                     Jump →
                   </button>
                 ` : ''}
@@ -223,6 +223,17 @@ function displayValidationResults(validation) {
   
   // Show panel
   panel.style.display = 'block';
+  
+  // Add event delegation for jump buttons
+  panel.querySelectorAll('.jump-to-item').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const itemId = this.getAttribute('data-item-id');
+      if (itemId) {
+        jumpToItem(parseInt(itemId));
+      }
+    });
+  });
   
   // Scroll to panel
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

@@ -774,7 +774,7 @@ function renderItem(item) {
   const requiredMark = item.is_required ? '<span class="text-red-500">*</span>' : '';
   
   return `
-    <div class="checklist-item" data-item-id="${item.item_id}">
+    <div class="checklist-item" data-item-id="${item.item_id}" data-template-item-id="${item.template_item_id}">
       <div class="item-label">
         ${escapeHtml(item.item_text)} ${requiredMark}
         ${item.help_text ? `<span class="item-help-text">${escapeHtml(item.help_text)}</span>` : ''}
