@@ -18,6 +18,7 @@ const reportService = require('./services/reportService');
 const teamsNotifications = require('./services/teamsNotifications');
 const { generateChecklistFromIssue, generateChecklistFromActionItem, checkRateLimit } = require('./services/ai-service');
 const { initializeDailyJobs } = require('./jobs/dailyNotifications');
+const { generateChecklistPDF } = require('./services/pdf-service');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -8018,6 +8019,155 @@ app.post('/api/templates/:id/promote', authenticateToken, async (req, res) => {
     console.error('Error promoting template:', error);
     res.status(500).json({ 
       error: 'Failed to promote template',
+      message: error.message 
+    });
+  }
+});
+
+// ========================================
+// PDF EXPORT ENDPOINT
+// ========================================
+
+// GET /api/checklists/:id/export/pdf - Export checklist as PDF
+app.get('/api/checklists/:id/export/pdf', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    
+    const {
+      format = 'full',              // 'full', 'summary', 'completed-only'
+      include_comments = 'true',
+      include_charts = 'true',
+      include_metadata = 'true'
+    } = req.query;
+    
+    // Get complete checklist data
+    const checklistResult = await pool.query(
+      `SELECT 
+        c.*,
+        ct.name as template_name,
+        p.name as project_name,
+        u.username as created_by_name,
+        (SELECT COUNT(*) FROM checklist_responses cr
+         INNER JOIN checklist_template_items cti ON cr.item_id = cti.id
+         WHERE cr.checklist_id = c.id AND cr.response_value IS NOT NULL) as completed_items
+      FROM checklists c
+      LEFT JOIN checklist_templates ct ON c.template_id = ct.id
+      LEFT JOIN projects p ON c.project_id = p.id
+      LEFT JOIN users u ON c.created_by = u.id
+      WHERE c.id = $1`,
+      [checklistId]
+    );
+    
+    if (checklistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    const checklist = checklistResult.rows[0];
+    
+    // Check access
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [checklist.project_id, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Calculate completion percentage
+    checklist.completion_percentage = checklist.total_items > 0 
+      ? Math.round((checklist.completed_items / checklist.total_items) * 100)
+      : 0;
+    
+    // Get all items with responses
+    const itemsResult = await pool.query(
+      `SELECT 
+        cti.id,
+        cti.item_text,
+        cti.field_type,
+        cts.title as section_title,
+        cts.section_number,
+        cti.display_order,
+        cr.response_value,
+        cr.updated_at as response_date,
+        (SELECT json_agg(json_build_object(
+          'user', u.username,
+          'comment', cc.comment_text,
+          'created_at', cc.created_at
+        ))
+        FROM checklist_comments cc
+        LEFT JOIN users u ON cc.user_id = u.id
+        WHERE cc.checklist_id = $1 AND cc.item_id = cti.id) as comments
+      FROM checklist_template_items cti
+      INNER JOIN checklist_template_sections cts ON cti.section_id = cts.id
+      LEFT JOIN checklist_responses cr ON cr.item_id = cti.id AND cr.checklist_id = $1
+      WHERE cts.template_id = $2
+      ORDER BY cts.display_order, cti.display_order`,
+      [checklistId, checklist.template_id]
+    );
+    
+    checklist.items = itemsResult.rows;
+    
+    // Get sign-offs
+    const signoffsResult = await pool.query(
+      `SELECT 
+        cs.*,
+        u.username as signed_by_name
+      FROM checklist_signoffs cs
+      LEFT JOIN users u ON cs.signed_by = u.id
+      WHERE cs.checklist_id = $1
+      ORDER BY cs.signed_at DESC`,
+      [checklistId]
+    );
+    
+    checklist.signoffs = signoffsResult.rows;
+    
+    // Get source information if AI-generated
+    if (checklist.is_ai_generated) {
+      if (checklist.generation_source === 'issue' && checklist.related_issue_id) {
+        const issueResult = await pool.query(
+          'SELECT title FROM issues WHERE id = $1',
+          [checklist.related_issue_id]
+        );
+        if (issueResult.rows.length > 0) {
+          checklist.source_title = issueResult.rows[0].title;
+        }
+      } else if (checklist.generation_source === 'action-item' && checklist.related_action_id) {
+        const actionResult = await pool.query(
+          'SELECT title FROM action_items WHERE id = $1',
+          [checklist.related_action_id]
+        );
+        if (actionResult.rows.length > 0) {
+          checklist.source_title = actionResult.rows[0].title;
+        }
+      }
+    }
+    
+    // Generate PDF
+    const pdfBuffer = await generateChecklistPDF(checklist, {
+      format,
+      include_comments: include_comments === 'true',
+      include_charts: include_charts === 'true',
+      include_metadata: include_metadata === 'true'
+    });
+    
+    // Set response headers
+    const filename = `${checklist.checklist_id || 'checklist'}_${Date.now()}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    // Send PDF
+    res.send(pdfBuffer);
+    
+    // Log export
+    console.log(`📄 PDF exported: ${filename} by user ${userId}`);
+    
+  } catch (error) {
+    console.error('PDF export error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate PDF',
       message: error.message 
     });
   }
