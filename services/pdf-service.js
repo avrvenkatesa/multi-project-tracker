@@ -273,7 +273,7 @@ async function addChecklistContent(doc, checklistData, format, includeComments) 
     // Items in section
     for (const item of items) {
       // Skip non-completed items if format is 'completed-only'
-      if (format === 'completed-only' && !item.response_value) {
+      if (format === 'completed-only' && !item.is_completed) {
         continue;
       }
       
@@ -283,7 +283,7 @@ async function addChecklistContent(doc, checklistData, format, includeComments) 
       }
       
       // Item checkbox/bullet (using safe ASCII characters)
-      const isCompleted = !!item.response_value;
+      const isCompleted = !!item.is_completed;
       const symbol = isCompleted ? '[X]' : '[ ]';
       
       doc.fontSize(10)
@@ -295,15 +295,30 @@ async function addChecklistContent(doc, checklistData, format, includeComments) 
       doc.text(symbol, 70, itemY);
       doc.text(item.item_text || item.text, 95, itemY, { width: 445 });
       
+      // Get the appropriate response value based on field type
+      let responseValue = null;
+      if (item.field_type === 'checkbox' || item.field_type === 'radio') {
+        responseValue = item.response_boolean ? 'Yes' : null;
+      } else if (item.field_type === 'date') {
+        responseValue = item.response_date;
+      } else {
+        responseValue = item.response_value;
+      }
+      
+      // Show notes if they exist
+      if (item.notes) {
+        responseValue = item.notes;
+      }
+      
       // Response value if exists
-      if (item.response_value) {
+      if (responseValue) {
         doc.moveDown(0.2);
         doc.fontSize(9)
            .fillColor('#6b7280')
            .font('Helvetica');
         
         const responseLabel = getFieldTypeLabel(item.field_type);
-        doc.text(`${responseLabel}: ${formatResponseValue(item.response_value, item.field_type)}`, 85, doc.y);
+        doc.text(`${responseLabel}: ${formatResponseValue(responseValue, item.field_type)}`, 85, doc.y);
       }
       
       // Comments if exist and included

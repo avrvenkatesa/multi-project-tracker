@@ -7,7 +7,7 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
-- **PDF Export for Checklists - Phase 2a - COMPLETE & ANTIVIRUS FIXED** (October 15, 2025):
+- **PDF Export for Checklists - Phase 2a - COMPLETE & ALL BUGS FIXED** (October 15, 2025):
   - **Backend**: Comprehensive PDF service (services/pdf-service.js) using pdfkit and stream-buffers with native progress bar rendering
   - **API**: GET /api/checklists/:id/export/pdf endpoint with format and inclusion query parameters
   - **Frontend**: Export button on checklist detail page, modal with format selection (full/summary/completed-only) and inclusion options (comments/charts/metadata)
@@ -30,6 +30,12 @@ Preferred communication style: Simple, everyday language.
     - Standard fonts only (Helvetica, Helvetica-Bold, Helvetica-Oblique)
     - ASCII-only checkbox symbols ([ ] and [X] instead of Unicode checkboxes)
     - A4 page size for consistency with other reports
+  - **Critical Bug Fix - Completion Percentage & Checkbox Display** (October 15, 2025):
+    - Fixed incorrect completion calculation: Changed from checking `response_value IS NOT NULL` to `is_completed = true`
+    - Fixed missing checkbox responses: Query now includes all response fields (response_boolean, response_date, response_value, is_completed, notes)
+    - Fixed PDF display logic: Now properly checks `is_completed` flag instead of just `response_value`
+    - Fixed response value extraction: Correctly retrieves data from response_boolean for checkboxes, response_date for dates, response_value for text fields
+    - Result: PDFs now show correct 100% completion and display all filled checkbox entries with proper [X] or [ ] symbols
   - **Deliverables**: TESTING_PDF_EXPORT.md (comprehensive testing guide with 10 manual test cases)
   - **Files**: services/pdf-service.js, server.js, public/checklist-fill.html, public/js/checklists.js, TESTING_PDF_EXPORT.md
 

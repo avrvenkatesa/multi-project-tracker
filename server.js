@@ -8049,8 +8049,7 @@ app.get('/api/checklists/:id/export/pdf', authenticateToken, async (req, res) =>
         p.name as project_name,
         u.username as created_by_name,
         (SELECT COUNT(*) FROM checklist_responses cr
-         INNER JOIN checklist_template_items cti ON cr.template_item_id = cti.id
-         WHERE cr.checklist_id = c.id AND cr.response_value IS NOT NULL) as completed_items
+         WHERE cr.checklist_id = c.id AND cr.is_completed = true) as completed_items
       FROM checklists c
       LEFT JOIN checklist_templates ct ON c.template_id = ct.id
       LEFT JOIN projects p ON c.project_id = p.id
@@ -8090,7 +8089,11 @@ app.get('/api/checklists/:id/export/pdf', authenticateToken, async (req, res) =>
         cts.section_number,
         cti.display_order,
         cr.response_value,
-        cr.updated_at as response_date,
+        cr.response_boolean,
+        cr.response_date,
+        cr.is_completed,
+        cr.notes,
+        cr.updated_at,
         cr.id as response_id,
         (SELECT json_agg(json_build_object(
           'user', u.username,
