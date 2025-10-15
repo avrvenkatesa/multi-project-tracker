@@ -7700,7 +7700,7 @@ app.post('/api/checklists/generate-from-issue', authenticateToken, async (req, r
         ) as tags
       FROM issues i
       INNER JOIN projects p ON i.project_id = p.id
-      LEFT JOIN users u ON i.created_by = u.id
+      LEFT JOIN users u ON i.created_by::integer = u.id
       WHERE i.id = $1`,
       [issue_id]
     );
@@ -7772,7 +7772,7 @@ app.post('/api/checklists/generate-from-action', authenticateToken, async (req, 
         u.name as assigned_to_name
       FROM action_items ai
       INNER JOIN projects p ON ai.project_id = p.id
-      LEFT JOIN users u ON ai.assigned_to = u.id
+      LEFT JOIN users u ON ai.assigned_to::integer = u.id
       WHERE ai.id = $1`,
       [action_id]
     );
