@@ -159,9 +159,10 @@ function addMetadata(doc, checklistData) {
      .font('Helvetica');
   
   metadata.forEach(item => {
-    doc.font('Helvetica-Bold').text(item.label, 70, doc.y, { continued: true, width: 150 });
-    doc.font('Helvetica').text(item.value, { width: 350 });
-    doc.moveDown(0.3);
+    const currentY = doc.y;
+    doc.font('Helvetica-Bold').text(item.label, 70, currentY, { width: 150 });
+    doc.font('Helvetica').text(item.value, 230, currentY, { width: 300 });
+    doc.moveDown(0.8);
   });
   
   doc.moveDown(1);
@@ -289,10 +290,10 @@ async function addChecklistContent(doc, checklistData, format, includeComments) 
          .fillColor('#374151')
          .font('Helvetica');
       
-      // Item text with checkbox
+      // Item text with checkbox (fixed wrapping)
       const itemY = doc.y;
-      doc.text(symbol, 70, itemY, { continued: true, width: 15 });
-      doc.text(item.item_text || item.text, { width: 450 });
+      doc.text(symbol, 70, itemY);
+      doc.text(item.item_text || item.text, 90, itemY, { width: 450 });
       
       // Response value if exists
       if (item.response_value) {
