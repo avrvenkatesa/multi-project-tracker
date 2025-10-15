@@ -8153,11 +8153,17 @@ app.get('/api/checklists/:id/export/pdf', authenticateToken, async (req, res) =>
       include_metadata: include_metadata === 'true'
     });
     
-    // Set response headers
-    const filename = `${checklist.checklist_id || 'checklist'}_${Date.now()}.pdf`;
-    res.setHeader('Content-Type', 'application/pdf');
+    // Set response headers with proper security
+    const safeTitle = (checklist.title || 'Checklist').replace(/[^a-zA-Z0-9\s-]/g, '').substring(0, 50);
+    const filename = `${safeTitle.replace(/\s+/g, '_')}_Report.pdf`;
+    
+    res.setHeader('Content-Type', 'application/pdf; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     
     // Send PDF
     res.send(pdfBuffer);
