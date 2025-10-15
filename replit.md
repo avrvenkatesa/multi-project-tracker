@@ -1,65 +1,15 @@
 # Multi-Project Tracker
 
 ## Overview
-Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures. The project envisions becoming a leading solution for centralized project oversight and efficient team collaboration.
+Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, envisioning a leading solution for centralized project oversight and efficient team collaboration.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes (October 2025)
-- **AI Checklist Generation - Phase 2a - COMPLETE** (October 15, 2025): Implemented full AI-powered checklist generation workflow from issues and action items:
-  - **Backend (Stage 1)**: Database schema updates, AI service with dual provider support (OpenAI GPT-4o / Anthropic Claude), 4 new API endpoints, template filtering, and enhanced error handling
-  - **UI Integration (Stage 2)**: Added "🤖 Generate Checklist" buttons to all issue and action item cards in Kanban view
-  - **Generation Modal**: Created modal with three states - loading (with AI animation), error (with retry), and success preview (shows generated checklist sections and items)
-  - **Template Promotion**: Smart toast notification after checklist creation offers option to promote AI template to reusable (Team Lead+ or creator only)
-  - **User Flow**: Click button → AI generates checklist (10-30s) → Preview and review → Create checklist → Optional template promotion → Navigate to checklists page
-  - **Rate Limiting**: 10 AI generations per hour per user (in-memory, Phase 2b: persist to database)
-  - **Security**: Full authentication, project access validation, role-based template promotion
-  - **Files**: services/ai-service.js, server.js, public/app.js, public/index.html
-- **Consistent Header Design** (October 14, 2025): Standardized headers across all project-aware pages for unified branding and navigation:
-  - **Header Structure**: All pages now follow consistent 3-line pattern: "Multi-Project Tracker" (app name) → Page name (Dashboard/Checklists/Tags/Risks) → Page description
-  - **Blue Gradient**: All headers use `bg-gradient-to-r from-blue-600 to-blue-700` with white text and consistent padding (py-6)
-  - **Page Descriptions**: Dashboard: "Track project progress, team performance, and delivery metrics" | Checklists: "Verify your work and deliver with quality" | Tags: "Organize your issues and action items with color-coded tags" | Risks: "Identify, assess, and monitor project risks"
-  - **Project Context**: Added "Managing [content] for: [Project Name]" section below header on all pages, displayed when project is selected from URL parameters
-  - **Navigation**: "← Back to Projects" button consistently positioned in top-right of header across all pages
-  - **Files**: dashboard.html/js, checklists.html/js, risks.html/js, tags.html/js
-- **Universal Dropdown Navigation** (October 14, 2025): Extended dropdown navigation to all project-aware pages for consistent user experience:
-  - **Page Coverage**: Implemented on dashboard.html, checklists.html, risks.html, and tags.html - all project-aware pages now have identical navigation
-  - **Simplified Headers**: Removed redundant navigation links, streamlined headers to show project name/info with "Back to Projects" button
-  - **Dropdown Position**: Positioned View/Create dropdowns below header in dedicated section for consistency across all pages
-  - **Project Context**: All dropdown links preserve project context using URL parameters (projectId or project) for seamless navigation
-  - **Complete Implementation**: Each page includes full dropdown logic (openDropdown, closeDropdown, toggle handlers, keyboard nav, outside-click dismissal)
-  - **Files**: dashboard.html/js, checklists.html/js, risks.html/js, tags.html/js
-- **Dropdown Navigation UI** (October 14, 2025): Consolidated cluttered navigation from 8 buttons to 2 accessible dropdown menus on main project page:
-  - **UI Cleanup**: Replaced 8 individual buttons (Dashboard, AI Analysis, Transcripts, Checklists, Tags, Risks, + Issue, + Action Item) with 2 dropdown menus ("View" with 6 items, "+ Create" with 2 items)
-  - **Accessibility Compliance**: Full WCAG compliance with ARIA attributes (aria-haspopup, aria-expanded, aria-controls, role="menu/menuitem")
-  - **Keyboard Navigation**: Complete keyboard support - Enter/Space to toggle, Arrow keys for navigation, Escape to close, Home/End for first/last item
-  - **Focus Management**: Auto-focus first item on open, return focus to button on close, proper ARIA state synchronization when switching dropdowns
-  - **User Experience**: Cleaner interface while maintaining all functionality, click-outside-to-close, hover states with colored backgrounds matching original button themes
-  - **Files**: public/index.html (dropdown structure), public/app.js (interaction logic)
-- **Project-Aware Checklist Navigation** (October 14, 2025): Enhanced checklist page to maintain project context when navigating from project pages:
-  - **Smart Navigation**: When accessing checklists from a project, the project is pre-selected in the filter dropdown
-  - **Project Pre-Selection**: Modal automatically pre-selects the project when creating new checklists
-  - **Global Templates**: Templates are system-wide and available to all projects (not project-specific)
-  - **Simplified UX**: Reduced clicks by pre-filling project information based on navigation context
-  - **Files**: public/app.js (navigation with project parameter), public/js/checklists.js (URL detection, project pre-selection)
-- **Checklist Page Layout Consistency** (October 14, 2025): Updated checklist page to match the consistent layout of other pages (Tags, Risks, Dashboard):
-  - **Navigation Cleanup**: Removed navigation tabs (Dashboard, Issues & Actions, Checklists, Risks, Tags) and replaced with simple "← Back to Projects" button
-  - **Header Redesign**: Updated header to match gradient styling and subtitle format used in Tags/Risks pages
-  - **Button Positioning**: Moved "+ New Checklist" button to right side of content area (consistent with other pages)
-  - **Files**: public/checklists.html (header structure), public/js/checklists.js (back button handler)
-- **Progress Tracking Fix** (October 14, 2025): Fixed data format mismatch preventing progress updates when completing checklist items:
-  - **Issue**: Frontend sent separate `response_value`/`response_boolean`/`response_date` fields without `is_completed` flag; backend expected `value`, `type`, and `is_completed`
-  - **Root Cause**: Backend only counts items where `is_completed = true`, but frontend never sent this field (always defaulted to false)
-  - **Fix**: Updated saveResponse() to send correct format: `{template_item_id, value, type, is_completed}` with smart completion detection
-  - **Completion Logic**: Checkbox (checked=true), text/textarea (has content), date (has value), radio/dropdown (has selection)
-  - **Result**: Progress circle, completed count, and status transitions now update in real-time as items are filled
-  - **Files**: public/js/checklists.js (saveResponse function)
-
 ## System Architecture
 
 ### Frontend
-The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS. It features a dynamic UI based on user roles, real-time AI analysis capabilities (in-modal search, review queue), a comprehensive comment system with markdown support and @mention autocomplete, and a Project Dashboard with analytics, Chart.js visualizations, and team performance metrics. UI elements like Kanban boards, tag displays, and risk cards prioritize clarity and interactivity. A comprehensive checklist system with hierarchical sections, various field types, and status auto-updates is also integrated. Visual due date badges and delivery performance indicators enhance project tracking.
+The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS. It features a dynamic UI based on user roles, real-time AI analysis capabilities (in-modal search, review queue), a comprehensive comment system with markdown support and @mention autocomplete, and a Project Dashboard with analytics, Chart.js visualizations, and team performance metrics. UI elements like Kanban boards, tag displays, risk cards, and a comprehensive checklist system prioritize clarity and interactivity. Consistent header design and universal dropdown navigation are applied across all project-aware pages.
 
 ### Backend
 The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations for core entities, including atomic transactions for tag management, project-level authorization, and checklist management. Status changes are logged to a `status_history` table for auditing.
@@ -71,7 +21,7 @@ A PostgreSQL database stores core entities such as Users, Projects, Issues, Acti
 Express.js handles requests, incorporating `express-rate-limit` for API protection and comprehensive error handling. It supports JSON and URL-encoded data parsing.
 
 ### Notifications
-The system integrates with Microsoft Teams for instant notifications (issue/action item creation, status changes) and daily scheduled reports (overdue items, project health summaries) using Adaptive Cards. Notifications include correctly formed URLs to the application.
+The system integrates with Microsoft Teams for instant notifications (issue/action item creation, status changes) and daily scheduled reports (overdue items, project health summaries) using Adaptive Cards.
 
 ## External Dependencies
 
