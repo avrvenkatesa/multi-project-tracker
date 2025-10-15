@@ -267,6 +267,29 @@ function setupChecklistFillPageListeners() {
     });
   }
   
+  // Export PDF button
+  const exportPdfBtn = document.getElementById('exportPdfBtn');
+  if (exportPdfBtn) {
+    exportPdfBtn.addEventListener('click', showExportPdfModal);
+  }
+  
+  // Export modal close buttons
+  const closeExportModalBtn = document.getElementById('closeExportModalBtn');
+  if (closeExportModalBtn) {
+    closeExportModalBtn.addEventListener('click', closeExportPdfModal);
+  }
+  
+  const cancelExportBtn = document.getElementById('cancelExportBtn');
+  if (cancelExportBtn) {
+    cancelExportBtn.addEventListener('click', closeExportPdfModal);
+  }
+  
+  // Confirm export button
+  const confirmExportBtn = document.getElementById('confirmExportBtn');
+  if (confirmExportBtn) {
+    confirmExportBtn.addEventListener('click', exportChecklistAsPdf);
+  }
+  
   // Add comment button
   const addCommentBtn = document.getElementById('addCommentBtn');
   if (addCommentBtn) {
@@ -1006,6 +1029,124 @@ function showToast(message, type = 'info') {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 300);
   }, 3000);
+}
+
+// =====================================================
+// PDF EXPORT FUNCTIONS
+// =====================================================
+
+function showExportPdfModal() {
+  const modal = document.getElementById('exportPdfModal');
+  if (modal) {
+    modal.style.display = 'flex';
+  }
+}
+
+function closeExportPdfModal() {
+  const modal = document.getElementById('exportPdfModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+async function exportChecklistAsPdf() {
+  const confirmBtn = document.getElementById('confirmExportBtn');
+  const originalText = confirmBtn.innerHTML;
+  
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const checklistId = urlParams.get('id');
+    
+    if (!checklistId) {
+      showToast('No checklist ID found', 'error');
+      return;
+    }
+    
+    // Get export options
+    const formatRadios = document.getElementsByName('pdfFormat');
+    let format = 'full';
+    for (const radio of formatRadios) {
+      if (radio.checked) {
+        format = radio.value;
+        break;
+      }
+    }
+    
+    const includeComments = document.getElementById('includeComments').checked;
+    const includeCharts = document.getElementById('includeCharts').checked;
+    const includeMetadata = document.getElementById('includeMetadata').checked;
+    
+    // Build query string
+    const queryParams = new URLSearchParams({
+      format,
+      include_comments: includeComments,
+      include_charts: includeCharts,
+      include_metadata: includeMetadata
+    });
+    
+    // Show loading state on button
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = `
+      <svg class="w-5 h-5 inline-block mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Generating...
+    `;
+    
+    // Request PDF
+    const response = await fetch(`/api/checklists/${checklistId}/export/pdf?${queryParams}`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to export PDF');
+    }
+    
+    // Get PDF blob
+    const blob = await response.blob();
+    
+    // Create download link
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    
+    // Get filename from Content-Disposition header or use default
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = 'checklist.pdf';
+    if (contentDisposition) {
+      const matches = /filename="?([^"]+)"?/.exec(contentDisposition);
+      if (matches && matches[1]) {
+        filename = matches[1];
+      }
+    }
+    
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    // Reset button
+    confirmBtn.disabled = false;
+    confirmBtn.innerHTML = originalText;
+    
+    // Close modal
+    closeExportPdfModal();
+    
+    // Show success toast
+    showToast('PDF exported successfully!', 'success');
+    
+  } catch (error) {
+    console.error('Export error:', error);
+    
+    // Reset button
+    const confirmBtn = document.getElementById('confirmExportBtn');
+    confirmBtn.disabled = false;
+    confirmBtn.innerHTML = originalText;
+    
+    showToast(error.message || 'Failed to export PDF', 'error');
+  }
 }
 
 // =====================================================
