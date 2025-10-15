@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const Anthropic = require('@anthropic-ai/sdk');
 const { Pool } = require('@neondatabase/serverless');
+const { extractTextFromFile, truncateToTokenLimit } = require('./file-processor');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -37,40 +38,200 @@ async function getTemplateByName(templateName) {
 /**
  * Generate checklist from issue
  */
-async function generateChecklistFromIssue(issue) {
-  const prompt = `You are a project management expert. Analyze this issue and generate a detailed checklist to address it.
+async function generateChecklistFromIssue(issue, attachmentIds = [], useDescription = true) {
+  let contextText = '';
+  
+  if (useDescription) {
+    contextText += buildDescriptionContext('issue', issue);
+  }
+  
+  if (attachmentIds && attachmentIds.length > 0) {
+    const attachmentContent = await getAttachmentContent(attachmentIds);
+    contextText += attachmentContent;
+  }
+  
+  if (!contextText.trim()) {
+    throw new Error('No source content provided for generation');
+  }
+  
+  const prompt = buildEnhancedPrompt('issue', issue, contextText, attachmentIds);
+  return await callAI(prompt, 'issue');
+}
 
-Issue Title: ${issue.title}
-Issue Description: ${issue.description || 'No description provided'}
-Issue Type: ${issue.type || 'Unknown'}
-Priority: ${issue.priority || 'Medium'}
-Status: ${issue.status || 'Open'}
-Tags: ${issue.tags || 'None'}
+/**
+ * Generate checklist from action item
+ */
+async function generateChecklistFromActionItem(actionItem, attachmentIds = [], useDescription = true) {
+  let contextText = '';
+  
+  if (useDescription) {
+    contextText += buildDescriptionContext('action-item', actionItem);
+  }
+  
+  if (attachmentIds && attachmentIds.length > 0) {
+    const attachmentContent = await getAttachmentContent(attachmentIds);
+    contextText += attachmentContent;
+  }
+  
+  if (!contextText.trim()) {
+    throw new Error('No source content provided for generation');
+  }
+  
+  const prompt = buildEnhancedPrompt('action-item', actionItem, contextText, attachmentIds);
+  return await callAI(prompt, 'action-item');
+}
 
-Based on this issue, generate a comprehensive checklist with:
-1. A descriptive checklist title that clearly indicates the purpose
-2. 3-7 main sections (logical groupings of related tasks)
-3. 5-15 checklist items per section
-4. Appropriate field types for each item
-5. Mark critical items as required
+/**
+ * Build context from description
+ */
+function buildDescriptionContext(type, data) {
+  if (type === 'issue') {
+    return `
+====================================
+SOURCE: Issue Description
+====================================
 
-For field types, use:
+Issue Title: ${data.title}
+Description: ${data.description || 'No description provided'}
+Type: ${data.type || 'Unknown'}
+Priority: ${data.priority || 'Medium'}
+Status: ${data.status || 'Open'}
+Tags: ${data.tags || 'None'}
+
+`;
+  } else {
+    return `
+====================================
+SOURCE: Action Item Description
+====================================
+
+Title: ${data.title}
+Description: ${data.description || 'No description provided'}
+Priority: ${data.priority || 'Medium'}
+Status: ${data.status || 'Open'}
+Due Date: ${data.due_date || 'Not set'}
+Assigned To: ${data.assigned_to_name || 'Unassigned'}
+
+`;
+  }
+}
+
+/**
+ * Get and process attachment content
+ */
+async function getAttachmentContent(attachmentIds) {
+  const result = await pool.query(
+    `SELECT id, original_name, file_path, file_type, extracted_text, file_size
+     FROM attachments 
+     WHERE id = ANY($1)
+     ORDER BY id`,
+    [attachmentIds]
+  );
+  
+  if (result.rows.length === 0) {
+    throw new Error('No attachments found with provided IDs');
+  }
+  
+  let content = '\n====================================\n';
+  content += 'SOURCE: Attached Documents\n';
+  content += '====================================\n\n';
+  
+  for (const attachment of result.rows) {
+    if (attachment.file_size > 10 * 1024 * 1024) {
+      content += `--- Document: ${attachment.original_name} ---\n`;
+      content += '[File too large to process (>10MB)]\n\n';
+      continue;
+    }
+    
+    let text = attachment.extracted_text;
+    
+    if (!text) {
+      try {
+        console.log(`Extracting text from attachment ${attachment.id}: ${attachment.original_name}`);
+        text = await extractTextFromFile(attachment.file_path, attachment.file_type);
+        
+        await pool.query(
+          `UPDATE attachments 
+           SET extracted_text = $1, 
+               is_processed = true,
+               processing_error = NULL
+           WHERE id = $2`,
+          [text, attachment.id]
+        );
+      } catch (error) {
+        console.error(`Failed to extract text from ${attachment.original_name}:`, error);
+        
+        await pool.query(
+          `UPDATE attachments 
+           SET processing_error = $1,
+               is_processed = false
+           WHERE id = $2`,
+          [error.message, attachment.id]
+        );
+        
+        text = `[Could not extract text from ${attachment.original_name}: ${error.message}]`;
+      }
+    }
+    
+    text = truncateToTokenLimit(text, 3000);
+    
+    content += `--- Document: ${attachment.original_name} ---\n${text}\n\n`;
+  }
+  
+  return content;
+}
+
+/**
+ * Build enhanced prompt with context
+ */
+function buildEnhancedPrompt(type, data, contextText, attachmentIds = []) {
+  const sourceLabel = type === 'issue' ? 'issue' : 'action item';
+  const hasAttachments = attachmentIds && attachmentIds.length > 0;
+  
+  let prompt = `You are a project management expert. Based on the following ${sourceLabel} information${hasAttachments ? ' and attached documents' : ''}, generate a comprehensive checklist.
+
+${contextText}
+
+====================================
+INSTRUCTIONS
+====================================
+
+1. Analyze ALL the provided information carefully
+${hasAttachments ? '2. Extract key requirements, tasks, and deliverables from the documents' : ''}
+${hasAttachments ? '3. Create a checklist that covers everything mentioned in the source materials' : '2. Create a detailed checklist based on the provided information'}
+${hasAttachments ? '4' : '3'}. Organize into logical sections (3-7 sections based on complexity)
+${hasAttachments ? '5' : '4'}. Create specific, actionable items (5-15 per section)
+${hasAttachments ? '6' : '5'}. Use appropriate field types for each item
+${hasAttachments ? '7' : '6'}. Mark critical items as required
+
+${hasAttachments ? `
+For documents (like SOWs, requirements docs, specifications):
+- Capture all major deliverables and milestones
+- Include validation/verification steps for each deliverable
+- Cover dependencies and prerequisites
+- Address acceptance criteria and quality standards
+- Include sign-off points where appropriate
+` : ''}
+
+Field types to use:
 - "checkbox" for yes/no confirmations and completion checks
-- "text" for short answers (names, IDs, hostnames, single values)
-- "textarea" for detailed notes, descriptions, or long-form content
-- "date" for dates, deadlines, and timestamps
+- "text" for capturing specific values, names, IDs, hostnames
+- "textarea" for detailed notes, observations, descriptions
+- "date" for deadlines, milestones, and timestamps
 - "radio" for multiple choice selections (include 2-5 options in field_options array)
 
+${type === 'issue' ? `
 IMPORTANT TEMPLATE MATCHING:
 - If this issue is about verifying server access, checking credentials, or validating permissions/connectivity, set use_template=true and template_name="Access Verification Checklist"
 - Otherwise, generate a custom checklist structure with use_template=false and template_name=null
+` : ''}
 
 Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 {
   "title": "Clear, action-oriented checklist title",
   "description": "Brief description of checklist purpose and scope",
-  "use_template": true or false,
-  "template_name": "Access Verification Checklist" or null,
+  "use_template": ${type === 'issue' ? 'true or false' : 'false'},
+  "template_name": ${type === 'issue' ? '"Access Verification Checklist" or null' : 'null'},
   "confidence": 75,
   "sections": [
     {
@@ -91,81 +252,13 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 }
 
 Requirements:
-- Minimum 20 total items across all sections
+- Minimum ${hasAttachments ? '30' : '20'} total items across all sections
 - At least 3 sections
 - Mix of field types (not all checkboxes)
 - Specific and actionable items
 - Professional language`;
 
-  return await callAI(prompt, 'issue');
-}
-
-/**
- * Generate checklist from action item
- */
-async function generateChecklistFromActionItem(actionItem) {
-  const prompt = `You are a project management expert. Analyze this action item and generate a detailed checklist to complete it.
-
-Action Title: ${actionItem.title}
-Description: ${actionItem.description || 'No description provided'}
-Priority: ${actionItem.priority || 'Medium'}
-Status: ${actionItem.status || 'Open'}
-Due Date: ${actionItem.due_date || 'Not set'}
-Assigned To: ${actionItem.assigned_to_name || 'Unassigned'}
-
-Based on this action item, generate a comprehensive checklist that breaks down this action into concrete, executable steps:
-
-1. A descriptive checklist title
-2. 2-5 main sections representing major phases or categories of work
-3. 3-10 specific, actionable items per section
-4. Appropriate field types for each item
-5. Mark critical items as required
-
-For field types, use:
-- "checkbox" for completion checks and confirmations
-- "text" for capturing specific values, names, or identifiers
-- "textarea" for notes, observations, or detailed responses
-- "date" for deadlines, completion dates, or timestamps
-- "radio" for selecting between predefined options
-
-Think about:
-- What are the prerequisite steps?
-- What are the main execution steps?
-- What validation/verification is needed?
-- What documentation or follow-up is required?
-
-Respond ONLY with valid JSON (no markdown formatting):
-{
-  "title": "Action-oriented checklist title",
-  "description": "Brief description of how this checklist helps complete the action",
-  "use_template": false,
-  "template_name": null,
-  "confidence": 80,
-  "sections": [
-    {
-      "title": "Section name",
-      "description": "What this section accomplishes",
-      "items": [
-        {
-          "text": "Specific, actionable task description",
-          "field_type": "checkbox|text|textarea|date|radio",
-          "field_options": ["Option A", "Option B"] or null,
-          "is_required": true or false,
-          "help_text": "How to complete this step"
-        }
-      ]
-    }
-  ],
-  "reasoning": "Why this breakdown makes sense for completing the action"
-}
-
-Requirements:
-- Minimum 10 total items
-- At least 2 sections
-- Concrete, actionable steps
-- Logical sequence`;
-
-  return await callAI(prompt, 'action-item');
+  return prompt;
 }
 
 /**
