@@ -106,16 +106,16 @@ function displayValidationResults(validation) {
         <div>
           <h3 class="text-xl font-semibold ${statusClass} mb-2">${statusIcon} Validation ${statusText}</h3>
           <div class="space-y-1 text-sm">
-            <div class="flex items-center space-x-3 cursor-help" 
+            <div class="flex items-center space-x-2 cursor-help" 
                  title="Completeness Score (50% weight):
 Based on required items completion
 • Required items completed / Total required items × 100
 • If no required items, uses overall completion rate">
               <span class="text-gray-600 w-28">Completeness:</span>
               <span class="font-semibold">${validation.completeness_score}%</span>
-              <span class="text-gray-400">ℹ️</span>
+              <span class="text-gray-400 flex items-center">ℹ️</span>
             </div>
-            <div class="flex items-center space-x-3 cursor-help"
+            <div class="flex items-center space-x-2 cursor-help"
                  title="Consistency Score (30% weight):
 Starts at 100%, then deducts:
 • -10 points per error
@@ -123,9 +123,9 @@ Starts at 100%, then deducts:
 Current: 100 - (${validation.error_count} errors × 10) - (${validation.warning_count} warnings × 3) = ${validation.consistency_score}%">
               <span class="text-gray-600 w-28">Consistency:</span>
               <span class="font-semibold">${validation.consistency_score}%</span>
-              <span class="text-gray-400">ℹ️</span>
+              <span class="text-gray-400 flex items-center">ℹ️</span>
             </div>
-            <div class="flex items-center space-x-3 cursor-help"
+            <div class="flex items-center space-x-2 cursor-help"
                  title="Quality Rating (20% weight):
 Base score: 50 points
 • +2 points per item with comments (max +20)
@@ -134,7 +134,7 @@ Base score: 50 points
 Range: 0-100 points">
               <span class="text-gray-600 w-28">Quality:</span>
               <span class="font-semibold">${validation.quality_rating}%</span>
-              <span class="text-gray-400">ℹ️</span>
+              <span class="text-gray-400 flex items-center">ℹ️</span>
             </div>
           </div>
         </div>
