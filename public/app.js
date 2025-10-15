@@ -4089,12 +4089,10 @@ async function openAIChecklistModal(itemId, itemType, itemTitle) {
       project_id: currentProject.id
     }, { withCredentials: true });
     
-    // Store the generated data
+    // Store the generated data (full preview object)
     currentAIChecklistData = {
       ...currentAIChecklistData,
-      template: response.data.template,
-      sections: response.data.sections,
-      generationId: response.data.generation_id
+      preview: response.data  // Store complete preview object
     };
     
     // Show preview
@@ -4115,19 +4113,19 @@ function renderAIChecklistPreview(data) {
   const templateBadge = document.getElementById('ai-checklist-template-badge');
   const sectionsContainer = document.getElementById('ai-checklist-sections');
   
-  // Show template info
-  templateBadge.textContent = `Template: ${data.template.name}`;
+  // Show checklist title
+  templateBadge.textContent = data.title || 'Generated Checklist';
   
   // Render sections and items
   sectionsContainer.innerHTML = data.sections.map(section => `
     <div class="border-l-4 border-blue-400 pl-3">
-      <h5 class="font-semibold text-sm text-gray-800 mb-2">${section.name}</h5>
+      <h5 class="font-semibold text-sm text-gray-800 mb-2">${section.title || section.name}</h5>
       ${section.description ? `<p class="text-xs text-gray-600 mb-2">${section.description}</p>` : ''}
       <div class="space-y-1">
         ${section.items.map(item => `
           <div class="flex items-start text-xs text-gray-700">
             <span class="text-blue-500 mr-2">•</span>
-            <span>${item.title}${item.is_required ? ' <span class="text-red-500">*</span>' : ''}</span>
+            <span>${item.text || item.title}${item.is_required ? ' <span class="text-red-500">*</span>' : ''}</span>
           </div>
         `).join('')}
       </div>
@@ -4136,33 +4134,100 @@ function renderAIChecklistPreview(data) {
 }
 
 async function confirmAIChecklistCreation() {
-  if (!currentAIChecklistData?.generationId) {
+  if (!currentAIChecklistData?.preview) {
     showToast('No checklist data available', 'error');
     return;
   }
   
   try {
     const response = await axios.post('/api/checklists/confirm-generated', {
-      generation_id: currentAIChecklistData.generationId,
-      project_id: currentProject.id,
-      [currentAIChecklistData.itemType === 'issue' ? 'issue_id' : 'action_item_id']: 
-        currentAIChecklistData.itemId
+      preview: currentAIChecklistData.preview,
+      source_id: currentAIChecklistData.itemId,
+      source_type: currentAIChecklistData.itemType === 'issue' ? 'issue' : 'action-item',
+      project_id: currentProject.id
     }, { withCredentials: true });
     
-    // Close modal and show success
+    // Close modal
     document.getElementById('ai-checklist-modal').classList.add('hidden');
     showToast('AI Checklist created successfully!', 'success');
     
-    // Optionally navigate to checklists page
-    const urlParams = new URLSearchParams(window.location.search);
-    const projectParam = urlParams.get('project') || urlParams.get('projectId');
-    if (projectParam) {
-      window.location.href = `/checklists.html?project=${projectParam}`;
+    // Show promotion prompt if it's a new AI template
+    if (response.data.is_new_template && response.data.template_id) {
+      showTemplatePromotionPrompt(response.data.template_id);
+    } else {
+      // Navigate to checklists page
+      navigateToChecklists();
     }
     
   } catch (error) {
     console.error('Error confirming checklist:', error);
     showToast(error.response?.data?.error || 'Failed to create checklist', 'error');
+  }
+}
+
+function showTemplatePromotionPrompt(templateId) {
+  const promptHtml = `
+    <div id="template-promotion-toast" class="fixed bottom-4 right-4 bg-white rounded-lg shadow-2xl border border-gray-200 p-4 z-50 max-w-md">
+      <div class="flex items-start gap-3">
+        <div class="flex-shrink-0">
+          <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <h4 class="font-semibold text-gray-800 mb-1">Make this template reusable?</h4>
+          <p class="text-sm text-gray-600 mb-3">This AI-generated template is currently hidden. Promote it to make it available for future use.</p>
+          <div class="flex gap-2">
+            <button onclick="promoteTemplate(${templateId})" class="flex-1 bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700">
+              Promote Template
+            </button>
+            <button onclick="dismissPromotionPrompt()" class="flex-1 bg-gray-200 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">
+              No Thanks
+            </button>
+          </div>
+        </div>
+        <button onclick="dismissPromotionPrompt()" class="flex-shrink-0 text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', promptHtml);
+  
+  // Auto-dismiss after 15 seconds
+  setTimeout(() => {
+    dismissPromotionPrompt();
+  }, 15000);
+}
+
+async function promoteTemplate(templateId) {
+  try {
+    await axios.post(`/api/templates/${templateId}/promote`, {}, { withCredentials: true });
+    showToast('Template promoted to reusable!', 'success');
+    dismissPromotionPrompt();
+    navigateToChecklists();
+  } catch (error) {
+    console.error('Error promoting template:', error);
+    showToast(error.response?.data?.error || 'Failed to promote template', 'error');
+  }
+}
+
+function dismissPromotionPrompt() {
+  const toast = document.getElementById('template-promotion-toast');
+  if (toast) {
+    toast.remove();
+  }
+  navigateToChecklists();
+}
+
+function navigateToChecklists() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const projectParam = urlParams.get('project') || urlParams.get('projectId');
+  if (projectParam) {
+    window.location.href = `/checklists.html?project=${projectParam}`;
   }
 }
 
