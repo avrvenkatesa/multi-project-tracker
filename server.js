@@ -7970,6 +7970,59 @@ app.post('/api/checklists/confirm-generated', authenticateToken, async (req, res
   }
 });
 
+// POST /api/templates/:id/promote - Promote AI template to reusable
+app.post('/api/templates/:id/promote', authenticateToken, async (req, res) => {
+  try {
+    const templateId = req.params.id;
+    const userId = req.user.id;
+    
+    // Verify template exists and user is creator or has appropriate role
+    const templateCheck = await pool.query(
+      'SELECT * FROM checklist_templates WHERE id = $1',
+      [templateId]
+    );
+    
+    if (templateCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    
+    const template = templateCheck.rows[0];
+    
+    // Check permission - must be creator or Team Lead+
+    const userRoleLevel = ROLE_HIERARCHY[req.user.role] || 0;
+    const isTeamLeadOrAbove = userRoleLevel >= ROLE_HIERARCHY['Team Lead'];
+    const isCreator = template.created_by === userId;
+    
+    if (!isCreator && !isTeamLeadOrAbove) {
+      return res.status(403).json({ error: 'Only the template creator or Team Lead+ can promote templates' });
+    }
+    
+    // Promote template: make it reusable and update category
+    await pool.query(
+      `UPDATE checklist_templates 
+       SET is_reusable = true,
+           category = CASE 
+             WHEN category = 'ai-generated' THEN 'custom'
+             ELSE category
+           END
+       WHERE id = $1`,
+      [templateId]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Template promoted to reusable successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error promoting template:', error);
+    res.status(500).json({ 
+      error: 'Failed to promote template',
+      message: error.message 
+    });
+  }
+});
+
 // Get mismatched assignee names
 app.get('/api/admin/assignee-mismatches', authenticateToken, async (req, res) => {
   try {

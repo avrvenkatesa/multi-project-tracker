@@ -1,6 +1,8 @@
 const OpenAI = require('openai');
 const Anthropic = require('@anthropic-ai/sdk');
-const { pool } = require('../config/database');
+const { Pool } = require('@neondatabase/serverless');
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const AI_PROVIDER = process.env.AI_PROVIDER || 'openai';
 
