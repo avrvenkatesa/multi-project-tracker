@@ -54,8 +54,17 @@ async function generateChecklistPDF(checklistData, options = {}) {
     // Sign-off section
     await addSignOffSection(doc, checklistData);
     
-    // Footer on each page
-    addPageNumbers(doc);
+    // Add simple footer on last page
+    doc.moveDown(2);
+    doc.fontSize(8)
+       .fillColor('#9ca3af')
+       .font('Helvetica')
+       .text(
+         `Generated: ${formatDate(new Date())} | Multi-Project Tracker`,
+         50,
+         doc.page.height - 50,
+         { align: 'center', width: doc.page.width - 100 }
+       );
     
     // Finalize PDF
     doc.end();
