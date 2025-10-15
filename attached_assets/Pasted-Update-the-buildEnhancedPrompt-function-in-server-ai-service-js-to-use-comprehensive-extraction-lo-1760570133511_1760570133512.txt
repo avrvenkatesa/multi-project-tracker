@@ -1,0 +1,91 @@
+Update the buildEnhancedPrompt() function in server/ai-service.js to use comprehensive extraction logic.
+
+CURRENT PROBLEM:
+The AI generates only 20 generic items even for large documents (92-page SOW).
+
+REQUIRED CHANGES:
+Replace the prompt text in buildEnhanchedPrompt() to emphasize:
+
+1. Document-size-based minimums:
+   - Small docs (1-10 pages): 30-60 items
+   - Medium docs (10-30 pages): 60-100 items  
+   - Large docs (30-100+ pages): 100-200+ items
+
+2. EXTRACTION over summarization:
+   - Break complex tasks into granular atomic steps
+   - Extract every requirement, not just summarize
+   - Include pre/during/post validation for each deliverable
+
+3. Comprehensive sections:
+   - 5-12 main sections for complex documents
+   - 8-20 items per major section
+   - Don't skip intermediate steps
+
+4. Quality emphasis:
+   - "MORE ITEMS IS BETTER - Aim for exhaustive coverage"
+   - "EXTRACT, DON'T SUMMARIZE - Include all details"
+   - "BE GRANULAR - Break complex tasks into substeps"
+   - "TARGET: 100+ items for substantial documents (30+ pages)"
+
+IMPLEMENTATION:
+Update the return statement in buildEnhancedPrompt() function with the new comprehensive prompt that:
+- Changes "project management expert" to "technical project expert"
+- Replaces "Minimum 20 total items" with document-size-based guidelines
+- Adds "CRITICAL INSTRUCTIONS: COMPREHENSIVE EXTRACTION" section
+- Includes detailed EXTRACTION RULES (5 rules about granularity, decomposition, completeness, validation, sections)
+- Adds "CRITICAL REMINDERS" emphasizing exhaustive coverage
+- Changes tone from balanced to "EXHAUSTIVE, MAXIMUM COVERAGE"
+
+The prompt should work for ANY document type (SOWs, requirements, specs, contracts), not just SOWs.
+
+EXAMPLE IMPROVEMENT:
+Before: "Conduct AD migration" (1 generic item)
+After: 12 specific items like "Document current DC inventory", "Validate AD health", "Install Windows 2022 DCs", "Transfer PDC Emulator FSMO role", "Validate replication health", etc.
+
+Update the code now and confirm when complete.
+```
+
+---
+
+## **Alternative: Even Simpler Version**
+
+If you want to be ultra-concise:
+```
+Update buildEnhancedPrompt() in server/ai-service.js to generate comprehensive checklists:
+
+CHANGE: Minimum items from 20 → 100-200 based on document size
+CHANGE: Prompt tone from "comprehensive coverage" → "EXHAUSTIVE, MAXIMUM COVERAGE"  
+CHANGE: Instructions from "5-15 per section" → "8-20 per section, break tasks into atomic steps"
+ADD: Document size guidelines (small: 30-60, medium: 60-100, large: 100-200+ items)
+ADD: Explicit extraction rules emphasizing granularity and validation steps
+ADD: "MORE IS BETTER, EXTRACT DON'T SUMMARIZE" emphasis
+
+Replace the entire return statement in buildEnhancedPrompt() with a comprehensive prompt that generates 100-150 items for large documents instead of 20.
+
+The prompt should work for any document type, not just SOWs.
+```
+
+---
+
+## **What to Expect After Replit Makes the Change**
+
+### **Step 1: Replit Will:**
+```
+✅ Open server/ai-service.js
+✅ Find buildEnhancedPrompt() function
+✅ Replace the return statement with comprehensive extraction logic
+✅ Save the file
+✅ Confirm "Changes made successfully"
+```
+
+### **Step 2: Test Results:**
+```
+BEFORE (with old prompt):
+- Issue: "SOW Checklist"  
+- Attachment: 92-page SOW
+- Result: 20 items, 4 generic sections ❌
+
+AFTER (with new prompt):
+- Same issue and attachment
+- Result: 100-150 items, 8-10 detailed sections ✅
+- Items are granular, specific, actionable

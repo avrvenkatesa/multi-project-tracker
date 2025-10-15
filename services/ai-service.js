@@ -188,29 +188,82 @@ function buildEnhancedPrompt(type, data, contextText, attachmentIds = []) {
   const sourceLabel = type === 'issue' ? 'issue' : 'action item';
   const hasAttachments = attachmentIds && attachmentIds.length > 0;
   
-  let prompt = `You are a project management expert. Based on the following ${sourceLabel} information${hasAttachments ? ' and attached documents' : ''}, generate a comprehensive checklist.
+  let prompt = `You are a technical project expert specializing in comprehensive task decomposition. Based on the following ${sourceLabel} information${hasAttachments ? ' and attached documents' : ''}, generate an EXHAUSTIVE, MAXIMUM COVERAGE checklist.
 
 ${contextText}
+
+====================================
+CRITICAL INSTRUCTIONS: COMPREHENSIVE EXTRACTION
+====================================
+
+⚠️ PRIMARY DIRECTIVE: EXTRACT, DON'T SUMMARIZE
+Your goal is EXHAUSTIVE coverage, not brevity. MORE ITEMS IS BETTER.
+
+${hasAttachments ? `
+DOCUMENT SIZE ANALYSIS & TARGETS:
+Estimate the document complexity and aim for:
+- Small documents (1-10 pages): 30-60 checklist items minimum
+- Medium documents (10-30 pages): 60-100 checklist items minimum  
+- Large documents (30-100+ pages): 100-200+ checklist items minimum
+- Complex SOWs/specifications: 150-250+ items for complete coverage
+
+FOR THIS REQUEST: Aim for the MAXIMUM items based on content volume.
+` : `
+DESCRIPTION-BASED TARGETS:
+- Simple tasks: 20-40 items with granular steps
+- Complex tasks: 40-80+ items breaking down every detail
+`}
+
+====================================
+EXTRACTION RULES (MANDATORY)
+====================================
+
+1. GRANULARITY: Break complex tasks into atomic, single-action steps
+   ❌ Bad: "Migrate Active Directory"
+   ✅ Good: Create 12+ items: "Document current DC inventory", "Validate AD health checks", "Install Windows 2022 DCs", "Transfer PDC Emulator FSMO role", "Transfer RID Master role", "Validate replication health", "Decommission old DCs", etc.
+
+2. DECOMPOSITION: Every deliverable needs pre/during/post steps
+   - Prerequisites and setup (before)
+   - Execution steps (during) 
+   - Validation and verification (after)
+   - Documentation and handoff
+
+3. COMPLETENESS: Extract ALL mentioned items, don't skip intermediate steps
+   - Include every requirement, deliverable, milestone
+   - Add validation steps for each deliverable
+   - Include dependencies, prerequisites, acceptance criteria
+   - Add sign-off and approval points
+
+4. VALIDATION: Each major task needs verification items
+   - Pre-task validation (readiness checks)
+   - In-progress validation (quality checks)
+   - Post-task validation (acceptance criteria)
+   - Rollback planning items
+
+5. SECTIONS: Create 5-12 comprehensive sections for complex documents
+   - Each section should have 8-20 items minimum
+   - Use logical phases: Planning → Preparation → Execution → Validation → Documentation
 
 ====================================
 INSTRUCTIONS
 ====================================
 
-1. Analyze ALL the provided information carefully
-${hasAttachments ? '2. Extract key requirements, tasks, and deliverables from the documents' : ''}
-${hasAttachments ? '3. Create a checklist that covers everything mentioned in the source materials' : '2. Create a detailed checklist based on the provided information'}
-${hasAttachments ? '4' : '3'}. Organize into logical sections (3-7 sections based on complexity)
-${hasAttachments ? '5' : '4'}. Create specific, actionable items (5-15 per section)
-${hasAttachments ? '6' : '5'}. Use appropriate field types for each item
-${hasAttachments ? '7' : '6'}. Mark critical items as required
+1. Analyze ALL provided information with extreme detail
+2. Extract EVERY requirement, task, deliverable, and milestone
+3. Break complex tasks into 5-15 granular substeps each
+4. Create 5-12 logical sections (for substantial documents)
+5. Generate 8-20 specific items per major section
+6. Use appropriate field types for each item
+7. Mark critical validation items as required
 
 ${hasAttachments ? `
-For documents (like SOWs, requirements docs, specifications):
-- Capture all major deliverables and milestones
-- Include validation/verification steps for each deliverable
-- Cover dependencies and prerequisites
-- Address acceptance criteria and quality standards
-- Include sign-off points where appropriate
+For SOWs, Requirements, Specifications, Contracts:
+- Extract EVERY deliverable mentioned (don't group or summarize)
+- Break each deliverable into setup → execution → validation steps
+- Include all dependencies, prerequisites, and constraints
+- Add acceptance criteria as separate checklist items
+- Include project milestones, reviews, and sign-off points
+- Cover pre-project planning, ongoing execution, and post-project closeout
 ` : ''}
 
 Field types to use:
@@ -225,6 +278,15 @@ IMPORTANT TEMPLATE MATCHING:
 - If this issue is about verifying server access, checking credentials, or validating permissions/connectivity, set use_template=true and template_name="Access Verification Checklist"
 - Otherwise, generate a custom checklist structure with use_template=false and template_name=null
 ` : ''}
+
+====================================
+CRITICAL REMINDERS
+====================================
+✅ MORE IS BETTER - Aim for exhaustive coverage
+✅ EXTRACT DON'T SUMMARIZE - Include all details from source
+✅ BE GRANULAR - Break complex tasks into atomic substeps  
+✅ ADD VALIDATION - Every deliverable needs pre/during/post checks
+${hasAttachments ? '✅ TARGET: 100+ items for substantial documents (30+ pages)' : '✅ TARGET: 40+ items for complex tasks'}
 
 Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 {
@@ -252,11 +314,13 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 }
 
 Requirements:
-- Minimum ${hasAttachments ? '30' : '20'} total items across all sections
-- At least 3 sections
+- Minimum ${hasAttachments ? '100' : '40'} total items across all sections for comprehensive coverage
+- 5-12 sections for complex documents, at least 3 sections minimum
+- 8-20 items per major section
 - Mix of field types (not all checkboxes)
-- Specific and actionable items
-- Professional language`;
+- Specific, atomic, and actionable items
+- Professional language
+- EXHAUSTIVE, MAXIMUM COVERAGE approach`;
 
   return prompt;
 }
@@ -274,12 +338,12 @@ async function callAI(prompt, sourceType) {
         messages: [
           { 
             role: 'system', 
-            content: 'You are a project management expert who creates detailed, actionable checklists. Always respond with valid JSON only, no markdown formatting, no code blocks.' 
+            content: 'You are a technical project expert specializing in comprehensive task decomposition. Create exhaustive, detailed checklists with maximum coverage. Always respond with valid JSON only, no markdown formatting, no code blocks.' 
           },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 2000
+        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 16000
       });
       
       response = completion.choices[0].message.content;
@@ -287,7 +351,7 @@ async function callAI(prompt, sourceType) {
     } else if (AI_PROVIDER === 'anthropic') {
       const message = await aiClient.messages.create({
         model: 'claude-3-5-sonnet-20241022',
-        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 2000,
+        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 8000,
         messages: [
           { 
             role: 'user', 
