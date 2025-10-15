@@ -243,15 +243,11 @@ function displayValidationResults(validation) {
  * Jump to specific item in checklist
  */
 function jumpToItem(itemId) {
-  console.log('jumpToItem called with itemId:', itemId);
-  
-  const itemElement = document.querySelector(`[data-item-id="${itemId}"]`) || 
-                      document.querySelector(`[data-template-item-id="${itemId}"]`);
-  
-  console.log('Found element:', itemElement);
+  // Search specifically for checklist items, not buttons
+  const itemElement = document.querySelector(`.checklist-item[data-template-item-id="${itemId}"]`) || 
+                      document.querySelector(`.checklist-item[data-item-id="${itemId}"]`);
   
   if (itemElement) {
-    console.log('Scrolling to element...');
     itemElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
     
     // Add highlight animation
@@ -260,10 +256,6 @@ function jumpToItem(itemId) {
     setTimeout(() => {
       itemElement.classList.remove('ring-4', 'ring-yellow-400');
     }, 3000);
-  } else {
-    console.error('Item element not found for ID:', itemId);
-    console.log('Available elements with data-item-id:', document.querySelectorAll('[data-item-id]'));
-    console.log('Available elements with data-template-item-id:', document.querySelectorAll('[data-template-item-id]'));
   }
 }
 
