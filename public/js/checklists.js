@@ -267,6 +267,18 @@ function setupChecklistFillPageListeners() {
     });
   }
   
+  // Validate button
+  const validateBtn = document.getElementById('validateBtn');
+  if (validateBtn) {
+    validateBtn.addEventListener('click', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const checklistId = urlParams.get('id');
+      if (checklistId) {
+        runValidation(checklistId);
+      }
+    });
+  }
+  
   // Export PDF button
   const exportPdfBtn = document.getElementById('exportPdfBtn');
   if (exportPdfBtn) {
