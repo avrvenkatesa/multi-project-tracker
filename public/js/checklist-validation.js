@@ -66,10 +66,22 @@ function displayValidationResults(validation) {
     panel.id = 'validationPanel';
     panel.className = 'bg-white rounded-lg shadow-lg border border-gray-200 p-6 mb-6';
     
-    // Insert after progress section
-    const progressSection = document.querySelector('.bg-white.rounded-lg.shadow-lg.p-6');
-    if (progressSection) {
+    // Insert after progress section (before checklist sections)
+    const progressSection = document.querySelector('.progress-summary');
+    const sectionsContainer = document.getElementById('checklistSections');
+    
+    if (progressSection && sectionsContainer) {
+      // Insert between progress and sections
       progressSection.after(panel);
+    } else if (sectionsContainer) {
+      // Fallback: insert before sections
+      sectionsContainer.before(panel);
+    } else {
+      // Last resort: append to main content
+      const mainContent = document.querySelector('.main-content') || document.querySelector('main');
+      if (mainContent) {
+        mainContent.insertBefore(panel, mainContent.firstChild);
+      }
     }
   }
   
