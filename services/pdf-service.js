@@ -282,9 +282,9 @@ async function addChecklistContent(doc, checklistData, format, includeComments) 
         doc.addPage();
       }
       
-      // Item checkbox/bullet
+      // Item checkbox/bullet (using safe ASCII characters)
       const isCompleted = !!item.response_value;
-      const symbol = isCompleted ? '☑' : '☐';
+      const symbol = isCompleted ? '[X]' : '[ ]';
       
       doc.fontSize(10)
          .fillColor('#374151')
@@ -293,7 +293,7 @@ async function addChecklistContent(doc, checklistData, format, includeComments) 
       // Item text with checkbox (fixed wrapping)
       const itemY = doc.y;
       doc.text(symbol, 70, itemY);
-      doc.text(item.item_text || item.text, 90, itemY, { width: 450 });
+      doc.text(item.item_text || item.text, 95, itemY, { width: 445 });
       
       // Response value if exists
       if (item.response_value) {
@@ -312,7 +312,7 @@ async function addChecklistContent(doc, checklistData, format, includeComments) 
         doc.fontSize(8)
            .fillColor('#9ca3af')
            .font('Helvetica-Oblique')
-           .text(`💬 ${item.comments.length} comment(s)`, 85, doc.y);
+           .text(`Comments: ${item.comments.length}`, 85, doc.y);
       }
       
       doc.moveDown(0.5);

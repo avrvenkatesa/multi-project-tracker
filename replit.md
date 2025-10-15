@@ -25,9 +25,10 @@ Preferred communication style: Simple, everyday language.
     - Proper page numbering using bufferedPageRange() method
     - Clean metadata matching dashboard reports (Title, Author, Subject, Keywords, Creator, Producer)
     - PDF structure validation (magic bytes %PDF-, trailer %%EOF)
-    - Sanitized filenames (alphanumeric only, YYYY-MM-DD timestamps)
-    - Enhanced HTTP headers (CSP, X-Frame-Options, X-Download-Options)
+    - Simple filenames matching dashboard pattern (checklist-report-{id}-{timestamp}.pdf)
+    - Minimal HTTP headers (exact same as dashboard reports - Content-Type and Content-Disposition only)
     - Standard fonts only (Helvetica, Helvetica-Bold, Helvetica-Oblique)
+    - ASCII-only checkbox symbols ([ ] and [X] instead of Unicode checkboxes)
     - A4 page size for consistency with other reports
   - **Deliverables**: TESTING_PDF_EXPORT.md (comprehensive testing guide with 10 manual test cases)
   - **Files**: services/pdf-service.js, server.js, public/checklist-fill.html, public/js/checklists.js, TESTING_PDF_EXPORT.md
