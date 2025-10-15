@@ -8170,35 +8170,12 @@ app.get('/api/checklists/:id/export/pdf', authenticateToken, async (req, res) =>
       throw new Error('PDF structure is incomplete');
     }
     
-    // Sanitize filename (remove special characters that trigger AV)
-    const sanitizeFilename = (name) => {
-      return name
-        .replace(/[^a-zA-Z0-9_-]/g, '_')
-        .replace(/__+/g, '_')
-        .substring(0, 100);
-    };
+    // Use same simple filename pattern as dashboard reports
+    const filename = `checklist-report-${checklistId}-${Date.now()}.pdf`;
     
-    const checklistName = sanitizeFilename(checklist.title || 'Checklist');
-    const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const filename = `Checklist_${checklistName}_${timestamp}.pdf`;
-    
-    // Set comprehensive security headers
-    res.setHeader('Content-Type', 'application/pdf; charset=utf-8');
+    // Use exact same headers as dashboard reports (minimal, proven to work)
+    res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', pdfBuffer.length);
-    
-    // Security headers to indicate safe download
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Content-Security-Policy', "default-src 'none'");
-    res.setHeader('X-Download-Options', 'noopen');
-    
-    // Cache control
-    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    
-    // Send PDF
     res.send(pdfBuffer);
     
     // Log export
