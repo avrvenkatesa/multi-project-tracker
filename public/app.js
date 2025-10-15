@@ -1102,14 +1102,18 @@ async function renderKanbanBoard() {
                                 </svg>
                                 <span>Copy Link</span>
                             </button>
-                            <button class="generate-checklist-btn flex items-center text-xs text-gray-600 hover:text-blue-600 transition-colors w-full" 
+                            <button class="generate-checklist-btn flex items-center text-xs text-gray-600 hover:text-blue-600 transition-colors w-full group relative" 
                                     data-item-id="${item.id}" 
                                     data-item-type="${item.type || 'issue'}"
-                                    data-item-title="${item.title.replace(/"/g, '&quot;')}">
+                                    data-item-title="${item.title.replace(/"/g, '&quot;')}"
+                                    title="AI will analyze this ${item.type || 'issue'} and create a comprehensive checklist (10-30s)">
                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                                 </svg>
                                 <span>🤖 Generate Checklist</span>
+                                <span class="absolute left-0 bottom-full mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                                    ✨ AI analyzes & creates checklist (Limit: 10/hour)
+                                </span>
                             </button>
                             ${canEdit || canDelete ? `
                                 <div class="flex gap-1 pt-1">
@@ -4113,19 +4117,41 @@ function renderAIChecklistPreview(data) {
   const templateBadge = document.getElementById('ai-checklist-template-badge');
   const sectionsContainer = document.getElementById('ai-checklist-sections');
   
-  // Show checklist title
-  templateBadge.textContent = data.title || 'Generated Checklist';
+  // Calculate total items
+  const totalItems = data.sections.reduce((sum, section) => sum + section.items.length, 0);
   
-  // Render sections and items
-  sectionsContainer.innerHTML = data.sections.map(section => `
-    <div class="border-l-4 border-blue-400 pl-3">
-      <h5 class="font-semibold text-sm text-gray-800 mb-2">${section.title || section.name}</h5>
-      ${section.description ? `<p class="text-xs text-gray-600 mb-2">${section.description}</p>` : ''}
-      <div class="space-y-1">
-        ${section.items.map(item => `
-          <div class="flex items-start text-xs text-gray-700">
-            <span class="text-blue-500 mr-2">•</span>
-            <span>${item.text || item.title}${item.is_required ? ' <span class="text-red-500">*</span>' : ''}</span>
+  // Show checklist title with item count
+  templateBadge.innerHTML = `
+    <span class="flex items-center gap-2">
+      <span>✨ ${data.title || 'Generated Checklist'}</span>
+      <span class="bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full font-semibold">${totalItems} items</span>
+    </span>
+  `;
+  
+  // Render sections and items with enhanced styling
+  sectionsContainer.innerHTML = data.sections.map((section, index) => `
+    <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="flex items-center justify-center w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full">${index + 1}</span>
+          <h5 class="font-semibold text-sm text-gray-900">${section.title || section.name}</h5>
+        </div>
+        <span class="text-xs text-gray-500">${section.items.length} ${section.items.length === 1 ? 'item' : 'items'}</span>
+      </div>
+      
+      ${section.description ? `
+        <p class="text-xs text-gray-600 mb-3 pl-8 italic">${section.description}</p>
+      ` : ''}
+      
+      <div class="space-y-2 pl-8">
+        ${section.items.map((item, itemIndex) => `
+          <div class="flex items-start gap-2 text-sm text-gray-700 group">
+            <span class="text-gray-400 font-mono text-xs mt-0.5">${itemIndex + 1}.</span>
+            <span class="flex-1">
+              ${item.text || item.title}
+              ${item.is_required ? '<span class="text-red-500 font-semibold ml-1" title="Required">*</span>' : ''}
+              ${item.field_type && item.field_type !== 'checkbox' ? `<span class="text-xs text-gray-400 ml-2">(${item.field_type})</span>` : ''}
+            </span>
           </div>
         `).join('')}
       </div>
@@ -4167,26 +4193,39 @@ async function confirmAIChecklistCreation() {
 
 function showTemplatePromotionPrompt(templateId) {
   const promptHtml = `
-    <div id="template-promotion-toast" class="fixed bottom-4 right-4 bg-white rounded-lg shadow-2xl border border-gray-200 p-4 z-50 max-w-md">
+    <div id="template-promotion-toast" class="fixed bottom-4 right-4 bg-white rounded-lg shadow-2xl border-2 border-blue-200 p-5 z-50 max-w-md animate-slide-up">
       <div class="flex items-start gap-3">
         <div class="flex-shrink-0">
-          <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-          </svg>
+          <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+            <span class="text-white text-xl">✨</span>
+          </div>
         </div>
         <div class="flex-1">
-          <h4 class="font-semibold text-gray-800 mb-1">Make this template reusable?</h4>
-          <p class="text-sm text-gray-600 mb-3">This AI-generated template is currently hidden. Promote it to make it available for future use.</p>
+          <h4 class="font-bold text-gray-900 mb-1 flex items-center gap-2">
+            Make this template reusable?
+            <span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-semibold">Recommended</span>
+          </h4>
+          <p class="text-sm text-gray-600 mb-3">Save time on future projects by making this AI template available to your team.</p>
+          
+          <div class="bg-blue-50 rounded-md p-2 mb-3 border border-blue-100">
+            <p class="text-xs text-blue-800 font-medium mb-1">✓ Benefits:</p>
+            <ul class="text-xs text-blue-700 space-y-0.5">
+              <li>• Reuse for similar tasks</li>
+              <li>• Available to all team members</li>
+              <li>• Appears in template library</li>
+            </ul>
+          </div>
+          
           <div class="flex gap-2">
-            <button onclick="promoteTemplate(${templateId})" class="flex-1 bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700">
-              Promote Template
+            <button onclick="promoteTemplate(${templateId})" class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm">
+              ✨ Promote Template
             </button>
-            <button onclick="dismissPromotionPrompt()" class="flex-1 bg-gray-200 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-300">
-              No Thanks
+            <button onclick="dismissPromotionPrompt()" class="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+              Not Now
             </button>
           </div>
         </div>
-        <button onclick="dismissPromotionPrompt()" class="flex-shrink-0 text-gray-400 hover:text-gray-600">
+        <button onclick="dismissPromotionPrompt()" class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors">
           <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
           </svg>
@@ -4197,10 +4236,10 @@ function showTemplatePromotionPrompt(templateId) {
   
   document.body.insertAdjacentHTML('beforeend', promptHtml);
   
-  // Auto-dismiss after 15 seconds
+  // Auto-dismiss after 20 seconds
   setTimeout(() => {
     dismissPromotionPrompt();
-  }, 15000);
+  }, 20000);
 }
 
 async function promoteTemplate(templateId) {
@@ -4242,6 +4281,12 @@ document.getElementById('cancel-ai-checklist-btn').addEventListener('click', fun
   currentAIChecklistData = null;
 });
 
+// Cancel button from error state
+document.getElementById('cancel-error-ai-checklist-btn').addEventListener('click', function() {
+  document.getElementById('ai-checklist-modal').classList.add('hidden');
+  currentAIChecklistData = null;
+});
+
 document.getElementById('retry-ai-checklist-btn').addEventListener('click', function() {
   if (currentAIChecklistData) {
     openAIChecklistModal(
@@ -4254,5 +4299,32 @@ document.getElementById('retry-ai-checklist-btn').addEventListener('click', func
 
 document.getElementById('create-ai-checklist-btn').addEventListener('click', function() {
   confirmAIChecklistCreation();
+});
+
+// Keyboard shortcuts for AI checklist modal
+document.addEventListener('keydown', function(e) {
+  const modal = document.getElementById('ai-checklist-modal');
+  const isModalOpen = !modal.classList.contains('hidden');
+  
+  if (!isModalOpen) return;
+  
+  // Escape key - close modal
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    modal.classList.add('hidden');
+    currentAIChecklistData = null;
+  }
+  
+  // Enter key - confirm creation (only in preview state)
+  if (e.key === 'Enter' && !document.getElementById('ai-checklist-preview').classList.contains('hidden')) {
+    e.preventDefault();
+    confirmAIChecklistCreation();
+  }
+  
+  // R key - retry (only in error state)
+  if ((e.key === 'r' || e.key === 'R') && !document.getElementById('ai-checklist-error').classList.contains('hidden')) {
+    e.preventDefault();
+    document.getElementById('retry-ai-checklist-btn').click();
+  }
 });
 
