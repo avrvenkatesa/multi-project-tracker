@@ -7326,6 +7326,7 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
     const itemsResult = await pool.query(
       `SELECT 
         cti.id as item_id,
+        cti.id as template_item_id,
         cti.section_id,
         cti.item_text,
         cti.field_type,
