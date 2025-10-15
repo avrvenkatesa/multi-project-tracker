@@ -3702,6 +3702,9 @@ async function openEditModal(itemId, itemType) {
       // Load tags and pre-select current ones
       await loadTagsForEditIssue(item.id);
       
+      // Load attachments
+      await loadEditAttachments(item.id, 'issue');
+      
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
     } else {
@@ -3721,6 +3724,9 @@ async function openEditModal(itemId, itemType) {
       
       // Load tags and pre-select current ones
       await loadTagsForEditActionItem(item.id);
+      
+      // Load attachments
+      await loadEditAttachments(item.id, 'action-item');
       
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
@@ -3915,6 +3921,115 @@ async function loadTeamMembersForEdit(type, currentAssignee = '') {
     });
   } catch (error) {
     console.error('Error loading team members:', error);
+  }
+}
+
+// Load attachments for edit modals
+async function loadEditAttachments(itemId, itemType) {
+  try {
+    const entityType = itemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${entityType}/${itemId}/attachments`, { withCredentials: true });
+    
+    const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
+    const attachmentsList = document.getElementById(`${prefix}-attachments-list`);
+    const attachments = response.data;
+    
+    if (attachments.length === 0) {
+      attachmentsList.innerHTML = '<p class="text-sm text-gray-500 italic">No attachments yet</p>';
+    } else {
+      attachmentsList.innerHTML = attachments.map(att => `
+        <div class="flex items-center justify-between p-2 border rounded hover:bg-gray-50">
+          <div class="flex items-center space-x-2 flex-1 min-w-0">
+            <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+            </svg>
+            <span class="text-sm truncate">${att.file_name}</span>
+            <span class="text-xs text-gray-400">(${formatFileSize(att.file_size)})</span>
+          </div>
+          <div class="flex items-center space-x-2 flex-shrink-0">
+            <button type="button" onclick="downloadAttachment(${att.id}, '${att.file_name}')" 
+                    class="text-blue-600 hover:text-blue-800 p-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+            </button>
+            <button type="button" onclick="deleteEditAttachment(${att.id}, ${itemId}, '${itemType}')" 
+                    class="text-red-600 hover:text-red-800 p-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (error) {
+    console.error('Error loading attachments:', error);
+    const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
+    document.getElementById(`${prefix}-attachments-list`).innerHTML = 
+      '<p class="text-sm text-red-500">Failed to load attachments</p>';
+  }
+}
+
+// Download attachment
+async function downloadAttachment(attachmentId, fileName) {
+  try {
+    const response = await axios.get(`/api/attachments/${attachmentId}/download`, {
+      withCredentials: true,
+      responseType: 'blob'
+    });
+    
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Error downloading attachment:', error);
+    alert('Failed to download attachment');
+  }
+}
+
+// Delete attachment from edit modal
+async function deleteEditAttachment(attachmentId, itemId, itemType) {
+  if (!confirm('Are you sure you want to delete this attachment?')) {
+    return;
+  }
+  
+  try {
+    await axios.delete(`/api/attachments/${attachmentId}`, { withCredentials: true });
+    await loadEditAttachments(itemId, itemType);
+    showToast('Attachment deleted successfully', 'success');
+  } catch (error) {
+    console.error('Error deleting attachment:', error);
+    alert('Failed to delete attachment');
+  }
+}
+
+// Upload attachment from edit modal
+async function uploadEditAttachment(files, itemId, itemType) {
+  if (!files || files.length === 0) return;
+  
+  const formData = new FormData();
+  Array.from(files).forEach(file => {
+    formData.append('files', file);
+  });
+  
+  try {
+    const entityType = itemType === 'issue' ? 'issues' : 'action-items';
+    await axios.post(`/api/${entityType}/${itemId}/attachments`, formData, {
+      withCredentials: true,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    
+    await loadEditAttachments(itemId, itemType);
+    showToast('Files uploaded successfully', 'success');
+  } catch (error) {
+    console.error('Error uploading attachments:', error);
+    alert(error.response?.data?.error || 'Failed to upload files');
   }
 }
 
@@ -4517,6 +4632,31 @@ document.addEventListener('keydown', function(e) {
   if ((e.key === 'r' || e.key === 'R') && !document.getElementById('ai-checklist-error').classList.contains('hidden')) {
     e.preventDefault();
     document.getElementById('retry-ai-checklist-btn').click();
+  }
+});
+
+// Event listeners for edit modal attachment uploads
+document.getElementById('edit-issue-upload-btn')?.addEventListener('click', function() {
+  document.getElementById('edit-issue-file-input').click();
+});
+
+document.getElementById('edit-issue-file-input')?.addEventListener('change', async function(e) {
+  const itemId = document.getElementById('edit-issue-id').value;
+  if (itemId && e.target.files.length > 0) {
+    await uploadEditAttachment(e.target.files, itemId, 'issue');
+    e.target.value = '';
+  }
+});
+
+document.getElementById('edit-action-item-upload-btn')?.addEventListener('click', function() {
+  document.getElementById('edit-action-item-file-input').click();
+});
+
+document.getElementById('edit-action-item-file-input')?.addEventListener('change', async function(e) {
+  const itemId = document.getElementById('edit-action-item-id').value;
+  if (itemId && e.target.files.length > 0) {
+    await uploadEditAttachment(e.target.files, itemId, 'action-item');
+    e.target.value = '';
   }
 });
 
