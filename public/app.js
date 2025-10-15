@@ -1102,6 +1102,15 @@ async function renderKanbanBoard() {
                                 </svg>
                                 <span>Copy Link</span>
                             </button>
+                            <button class="generate-checklist-btn flex items-center text-xs text-gray-600 hover:text-blue-600 transition-colors w-full" 
+                                    data-item-id="${item.id}" 
+                                    data-item-type="${item.type || 'issue'}"
+                                    data-item-title="${item.title.replace(/"/g, '&quot;')}">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                </svg>
+                                <span>🤖 Generate Checklist</span>
+                            </button>
                             ${canEdit || canDelete ? `
                                 <div class="flex gap-1 pt-1">
                                     ${canEdit ? `
@@ -1181,6 +1190,17 @@ async function renderKanbanBoard() {
                     const itemId = parseInt(this.getAttribute('data-item-id'));
                     const itemType = this.getAttribute('data-item-type');
                     copyItemLink(itemId, itemType);
+                });
+            });
+            
+            // Add generate checklist button listeners
+            container.querySelectorAll('.generate-checklist-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent drag start and card click
+                    const itemId = parseInt(this.getAttribute('data-item-id'));
+                    const itemType = this.getAttribute('data-item-type');
+                    const itemTitle = this.getAttribute('data-item-title');
+                    openAIChecklistModal(itemId, itemType, itemTitle);
                 });
             });
             
@@ -4034,4 +4054,140 @@ function showToast(message, type = 'info') {
     toast.remove();
   }, 3000);
 }
+
+// AI Checklist Generation
+let currentAIChecklistData = null;
+
+async function openAIChecklistModal(itemId, itemType, itemTitle) {
+  const modal = document.getElementById('ai-checklist-modal');
+  const loadingEl = document.getElementById('ai-checklist-loading');
+  const errorEl = document.getElementById('ai-checklist-error');
+  const previewEl = document.getElementById('ai-checklist-preview');
+  const titleEl = document.getElementById('ai-checklist-item-title');
+  
+  // Reset state
+  currentAIChecklistData = { itemId, itemType, itemTitle };
+  loadingEl.classList.add('hidden');
+  errorEl.classList.add('hidden');
+  previewEl.classList.add('hidden');
+  
+  // Set title
+  titleEl.textContent = `Generating checklist for: ${itemTitle}`;
+  
+  // Show modal and loading
+  modal.classList.remove('hidden');
+  loadingEl.classList.remove('hidden');
+  
+  // Call API to generate checklist
+  try {
+    const endpoint = itemType === 'issue' 
+      ? `/api/checklists/generate-from-issue` 
+      : `/api/checklists/generate-from-action`;
+    
+    const response = await axios.post(endpoint, {
+      [itemType === 'issue' ? 'issue_id' : 'action_item_id']: itemId,
+      project_id: currentProject.id
+    }, { withCredentials: true });
+    
+    // Store the generated data
+    currentAIChecklistData = {
+      ...currentAIChecklistData,
+      template: response.data.template,
+      sections: response.data.sections,
+      generationId: response.data.generation_id
+    };
+    
+    // Show preview
+    loadingEl.classList.add('hidden');
+    renderAIChecklistPreview(response.data);
+    previewEl.classList.remove('hidden');
+    
+  } catch (error) {
+    loadingEl.classList.add('hidden');
+    
+    const errorMessage = error.response?.data?.error || 'Failed to generate checklist';
+    document.getElementById('ai-checklist-error-message').textContent = errorMessage;
+    errorEl.classList.remove('hidden');
+  }
+}
+
+function renderAIChecklistPreview(data) {
+  const templateBadge = document.getElementById('ai-checklist-template-badge');
+  const sectionsContainer = document.getElementById('ai-checklist-sections');
+  
+  // Show template info
+  templateBadge.textContent = `Template: ${data.template.name}`;
+  
+  // Render sections and items
+  sectionsContainer.innerHTML = data.sections.map(section => `
+    <div class="border-l-4 border-blue-400 pl-3">
+      <h5 class="font-semibold text-sm text-gray-800 mb-2">${section.name}</h5>
+      ${section.description ? `<p class="text-xs text-gray-600 mb-2">${section.description}</p>` : ''}
+      <div class="space-y-1">
+        ${section.items.map(item => `
+          <div class="flex items-start text-xs text-gray-700">
+            <span class="text-blue-500 mr-2">•</span>
+            <span>${item.title}${item.is_required ? ' <span class="text-red-500">*</span>' : ''}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function confirmAIChecklistCreation() {
+  if (!currentAIChecklistData?.generationId) {
+    showToast('No checklist data available', 'error');
+    return;
+  }
+  
+  try {
+    const response = await axios.post('/api/checklists/confirm-generated', {
+      generation_id: currentAIChecklistData.generationId,
+      project_id: currentProject.id,
+      [currentAIChecklistData.itemType === 'issue' ? 'issue_id' : 'action_item_id']: 
+        currentAIChecklistData.itemId
+    }, { withCredentials: true });
+    
+    // Close modal and show success
+    document.getElementById('ai-checklist-modal').classList.add('hidden');
+    showToast('AI Checklist created successfully!', 'success');
+    
+    // Optionally navigate to checklists page
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectParam = urlParams.get('project') || urlParams.get('projectId');
+    if (projectParam) {
+      window.location.href = `/checklists.html?project=${projectParam}`;
+    }
+    
+  } catch (error) {
+    console.error('Error confirming checklist:', error);
+    showToast(error.response?.data?.error || 'Failed to create checklist', 'error');
+  }
+}
+
+// Event listeners for AI checklist modal
+document.getElementById('close-ai-checklist-modal-btn').addEventListener('click', function() {
+  document.getElementById('ai-checklist-modal').classList.add('hidden');
+  currentAIChecklistData = null;
+});
+
+document.getElementById('cancel-ai-checklist-btn').addEventListener('click', function() {
+  document.getElementById('ai-checklist-modal').classList.add('hidden');
+  currentAIChecklistData = null;
+});
+
+document.getElementById('retry-ai-checklist-btn').addEventListener('click', function() {
+  if (currentAIChecklistData) {
+    openAIChecklistModal(
+      currentAIChecklistData.itemId,
+      currentAIChecklistData.itemType,
+      currentAIChecklistData.itemTitle
+    );
+  }
+});
+
+document.getElementById('create-ai-checklist-btn').addEventListener('click', function() {
+  confirmAIChecklistCreation();
+});
 

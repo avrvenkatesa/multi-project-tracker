@@ -767,6 +767,80 @@
                     </div>
                 </div>
             </div>
+
+            <!-- AI Checklist Generation Modal -->
+            <div id="ai-checklist-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-center justify-between p-6 border-b">
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800">🤖 AI Checklist Generation</h3>
+                            <p class="text-xs text-gray-500 mt-1" id="ai-checklist-item-title"></p>
+                        </div>
+                        <button id="close-ai-checklist-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                    </div>
+                    
+                    <div class="p-6">
+                        <!-- Loading State -->
+                        <div id="ai-checklist-loading" class="hidden text-center py-8">
+                            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                            <p class="text-sm text-gray-600 mt-3 font-medium">Generating checklist with AI...</p>
+                            <p class="text-xs text-gray-500 mt-1">This may take 10-30 seconds</p>
+                        </div>
+
+                        <!-- Error State -->
+                        <div id="ai-checklist-error" class="hidden">
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                                <div class="flex items-start">
+                                    <svg class="w-5 h-5 text-red-500 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <div>
+                                        <p class="text-sm font-medium text-red-800">Generation Failed</p>
+                                        <p id="ai-checklist-error-message" class="text-xs text-red-600 mt-1"></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="retry-ai-checklist-btn" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">
+                                Try Again
+                            </button>
+                        </div>
+
+                        <!-- Success State - Preview -->
+                        <div id="ai-checklist-preview" class="hidden">
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                <div class="flex items-start">
+                                    <svg class="w-5 h-5 text-green-500 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-green-800">Checklist Generated!</p>
+                                        <p class="text-xs text-green-600 mt-1">Review the checklist below and create it when ready</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="border rounded-lg p-4 mb-4 bg-gray-50">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="font-semibold text-gray-800">Generated Checklist</h4>
+                                    <span id="ai-checklist-template-badge" class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full"></span>
+                                </div>
+                                <div id="ai-checklist-sections" class="space-y-3 max-h-96 overflow-y-auto">
+                                    <!-- Sections and items will be rendered here -->
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button id="cancel-ai-checklist-btn" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300">
+                                    Cancel
+                                </button>
+                                <button id="create-ai-checklist-btn" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">
+                                    Create Checklist
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Edit Project Modal -->
