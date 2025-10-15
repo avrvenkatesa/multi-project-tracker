@@ -1,0 +1,1492 @@
+CONTEXT:
+Phase 2a - Prompt 3 of 3 (FINAL). AI Checklist Generation (Prompt 1) and PDF Export (Prompt 2) are complete. Now implementing intelligent validation to ensure checklist quality before approval.
+
+TASK:
+Add AI-assisted validation system that checks checklist completeness, flags issues, calculates quality scores, and provides actionable recommendations before approval.
+
+ESTIMATED TIME: 3-4 hours
+
+---
+
+## REQUIREMENTS
+
+### 1. Database Schema Updates
+
+**Add validation tracking table:**
+```sql
+-- Track validation runs
+CREATE TABLE IF NOT EXISTS checklist_validations (
+  id SERIAL PRIMARY KEY,
+  checklist_id INTEGER REFERENCES checklists(id) ON DELETE CASCADE,
+  
+  -- Validation results
+  is_valid BOOLEAN DEFAULT false,
+  quality_score INTEGER, -- 0-100
+  
+  -- Score breakdown
+  completeness_score INTEGER,
+  consistency_score INTEGER,
+  quality_rating INTEGER,
+  
+  -- Issues found
+  error_count INTEGER DEFAULT 0,
+  warning_count INTEGER DEFAULT 0,
+  
+  -- Validation details
+  errors JSONB, -- Array of error objects
+  warnings JSONB, -- Array of warning objects
+  recommendations TEXT[],
+  
+  -- Metadata
+  validated_by INTEGER REFERENCES users(id),
+  validated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  validation_type VARCHAR(50) DEFAULT 'manual' -- 'manual', 'auto', 'pre-approval'
+);
+
+CREATE INDEX idx_checklist_validations ON checklist_validations(checklist_id, validated_at DESC);
+
+-- Add validation status to checklists
+ALTER TABLE checklists 
+ADD COLUMN IF NOT EXISTS last_validation_score INTEGER,
+ADD COLUMN IF NOT EXISTS last_validated_at TIMESTAMP,
+ADD COLUMN IF NOT EXISTS validation_status VARCHAR(50) DEFAULT 'not-validated'; 
+-- 'not-validated', 'passed', 'failed', 'warnings'
+
+COMMENT ON COLUMN checklists.validation_status IS 'Current validation state';
+```
+
+### 2. Create Validation Service
+
+**Create new file: server/validation-service.js**
+```javascript
+/**
+ * Validation Service - AI-Assisted Checklist Validation
+ */
+
+/**
+ * Validate checklist completeness and quality
+ */
+async function validateChecklist(checklistData) {
+  const errors = [];
+  const warnings = [];
+  const recommendations = [];
+  
+  // 1. Required Fields Validation
+  const requiredValidation = validateRequiredFields(checklistData);
+  errors.push(...requiredValidation.errors);
+  warnings.push(...requiredValidation.warnings);
+  
+  // 2. Consistency Validation
+  const consistencyValidation = validateConsistency(checklistData);
+  errors.push(...consistencyValidation.errors);
+  warnings.push(...consistencyValidation.warnings);
+  
+  // 3. Quality Checks
+  const qualityValidation = validateQuality(checklistData);
+  warnings.push(...qualityValidation.warnings);
+  recommendations.push(...qualityValidation.recommendations);
+  
+  // 4. Calculate Quality Score
+  const qualityScore = calculateQualityScore(checklistData, errors, warnings);
+  
+  // 5. Determine if valid
+  const isValid = errors.length === 0 && qualityScore.total >= 60;
+  
+  return {
+    is_valid: isValid,
+    quality_score: qualityScore.total,
+    completeness_score: qualityScore.completeness,
+    consistency_score: qualityScore.consistency,
+    quality_rating: qualityScore.quality,
+    error_count: errors.length,
+    warning_count: warnings.length,
+    errors: errors,
+    warnings: warnings,
+    recommendations: recommendations
+  };
+}
+
+/**
+ * Validate required fields are completed
+ */
+function validateRequiredFields(checklistData) {
+  const errors = [];
+  const warnings = [];
+  
+  const requiredItems = checklistData.items.filter(item => item.is_required);
+  const missingRequired = requiredItems.filter(item => !item.response_value);
+  
+  if (missingRequired.length > 0) {
+    missingRequired.forEach(item => {
+      errors.push({
+        type: 'required_field',
+        severity: 'error',
+        section: item.section_title,
+        item: item.item_text,
+        item_id: item.id,
+        message: 'Required field not completed',
+        suggestion: 'Please provide a response for this required item'
+      });
+    });
+  }
+  
+  // Warn about optional fields
+  const optionalItems = checklistData.items.filter(item => !item.is_required);
+  const missingOptional = optionalItems.filter(item => !item.response_value);
+  
+  if (missingOptional.length > optionalItems.length * 0.3) {
+    warnings.push({
+      type: 'optional_incomplete',
+      severity: 'warning',
+      section: 'General',
+      message: `${missingOptional.length} optional items not completed`,
+      suggestion: 'Consider completing more optional items for thoroughness'
+    });
+  }
+  
+  return { errors, warnings };
+}
+
+/**
+ * Validate consistency across responses
+ */
+function validateConsistency(checklistData) {
+  const errors = [];
+  const warnings = [];
+  
+  // 1. Date consistency checks
+  const dateItems = checklistData.items.filter(item => item.field_type === 'date' && item.response_value);
+  
+  dateItems.forEach(item => {
+    try {
+      const date = new Date(item.response_value);
+      const now = new Date();
+      
+      // Dates in far future (>5 years)
+      if (date > new Date(now.getFullYear() + 5, now.getMonth(), now.getDate())) {
+        warnings.push({
+          type: 'date_future',
+          severity: 'warning',
+          section: item.section_title,
+          item: item.item_text,
+          item_id: item.id,
+          message: 'Date is more than 5 years in the future',
+          suggestion: 'Verify this date is correct'
+        });
+      }
+      
+      // Dates in far past (>10 years ago)
+      if (date < new Date(now.getFullYear() - 10, now.getMonth(), now.getDate())) {
+        warnings.push({
+          type: 'date_past',
+          severity: 'warning',
+          section: item.section_title,
+          item: item.item_text,
+          item_id: item.id,
+          message: 'Date is more than 10 years in the past',
+          suggestion: 'Verify this date is correct'
+        });
+      }
+      
+      // Invalid dates
+      if (isNaN(date.getTime())) {
+        errors.push({
+          type: 'invalid_date',
+          severity: 'error',
+          section: item.section_title,
+          item: item.item_text,
+          item_id: item.id,
+          message: 'Invalid date format',
+          suggestion: 'Enter a valid date in YYYY-MM-DD format'
+        });
+      }
+    } catch (e) {
+      errors.push({
+        type: 'invalid_date',
+        severity: 'error',
+        section: item.section_title,
+        item: item.item_text,
+        item_id: item.id,
+        message: 'Date could not be parsed',
+        suggestion: 'Enter a valid date'
+      });
+    }
+  });
+  
+  // 2. Text field length checks
+  const textItems = checklistData.items.filter(item => 
+    (item.field_type === 'text' || item.field_type === 'textarea') && 
+    item.response_value
+  );
+  
+  textItems.forEach(item => {
+    const length = item.response_value.length;
+    
+    // Too short responses (likely incomplete)
+    if (item.field_type === 'textarea' && length < 10) {
+      warnings.push({
+        type: 'response_too_short',
+        severity: 'warning',
+        section: item.section_title,
+        item: item.item_text,
+        item_id: item.id,
+        message: 'Response seems too brief',
+        suggestion: 'Consider providing more detail'
+      });
+    }
+    
+    // Suspiciously long responses
+    if (length > 5000) {
+      warnings.push({
+        type: 'response_too_long',
+        severity: 'warning',
+        section: item.section_title,
+        item: item.item_text,
+        item_id: item.id,
+        message: 'Response is very long',
+        suggestion: 'Consider summarizing or breaking into sections'
+      });
+    }
+    
+    // Placeholder text detection
+    const placeholders = ['todo', 'tbd', 'pending', 'n/a', 'none', 'test', 'xxx'];
+    const lowerResponse = item.response_value.toLowerCase().trim();
+    
+    if (placeholders.includes(lowerResponse)) {
+      warnings.push({
+        type: 'placeholder_text',
+        severity: 'warning',
+        section: item.section_title,
+        item: item.item_text,
+        item_id: item.id,
+        message: 'Response appears to be placeholder text',
+        suggestion: 'Replace with actual information'
+      });
+    }
+  });
+  
+  // 3. Section completion consistency
+  const sections = {};
+  checklistData.items.forEach(item => {
+    if (!sections[item.section_title]) {
+      sections[item.section_title] = { total: 0, completed: 0 };
+    }
+    sections[item.section_title].total++;
+    if (item.response_value) {
+      sections[item.section_title].completed++;
+    }
+  });
+  
+  Object.entries(sections).forEach(([sectionTitle, stats]) => {
+    const completionRate = stats.completed / stats.total;
+    
+    // Section barely started
+    if (completionRate > 0 && completionRate < 0.25) {
+      warnings.push({
+        type: 'section_incomplete',
+        severity: 'warning',
+        section: sectionTitle,
+        message: `Section only ${Math.round(completionRate * 100)}% complete`,
+        suggestion: 'Complete more items in this section before submitting'
+      });
+    }
+  });
+  
+  return { errors, warnings };
+}
+
+/**
+ * Quality checks and recommendations
+ */
+function validateQuality(checklistData) {
+  const warnings = [];
+  const recommendations = [];
+  
+  // 1. Check for items with comments
+  const itemsWithComments = checklistData.items.filter(item => 
+    item.comments && item.comments.length > 0
+  );
+  
+  if (itemsWithComments.length === 0 && checklistData.items.length > 20) {
+    recommendations.push('Consider adding comments to clarify responses or provide context');
+  }
+  
+  // 2. Check completion time
+  const createdAt = new Date(checklistData.created_at);
+  const now = new Date();
+  const hoursSinceCreation = (now - createdAt) / (1000 * 60 * 60);
+  
+  if (hoursSinceCreation < 0.5 && checklistData.items.length > 50) {
+    warnings.push({
+      type: 'completed_too_quickly',
+      severity: 'warning',
+      section: 'General',
+      message: 'Checklist completed in less than 30 minutes',
+      suggestion: 'Verify all responses are accurate and thorough'
+    });
+  }
+  
+  // 3. Check for AI-generated checklist quality
+  if (checklistData.is_ai_generated) {
+    const aiRecommendations = validateAIGeneratedChecklist(checklistData);
+    recommendations.push(...aiRecommendations);
+  }
+  
+  // 4. Overall completion recommendations
+  const completionRate = (checklistData.completed_items / checklistData.total_items) * 100;
+  
+  if (completionRate < 50) {
+    recommendations.push('Complete at least 50% of items before requesting approval');
+  } else if (completionRate < 80) {
+    recommendations.push('Aim for 80%+ completion for best quality assurance');
+  } else if (completionRate === 100) {
+    recommendations.push('Excellent! All items completed. Ready for review.');
+  }
+  
+  return { warnings, recommendations };
+}
+
+/**
+ * Validate AI-generated checklists
+ */
+function validateAIGeneratedChecklist(checklistData) {
+  const recommendations = [];
+  
+  // Check if responses align with AI-generated structure
+  recommendations.push('This checklist was AI-generated. Verify all items are relevant to your use case.');
+  
+  // Check if using attachment-based generation
+  if (checklistData.generation_source && checklistData.used_attachments > 0) {
+    recommendations.push('Review items generated from attachments for accuracy.');
+  }
+  
+  return recommendations;
+}
+
+/**
+ * Calculate quality score (0-100)
+ */
+function calculateQualityScore(checklistData, errors, warnings) {
+  const totalItems = checklistData.total_items;
+  const completedItems = checklistData.completed_items;
+  const requiredItems = checklistData.items.filter(item => item.is_required).length;
+  const completedRequired = checklistData.items.filter(item => 
+    item.is_required && item.response_value
+  ).length;
+  
+  // 1. Completeness Score (50% weight)
+  // Based on required items completion
+  let completenessScore = 0;
+  if (requiredItems > 0) {
+    completenessScore = (completedRequired / requiredItems) * 100;
+  } else {
+    // If no required items, use overall completion
+    completenessScore = (completedItems / totalItems) * 100;
+  }
+  
+  // 2. Consistency Score (30% weight)
+  // Based on errors and warnings
+  let consistencyScore = 100;
+  consistencyScore -= (errors.length * 10); // Each error: -10 points
+  consistencyScore -= (warnings.length * 3); // Each warning: -3 points
+  consistencyScore = Math.max(0, consistencyScore);
+  
+  // 3. Quality Rating (20% weight)
+  // Based on detail and thoroughness
+  let qualityRating = 50; // Base score
+  
+  // Bonus for comments
+  const itemsWithComments = checklistData.items.filter(item => 
+    item.comments && item.comments.length > 0
+  ).length;
+  qualityRating += Math.min(20, itemsWithComments * 2);
+  
+  // Bonus for detailed responses (textarea fields)
+  const detailedResponses = checklistData.items.filter(item => 
+    item.field_type === 'textarea' && 
+    item.response_value && 
+    item.response_value.length > 50
+  ).length;
+  qualityRating += Math.min(15, detailedResponses * 3);
+  
+  // Penalty for placeholder text
+  const placeholderCount = warnings.filter(w => w.type === 'placeholder_text').length;
+  qualityRating -= (placeholderCount * 5);
+  
+  qualityRating = Math.max(0, Math.min(100, qualityRating));
+  
+  // 4. Calculate total score (weighted average)
+  const totalScore = Math.round(
+    (completenessScore * 0.5) +
+    (consistencyScore * 0.3) +
+    (qualityRating * 0.2)
+  );
+  
+  return {
+    total: Math.max(0, Math.min(100, totalScore)),
+    completeness: Math.round(completenessScore),
+    consistency: Math.round(consistencyScore),
+    quality: Math.round(qualityRating)
+  };
+}
+
+/**
+ * Get validation status text
+ */
+function getValidationStatus(score, errorCount) {
+  if (errorCount > 0) return 'failed';
+  if (score >= 80) return 'passed';
+  if (score >= 60) return 'warnings';
+  return 'failed';
+}
+
+module.exports = {
+  validateChecklist,
+  getValidationStatus
+};
+```
+
+### 3. API Endpoints
+
+**Add to server.js:**
+```javascript
+const { validateChecklist, getValidationStatus } = require('./server/validation-service');
+
+// ========================================
+// VALIDATION ENDPOINTS
+// ========================================
+
+// POST /api/checklists/:id/validate - Run validation
+app.post('/api/checklists/:id/validate', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    const { validation_type = 'manual' } = req.body;
+    
+    // Get checklist with all items and responses
+    const checklistResult = await pool.query(
+      `SELECT 
+        c.*,
+        (SELECT COUNT(*) FROM checklist_responses cr
+         INNER JOIN checklist_template_items cti ON cr.item_id = cti.id
+         WHERE cr.checklist_id = c.id AND cr.response_value IS NOT NULL) as completed_items
+      FROM checklists c
+      WHERE c.id = $1`,
+      [checklistId]
+    );
+    
+    if (checklistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    const checklist = checklistResult.rows[0];
+    
+    // Check access
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [checklist.project_id, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get all items with responses
+    const itemsResult = await pool.query(
+      `SELECT 
+        cti.id,
+        cti.item_text,
+        cti.field_type,
+        cti.is_required,
+        cts.title as section_title,
+        cts.section_number,
+        cr.response_value,
+        (SELECT json_agg(json_build_object(
+          'user', u.name,
+          'comment', cc.comment_text
+        ))
+        FROM checklist_comments cc
+        LEFT JOIN users u ON cc.user_id = u.id
+        WHERE cc.checklist_id = $1 AND cc.item_id = cti.id) as comments
+      FROM checklist_template_items cti
+      INNER JOIN checklist_template_sections cts ON cti.section_id = cts.id
+      LEFT JOIN checklist_responses cr ON cr.item_id = cti.id AND cr.checklist_id = $1
+      WHERE cts.template_id = $2
+      ORDER BY cts.display_order, cti.display_order`,
+      [checklistId, checklist.template_id]
+    );
+    
+    checklist.items = itemsResult.rows;
+    
+    // Run validation
+    const validationResult = await validateChecklist(checklist);
+    
+    // Save validation to database
+    const validationStatus = getValidationStatus(
+      validationResult.quality_score, 
+      validationResult.error_count
+    );
+    
+    await pool.query(
+      `INSERT INTO checklist_validations (
+        checklist_id, is_valid, quality_score,
+        completeness_score, consistency_score, quality_rating,
+        error_count, warning_count, errors, warnings, recommendations,
+        validated_by, validation_type
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [
+        checklistId,
+        validationResult.is_valid,
+        validationResult.quality_score,
+        validationResult.completeness_score,
+        validationResult.consistency_score,
+        validationResult.quality_rating,
+        validationResult.error_count,
+        validationResult.warning_count,
+        JSON.stringify(validationResult.errors),
+        JSON.stringify(validationResult.warnings),
+        validationResult.recommendations,
+        userId,
+        validation_type
+      ]
+    );
+    
+    // Update checklist validation status
+    await pool.query(
+      `UPDATE checklists 
+       SET last_validation_score = $1,
+           last_validated_at = CURRENT_TIMESTAMP,
+           validation_status = $2
+       WHERE id = $3`,
+      [validationResult.quality_score, validationStatus, checklistId]
+    );
+    
+    res.json(validationResult);
+    
+  } catch (error) {
+    console.error('Validation error:', error);
+    res.status(500).json({ 
+      error: 'Validation failed',
+      message: error.message 
+    });
+  }
+});
+
+// GET /api/checklists/:id/quality-score - Get quality score
+app.get('/api/checklists/:id/quality-score', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    
+    // Get checklist
+    const checklistResult = await pool.query(
+      `SELECT c.*, p.id as project_id
+       FROM checklists c
+       LEFT JOIN projects p ON c.project_id = p.id
+       WHERE c.id = $1`,
+      [checklistId]
+    );
+    
+    if (checklistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    const checklist = checklistResult.rows[0];
+    
+    // Check access
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [checklist.project_id, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get latest validation
+    const validationResult = await pool.query(
+      `SELECT * FROM checklist_validations
+       WHERE checklist_id = $1
+       ORDER BY validated_at DESC
+       LIMIT 1`,
+      [checklistId]
+    );
+    
+    if (validationResult.rows.length === 0) {
+      return res.json({
+        has_validation: false,
+        message: 'No validation run yet. Click "Validate" to check quality.'
+      });
+    }
+    
+    const validation = validationResult.rows[0];
+    
+    res.json({
+      has_validation: true,
+      score: validation.quality_score,
+      breakdown: {
+        completeness: validation.completeness_score,
+        consistency: validation.consistency_score,
+        quality: validation.quality_rating
+      },
+      status: checklist.validation_status,
+      is_valid: validation.is_valid,
+      error_count: validation.error_count,
+      warning_count: validation.warning_count,
+      validated_at: validation.validated_at
+    });
+    
+  } catch (error) {
+    console.error('Quality score fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch quality score' });
+  }
+});
+
+// GET /api/checklists/:id/validation-history - Get validation history
+app.get('/api/checklists/:id/validation-history', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    
+    // Check access (simplified)
+    const checklist = await pool.query(
+      'SELECT project_id FROM checklists WHERE id = $1',
+      [checklistId]
+    );
+    
+    if (checklist.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [checklist.rows[0].project_id, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get validation history
+    const history = await pool.query(
+      `SELECT 
+        cv.*,
+        u.name as validated_by_name
+       FROM checklist_validations cv
+       LEFT JOIN users u ON cv.validated_by = u.id
+       WHERE cv.checklist_id = $1
+       ORDER BY cv.validated_at DESC
+       LIMIT 10`,
+      [checklistId]
+    );
+    
+    res.json(history.rows);
+    
+  } catch (error) {
+    console.error('Validation history error:', error);
+    res.status(500).json({ error: 'Failed to fetch validation history' });
+  }
+});
+```
+
+### 4. Frontend Implementation
+
+**Create public/js/checklist-validation.js:**
+```javascript
+/**
+ * Checklist Validation Functions
+ */
+
+let currentValidation = null;
+
+/**
+ * Run validation on checklist
+ */
+async function runValidation(checklistId) {
+  try {
+    // Show loading
+    const validateBtn = document.getElementById('validateBtn');
+    const originalText = validateBtn.innerHTML;
+    validateBtn.disabled = true;
+    validateBtn.innerHTML = '⏳ Validating...';
+    
+    // Run validation
+    const response = await fetch(`/api/checklists/${checklistId}/validate`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ validation_type: 'manual' })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Validation failed');
+    }
+    
+    currentValidation = await response.json();
+    
+    // Show results
+    displayValidationResults(currentValidation);
+    
+    // Update quality badge
+    updateQualityBadge(currentValidation.quality_score);
+    
+    // Restore button
+    validateBtn.disabled = false;
+    validateBtn.innerHTML = originalText;
+    
+    showToast('✅ Validation complete!', 'success');
+    
+  } catch (error) {
+    console.error('Validation error:', error);
+    showToast(`❌ Validation failed: ${error.message}`, 'error');
+    
+    const validateBtn = document.getElementById('validateBtn');
+    if (validateBtn) {
+      validateBtn.disabled = false;
+      validateBtn.innerHTML = '✅ Validate';
+    }
+  }
+}
+
+/**
+ * Display validation results
+ */
+function displayValidationResults(validation) {
+  // Create or get validation panel
+  let panel = document.getElementById('validationPanel');
+  
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'validationPanel';
+    panel.className = 'validation-panel';
+    
+    // Insert after checklist header
+    const header = document.querySelector('.checklist-header');
+    if (header) {
+      header.after(panel);
+    } else {
+      document.querySelector('.checklist-content')?.prepend(panel);
+    }
+  }
+  
+  // Score color
+  const scoreColor = getScoreColor(validation.quality_score);
+  const statusIcon = validation.is_valid ? '✅' : '❌';
+  const statusText = validation.is_valid ? 'Passed' : 'Failed';
+  
+  panel.innerHTML = `
+    <div class="validation-header">
+      <div class="validation-score">
+        <div class="score-circle" style="border-color: ${scoreColor};">
+          <span class="score-value" style="color: ${scoreColor};">${validation.quality_score}</span>
+          <span class="score-label">Quality Score</span>
+        </div>
+        <div class="score-details">
+          <h3>${statusIcon} Validation ${statusText}</h3>
+          <div class="score-breakdown">
+            <div class="score-item">
+              <span class="label">Completeness:</span>
+              <span class="value">${validation.completeness_score}%</span>
+            </div>
+            <div class="score-item">
+              <span class="label">Consistency:</span>
+              <span class="value">${validation.consistency_score}%</span>
+            </div>
+            <div class="score-item">
+              <span class="label">Quality:</span>
+              <span class="value">${validation.quality_rating}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="validation-summary">
+        <div class="summary-item ${validation.error_count > 0 ? 'has-errors' : ''}">
+          <span class="icon">❌</span>
+          <span class="count">${validation.error_count}</span>
+          <span class="label">Errors</span>
+        </div>
+        <div class="summary-item ${validation.warning_count > 0 ? 'has-warnings' : ''}">
+          <span class="icon">⚠️</span>
+          <span class="count">${validation.warning_count}</span>
+          <span class="label">Warnings</span>
+        </div>
+        <div class="summary-item">
+          <span class="icon">💡</span>
+          <span class="count">${validation.recommendations.length}</span>
+          <span class="label">Tips</span>
+        </div>
+      </div>
+    </div>
+    
+    ${validation.error_count > 0 ? `
+      <div class="validation-section errors-section">
+        <h4>❌ Errors (Must Fix)</h4>
+        <div class="issues-list">
+          ${validation.errors.map(error => `
+            <div class="issue-item error">
+              <div class="issue-header">
+                <span class="issue-icon">❌</span>
+                <strong>${error.section}</strong>
+              </div>
+              <div class="issue-body">
+                <p class="issue-item-text">${error.item || 'General'}</p>
+                <p class="issue-message">${error.message}</p>
+                <p class="issue-suggestion">💡 ${error.suggestion}</p>
+                ${error.item_id ? `
+                  <button onclick="jumpToItem(${error.item_id})" class="btn-link">
+                    Jump to Item →
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+    
+    ${validation.warning_count > 0 ? `
+      <div class="validation-section warnings-section">
+        <h4>⚠️ Warnings (Should Review)</h4>
+        <div class="issues-list">
+          ${validation.warnings.map(warning => `
+            <div class="issue-item warning">
+              <div class="issue-header">
+                <span class="issue-icon">⚠️</span>
+                <strong>${warning.section}</strong>
+              </div>
+              <div class="issue-body">
+                <p class="issue-item-text">${warning.item || 'General'}</p>
+                <p class="issue-message">${warning.message}</p>
+                <p class="issue-suggestion">💡 ${warning.suggestion}</p>
+                ${warning.item_id ? `
+                  <button onclick="jumpToItem(${warning.item_id})" class="btn-link">
+                    Jump to Item →
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+    
+    ${validation.recommendations.length > 0 ? `
+      <div class="validation-section recommendations-section">
+        <h4>💡 Recommendations</h4>
+        <ul class="recommendations-list">
+          ${validation.recommendations.map(rec => `
+            <li>${rec}</li>
+          `).join('')}
+        </ul>
+      </div>
+    ` : ''}
+    
+    ${!validation.is_valid ? `
+      <div class="validation-footer">
+        <p class="validation-message error-message">
+          ❌ Cannot submit for approval. Quality score must be at least 60 and all errors must be fixed.
+        </p>
+      </div>
+    ` : validation.quality_score < 80 ? `
+      <div class="validation-footer">
+        <p class="validation-message warning-message">
+          ⚠️ Checklist can be submitted but consider addressing warnings for higher quality.
+        </p>
+      </div>
+    ` : `
+      <div class="validation-footer">
+        <p class="validation-message success-message">
+          ✅ Excellent! Checklist is ready for approval.
+        </p>
+      </div>
+    `}
+  `;
+  
+  // Show panel
+  panel.style.display = 'block';
+}
+
+/**
+ * Jump to specific item in checklist
+ */
+function jumpToItem(itemId) {
+  const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+  if (itemElement) {
+    itemElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    itemElement.classList.add('highlight-item');
+    
+    setTimeout(() => {
+      itemElement.classList.remove('highlight-item');
+    }, 3000);
+  }
+}
+
+/**
+ * Update quality badge in header
+ */
+function updateQualityBadge(score) {
+  let badge = document.getElementById('qualityBadge');
+  
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'qualityBadge';
+    badge.className = 'quality-badge';
+    
+    const actions = document.querySelector('.checklist-actions');
+    if (actions) {
+      actions.prepend(badge);
+    }
+  }
+  
+  const color = getScoreColor(score);
+  const label = getScoreLabel(score);
+  
+  badge.innerHTML = `
+    <span class="badge-score" style="background: ${color};">${score}</span>
+    <span class="badge-label">${label}</span>
+  `;
+}
+
+/**
+ * Get color for score
+ */
+function getScoreColor(score) {
+  if (score >= 80) return '#10b981'; // Green
+  if (score >= 60) return '#f59e0b'; // Yellow
+  return '#ef4444'; // Red
+}
+
+/**
+ * Get label for score
+ */
+function getScoreLabel(score) {
+  if (score >= 90) return 'Excellent';
+  if (score >= 80) return 'Good';
+  if (score >= 70) return 'Fair';
+  if (score >= 60) return 'Acceptable';
+  return 'Needs Work';
+}
+
+/**
+ * Auto-validate before approval
+ */
+async function validateBeforeApproval(checklistId) {
+  try {
+    const response = await fetch(`/api/checklists/${checklistId}/validate`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ validation_type: 'pre-approval' })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Pre-approval validation failed');
+    }
+    
+    const validation = await response.json();
+    
+    if (!validation.is_valid) {
+      displayValidationResults(validation);
+      showToast('❌ Cannot submit: Fix errors and ensure quality score ≥ 60', 'error');
+      return false;
+    }
+    
+    if (validation.quality_score < 80) {
+      const confirmed = confirm(
+        `Quality score is ${validation.quality_score}/100. ` +
+        `There are ${validation.warning_count} warnings. ` +
+        `Submit anyway?`
+      );
+      return confirmed;
+    }
+    
+    return true;
+    
+  } catch (error) {
+    console.error('Pre-approval validation error:', error);
+    showToast('Validation check failed. Cannot submit.', 'error');
+    return false;
+  }
+}
+
+/**
+ * Load quality score on page load
+ */
+async function loadQualityScore(checklistId) {
+  try {
+    const response = await fetch(`/api/checklists/${checklistId}/quality-score`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) return;
+    
+    const data = await response.json();
+    
+    if (data.has_validation) {
+      updateQualityBadge(data.score);
+    }
+    
+  } catch (error) {
+    console.error('Failed to load quality score:', error);
+  }
+}
+```
+
+### 5. Add Validation UI to Checklist Page
+
+**Update checklist-fill.html:**
+```html
+<!-- Add validate button to header -->
+<div class="checklist-actions">
+  <!-- Quality badge (inserted dynamically) -->
+  
+  <!-- Existing buttons -->
+  
+  <!-- Validation button -->
+  <button onclick="runValidation(currentChecklistId)" id="validateBtn" class="btn-validate">
+    ✅ Validate
+  </button>
+  
+  <!-- Export button -->
+  <button onclick="quickExportPDF(currentChecklistId)" id="exportPdfBtn" class="btn-export">
+    📥 Export PDF
+  </button>
+</div>
+
+<!-- Validation panel (inserted dynamically) -->
+
+<!-- Add scripts -->
+<script src="js/checklist-validation.js"></script>
+<script>
+  // Load quality score on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    const checklistId = getCurrentChecklistId();
+    if (checklistId) {
+      loadQualityScore(checklistId);
+    }
+  });
+  
+  // Intercept approval submission
+  const originalSubmitForApproval = window.submitForApproval;
+  window.submitForApproval = async function(checklistId) {
+    const canProceed = await validateBeforeApproval(checklistId);
+    if (canProceed) {
+      originalSubmitForApproval(checklistId);
+    }
+  };
+</script>
+```
+
+### 6. CSS Styling
+
+**Add to public/css/checklists.css:**
+```css
+/* Validation Button */
+.btn-validate {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.btn-validate:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.5);
+}
+
+.btn-validate:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Quality Badge */
+.quality-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 20px;
+}
+
+.badge-score {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  color: white;
+  font-size: 16px;
+}
+
+.badge-label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+/* Validation Panel */
+.validation-panel {
+  margin: 20px 0;
+  padding: 25px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.validation-header {
+  display: flex;
+  gap: 40px;
+  margin-bottom: 30px;
+  padding-bottom: 25px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.validation-score {
+  display: flex;
+  gap: 25px;
+  align-items: center;
+}
+
+.score-circle {
+  width: 120px;
+  height: 120px;
+  border: 6px solid;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.score-value {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.score-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.score-details h3 {
+  margin: 0 0 15px 0;
+  font-size: 20px;
+  color: #1f2937;
+}
+
+.score-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.score-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.score-item .label {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.score-item .value {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.validation-summary {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+  flex: 1;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 15px 25px;
+  background: #f9fafb;
+  border-radius: 10px;
+  min-width: 100px;
+}
+
+.summary-item.has-errors {
+  background: #fee2e2;
+}
+
+.summary-item.has-warnings {
+  background: #fef3c7;
+}
+
+.summary-item .icon {
+  font-size: 24px;
+}
+
+.summary-item .count {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.summary-item .label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* Validation Sections */
+.validation-section {
+  margin-bottom: 25px;
+}
+
+.validation-section h4 {
+  margin-bottom: 15px;
+  color: #1f2937;
+  font-size: 16px;
+}
+
+.errors-section h4 {
+  color: #dc2626;
+}
+
+.warnings-section h4 {
+  color: #d97706;
+}
+
+.recommendations-section h4 {
+  color: #2563eb;
+}
+
+/* Issues List */
+.issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.issue-item {
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.issue-item.error {
+  background: #fee2e2;
+  border-color: #dc2626;
+}
+
+.issue-item.warning {
+  background: #fef3c7;
+  border-color: #d97706;
+}
+
+.issue-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.issue-icon {
+  font-size: 18px;
+}
+
+.issue-body {
+  margin-left: 28px;
+}
+
+.issue-item-text {
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 5px 0;
+  font-size: 14px;
+}
+
+.issue-message {
+  color: #374151;
+  margin: 0 0 5px 0;
+  font-size: 14px;
+}
+
+.issue-suggestion {
+  color: #6b7280;
+  margin: 5px 0;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Recommendations */
+.recommendations-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.recommendations-list li {
+  padding: 12px 15px;
+  background: #eff6ff;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border-left: 3px solid #3b82f6;
+  color: #1e40af;
+}
+
+/* Validation Footer */
+.validation-footer {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 2px solid #e5e7eb;
+}
+
+.validation-message {
+  padding: 15px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-align: center;
+  margin: 0;
+}
+
+.error-message {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 2px solid #dc2626;
+}
+
+.warning-message {
+  background: #fef3c7;
+  color: #d97706;
+  border: 2px solid #d97706;
+}
+
+.success-message {
+  background: #d1fae5;
+  color: #065f46;
+  border: 2px solid #10b981;
+}
+
+/* Highlight Animation */
+@keyframes highlight {
+  0%, 100% { background: transparent; }
+  50% { background: #fef3c7; }
+}
+
+.highlight-item {
+  animation: highlight 1s ease-in-out 3;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .validation-header {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .validation-summary {
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+  
+  .summary-item {
+    min-width: 80px;
+    padding: 12px 15px;
+  }
+}
+```
+
+---
+
+## TESTING
+
+**Test Scenarios:**
+
+1. **Complete Validation:**
+   - Fill out checklist completely
+   - Run validation
+   - Should show score 90-100, all green
+
+2. **Missing Required Fields:**
+   - Leave required fields empty
+   - Run validation
+   - Should show errors, score <60, cannot approve
+
+3. **Placeholder Text:**
+   - Fill fields with "TODO" or "TBD"
+   - Run validation
+   - Should show warnings about placeholder text
+
+4. **Invalid Dates:**
+   - Enter dates far in future/past
+   - Run validation
+   - Should show date warnings
+
+5. **Pre-Approval Validation:**
+   - Try to submit with errors
+   - Should block submission
+   - Try to submit with warnings
+   - Should prompt confirmation
+
+6. **Quality Score Display:**
+   - Validate checklist
+   - Refresh page
+   - Quality badge should persist
+
+7. **Jump to Item:**
+   - Click "Jump to Item" on error
+   - Should scroll to and highlight item
+
+8. **Score Breakdown:**
+   - Check completeness, consistency, quality scores
+   - Verify they match expectations
+
+---
+
+## DELIVERABLES
+
+1. ✅ validation-service.js created with scoring logic
+2. ✅ Three validation endpoints in server.js
+3. ✅ Frontend validation UI functional
+4. ✅ Quality badge displays in header
+5. ✅ Validation panel shows errors/warnings/tips
+6. ✅ Jump to item functionality works
+7. ✅ Pre-approval validation blocks bad submissions
+8. ✅ Quality score persists across page loads
+9. ✅ All CSS styling applied
+10. ✅ Successfully validated multiple checklists
+
+---
+
+## OUTPUT REQUIRED
+
+Confirm when complete:
+1. "Database schema updated with validation tables" ✅
+2. "Validation service working with scoring" ✅
+3. "Validation endpoints functional" ✅
+4. "Validation UI displays correctly" ✅
+5. "Pre-approval validation blocks submissions" ✅
+6. "Quality badges and scores working" ✅
+
+---
+
+🎉 This completes Phase 2a! All three prompts delivered.
+
+Let me know when testing is complete!
