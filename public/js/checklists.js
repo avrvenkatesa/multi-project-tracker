@@ -914,6 +914,24 @@ function updateProgressFromData(checklist) {
   document.getElementById('completedItems').textContent = checklist.completed_items;
   document.getElementById('totalItems').textContent = checklist.total_items;
   document.getElementById('progressBarFill').style.width = `${progress}%`;
+  
+  // Update circular progress color based on percentage
+  const progressCircle = document.querySelector('.progress-circle');
+  if (progressCircle) {
+    const degrees = (progress / 100) * 360;
+    let color = '#3b82f6'; // Blue default
+    
+    // Color based on progress: 0-30% red, 31-70% yellow, 71-100% green
+    if (progress <= 30) {
+      color = '#ef4444'; // Red
+    } else if (progress <= 70) {
+      color = '#f59e0b'; // Yellow
+    } else {
+      color = '#10b981'; // Green
+    }
+    
+    progressCircle.style.background = `conic-gradient(${color} ${degrees}deg, #e5e7eb ${degrees}deg)`;
+  }
 }
 
 // =====================================================
