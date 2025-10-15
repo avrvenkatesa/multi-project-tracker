@@ -93,7 +93,12 @@ function displayValidationResults(validation) {
     <div class="flex items-start justify-between mb-6">
       <div class="flex items-center space-x-6">
         <div class="text-center">
-          <div class="w-24 h-24 rounded-full border-4 flex flex-col items-center justify-center" style="border-color: ${scoreColor};">
+          <div class="w-24 h-24 rounded-full border-4 flex flex-col items-center justify-center cursor-help" 
+               style="border-color: ${scoreColor};"
+               title="Quality Score Calculation:
+(Completeness ${validation.completeness_score}% × 50%) + (Consistency ${validation.consistency_score}% × 30%) + (Quality ${validation.quality_rating}% × 20%)
+= (${Math.round(validation.completeness_score * 0.5)} + ${Math.round(validation.consistency_score * 0.3)} + ${Math.round(validation.quality_rating * 0.2)})
+= ${validation.quality_score} points">
             <span class="text-3xl font-bold ${scoreTextClass}">${validation.quality_score}</span>
             <span class="text-xs text-gray-500 mt-1">Quality Score</span>
           </div>
@@ -101,17 +106,35 @@ function displayValidationResults(validation) {
         <div>
           <h3 class="text-xl font-semibold ${statusClass} mb-2">${statusIcon} Validation ${statusText}</h3>
           <div class="space-y-1 text-sm">
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-3 cursor-help" 
+                 title="Completeness Score (50% weight):
+Based on required items completion
+• Required items completed / Total required items × 100
+• If no required items, uses overall completion rate">
               <span class="text-gray-600 w-28">Completeness:</span>
               <span class="font-semibold">${validation.completeness_score}%</span>
+              <span class="text-gray-400">ℹ️</span>
             </div>
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-3 cursor-help"
+                 title="Consistency Score (30% weight):
+Starts at 100%, then deducts:
+• -10 points per error
+• -3 points per warning
+Current: 100 - (${validation.error_count} errors × 10) - (${validation.warning_count} warnings × 3) = ${validation.consistency_score}%">
               <span class="text-gray-600 w-28">Consistency:</span>
               <span class="font-semibold">${validation.consistency_score}%</span>
+              <span class="text-gray-400">ℹ️</span>
             </div>
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-3 cursor-help"
+                 title="Quality Rating (20% weight):
+Base score: 50 points
+• +2 points per item with comments (max +20)
+• +3 points per detailed response >50 chars (max +15)
+• -5 points per placeholder text
+Range: 0-100 points">
               <span class="text-gray-600 w-28">Quality:</span>
               <span class="font-semibold">${validation.quality_rating}%</span>
+              <span class="text-gray-400">ℹ️</span>
             </div>
           </div>
         </div>
