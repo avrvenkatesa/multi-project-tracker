@@ -33,9 +33,6 @@ async function runValidation(checklistId) {
     // Show results
     displayValidationResults(currentValidation);
     
-    // Update quality badge
-    updateQualityBadge(currentValidation.quality_score);
-    
     // Restore button
     validateBtn.disabled = false;
     validateBtn.innerHTML = originalText;
@@ -329,9 +326,6 @@ async function loadQualityScore(checklistId) {
     if (!response.ok) return;
     
     const validation = await response.json();
-    
-    // Update quality badge
-    updateQualityBadge(validation.quality_score);
     
   } catch (error) {
     console.error('Failed to load quality score:', error);
