@@ -7,6 +7,18 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
+- **PDF Export for Checklists - Phase 2a - COMPLETE** (October 15, 2025):
+  - **Backend**: Comprehensive PDF service (services/pdf-service.js) using pdfkit, chartjs-node-canvas, and stream-buffers
+  - **API**: GET /api/checklists/:id/export/pdf endpoint with format and inclusion query parameters
+  - **Frontend**: Export button on checklist detail page, modal with format selection (full/summary/completed-only) and inclusion options (comments/charts/metadata)
+  - **PDF Features**: Professional formatting with header/footer, metadata section, progress doughnut chart, checklist items with responses, sign-off section with signatures or placeholders, page numbers on all pages
+  - **Format Options**: Full Report (all data), Summary (key info only), Completed Items Only (filtered view)
+  - **Inclusion Options**: Toggle comments, progress charts, and metadata sections
+  - **File Management**: Auto-generated filenames with checklist ID and timestamp, proper content-disposition headers for downloads
+  - **Error Handling**: Authentication checks, project access validation, graceful chart generation failures
+  - **Deliverables**: TESTING_PDF_EXPORT.md (comprehensive testing guide with 10 manual test cases)
+  - **Files**: services/pdf-service.js, server.js, public/checklist-fill.html, public/js/checklists.js, TESTING_PDF_EXPORT.md
+
 - **AI Checklist Generation - Phase 2a - ALL 4 STAGES COMPLETE** (October 15, 2025):
   - **Stage 1 (Foundation)**: Backend AI service, database schema, 4 API endpoints, dual provider support (OpenAI GPT-4o/Anthropic Claude)
   - **Stage 2 (Integration)**: UI buttons on all cards, generation modal with 3 states (loading/error/preview)
@@ -69,7 +81,9 @@ The system integrates with Microsoft Teams for instant notifications (issue/acti
 - **node-cron**: Scheduled task manager for daily notifications.
 
 ### Reporting & Export
-- **pdfkit**: Server-side PDF generation for reports.
+- **pdfkit**: Server-side PDF generation for reports and checklist exports.
+- **chartjs-node-canvas**: Server-side chart rendering for PDF reports (progress charts, analytics).
+- **stream-buffers**: Buffer management for PDF generation and streaming.
 - **csv-writer**: CSV file generation for data export.
 
 ### CDN Services
