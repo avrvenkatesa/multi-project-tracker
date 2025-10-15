@@ -7691,7 +7691,7 @@ app.post('/api/checklists/generate-from-issue', authenticateToken, async (req, r
         i.*,
         p.id as project_id,
         p.name as project_name,
-        u.name as creator_name,
+        u.username as creator_name,
         COALESCE(
           (SELECT json_agg(json_build_object('name', t.name, 'color', t.color))
            FROM issue_tags it
@@ -7769,7 +7769,7 @@ app.post('/api/checklists/generate-from-action', authenticateToken, async (req, 
         ai.*,
         p.id as project_id,
         p.name as project_name,
-        u.name as assigned_to_name
+        u.username as assigned_to_name
       FROM action_items ai
       INNER JOIN projects p ON ai.project_id = p.id
       LEFT JOIN users u ON ai.assigned_to::integer = u.id
