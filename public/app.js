@@ -4061,9 +4061,12 @@ function showToast(message, type = 'info') {
 
 // AI Checklist Generation
 let currentAIChecklistData = null;
+let selectedAttachmentIds = [];
+let uploadedFiles = [];
 
 async function openAIChecklistModal(itemId, itemType, itemTitle) {
   const modal = document.getElementById('ai-checklist-modal');
+  const sourceSelectionEl = document.getElementById('ai-checklist-source-selection');
   const loadingEl = document.getElementById('ai-checklist-loading');
   const errorEl = document.getElementById('ai-checklist-error');
   const previewEl = document.getElementById('ai-checklist-preview');
@@ -4071,45 +4074,232 @@ async function openAIChecklistModal(itemId, itemType, itemTitle) {
   
   // Reset state
   currentAIChecklistData = { itemId, itemType, itemTitle };
+  selectedAttachmentIds = [];
+  uploadedFiles = [];
   loadingEl.classList.add('hidden');
   errorEl.classList.add('hidden');
   previewEl.classList.add('hidden');
+  sourceSelectionEl.classList.add('hidden');
   
   // Set title
   titleEl.textContent = `Generating checklist for: ${itemTitle}`;
   
-  // Show modal and loading
+  // Show modal and source selection
   modal.classList.remove('hidden');
-  loadingEl.classList.remove('hidden');
+  sourceSelectionEl.classList.remove('hidden');
   
-  // Call API to generate checklist
+  // Load existing attachments
+  await loadExistingAttachments(itemId, itemType);
+  
+  // Setup event listeners
+  setupSourceSelectionListeners();
+}
+
+async function loadExistingAttachments(itemId, itemType) {
   try {
-    const endpoint = itemType === 'issue' 
+    const entityType = itemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${entityType}/${itemId}/attachments`, { withCredentials: true });
+    
+    const attachmentsList = document.getElementById('existing-attachments-list');
+    const attachments = response.data;
+    
+    if (attachments.length === 0) {
+      attachmentsList.innerHTML = '<p class="text-xs text-gray-400 italic">No existing attachments</p>';
+    } else {
+      attachmentsList.innerHTML = attachments.map(att => {
+        const supportedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+        const isSupported = supportedTypes.includes(att.file_type);
+        
+        return `
+          <label class="flex items-center space-x-2 p-2 border rounded cursor-pointer hover:bg-gray-50 ${!isSupported ? 'opacity-50' : ''}">
+            <input type="checkbox" class="attachment-checkbox" data-attachment-id="${att.id}" ${!isSupported ? 'disabled' : ''}>
+            <div class="flex-1">
+              <div class="text-sm font-medium text-gray-900">${att.original_name}</div>
+              <div class="text-xs text-gray-500">${formatFileSize(att.file_size)}${!isSupported ? ' - Unsupported format' : ''}</div>
+            </div>
+          </label>
+        `;
+      }).join('');
+    }
+    
+    updateAttachmentCount();
+  } catch (error) {
+    console.error('Error loading attachments:', error);
+    document.getElementById('existing-attachments-list').innerHTML = '<p class="text-xs text-red-500">Failed to load attachments</p>';
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function setupSourceSelectionListeners() {
+  // Upload button
+  document.getElementById('upload-attachment-btn').onclick = () => {
+    document.getElementById('attachment-upload-input').click();
+  };
+  
+  // File upload handler
+  document.getElementById('attachment-upload-input').onchange = async (e) => {
+    const files = Array.from(e.target.files);
+    await handleFileUploads(files);
+    e.target.value = ''; // Reset input
+  };
+  
+  // Attachment checkboxes
+  document.querySelectorAll('.attachment-checkbox').forEach(cb => {
+    cb.onchange = () => {
+      const id = parseInt(cb.dataset.attachmentId);
+      if (cb.checked) {
+        if (!selectedAttachmentIds.includes(id)) {
+          selectedAttachmentIds.push(id);
+        }
+      } else {
+        selectedAttachmentIds = selectedAttachmentIds.filter(aid => aid !== id);
+      }
+      updateAttachmentCount();
+    };
+  });
+  
+  // Cancel button
+  document.getElementById('cancel-source-selection-btn').onclick = () => {
+    document.getElementById('ai-checklist-modal').classList.add('hidden');
+  };
+  
+  // Generate button
+  document.getElementById('generate-with-sources-btn').onclick = async () => {
+    await generateWithSelectedSources();
+  };
+}
+
+async function handleFileUploads(files) {
+  const newlyUploadedEl = document.getElementById('newly-uploaded-files');
+  const entityType = currentAIChecklistData.itemType === 'issue' ? 'issues' : 'action-items';
+  
+  for (const file of files) {
+    // Validate file size
+    if (file.size > 10 * 1024 * 1024) {
+      showToast(`${file.name} is too large (max 10MB)`, 'error');
+      continue;
+    }
+    
+    // Upload file
+    try {
+      const formData = new FormData();
+      formData.append('files', file);
+      
+      const response = await axios.post(
+        `/api/${entityType}/${currentAIChecklistData.itemId}/attachments`,
+        formData,
+        { 
+          withCredentials: true,
+          headers: { 'Content-Type': 'multipart/form-data' }
+        }
+      );
+      
+      const uploadedFile = response.data[0];
+      uploadedFiles.push(uploadedFile);
+      selectedAttachmentIds.push(uploadedFile.id);
+      
+      // Add to UI
+      const fileEl = document.createElement('div');
+      fileEl.className = 'flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded';
+      fileEl.innerHTML = `
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+          <div>
+            <div class="text-sm font-medium text-gray-900">${uploadedFile.original_name}</div>
+            <div class="text-xs text-gray-500">${formatFileSize(uploadedFile.file_size)}</div>
+          </div>
+        </div>
+        <button class="text-red-500 hover:text-red-700" onclick="removeUploadedFile(${uploadedFile.id})">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      `;
+      newlyUploadedEl.appendChild(fileEl);
+      
+      updateAttachmentCount();
+      showToast(`${file.name} uploaded successfully`, 'success');
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      showToast(`Failed to upload ${file.name}`, 'error');
+    }
+  }
+}
+
+function removeUploadedFile(attachmentId) {
+  selectedAttachmentIds = selectedAttachmentIds.filter(id => id !== attachmentId);
+  uploadedFiles = uploadedFiles.filter(f => f.id !== attachmentId);
+  updateAttachmentCount();
+  
+  // Remove from UI
+  const container = document.getElementById('newly-uploaded-files');
+  const fileElements = container.children;
+  for (let el of fileElements) {
+    if (el.querySelector('button').onclick.toString().includes(attachmentId)) {
+      el.remove();
+      break;
+    }
+  }
+}
+
+function updateAttachmentCount() {
+  const badge = document.getElementById('attachment-count-badge');
+  badge.textContent = `${selectedAttachmentIds.length} selected`;
+}
+
+async function generateWithSelectedSources() {
+  const useDescription = document.getElementById('use-description-checkbox').checked;
+  
+  if (!useDescription && selectedAttachmentIds.length === 0) {
+    showToast('Please select at least one source (description or attachments)', 'error');
+    return;
+  }
+  
+  // Hide source selection, show loading
+  document.getElementById('ai-checklist-source-selection').classList.add('hidden');
+  document.getElementById('ai-checklist-loading').classList.remove('hidden');
+  
+  try {
+    const endpoint = currentAIChecklistData.itemType === 'issue' 
       ? `/api/checklists/generate-from-issue` 
       : `/api/checklists/generate-from-action`;
     
     const response = await axios.post(endpoint, {
-      [itemType === 'issue' ? 'issue_id' : 'action_item_id']: itemId,
+      [currentAIChecklistData.itemType === 'issue' ? 'issue_id' : 'action_id']: currentAIChecklistData.itemId,
+      attachment_ids: selectedAttachmentIds,
+      use_description: useDescription,
       project_id: currentProject.id
     }, { withCredentials: true });
     
-    // Store the generated data (full preview object)
+    // Store the generated data
     currentAIChecklistData = {
       ...currentAIChecklistData,
-      preview: response.data  // Store complete preview object
+      preview: response.data,
+      attachment_ids: selectedAttachmentIds,
+      use_description: useDescription
     };
     
     // Show preview
-    loadingEl.classList.add('hidden');
+    document.getElementById('ai-checklist-loading').classList.add('hidden');
     renderAIChecklistPreview(response.data);
-    previewEl.classList.remove('hidden');
+    document.getElementById('ai-checklist-preview').classList.remove('hidden');
     
   } catch (error) {
-    loadingEl.classList.add('hidden');
+    document.getElementById('ai-checklist-loading').classList.add('hidden');
     
-    const errorMessage = error.response?.data?.error || 'Failed to generate checklist';
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to generate checklist';
     document.getElementById('ai-checklist-error-message').textContent = errorMessage;
-    errorEl.classList.remove('hidden');
+    document.getElementById('ai-checklist-error').classList.remove('hidden');
   }
 }
 
@@ -4170,7 +4360,9 @@ async function confirmAIChecklistCreation() {
       preview: currentAIChecklistData.preview,
       source_id: currentAIChecklistData.itemId,
       source_type: currentAIChecklistData.itemType === 'issue' ? 'issue' : 'action-item',
-      project_id: currentProject.id
+      project_id: currentProject.id,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      use_description: currentAIChecklistData.use_description !== undefined ? currentAIChecklistData.use_description : true
     }, { withCredentials: true });
     
     // Close modal
