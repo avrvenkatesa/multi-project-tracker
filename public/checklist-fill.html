@@ -9,23 +9,12 @@
 </head>
 <body class="bg-gray-50">
   <!-- Header -->
-  <header class="bg-blue-600 text-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 py-6">
-      <div class="flex justify-between items-center flex-wrap gap-4">
-        <h1 class="text-3xl font-bold">📋 Multi-Project Tracker</h1>
+  <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3">
+      <!-- Line 1: Title -->
+      <div class="flex justify-between items-center mb-2">
+        <h1 class="text-2xl font-bold">📋 Checklists</h1>
         <div class="flex items-center gap-3">
-          <button id="validateBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all flex items-center gap-2">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-            </svg>
-            Validate Quality
-          </button>
-          <button id="exportPdfBtn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
-            </svg>
-            Export PDF
-          </button>
           <button id="saveProgressBtn" class="btn-primary">
             💾 Save Progress
           </button>
@@ -34,17 +23,41 @@
           </button>
         </div>
       </div>
+      <!-- Line 2: Description -->
+      <p class="text-blue-100 text-sm">Complete and validate your project checklists with quality assurance</p>
     </div>
   </header>
 
   <main class="main-content">
-    <!-- Checklist Header -->
-    <div class="checklist-header">
-      <h2 id="checklistTitle">Loading...</h2>
-      <div class="checklist-meta">
-        <span id="checklistId"></span>
-        <span id="projectName"></span>
-        <span id="assignedTo"></span>
+    <!-- Checklist Header with Project Name -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div class="flex justify-between items-start mb-4">
+        <div class="flex-1">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full" id="projectName">Loading...</span>
+          </div>
+          <h2 id="checklistTitle" class="text-2xl font-bold text-gray-900 mb-2">Loading...</h2>
+          <div class="checklist-meta flex gap-4 text-sm text-gray-500">
+            <span id="checklistId"></span>
+            <span id="assignedTo"></span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-3 pt-4 border-t border-gray-200">
+        <button id="validateBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all flex items-center gap-2">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+          </svg>
+          Validate Quality
+        </button>
+        <button id="exportPdfBtn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
+          </svg>
+          Export PDF
+        </button>
       </div>
     </div>
 
