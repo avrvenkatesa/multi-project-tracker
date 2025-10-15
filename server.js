@@ -7676,7 +7676,7 @@ app.delete('/api/checklists/:id', authenticateToken, async (req, res) => {
 // POST /api/checklists/generate-from-issue
 app.post('/api/checklists/generate-from-issue', authenticateToken, async (req, res) => {
   try {
-    const { issue_id } = req.body;
+    const { issue_id, attachment_ids = [], use_description = true } = req.body;
     const userId = req.user.id;
     
     // Rate limiting
@@ -7728,8 +7728,8 @@ app.post('/api/checklists/generate-from-issue', authenticateToken, async (req, r
     issue.tags = Array.isArray(issue.tags) ? issue.tags.map(t => t.name).join(', ') : '';
     
     // Generate checklist using AI
-    console.log(`✨ Generating checklist from issue ${issue_id}...`);
-    const checklistPreview = await generateChecklistFromIssue(issue);
+    console.log(`✨ Generating checklist from issue ${issue_id} with ${attachment_ids.length} attachments...`);
+    const checklistPreview = await generateChecklistFromIssue(issue, attachment_ids, use_description);
     
     // Add metadata
     checklistPreview.issue_id = issue_id;
@@ -7754,7 +7754,7 @@ app.post('/api/checklists/generate-from-issue', authenticateToken, async (req, r
 // POST /api/checklists/generate-from-action
 app.post('/api/checklists/generate-from-action', authenticateToken, async (req, res) => {
   try {
-    const { action_id } = req.body;
+    const { action_id, attachment_ids = [], use_description = true } = req.body;
     const userId = req.user.id;
     
     // Rate limiting
@@ -7797,8 +7797,8 @@ app.post('/api/checklists/generate-from-action', authenticateToken, async (req, 
     }
     
     // Generate checklist using AI
-    console.log(`✨ Generating checklist from action item ${action_id}...`);
-    const checklistPreview = await generateChecklistFromActionItem(actionItem);
+    console.log(`✨ Generating checklist from action item ${action_id} with ${attachment_ids.length} attachments...`);
+    const checklistPreview = await generateChecklistFromActionItem(actionItem, attachment_ids, use_description);
     
     // Add metadata
     checklistPreview.action_id = action_id;
@@ -7823,7 +7823,7 @@ app.post('/api/checklists/generate-from-action', authenticateToken, async (req, 
 // POST /api/checklists/confirm-generated - Create checklist from preview
 app.post('/api/checklists/confirm-generated', authenticateToken, async (req, res) => {
   try {
-    const { preview, source_id, source_type, project_id } = req.body;
+    const { preview, source_id, source_type, project_id, attachment_ids = [], use_description = true } = req.body;
     const userId = req.user.id;
     
     // Verify access
@@ -7926,8 +7926,8 @@ app.post('/api/checklists/confirm-generated', authenticateToken, async (req, res
           checklist_id, template_id, project_id, title, description,
           related_issue_id, related_action_id, 
           is_ai_generated, generation_source,
-          total_items, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          total_items, created_by, used_attachments, used_description
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *`,
         [
           checklistId,
@@ -7940,12 +7940,35 @@ app.post('/api/checklists/confirm-generated', authenticateToken, async (req, res
           true,  // is_ai_generated
           source_type,  // 'issue' or 'action-item'
           totalItems,
-          userId
+          userId,
+          attachment_ids,  // used_attachments
+          use_description  // used_description
         ]
       );
       
+      // Track generation sources
+      let descriptionText = null;
+      if (use_description && source_type === 'issue') {
+        const issueData = await client.query('SELECT title, description FROM issues WHERE id = $1', [source_id]);
+        if (issueData.rows.length > 0) {
+          descriptionText = `${issueData.rows[0].title}\n${issueData.rows[0].description || ''}`;
+        }
+      } else if (use_description && source_type === 'action-item') {
+        const actionData = await client.query('SELECT title, description FROM action_items WHERE id = $1', [source_id]);
+        if (actionData.rows.length > 0) {
+          descriptionText = `${actionData.rows[0].title}\n${actionData.rows[0].description || ''}`;
+        }
+      }
+      
+      await client.query(
+        `INSERT INTO checklist_generation_sources (
+          checklist_id, used_description, description_text, attachment_ids
+        ) VALUES ($1, $2, $3, $4)`,
+        [checklistResult.rows[0].id, use_description, descriptionText, attachment_ids]
+      );
+      
       // Log success (notifications table doesn't exist, so we just log)
-      console.log(`✅ Checklist generated for ${source_type} #${source_id} by user ${userId}`);
+      console.log(`✅ Checklist generated for ${source_type} #${source_id} by user ${userId} with ${attachment_ids.length} attachments`);
       
       await client.query('COMMIT');
       
