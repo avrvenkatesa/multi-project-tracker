@@ -6,6 +6,18 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (October 2025)
+- **AI Checklist Generation - Phase 2a - ALL 4 STAGES COMPLETE** (October 15, 2025):
+  - **Stage 1 (Foundation)**: Backend AI service, database schema, 4 API endpoints, dual provider support (OpenAI GPT-4o/Anthropic Claude)
+  - **Stage 2 (Integration)**: UI buttons on all cards, generation modal with 3 states (loading/error/preview)
+  - **Stage 3 (Polish)**: Enhanced animations (pulse rings, sparkle, bouncing dots), improved error messages with troubleshooting, numbered sections with item counts, template promotion toast with benefits, keyboard shortcuts (Escape/Enter/R), tooltips with rate limits
+  - **Stage 4 (Testing)**: Comprehensive test suite with 20 manual test cases + 7 automated tests covering authentication, generation, rate limiting, error handling, template promotion, and data persistence
+  - **Deliverables**: TESTING_AI_CHECKLIST.md (comprehensive guide), test-ai-checklist.js (automated script), STAGE4_QUICKSTART.md (quick start guide)
+  - **Test Coverage**: Functional (generation, templates, errors), UI/UX (animations, shortcuts, tooltips), Integration (end-to-end), Database (persistence), Performance (speed), Security (auth, validation), Regression (existing features)
+  - **Rate Limiting**: 10 AI generations per hour per user (in-memory, Phase 2b: persist to database)
+  - **Known Limitations**: In-memory rate limiting, no custom instructions yet, no cost tracking (all Phase 2b)
+  - **Files**: services/ai-service.js, server.js, public/app.js, public/index.html, TESTING_AI_CHECKLIST.md, test-ai-checklist.js, STAGE4_QUICKSTART.md
+
 ## System Architecture
 
 ### Frontend
