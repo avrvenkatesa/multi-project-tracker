@@ -7,6 +7,16 @@ Multi-Project Tracker is an AI-powered issue tracking system designed to central
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
+- **AI Checklist Generation - Phase 2a** (October 15, 2025): Implemented AI-powered checklist generation from issues and action items:
+  - **Database Schema**: Added `is_reusable` column to `checklist_templates`, `is_ai_generated` and `generation_source` columns to `checklists`
+  - **Hybrid Template Approach**: AI-generated templates are non-reusable by default (hidden from main template list) but can be promoted to reusable
+  - **AI Service** (services/ai-service.js): Supports OpenAI (gpt-4o) and Anthropic (Claude), dynamic template lookup by name (no hardcoded IDs), enhanced error handling with specific error types
+  - **Rate Limiting**: 10 AI generations per hour per user (in-memory, TODO Phase 2b: persist to database)
+  - **API Endpoints**: POST /api/checklists/generate-from-issue, POST /api/checklists/generate-from-action, POST /api/checklists/confirm-generated, POST /api/templates/:id/promote
+  - **Template Filtering**: GET /api/checklist-templates now filters non-reusable templates by default (use ?include_ai_generated=true to see all)
+  - **Template Promotion**: Team Lead+ or template creator can promote AI templates to reusable (changes category from 'ai-generated' to 'custom')
+  - **Security**: Uses Replit OPENAI_API_KEY secret, full authentication and project access validation on all endpoints
+  - **Files**: services/ai-service.js, server.js (database migrations applied)
 - **Consistent Header Design** (October 14, 2025): Standardized headers across all project-aware pages for unified branding and navigation:
   - **Header Structure**: All pages now follow consistent 3-line pattern: "Multi-Project Tracker" (app name) → Page name (Dashboard/Checklists/Tags/Risks) → Page description
   - **Blue Gradient**: All headers use `bg-gradient-to-r from-blue-600 to-blue-700` with white text and consistent padding (py-6)
@@ -85,7 +95,8 @@ The system integrates with Microsoft Teams for instant notifications (issue/acti
 - **string-similarity**: Duplicate detection.
 
 ### AI Integration
-- **OpenAI**: GPT-3.5-Turbo for AI-powered meeting transcript analysis.
+- **OpenAI**: GPT-3.5-Turbo for AI-powered meeting transcript analysis, GPT-4o for AI checklist generation.
+- **Anthropic**: Claude 3.5 Sonnet support for AI checklist generation (alternative to OpenAI).
 
 ### Database & ORM
 - **@neondatabase/serverless**: Neon PostgreSQL driver.
