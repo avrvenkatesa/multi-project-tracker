@@ -1106,11 +1106,6 @@ async function exportChecklistAsPdf() {
     // Get PDF blob
     const blob = await response.blob();
     
-    // Create download link
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    
     // Get filename from Content-Disposition header or use default
     const contentDisposition = response.headers.get('Content-Disposition');
     let filename = 'checklist.pdf';
@@ -1121,11 +1116,37 @@ async function exportChecklistAsPdf() {
       }
     }
     
+    // Create download link with better browser support
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
     a.download = filename;
+    
+    // Add to DOM, click, and remove
     document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    
+    // Try to trigger download
+    try {
+      a.click();
+      
+      // Show success toast
+      showToast('PDF downloaded successfully! Check your Downloads folder.', 'success');
+      
+    } catch (err) {
+      // Fallback: open in new tab if download fails
+      console.error('Download failed, opening in new tab:', err);
+      window.open(url, '_blank');
+      showToast('PDF opened in new tab. Right-click to save it.', 'info');
+    }
+    
+    // Clean up after a delay
+    setTimeout(() => {
+      if (document.body.contains(a)) {
+        document.body.removeChild(a);
+      }
+      window.URL.revokeObjectURL(url);
+    }, 1000);
     
     // Reset button
     confirmBtn.disabled = false;
@@ -1133,9 +1154,6 @@ async function exportChecklistAsPdf() {
     
     // Close modal
     closeExportPdfModal();
-    
-    // Show success toast
-    showToast('PDF exported successfully!', 'success');
     
   } catch (error) {
     console.error('Export error:', error);
