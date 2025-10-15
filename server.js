@@ -7163,11 +7163,36 @@ app.delete('/api/risks/:riskId', authenticateToken, async (req, res) => {
 // GET /api/checklist-templates - List all checklist templates
 app.get('/api/checklist-templates', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT id, name, description, icon, category, created_at
-       FROM checklist_templates
-       ORDER BY name`
-    );
+    const { include_ai_generated } = req.query;
+    
+    let query = `
+      SELECT 
+        ct.id, 
+        ct.name, 
+        ct.description, 
+        ct.icon, 
+        ct.category, 
+        ct.created_at,
+        ct.is_reusable,
+        u.username as created_by_name,
+        COUNT(DISTINCT c.id) as usage_count
+      FROM checklist_templates ct
+      LEFT JOIN users u ON ct.created_by = u.id
+      LEFT JOIN checklists c ON ct.id = c.template_id
+      WHERE ct.is_active = true
+    `;
+    
+    // By default, hide AI-generated non-reusable templates
+    if (include_ai_generated !== 'true') {
+      query += ` AND ct.is_reusable = true`;
+    }
+    
+    query += `
+      GROUP BY ct.id, u.username
+      ORDER BY ct.is_system DESC, ct.name ASC
+    `;
+    
+    const result = await pool.query(query);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching checklist templates:', error);
