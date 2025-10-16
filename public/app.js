@@ -4563,7 +4563,7 @@ function renderWorkstreamAnalysis(analysis) {
           <div class="text-xs text-gray-600">Total Items</div>
         </div>
         <div class="text-center p-2 bg-green-50 rounded">
-          <div class="text-2xl font-bold text-green-600">${analysis.recommended_approach === 'multiple' ? 'Multiple' : 'Single'}</div>
+          <div class="text-2xl font-bold text-green-600">${analysis.recommendation === 'multiple' ? 'Multiple' : 'Single'}</div>
           <div class="text-xs text-gray-600">Recommended</div>
         </div>
       </div>
@@ -4582,6 +4582,26 @@ function renderWorkstreamAnalysis(analysis) {
       </div>
     </div>
   `;
+  
+  // Update button styling and badges based on recommendation
+  const singleBtn = document.getElementById('generate-single-checklist-btn');
+  const multipleBtn = document.getElementById('generate-multiple-checklists-btn');
+  const singleBadge = document.getElementById('single-recommended-badge');
+  const multipleBadge = document.getElementById('multiple-recommended-badge');
+  
+  if (analysis.recommendation === 'multiple') {
+    // Multiple is recommended
+    multipleBadge.classList.remove('hidden');
+    singleBadge.classList.add('hidden');
+    multipleBtn.className = 'w-full text-left border-2 border-blue-500 bg-blue-50 rounded-lg p-4 hover:bg-blue-100 transition-colors';
+    singleBtn.className = 'w-full text-left border rounded-lg p-4 hover:bg-gray-50 transition-colors';
+  } else {
+    // Single is recommended
+    singleBadge.classList.remove('hidden');
+    multipleBadge.classList.add('hidden');
+    singleBtn.className = 'w-full text-left border-2 border-blue-500 bg-blue-50 rounded-lg p-4 hover:bg-blue-100 transition-colors';
+    multipleBtn.className = 'w-full text-left border rounded-lg p-4 hover:bg-gray-50 transition-colors';
+  }
 }
 
 function renderBatchPreview(batchData) {

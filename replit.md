@@ -21,8 +21,13 @@ Preferred communication style: Simple, everyday language.
     - Changed from `pdf(dataBuffer)` to `new PDFParse({ data: dataBuffer })`
     - Added proper `await parser.getText()` call
     - Implemented resource cleanup with `parser.destroy()` in finally block
-  - **UI Enhancements**: Added batch progress UI elements (progress bar, percentage, status text)
-  - **Files Modified**: services/ai-service.js (preview fix), services/file-processor.js (PDF v2 API), public/index.html (progress UI), public/app.js (progress logic)
+  - **Recommendation Consistency Fix**: Fixed conflicting recommendations between Document Analysis and button badges
+    - Fixed field name mismatch: frontend now reads `recommendation` instead of `recommended_approach`
+    - Dynamic badge display: shows "Recommended" badge only on AI's recommended option (single vs multiple)
+    - Visual highlighting: recommended button has blue border and background, non-recommended is plain gray
+    - Both analysis summary and button badges now show consistent recommendation
+  - **UI Enhancements**: Added batch progress UI elements (progress bar, percentage, status text), dynamic recommendation badges
+  - **Files Modified**: services/ai-service.js (preview fix), services/file-processor.js (PDF v2 API), public/index.html (progress UI, dynamic badges), public/app.js (progress logic, recommendation sync)
 
 - **Phase 2B: Multi-Checklist Generation from Documents** (October 16, 2025):
   - **Backend Complete**: Implemented full backend support for analyzing documents and generating multiple focused checklists
