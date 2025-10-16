@@ -16,7 +16,9 @@ const stringSimilarity = require('string-similarity');
 const notificationService = require('./services/notificationService');
 const reportService = require('./services/reportService');
 const teamsNotifications = require('./services/teamsNotifications');
-const { generateChecklistFromIssue, generateChecklistFromActionItem, checkRateLimit } = require('./services/ai-service');
+const { generateChecklistFromIssue, generateChecklistFromActionItem, generateMultipleChecklists, checkRateLimit } = require('./services/ai-service');
+const { analyzeDocumentForWorkstreams } = require('./services/document-analyzer');
+const { extractTextFromFile } = require('./services/file-processor');
 const { initializeDailyJobs } = require('./jobs/dailyNotifications');
 const { generateChecklistPDF } = require('./services/pdf-service');
 const { validateChecklist, getValidationStatus } = require('./services/validation-service');
@@ -7991,6 +7993,281 @@ app.post('/api/checklists/confirm-generated', authenticateToken, async (req, res
     console.error('Error confirming checklist:', error);
     res.status(500).json({ 
       error: 'Failed to create checklist',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/checklists/analyze-document - Analyze document for workstreams
+app.post('/api/checklists/analyze-document', authenticateToken, async (req, res) => {
+  try {
+    const { source_type, source_id, attachment_ids } = req.body;
+    const userId = req.user.id;
+    
+    if (!attachment_ids || attachment_ids.length === 0) {
+      return res.status(400).json({ error: 'At least one attachment required for analysis' });
+    }
+    
+    // Get attachment content
+    const result = await pool.query(
+      `SELECT id, original_name, file_path, file_type, extracted_text, file_size
+       FROM attachments 
+       WHERE id = ANY($1)
+       ORDER BY id`,
+      [attachment_ids]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attachments not found' });
+    }
+    
+    // Extract text from first/largest attachment
+    const attachment = result.rows[0];
+    let documentText = attachment.extracted_text;
+    
+    if (!documentText) {
+      documentText = await extractTextFromFile(attachment.file_path, attachment.file_type);
+    }
+    
+    // Analyze for workstreams
+    console.log(`Analyzing ${attachment.original_name} for workstreams...`);
+    const analysis = await analyzeDocumentForWorkstreams(documentText, attachment.original_name);
+    
+    res.json(analysis);
+    
+  } catch (error) {
+    console.error('Document analysis error:', error);
+    res.status(500).json({ 
+      error: 'Failed to analyze document',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/checklists/generate-batch - Generate multiple checklists
+app.post('/api/checklists/generate-batch', authenticateToken, async (req, res) => {
+  try {
+    const { 
+      source_type, 
+      source_id, 
+      attachment_ids,
+      workstreams,
+      use_description 
+    } = req.body;
+    const userId = req.user.id;
+    
+    // Validation
+    if (!workstreams || workstreams.length === 0) {
+      return res.status(400).json({ error: 'Workstreams required' });
+    }
+    
+    if (workstreams.length > 10) {
+      return res.status(400).json({ error: 'Maximum 10 checklists per batch' });
+    }
+    
+    // Rate limiting - count as N generations
+    const rateLimit = checkRateLimit(userId, workstreams.length);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({ 
+        error: 'Rate limit exceeded',
+        message: `This would exceed your limit. Try again in ${rateLimit.minutesUntilReset} minutes.`
+      });
+    }
+    
+    // Get source data
+    let sourceData;
+    if (source_type === 'issue') {
+      const result = await pool.query(
+        `SELECT i.*, p.id as project_id, p.name as project_name
+         FROM issues i
+         INNER JOIN projects p ON i.project_id = p.id
+         WHERE i.id = $1`,
+        [source_id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Issue not found' });
+      }
+      sourceData = result.rows[0];
+    } else {
+      const result = await pool.query(
+        `SELECT ai.*, p.id as project_id, p.name as project_name
+         FROM action_items ai
+         INNER JOIN projects p ON ai.project_id = p.id
+         WHERE ai.id = $1`,
+        [source_id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Action item not found' });
+      }
+      sourceData = result.rows[0];
+    }
+    
+    sourceData.use_description = use_description;
+    
+    // Generate multiple checklists
+    console.log(`Batch generation: ${workstreams.length} checklists for ${source_type} #${source_id}`);
+    const results = await generateMultipleChecklists(
+      source_type,
+      sourceData,
+      attachment_ids,
+      workstreams
+    );
+    
+    // Add metadata
+    const response = {
+      source_id,
+      source_type,
+      project_id: sourceData.project_id,
+      workstreams_requested: workstreams.length,
+      checklists_generated: results.filter(r => r.success).length,
+      checklists_failed: results.filter(r => !r.success).length,
+      results: results,
+      rate_limit_remaining: rateLimit.remaining
+    };
+    
+    res.json(response);
+    
+  } catch (error) {
+    console.error('Batch generation error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate checklists',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/checklists/confirm-batch - Create multiple checklists from previews
+app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) => {
+  try {
+    const { previews, source_id, source_type, project_id, attachment_ids, use_description } = req.body;
+    const userId = req.user.id;
+    
+    if (!previews || !Array.isArray(previews) || previews.length === 0) {
+      return res.status(400).json({ error: 'Checklist previews required' });
+    }
+    
+    const client = await pool.connect();
+    const createdChecklists = [];
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Create all checklists
+      for (const preview of previews) {
+        // Create template if needed
+        let templateId = null;
+        if (!preview.use_template) {
+          const templateResult = await client.query(
+            `INSERT INTO checklist_templates (
+              name, description, category, created_by, is_reusable
+            ) VALUES ($1, $2, $3, $4, $5)
+            RETURNING id`,
+            [
+              preview.title,
+              preview.description,
+              'AI Generated',
+              userId,
+              false
+            ]
+          );
+          templateId = templateResult.rows[0].id;
+          
+          // Create template sections and items
+          for (const section of preview.sections) {
+            const sectionResult = await client.query(
+              `INSERT INTO checklist_template_sections (
+                template_id, title, description, display_order
+              ) VALUES ($1, $2, $3, $4)
+              RETURNING id`,
+              [templateId, section.title, section.description, section.display_order || 0]
+            );
+            
+            for (let i = 0; i < section.items.length; i++) {
+              const item = section.items[i];
+              await client.query(
+                `INSERT INTO checklist_template_items (
+                  section_id, text, field_type, field_options, is_required, 
+                  help_text, display_order
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [
+                  sectionResult.rows[0].id,
+                  item.text,
+                  item.field_type || 'checkbox',
+                  item.field_options ? JSON.stringify(item.field_options) : null,
+                  item.is_required || false,
+                  item.help_text || null,
+                  i
+                ]
+              );
+            }
+          }
+        }
+        
+        // Create checklist instance
+        const checklistResult = await client.query(
+          `INSERT INTO checklists (
+            title, description, project_id, template_id, 
+            related_issue_id, related_action_id, created_by,
+            is_ai_generated, ai_confidence
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          RETURNING *`,
+          [
+            preview.title,
+            preview.description,
+            project_id,
+            templateId,
+            source_type === 'issue' ? source_id : null,
+            source_type === 'action-item' ? source_id : null,
+            userId,
+            true,
+            preview.confidence || 85
+          ]
+        );
+        
+        // Record generation sources
+        let descriptionText = null;
+        if (use_description && source_type === 'issue') {
+          const issueData = await client.query('SELECT title, description FROM issues WHERE id = $1', [source_id]);
+          if (issueData.rows.length > 0) {
+            descriptionText = `${issueData.rows[0].title}\n${issueData.rows[0].description || ''}`;
+          }
+        } else if (use_description && source_type === 'action-item') {
+          const actionData = await client.query('SELECT title, description FROM action_items WHERE id = $1', [source_id]);
+          if (actionData.rows.length > 0) {
+            descriptionText = `${actionData.rows[0].title}\n${actionData.rows[0].description || ''}`;
+          }
+        }
+        
+        await client.query(
+          `INSERT INTO checklist_generation_sources (
+            checklist_id, used_description, description_text, attachment_ids
+          ) VALUES ($1, $2, $3, $4)`,
+          [checklistResult.rows[0].id, use_description, descriptionText, attachment_ids || []]
+        );
+        
+        createdChecklists.push(checklistResult.rows[0]);
+      }
+      
+      await client.query('COMMIT');
+      
+      res.status(201).json({
+        success: true,
+        checklists: createdChecklists,
+        count: createdChecklists.length,
+        message: `Successfully created ${createdChecklists.length} checklists`
+      });
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('Batch confirm error:', error);
+    res.status(500).json({ 
+      error: 'Failed to create checklists',
       message: error.message 
     });
   }
