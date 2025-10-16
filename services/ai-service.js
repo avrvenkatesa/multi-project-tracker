@@ -196,7 +196,7 @@ ${contextText}
 CRITICAL INSTRUCTIONS: COMPREHENSIVE EXTRACTION
 ====================================
 
-⚠️ PRIMARY DIRECTIVE: EXTRACT, DON'T SUMMARIZE
+[!] PRIMARY DIRECTIVE: EXTRACT, DON'T SUMMARIZE
 Your goal is EXHAUSTIVE coverage, not brevity. MORE ITEMS IS BETTER.
 
 ${hasAttachments ? `
@@ -219,8 +219,8 @@ EXTRACTION RULES (MANDATORY)
 ====================================
 
 1. GRANULARITY: Break complex tasks into atomic, single-action steps
-   ❌ Bad: "Migrate Active Directory"
-   ✅ Good: Create 12+ items: "Document current DC inventory", "Validate AD health checks", "Install Windows 2022 DCs", "Transfer PDC Emulator FSMO role", "Transfer RID Master role", "Validate replication health", "Decommission old DCs", etc.
+   [X] Bad: "Migrate Active Directory"
+   [OK] Good: Create 12+ items: "Document current DC inventory", "Validate AD health checks", "Install Windows 2022 DCs", "Transfer PDC Emulator FSMO role", "Transfer RID Master role", "Validate replication health", "Decommission old DCs", etc.
 
 2. DECOMPOSITION: Every deliverable needs pre/during/post steps
    - Prerequisites and setup (before)
@@ -282,11 +282,11 @@ IMPORTANT TEMPLATE MATCHING:
 ====================================
 CRITICAL REMINDERS
 ====================================
-✅ MORE IS BETTER - Aim for exhaustive coverage
-✅ EXTRACT DON'T SUMMARIZE - Include all details from source
-✅ BE GRANULAR - Break complex tasks into atomic substeps  
-✅ ADD VALIDATION - Every deliverable needs pre/during/post checks
-${hasAttachments ? '✅ TARGET: 100+ items for substantial documents (30+ pages)' : '✅ TARGET: 40+ items for complex tasks'}
+[OK] MORE IS BETTER - Aim for exhaustive coverage
+[OK] EXTRACT DON'T SUMMARIZE - Include all details from source
+[OK] BE GRANULAR - Break complex tasks into atomic substeps  
+[OK] ADD VALIDATION - Every deliverable needs pre/during/post checks
+${hasAttachments ? '[OK] TARGET: 100+ items for substantial documents (30+ pages)' : '[OK] TARGET: 40+ items for complex tasks'}
 
 Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 {
