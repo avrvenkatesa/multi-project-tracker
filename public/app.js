@@ -4189,7 +4189,12 @@ async function openAIChecklistModal(itemId, itemType, itemTitle) {
   const titleEl = document.getElementById('ai-checklist-item-title');
   
   // Reset state
-  currentAIChecklistData = { itemId, itemType, itemTitle };
+  currentAIChecklistData = { 
+    itemId, 
+    itemType, 
+    itemTitle,
+    projectName: currentProject?.name || 'Unknown Project'
+  };
   selectedAttachmentIds = [];
   uploadedFiles = [];
   loadingEl.classList.add('hidden');
@@ -4197,8 +4202,9 @@ async function openAIChecklistModal(itemId, itemType, itemTitle) {
   previewEl.classList.add('hidden');
   sourceSelectionEl.classList.add('hidden');
   
-  // Set title
-  titleEl.textContent = `Generating checklist for: ${itemTitle}`;
+  // Set title with project name and issue/action item
+  const itemTypeLabel = itemType === 'issue' ? 'Issue' : 'Action Item';
+  titleEl.innerHTML = `<div class="text-gray-600 text-xs font-normal">${itemTypeLabel}: ${itemTitle}</div>`;
   
   // Show modal and source selection
   modal.classList.remove('hidden');
@@ -4423,7 +4429,13 @@ async function generateSingleChecklist() {
   // Show loading
   document.getElementById('ai-checklist-workstream-analysis')?.classList.add('hidden');
   document.getElementById('ai-checklist-loading').classList.remove('hidden');
-  document.getElementById('loading-main-text').textContent = 'AI is generating your checklist...';
+  
+  // Update header with project name
+  const titleEl = document.getElementById('ai-checklist-item-title');
+  const itemTypeLabel = currentAIChecklistData.itemType === 'issue' ? 'Issue' : 'Action Item';
+  titleEl.innerHTML = `<div class="text-gray-600 text-xs font-normal">${itemTypeLabel}: ${currentAIChecklistData.itemTitle}</div>`;
+  
+  document.getElementById('loading-main-text').textContent = `Generating checklist for ${currentAIChecklistData.projectName}`;
   document.getElementById('loading-sub-text').textContent = 'Creating comprehensive task list';
   
   try {
@@ -4465,7 +4477,13 @@ async function generateMultipleChecklists() {
   // Show loading with progress
   document.getElementById('ai-checklist-workstream-analysis').classList.add('hidden');
   document.getElementById('ai-checklist-loading').classList.remove('hidden');
-  document.getElementById('loading-main-text').textContent = `Generating ${totalChecklists} checklists...`;
+  
+  // Update header with project name
+  const titleEl = document.getElementById('ai-checklist-item-title');
+  const itemTypeLabel = currentAIChecklistData.itemType === 'issue' ? 'Issue' : 'Action Item';
+  titleEl.innerHTML = `<div class="text-gray-600 text-xs font-normal">${itemTypeLabel}: ${currentAIChecklistData.itemTitle}</div>`;
+  
+  document.getElementById('loading-main-text').textContent = `Generating ${totalChecklists} checklists for ${currentAIChecklistData.projectName}`;
   document.getElementById('loading-sub-text').textContent = 'AI is analyzing each workstream';
   
   // Show progress bar
@@ -4486,11 +4504,15 @@ async function generateMultipleChecklists() {
   const progressInterval = setInterval(() => {
     // Increment progress slowly (95% max before completion)
     currentProgress = Math.min(currentProgress + (95 / (estimatedTime * 1.2)), 95);
-    const currentChecklist = Math.min(Math.ceil((currentProgress / 95) * totalChecklists), totalChecklists);
+    const currentChecklistIndex = Math.min(Math.ceil((currentProgress / 95) * totalChecklists), totalChecklists);
+    const currentChecklistName = workstreamAnalysis.workstreams[currentChecklistIndex - 1]?.name || 'Checklist';
     
     progressBar.style.width = `${currentProgress}%`;
     progressPercent.textContent = `${Math.round(currentProgress)}%`;
-    progressText.textContent = `Generating checklist ${currentChecklist} of ${totalChecklists}...`;
+    progressText.textContent = `Generating ${currentChecklistName} for ${currentAIChecklistData.projectName}`;
+    
+    // Update main text with checklist number
+    document.getElementById('loading-main-text').textContent = `Generating checklist ${currentChecklistIndex} of ${totalChecklists}`;
   }, 1000);
   
   try {
@@ -4736,6 +4758,43 @@ async function confirmBatchChecklistCreation() {
   try {
     const successfulResults = currentAIChecklistData.batchResults.results.filter(r => r.success);
     const previews = successfulResults.map(r => r.preview);
+    const totalChecklists = previews.length;
+    
+    // Hide preview and show loading with creation progress
+    document.getElementById('ai-checklist-batch-preview').classList.add('hidden');
+    document.getElementById('ai-checklist-loading').classList.remove('hidden');
+    
+    // Set header
+    const titleEl = document.getElementById('ai-checklist-item-title');
+    const itemTypeLabel = currentAIChecklistData.itemType === 'issue' ? 'Issue' : 'Action Item';
+    titleEl.innerHTML = `<div class="text-gray-600 text-xs font-normal">${itemTypeLabel}: ${currentAIChecklistData.itemTitle}</div>`;
+    
+    // Setup progress UI
+    document.getElementById('loading-main-text').textContent = `Creating ${totalChecklists} checklists...`;
+    document.getElementById('loading-sub-text').textContent = 'Saving to database';
+    
+    const progressContainer = document.getElementById('batch-progress-container');
+    const progressBar = document.getElementById('batch-progress-bar');
+    const progressText = document.getElementById('batch-progress-text');
+    const progressPercent = document.getElementById('batch-progress-percent');
+    
+    progressContainer.classList.remove('hidden');
+    progressBar.style.width = '0%';
+    
+    // Simulate progress during database creation
+    let currentProgress = 0;
+    const estimatedTime = totalChecklists * 1.5; // ~1.5 seconds per checklist for DB operations
+    const progressInterval = setInterval(() => {
+      currentProgress = Math.min(currentProgress + (95 / (estimatedTime * 1.2)), 95);
+      const currentChecklistIndex = Math.min(Math.ceil((currentProgress / 95) * totalChecklists), totalChecklists);
+      const currentChecklistName = previews[currentChecklistIndex - 1]?.title || 'Checklist';
+      
+      progressBar.style.width = `${currentProgress}%`;
+      progressPercent.textContent = `${Math.round(currentProgress)}%`;
+      progressText.textContent = `Creating ${currentChecklistName}...`;
+      
+      document.getElementById('loading-main-text').textContent = `Creating checklist ${currentChecklistIndex} of ${totalChecklists}`;
+    }, 300);
     
     const response = await axios.post('/api/checklists/confirm-batch', {
       previews: previews,
@@ -4746,17 +4805,37 @@ async function confirmBatchChecklistCreation() {
       use_description: currentAIChecklistData.use_description
     }, { withCredentials: true });
     
-    // Close modal
-    document.getElementById('ai-checklist-modal').classList.add('hidden');
-    showToast(`${response.data.count} checklists created successfully!`, 'success');
+    // Complete progress
+    clearInterval(progressInterval);
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    progressText.textContent = `All ${totalChecklists} checklists created!`;
+    document.getElementById('loading-main-text').textContent = 'Checklists created successfully!';
     
-    // Navigate to checklists page after delay
+    // Small delay to show completion
     setTimeout(() => {
-      navigateToChecklists();
-    }, 2000);
+      // Close modal
+      document.getElementById('ai-checklist-modal').classList.add('hidden');
+      
+      // Reset progress
+      progressContainer.classList.add('hidden');
+      progressBar.style.width = '0%';
+      
+      showToast(`${response.data.count} checklists created successfully!`, 'success');
+      
+      // Navigate to checklists page
+      setTimeout(() => {
+        navigateToChecklists();
+      }, 1500);
+    }, 800);
     
   } catch (error) {
     console.error('Error confirming batch:', error);
+    
+    // Hide loading and show error
+    document.getElementById('ai-checklist-loading').classList.add('hidden');
+    document.getElementById('batch-progress-container').classList.add('hidden');
+    
     showToast(error.response?.data?.error || 'Failed to create checklists', 'error');
   }
 }

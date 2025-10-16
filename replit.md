@@ -14,6 +14,25 @@ The project aims to be a leading solution for centralized project oversight and 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (October 2025)
+
+- **Enhanced Progress UI & Context Display** (October 16, 2025):
+  - **Improved Modal Header**: Shows Issue/Action Item title below the modal heading for better context
+  - **Project-Aware Progress**: Progress indicators now display "Generating <checklist name> for <project name>"
+    - During generation: Shows current workstream name being processed with project context
+    - During creation: Shows current checklist being saved to database
+  - **Creation Progress Tracking**: Added visual progress bar when clicking "Create All Checklists"
+    - Shows real-time progress as each checklist is saved to database
+    - Displays checklist names during creation process
+    - Smooth completion animation before navigation
+  - **Files Modified**: public/app.js (openAIChecklistModal, generateSingleChecklist, generateMultipleChecklists, confirmBatchChecklistCreation)
+
+- **Database Schema Fixes** (October 16, 2025):
+  - Fixed `checklist_template_items` column name: changed `text` to `item_text` in batch creation
+  - Fixed `checklists` table: made `checklist_id` nullable and removed from INSERT statements
+  - Removed non-existent `ai_confidence` column from checklist creation queries
+  - All multi-checklist generation now works successfully
+
 ## System Architecture
 
 ### Frontend
