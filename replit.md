@@ -46,7 +46,7 @@ Preferred communication style: Simple, everyday language.
   - **Mandatory Targets Section**: Added non-negotiable minimum targets (100 items for attachments, 40 for descriptions) with failure warnings
   - **Granularity Examples**: Added concrete 15-item examples showing how to decompose "Migrate Active Directory" and "Set up AWS infrastructure" tasks
   - **Strengthened Final Reminder**: Replaced weak "Requirements" with "ABSOLUTE REQUIREMENTS - NON-NEGOTIABLE" and item count verification
-  - **Fixed PDF Extraction**: Corrected pdf-parse import to use pdfParse.PDFParse() (resolves "pdf is not a function" error)
+  - **Fixed PDF Extraction**: Corrected pdf-parse usage to call pdfParse(dataBuffer) directly (resolves "Class constructor PDFParse cannot be invoked without 'new'" error)
   - **Expected Results**: 100-180 items (up from 40), 10-20 items per section (up from 8), SOW-specific technical details throughout
   - **Files Modified**: services/ai-service.js (buildEnhancedPrompt, callAI, getAttachmentContent), services/file-processor.js (PDF extraction fix)
 

@@ -29,7 +29,7 @@ async function extractTextFromFile(filePath, mimeType) {
 async function extractFromPDF(filePath) {
   try {
     const dataBuffer = await fs.readFile(filePath);
-    const data = await pdfParse.PDFParse(dataBuffer);
+    const data = await pdfParse(dataBuffer);
     
     if (!data.text || data.text.trim().length === 0) {
       throw new Error('PDF appears to be empty or contains only images');
