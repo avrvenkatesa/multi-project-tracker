@@ -4544,11 +4544,7 @@ async function generateMultipleChecklists() {
   document.getElementById('ai-checklist-workstream-analysis').classList.add('hidden');
   document.getElementById('ai-checklist-loading').classList.remove('hidden');
   
-  // Update header with project name
-  const titleEl = document.getElementById('ai-checklist-item-title');
-  const itemTypeLabel = currentAIChecklistData.itemType === 'issue' ? 'Issue' : 'Action Item';
-  titleEl.innerHTML = `<div class="text-gray-600 text-xs font-normal">${itemTypeLabel}: ${currentAIChecklistData.itemTitle}</div>`;
-  
+  // Update loading text
   document.getElementById('loading-main-text').textContent = `Generating ${totalChecklists} checklists for ${currentAIChecklistData.projectName}`;
   document.getElementById('loading-sub-text').textContent = 'AI is analyzing each workstream';
   
@@ -5019,7 +5015,10 @@ document.getElementById('generate-single-checklist-btn').addEventListener('click
   await generateSingleChecklist();
 });
 
-document.getElementById('generate-multiple-checklists-btn').addEventListener('click', async function() {
+document.getElementById('generate-multiple-checklists-btn').addEventListener('click', async function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('[DEBUG] Multiple checklists button clicked');
   await generateMultipleChecklists();
 });
 
