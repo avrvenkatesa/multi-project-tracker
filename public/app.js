@@ -4180,6 +4180,51 @@ let selectedAttachmentIds = [];
 let uploadedFiles = [];
 let workstreamAnalysis = null;
 
+// Update step indicator
+function updateChecklistGenerationStep(stepNumber) {
+  const stepNames = ['', 'Source Selection', 'Source Analysis', 'Checklist Generation', 'Preview', 'Checklist Creation'];
+  
+  // Update step name in title
+  const stepNameEl = document.getElementById('ai-checklist-step-name');
+  if (stepNameEl) {
+    stepNameEl.textContent = ` - ${stepNames[stepNumber]}`;
+  }
+  
+  // Update step indicators
+  for (let i = 1; i <= 5; i++) {
+    const indicator = document.getElementById(`step-indicator-${i}`);
+    const circle = indicator?.querySelector('div');
+    const label = indicator?.querySelector('span');
+    const line = document.getElementById(`step-line-${i}`);
+    
+    if (i < stepNumber) {
+      // Completed steps
+      if (circle) {
+        circle.className = 'w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-semibold';
+        circle.innerHTML = '✓';
+      }
+      if (label) label.className = 'text-xs text-green-600 ml-1.5';
+      if (line) line.className = 'w-8 h-0.5 bg-green-500';
+    } else if (i === stepNumber) {
+      // Current step
+      if (circle) {
+        circle.className = 'w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-semibold';
+        circle.textContent = i;
+      }
+      if (label) label.className = 'text-xs text-blue-600 ml-1.5 font-semibold';
+      if (line) line.className = 'w-8 h-0.5 bg-gray-300';
+    } else {
+      // Future steps
+      if (circle) {
+        circle.className = 'w-6 h-6 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-xs font-semibold';
+        circle.textContent = i;
+      }
+      if (label) label.className = 'text-xs text-gray-500 ml-1.5';
+      if (line) line.className = 'w-8 h-0.5 bg-gray-300';
+    }
+  }
+}
+
 async function openAIChecklistModal(itemId, itemType, itemTitle) {
   const modal = document.getElementById('ai-checklist-modal');
   const sourceSelectionEl = document.getElementById('ai-checklist-source-selection');
@@ -4215,6 +4260,9 @@ async function openAIChecklistModal(itemId, itemType, itemTitle) {
   // Show modal and source selection
   modal.classList.remove('hidden');
   sourceSelectionEl.classList.remove('hidden');
+  
+  // Set to Step 1: Source Selection
+  updateChecklistGenerationStep(1);
   
   // Load existing attachments
   await loadExistingAttachments(itemId, itemType);
@@ -4474,6 +4522,9 @@ async function generateWithSelectedSources() {
       renderWorkstreamAnalysis(workstreamAnalysis);
       document.getElementById('ai-checklist-workstream-analysis').classList.remove('hidden');
       
+      // Set to Step 2: Source Analysis
+      updateChecklistGenerationStep(2);
+      
     } catch (error) {
       document.getElementById('ai-checklist-loading').classList.add('hidden');
       const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to analyze document';
@@ -4491,10 +4542,8 @@ async function generateSingleChecklist() {
   document.getElementById('ai-checklist-workstream-analysis')?.classList.add('hidden');
   document.getElementById('ai-checklist-loading').classList.remove('hidden');
   
-  // Update header with project name
-  const titleEl = document.getElementById('ai-checklist-item-title');
-  const itemTypeLabel = currentAIChecklistData.itemType === 'issue' ? 'Issue' : 'Action Item';
-  titleEl.innerHTML = `<div class="text-gray-600 text-xs font-normal">${itemTypeLabel}: ${currentAIChecklistData.itemTitle}</div>`;
+  // Set to Step 3: Checklist Generation
+  updateChecklistGenerationStep(3);
   
   document.getElementById('loading-main-text').textContent = `Generating checklist for ${currentAIChecklistData.projectName}`;
   document.getElementById('loading-sub-text').textContent = 'Creating comprehensive task list';
@@ -4518,6 +4567,9 @@ async function generateSingleChecklist() {
     document.getElementById('ai-checklist-loading').classList.add('hidden');
     renderAIChecklistPreview(response.data);
     document.getElementById('ai-checklist-preview').classList.remove('hidden');
+    
+    // Set to Step 4: Preview
+    updateChecklistGenerationStep(4);
     
   } catch (error) {
     document.getElementById('ai-checklist-loading').classList.add('hidden');
@@ -4543,6 +4595,9 @@ async function generateMultipleChecklists() {
   // Show loading with progress
   document.getElementById('ai-checklist-workstream-analysis').classList.add('hidden');
   document.getElementById('ai-checklist-loading').classList.remove('hidden');
+  
+  // Set to Step 3: Checklist Generation
+  updateChecklistGenerationStep(3);
   
   // Update loading text
   document.getElementById('loading-main-text').textContent = `Generating ${totalChecklists} checklists for ${currentAIChecklistData.projectName}`;
@@ -4608,6 +4663,9 @@ async function generateMultipleChecklists() {
       // Show batch preview
       renderBatchPreview(response.data);
       document.getElementById('ai-checklist-batch-preview').classList.remove('hidden');
+      
+      // Set to Step 4: Preview
+      updateChecklistGenerationStep(4);
     }, 500);
     
   } catch (error) {
@@ -4784,6 +4842,9 @@ async function confirmAIChecklistCreation() {
     return;
   }
   
+  // Set to Step 5: Checklist Creation
+  updateChecklistGenerationStep(5);
+  
   try {
     const response = await axios.post('/api/checklists/confirm-generated', {
       preview: currentAIChecklistData.preview,
@@ -4828,6 +4889,9 @@ async function confirmBatchChecklistCreation() {
     // Hide preview and show loading with creation progress
     document.getElementById('ai-checklist-batch-preview').classList.add('hidden');
     document.getElementById('ai-checklist-loading').classList.remove('hidden');
+    
+    // Set to Step 5: Checklist Creation
+    updateChecklistGenerationStep(5);
     
     // Setup progress UI
     document.getElementById('loading-main-text').textContent = `Creating ${totalChecklists} checklists...`;

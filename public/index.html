@@ -773,7 +773,39 @@
                 <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
                     <div class="flex items-start justify-between p-6 border-b">
                         <div class="flex-1 pr-4">
-                            <h3 class="text-xl font-semibold text-gray-800">AI Checklist Generation</h3>
+                            <h3 class="text-xl font-semibold text-gray-800">
+                                AI Checklist Generation
+                                <span id="ai-checklist-step-name" class="text-base font-normal text-gray-600"></span>
+                            </h3>
+                            
+                            <!-- Step Indicator -->
+                            <div class="flex items-center gap-2 mt-3 mb-2">
+                                <div id="step-indicator-1" class="flex items-center">
+                                    <div class="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-semibold">1</div>
+                                    <span class="text-xs text-gray-600 ml-1.5">Select</span>
+                                </div>
+                                <div class="w-8 h-0.5 bg-gray-300" id="step-line-1"></div>
+                                <div id="step-indicator-2" class="flex items-center">
+                                    <div class="w-6 h-6 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-xs font-semibold">2</div>
+                                    <span class="text-xs text-gray-500 ml-1.5">Analyze</span>
+                                </div>
+                                <div class="w-8 h-0.5 bg-gray-300" id="step-line-2"></div>
+                                <div id="step-indicator-3" class="flex items-center">
+                                    <div class="w-6 h-6 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-xs font-semibold">3</div>
+                                    <span class="text-xs text-gray-500 ml-1.5">Generate</span>
+                                </div>
+                                <div class="w-8 h-0.5 bg-gray-300" id="step-line-3"></div>
+                                <div id="step-indicator-4" class="flex items-center">
+                                    <div class="w-6 h-6 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-xs font-semibold">4</div>
+                                    <span class="text-xs text-gray-500 ml-1.5">Preview</span>
+                                </div>
+                                <div class="w-8 h-0.5 bg-gray-300" id="step-line-4"></div>
+                                <div id="step-indicator-5" class="flex items-center">
+                                    <div class="w-6 h-6 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-xs font-semibold">5</div>
+                                    <span class="text-xs text-gray-500 ml-1.5">Create</span>
+                                </div>
+                            </div>
+                            
                             <p class="text-sm text-gray-600 mt-2" id="ai-checklist-project-name"></p>
                             <p class="text-sm text-gray-700 mt-1" id="ai-checklist-item-info"></p>
                             <p class="text-xs text-gray-500 mt-1" id="ai-checklist-sources"></p>

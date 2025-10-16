@@ -18,6 +18,7 @@ Preferred communication style: Simple, everyday language.
 
 - **New Features** (October 16, 2025):
   - **Batch Template Promotion**: Added template promotion prompts for multiple checklist creation, allowing users to promote all newly created templates to reusable status at once (server.js, public/app.js)
+  - **Visual Step Indicator**: Added 5-step progress indicator to AI Checklist Generation modal showing current progress through: Source Selection → Source Analysis → Checklist Generation → Preview → Checklist Creation (public/index.html, public/app.js)
 
 - **Bug Fixes** (October 16, 2025):
   - Fixed "null" prefix in checklist section headings (public/js/checklists.js)
