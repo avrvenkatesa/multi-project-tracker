@@ -8,6 +8,30 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Phase 2B: Multi-Checklist Generation from Documents** (October 16, 2025):
+  - **Backend Complete**: Implemented full backend support for analyzing documents and generating multiple focused checklists
+  - **Document Analyzer Service** (services/document-analyzer.js):
+    - Analyzes documents to detect 3-8 distinct workstreams/phases
+    - Identifies complexity level and recommends single vs multi-checklist generation
+    - Returns structured workstream data with estimated items, priorities, and dependencies
+    - Supports both OpenAI GPT-4o and Anthropic Claude 3.5 Sonnet
+  - **Batch Generation Functions** (services/ai-service.js):
+    - generateMultipleChecklists(): Creates N checklists from workstream analysis
+    - buildWorkstreamPrompt(): Focused prompts for each workstream with 1-second delays between API calls
+    - Enhanced rate limiting to support batch requests (counts as N generations)
+  - **New API Endpoints** (server.js):
+    - POST /api/checklists/analyze-document: Analyzes uploaded document for workstreams
+    - POST /api/checklists/generate-batch: Generates multiple checklists from workstreams
+    - POST /api/checklists/confirm-batch: Creates multiple checklists from previews
+  - **Benefits**:
+    - One 92-page SOW → 5-8 focused checklists instead of 1 overwhelming checklist
+    - Each checklist has 15-40 items focused on specific workstream
+    - Better organization for teams where different people handle different areas
+    - Total of 100-200 items across all checklists for large documents
+  - **Frontend Status**: Backend complete, frontend UI implementation pending (requires ai-checklist.js updates for workstream selection and batch preview)
+  - **Files Created**: services/document-analyzer.js
+  - **Files Modified**: services/ai-service.js (batch functions), server.js (3 new endpoints)
+
 - **AI Service Comprehensive Extraction Fix - 7-Point Enhancement** (October 16, 2025):
   - **Fixed Unicode Characters**: Replaced corrupted emoji (⚠️, ✅, ❌) with plain text ([!], [OK], [X]) to prevent parsing issues
   - **Increased Token Limits**: Set max_tokens to 16,384 for OpenAI GPT-4o (maximum supported by model, allows 150+ item responses)
