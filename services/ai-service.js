@@ -372,14 +372,23 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
   "reasoning": "1-2 sentence explanation of why this checklist structure was chosen"
 }
 
-Requirements:
-- Minimum ${hasAttachments ? '100' : '40'} total items across all sections for comprehensive coverage
-- 5-12 sections for complex documents, at least 3 sections minimum
-- 8-20 items per major section
-- Mix of field types (not all checkboxes)
-- Specific, atomic, and actionable items
-- Professional language
-- EXHAUSTIVE, MAXIMUM COVERAGE approach`;
+[!] ABSOLUTE REQUIREMENTS - NON-NEGOTIABLE:
+${hasAttachments ? `
+- MINIMUM 100 ITEMS ACROSS ALL SECTIONS (or generation has failed)
+- TARGET: 120-180 items for large documents
+- 6-12 major sections
+- 10-20 items per major section
+` : `
+- MINIMUM 40 items across all sections
+- 5-8 major sections
+- 8-15 items per section
+`}
+- Every complex task broken into 5-15 atomic substeps
+- Validation items for each deliverable
+- NO summarization - FULL extraction only
+- Specific, technical, actionable items
+
+[!] FINAL CHECK: Count your items. If fewer than ${hasAttachments ? '100' : '40'}, you have NOT followed instructions. Add more granular items.`;
 
   return prompt;
 }
