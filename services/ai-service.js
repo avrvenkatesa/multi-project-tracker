@@ -495,13 +495,128 @@ async function callAI(prompt, sourceType) {
 }
 
 /**
+ * Generate multiple checklists from one document based on workstream analysis
+ */
+async function generateMultipleChecklists(sourceType, sourceData, attachmentIds, workstreams) {
+  const results = [];
+  
+  // Get full document content
+  let contextText = '';
+  if (sourceData.use_description) {
+    contextText = buildDescriptionContext(sourceType, sourceData);
+  }
+  
+  const attachmentContent = await getAttachmentContent(attachmentIds);
+  const fullContext = contextText + attachmentContent;
+  
+  console.log(`Generating ${workstreams.length} checklists from document...`);
+  
+  // Generate checklist for each workstream
+  for (let i = 0; i < workstreams.length; i++) {
+    const workstream = workstreams[i];
+    
+    console.log(`[${i + 1}/${workstreams.length}] Generating: ${workstream.name}`);
+    
+    try {
+      const focusedPrompt = buildWorkstreamPrompt(
+        sourceType,
+        sourceData,
+        fullContext,
+        workstream,
+        i + 1,
+        workstreams.length
+      );
+      
+      const checklist = await callAI(focusedPrompt, sourceType);
+      
+      results.push({
+        workstream_name: workstream.name,
+        checklist: checklist,
+        success: true
+      });
+      
+      // Small delay between API calls to avoid rate limits
+      if (i < workstreams.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+    } catch (error) {
+      console.error(`Failed to generate checklist for ${workstream.name}:`, error);
+      results.push({
+        workstream_name: workstream.name,
+        error: error.message,
+        success: false
+      });
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Build focused prompt for a specific workstream
+ */
+function buildWorkstreamPrompt(type, data, fullContext, workstream, index, total) {
+  const sourceLabel = type === 'issue' ? 'issue' : 'action item';
+  
+  return `You are creating checklist ${index} of ${total} for a ${sourceLabel}.
+
+WORKSTREAM FOCUS: ${workstream.name}
+Description: ${workstream.description}
+Target Items: ${workstream.estimated_items}
+Key Deliverables: ${workstream.key_deliverables.join(', ')}
+
+FULL DOCUMENT CONTEXT:
+${fullContext}
+
+[!] CRITICAL: Extract ONLY items related to "${workstream.name}" workstream.
+Focus on: ${workstream.description}
+
+Create a comprehensive checklist with ${workstream.estimated_items} items covering:
+${workstream.key_deliverables.map((d, i) => `${i + 1}. ${d}`).join('\n')}
+
+REQUIREMENTS:
+- Generate ${workstream.estimated_items} items (±5 items acceptable)
+- Focus ONLY on this workstream, ignore other areas
+- Break tasks into atomic steps
+- Include: prerequisites → execution → validation → documentation
+- 3-6 major sections
+- 8-15 items per section
+
+Respond ONLY with valid JSON (no markdown):
+{
+  "title": "${workstream.name}",
+  "description": "Detailed checklist for ${workstream.description}",
+  "use_template": false,
+  "template_name": null,
+  "confidence": 85,
+  "sections": [
+    {
+      "title": "Section name",
+      "description": "Section purpose",
+      "items": [
+        {
+          "text": "Specific, actionable task",
+          "field_type": "checkbox|text|textarea|date|radio",
+          "field_options": null,
+          "is_required": true or false,
+          "help_text": "Completion guidance"
+        }
+      ]
+    }
+  ],
+  "reasoning": "Why this structure for ${workstream.name}"
+}`;
+}
+
+/**
  * Rate limiting check
  * TODO Phase 2b: Move rate limiting to database or Redis for persistence
  * Current in-memory approach resets on server restart
  */
 const rateLimitMap = new Map();
 
-function checkRateLimit(userId) {
+function checkRateLimit(userId, requestCount = 1) {
   const key = `ai-gen-${userId}`;
   const now = Date.now();
   const userRequests = rateLimitMap.get(key) || [];
@@ -509,13 +624,16 @@ function checkRateLimit(userId) {
   // Remove requests older than 1 hour
   const recentRequests = userRequests.filter(time => now - time < 3600000);
   
-  if (recentRequests.length >= 10) {
+  if (recentRequests.length + requestCount > 10) {
     const oldestRequest = Math.min(...recentRequests);
     const minutesUntilReset = Math.ceil((3600000 - (now - oldestRequest)) / 60000);
     return { allowed: false, minutesUntilReset };
   }
   
-  recentRequests.push(now);
+  // Add requestCount times to the array (for batch requests)
+  for (let i = 0; i < requestCount; i++) {
+    recentRequests.push(now);
+  }
   rateLimitMap.set(key, recentRequests);
   return { allowed: true, remaining: 10 - recentRequests.length };
 }
@@ -523,5 +641,6 @@ function checkRateLimit(userId) {
 module.exports = {
   generateChecklistFromIssue,
   generateChecklistFromActionItem,
+  generateMultipleChecklists,
   checkRateLimit
 };
