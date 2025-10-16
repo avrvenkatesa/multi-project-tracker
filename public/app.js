@@ -4829,11 +4829,6 @@ async function confirmBatchChecklistCreation() {
     document.getElementById('ai-checklist-batch-preview').classList.add('hidden');
     document.getElementById('ai-checklist-loading').classList.remove('hidden');
     
-    // Set header
-    const titleEl = document.getElementById('ai-checklist-item-title');
-    const itemTypeLabel = currentAIChecklistData.itemType === 'issue' ? 'Issue' : 'Action Item';
-    titleEl.innerHTML = `<div class="text-gray-600 text-xs font-normal">${itemTypeLabel}: ${currentAIChecklistData.itemTitle}</div>`;
-    
     // Setup progress UI
     document.getElementById('loading-main-text').textContent = `Creating ${totalChecklists} checklists...`;
     document.getElementById('loading-sub-text').textContent = 'Saving to database';

@@ -27,7 +27,8 @@ Preferred communication style: Simple, everyday language.
   - Added 2-minute timeout to frontend batch generation requests (public/app.js)
   - Enhanced batch generation logging for better debugging (server.js, services/ai-service.js)
   - Fixed "Multiple Focused Checklists" button triggering wrong function - added event propagation prevention (public/app.js)
-  - Fixed null element error in batch generation by removing reference to non-existent UI element (public/app.js)
+  - Fixed null element error in batch generation by removing reference to non-existent UI element in generateMultipleChecklists (public/app.js)
+  - Fixed null element error in batch creation by removing reference to non-existent UI element in confirmBatchChecklistCreation (public/app.js)
   - Fixed "Generation Failed" error with successful backend - increased frontend timeout to 5 minutes for large batch generations (public/app.js)
 
 - **Enhanced Modal Context Display** (October 16, 2025):
