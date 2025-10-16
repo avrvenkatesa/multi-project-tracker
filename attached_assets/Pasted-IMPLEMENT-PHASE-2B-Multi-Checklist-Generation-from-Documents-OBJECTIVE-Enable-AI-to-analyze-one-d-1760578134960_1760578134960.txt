@@ -1,0 +1,1267 @@
+IMPLEMENT PHASE 2B: Multi-Checklist Generation from Documents
+
+OBJECTIVE:
+Enable AI to analyze one document (like a 92-page SOW) and generate multiple focused 
+checklists instead of one generic checklist. Also fix existing AI prompt issues.
+
+CURRENT STATE:
+- One issue → Generate button → One 40-item generic checklist ❌
+
+TARGET STATE:
+- One issue → Generate button → AI analyzes document → Suggests 5 workstreams → 
+  User chooses → Generates 5 comprehensive checklists (30-40 items each) ✅
+
+ESTIMATED TIME: 6-8 hours
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 2B FEATURES TO IMPLEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Feature 1: Document Analysis API (detects workstreams)
+Feature 2: Batch Checklist Generation (creates multiple checklists)
+Feature 3: Multi-Preview UI (shows all checklists before creation)
+Feature 4: Enhanced AI Prompt (fixes to generate comprehensive items)
+Feature 5: Workstream Detection Logic (identifies phases/areas in documents)
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION PLAN
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: Fix Existing AI Prompt Issues (server/ai-service.js)               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1.1 Fix Unicode Characters
+────────────────────────
+In buildEnhancedPrompt() function, replace corrupted characters:
+âš ï¸ → ⚠️  (or use [!])
+âœ… → ✅  (or use [OK])
+âŒ → ❌  (or use [X])
+
+1.2 Increase Token Limit
+────────────────────────
+Line ~384: Change max_tokens from 16000 to 20000
+
+1.3 Strengthen System Message
+────────────────────────
+Line ~376: Update system message to emphasize 100+ items requirement
+
+1.4 Add Debug Logging
+────────────────────────
+Add console.log in buildEnhancedPrompt() showing context length and preview
+
+1.5 Add Granularity Examples
+────────────────────────
+Add section showing ❌ "Migrate AD" vs ✅ 15 specific granular items
+
+1.6 Add Mandatory Targets
+────────────────────────
+Add "YOU MUST GENERATE AT LEAST 100 ITEMS" section with document size guidelines
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: Create Document Analysis Service (NEW FILE)                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+CREATE: server/document-analyzer.js
+
+/**
+ * Analyze document to detect workstreams/phases for multi-checklist generation
+ */
+const OpenAI = require('openai');
+const Anthropic = require('@anthropic-ai/sdk');
+
+const AI_PROVIDER = process.env.AI_PROVIDER || 'openai';
+let aiClient;
+
+if (AI_PROVIDER === 'openai') {
+  aiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+} else if (AI_PROVIDER === 'anthropic') {
+  aiClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
+
+async function analyzeDocumentForWorkstreams(documentText, documentName) {
+  const prompt = `Analyze this document and identify distinct workstreams, phases, or major areas that should each have their own separate checklist.
+
+Document: ${documentName}
+Content:
+${documentText.substring(0, 10000)}
+
+Identify 3-8 distinct workstreams that meet these criteria:
+- Each represents a separate major area of work
+- Each has at least 10-15 distinct tasks/requirements
+- Logical separation (e.g., Infrastructure Setup, Data Migration, Testing, Training)
+- Could be executed by different teams or in different phases
+
+Common patterns to look for:
+- Project phases (Planning, Execution, Validation, Closeout)
+- Technical domains (Infrastructure, Applications, Security, Network)
+- Migration stages (Assessment, Setup, Migration, Validation, Cutover)
+- Workstreams by system (AD Migration, File Server, Database, Application)
+
+Respond ONLY with valid JSON:
+{
+  "document_type": "SOW|Requirements|Specification|Project Plan|Other",
+  "complexity": "Simple|Medium|Complex",
+  "total_estimated_items": 120,
+  "recommendation": "multiple|single",
+  "workstreams": [
+    {
+      "name": "Infrastructure & Network Setup",
+      "description": "AWS account setup, VPC, networking, security groups",
+      "estimated_items": 35,
+      "priority": "high|medium|low",
+      "dependencies": ["None"] or ["Infrastructure Setup"],
+      "key_deliverables": ["VPC configured", "VPN established", "Security groups created"]
+    }
+  ],
+  "reasoning": "Why this breakdown makes sense for the document"
+}
+
+Requirements:
+- Identify 3-8 workstreams for complex documents
+- Each workstream should have 15-40 estimated items
+- Total estimated items should be 100-200 for large documents
+- Workstreams should be logically independent where possible`;
+
+  try {
+    let response;
+    
+    if (AI_PROVIDER === 'openai') {
+      const completion = await aiClient.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: 'You are a technical project analyst who identifies distinct workstreams in documents. Respond with valid JSON only.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 2000
+      });
+      response = completion.choices[0].message.content;
+    } else if (AI_PROVIDER === 'anthropic') {
+      const message = await aiClient.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      });
+      response = message.content[0].text;
+    }
+    
+    response = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const analysis = JSON.parse(response);
+    
+    return analysis;
+    
+  } catch (error) {
+    console.error('Document analysis error:', error);
+    throw new Error(`Failed to analyze document: ${error.message}`);
+  }
+}
+
+module.exports = {
+  analyzeDocumentForWorkstreams
+};
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: Add Batch Generation Functions (server/ai-service.js)              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ADD to server/ai-service.js:
+
+/**
+ * Generate multiple checklists from one document based on workstream analysis
+ */
+async function generateMultipleChecklists(sourceType, sourceData, attachmentIds, workstreams) {
+  const results = [];
+  
+  // Get full document content
+  let contextText = '';
+  if (sourceData.use_description) {
+    contextText = buildDescriptionContext(sourceType, sourceData);
+  }
+  
+  const attachmentContent = await getAttachmentContent(attachmentIds);
+  const fullContext = contextText + attachmentContent;
+  
+  console.log(`Generating ${workstreams.length} checklists from document...`);
+  
+  // Generate checklist for each workstream
+  for (let i = 0; i < workstreams.length; i++) {
+    const workstream = workstreams[i];
+    
+    console.log(`[${i + 1}/${workstreams.length}] Generating: ${workstream.name}`);
+    
+    try {
+      const focusedPrompt = buildWorkstreamPrompt(
+        sourceType,
+        sourceData,
+        fullContext,
+        workstream,
+        i + 1,
+        workstreams.length
+      );
+      
+      const checklist = await callAI(focusedPrompt, sourceType);
+      
+      results.push({
+        workstream_name: workstream.name,
+        checklist: checklist,
+        success: true
+      });
+      
+      // Small delay between API calls to avoid rate limits
+      if (i < workstreams.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+    } catch (error) {
+      console.error(`Failed to generate checklist for ${workstream.name}:`, error);
+      results.push({
+        workstream_name: workstream.name,
+        error: error.message,
+        success: false
+      });
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Build focused prompt for a specific workstream
+ */
+function buildWorkstreamPrompt(type, data, fullContext, workstream, index, total) {
+  const sourceLabel = type === 'issue' ? 'issue' : 'action item';
+  
+  return `You are creating checklist ${index} of ${total} for a ${sourceLabel}.
+
+WORKSTREAM FOCUS: ${workstream.name}
+Description: ${workstream.description}
+Target Items: ${workstream.estimated_items}
+Key Deliverables: ${workstream.key_deliverables.join(', ')}
+
+FULL DOCUMENT CONTEXT:
+${fullContext}
+
+⚠️ CRITICAL: Extract ONLY items related to "${workstream.name}" workstream.
+Focus on: ${workstream.description}
+
+Create a comprehensive checklist with ${workstream.estimated_items} items covering:
+${workstream.key_deliverables.map((d, i) => `${i + 1}. ${d}`).join('\n')}
+
+REQUIREMENTS:
+- Generate ${workstream.estimated_items} items (±5 items)
+- Focus ONLY on this workstream, ignore other areas
+- Break tasks into atomic steps
+- Include: prerequisites → execution → validation → documentation
+- 3-6 major sections
+- 8-15 items per section
+
+Respond ONLY with valid JSON (no markdown):
+{
+  "title": "${workstream.name}",
+  "description": "Detailed checklist for ${workstream.description}",
+  "use_template": false,
+  "template_name": null,
+  "confidence": 85,
+  "sections": [
+    {
+      "title": "Section name",
+      "description": "Section purpose",
+      "items": [
+        {
+          "text": "Specific, actionable task",
+          "field_type": "checkbox|text|textarea|date|radio",
+          "field_options": null,
+          "is_required": true or false,
+          "help_text": "Completion guidance"
+        }
+      ]
+    }
+  ],
+  "reasoning": "Why this structure for ${workstream.name}"
+}`;
+}
+
+// Add to exports
+module.exports = {
+  generateChecklistFromIssue,
+  generateChecklistFromActionItem,
+  generateMultipleChecklists,  // NEW
+  checkRateLimit
+};
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: Add API Endpoints (server.js)                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ADD to server.js:
+
+const { analyzeDocumentForWorkstreams } = require('./server/document-analyzer');
+const { generateMultipleChecklists } = require('./server/ai-service');
+
+// POST /api/checklists/analyze-document - Analyze document for workstreams
+app.post('/api/checklists/analyze-document', authenticateToken, async (req, res) => {
+  try {
+    const { source_type, source_id, attachment_ids } = req.body;
+    const userId = req.user.id;
+    
+    if (!attachment_ids || attachment_ids.length === 0) {
+      return res.status(400).json({ error: 'At least one attachment required for analysis' });
+    }
+    
+    // Get attachment content
+    const result = await pool.query(
+      `SELECT id, original_name, file_path, file_type, extracted_text, file_size
+       FROM attachments 
+       WHERE id = ANY($1)
+       ORDER BY id`,
+      [attachment_ids]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attachments not found' });
+    }
+    
+    // Extract text from first/largest attachment
+    const attachment = result.rows[0];
+    let documentText = attachment.extracted_text;
+    
+    if (!documentText) {
+      const { extractTextFromFile } = require('./server/file-processor');
+      documentText = await extractTextFromFile(attachment.file_path, attachment.file_type);
+    }
+    
+    // Analyze for workstreams
+    console.log(`Analyzing ${attachment.original_name} for workstreams...`);
+    const analysis = await analyzeDocumentForWorkstreams(documentText, attachment.original_name);
+    
+    res.json(analysis);
+    
+  } catch (error) {
+    console.error('Document analysis error:', error);
+    res.status(500).json({ 
+      error: 'Failed to analyze document',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/checklists/generate-batch - Generate multiple checklists
+app.post('/api/checklists/generate-batch', authenticateToken, async (req, res) => {
+  try {
+    const { 
+      source_type, 
+      source_id, 
+      attachment_ids,
+      workstreams,
+      use_description 
+    } = req.body;
+    const userId = req.user.id;
+    
+    // Validation
+    if (!workstreams || workstreams.length === 0) {
+      return res.status(400).json({ error: 'Workstreams required' });
+    }
+    
+    if (workstreams.length > 10) {
+      return res.status(400).json({ error: 'Maximum 10 checklists per batch' });
+    }
+    
+    // Rate limiting - count as N generations
+    const rateLimit = checkRateLimit(userId, workstreams.length);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({ 
+        error: 'Rate limit exceeded',
+        message: `This would exceed your limit. Try again in ${rateLimit.minutesUntilReset} minutes.`
+      });
+    }
+    
+    // Get source data
+    let sourceData;
+    if (source_type === 'issue') {
+      const result = await pool.query(
+        `SELECT i.*, p.id as project_id, p.name as project_name
+         FROM issues i
+         INNER JOIN projects p ON i.project_id = p.id
+         WHERE i.id = $1`,
+        [source_id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Issue not found' });
+      }
+      sourceData = result.rows[0];
+    } else {
+      const result = await pool.query(
+        `SELECT ai.*, p.id as project_id, p.name as project_name
+         FROM action_items ai
+         INNER JOIN projects p ON ai.project_id = p.id
+         WHERE ai.id = $1`,
+        [source_id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Action item not found' });
+      }
+      sourceData = result.rows[0];
+    }
+    
+    sourceData.use_description = use_description;
+    
+    // Generate multiple checklists
+    console.log(`Batch generation: ${workstreams.length} checklists for ${source_type} #${source_id}`);
+    const results = await generateMultipleChecklists(
+      source_type,
+      sourceData,
+      attachment_ids,
+      workstreams
+    );
+    
+    // Add metadata
+    const response = {
+      source_id,
+      source_type,
+      project_id: sourceData.project_id,
+      workstreams_requested: workstreams.length,
+      checklists_generated: results.filter(r => r.success).length,
+      checklists_failed: results.filter(r => !r.success).length,
+      results: results,
+      rate_limit_remaining: rateLimit.remaining
+    };
+    
+    res.json(response);
+    
+  } catch (error) {
+    console.error('Batch generation error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate checklists',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/checklists/confirm-batch - Create multiple checklists from previews
+app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) => {
+  try {
+    const { previews, source_id, source_type, project_id } = req.body;
+    const userId = req.user.id;
+    
+    if (!previews || !Array.isArray(previews) || previews.length === 0) {
+      return res.status(400).json({ error: 'Checklist previews required' });
+    }
+    
+    const client = await pool.connect();
+    const createdChecklists = [];
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Create all checklists
+      for (const preview of previews) {
+        // Create template if needed
+        let templateId = null;
+        if (!preview.use_template) {
+          const templateResult = await client.query(
+            `INSERT INTO checklist_templates (
+              name, description, category, created_by, is_reusable
+            ) VALUES ($1, $2, $3, $4, $5)
+            RETURNING id`,
+            [
+              preview.title,
+              preview.description,
+              'AI Generated',
+              userId,
+              false
+            ]
+          );
+          templateId = templateResult.rows[0].id;
+          
+          // Create template sections and items
+          for (const section of preview.sections) {
+            const sectionResult = await client.query(
+              `INSERT INTO checklist_template_sections (
+                template_id, title, description, display_order
+              ) VALUES ($1, $2, $3, $4)
+              RETURNING id`,
+              [templateId, section.title, section.description, section.display_order || 0]
+            );
+            
+            for (let i = 0; i < section.items.length; i++) {
+              const item = section.items[i];
+              await client.query(
+                `INSERT INTO checklist_template_items (
+                  section_id, text, field_type, field_options, is_required, 
+                  help_text, display_order
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [
+                  sectionResult.rows[0].id,
+                  item.text,
+                  item.field_type || 'checkbox',
+                  item.field_options ? JSON.stringify(item.field_options) : null,
+                  item.is_required || false,
+                  item.help_text || null,
+                  i
+                ]
+              );
+            }
+          }
+        }
+        
+        // Create checklist instance
+        const checklistResult = await client.query(
+          `INSERT INTO checklists (
+            title, description, project_id, template_id, 
+            related_issue_id, related_action_id, created_by,
+            is_ai_generated, ai_confidence
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          RETURNING *`,
+          [
+            preview.title,
+            preview.description,
+            project_id,
+            templateId,
+            source_type === 'issue' ? source_id : null,
+            source_type === 'action-item' ? source_id : null,
+            userId,
+            true,
+            preview.confidence || 85
+          ]
+        );
+        
+        createdChecklists.push(checklistResult.rows[0]);
+      }
+      
+      await client.query('COMMIT');
+      
+      res.status(201).json({
+        success: true,
+        checklists: createdChecklists,
+        count: createdChecklists.length,
+        message: `Successfully created ${createdChecklists.length} checklists`
+      });
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('Batch confirm error:', error);
+    res.status(500).json({ 
+      error: 'Failed to create checklists',
+      message: error.message 
+    });
+  }
+});
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: Update Frontend UI (public/js/ai-checklist.js)                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ADD to public/js/ai-checklist.js:
+
+let documentAnalysis = null;
+let batchPreviews = null;
+
+/**
+ * Modified generation flow with analysis step
+ */
+async function generateChecklistWithOptions(sourceType, sourceId) {
+  try {
+    await showSourceSelectionModal(sourceType, sourceId);
+  } catch (error) {
+    console.error('Generation error:', error);
+    showToast('Failed to start generation', 'error');
+  }
+}
+
+/**
+ * Proceed with generation - analyze document first
+ */
+async function proceedWithGeneration(sourceType, sourceId) {
+  const useDescription = document.getElementById('useDescription')?.checked;
+  const selectedAttachmentIds = Array.from(
+    document.querySelectorAll('.attachment-select:checked')
+  ).map(cb => parseInt(cb.dataset.attachmentId));
+  
+  if (!useDescription && selectedAttachmentIds.length === 0) {
+    showToast('Please select at least one source', 'error');
+    return;
+  }
+  
+  hideSourceSelectionModal();
+  
+  // If attachments selected, analyze for workstreams first
+  if (selectedAttachmentIds.length > 0) {
+    await analyzeAndOfferOptions(sourceType, sourceId, useDescription, selectedAttachmentIds);
+  } else {
+    // No attachments, do single generation
+    await generateSingleChecklist(sourceType, sourceId, useDescription, []);
+  }
+}
+
+/**
+ * Analyze document and offer single vs multiple checklist options
+ */
+async function analyzeAndOfferOptions(sourceType, sourceId, useDescription, attachmentIds) {
+  try {
+    showLoadingModal('Analyzing document...');
+    
+    const response = await fetch('/api/checklists/analyze-document', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_type: sourceType,
+        source_id: sourceId,
+        attachment_ids: attachmentIds
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Document analysis failed');
+    }
+    
+    documentAnalysis = await response.json();
+    
+    hideLoadingModal();
+    
+    // Show options modal
+    showGenerationOptionsModal(sourceType, sourceId, useDescription, attachmentIds);
+    
+  } catch (error) {
+    console.error('Analysis error:', error);
+    hideLoadingModal();
+    showToast(`Analysis failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Show modal with single vs multiple checklist options
+ */
+function showGenerationOptionsModal(sourceType, sourceId, useDescription, attachmentIds) {
+  const modal = document.getElementById('generationOptionsModal') || createGenerationOptionsModal();
+  
+  const workstreamsList = documentAnalysis.workstreams.map((w, i) => `
+    <li class="workstream-item">
+      <div class="workstream-header">
+        <strong>${i + 1}. ${w.name}</strong>
+        <span class="item-badge">${w.estimated_items} items</span>
+      </div>
+      <p class="workstream-desc">${w.description}</p>
+      <div class="workstream-deliverables">
+        <strong>Key Deliverables:</strong> ${w.key_deliverables.join(', ')}
+      </div>
+    </li>
+  `).join('');
+  
+  modal.querySelector('.modal-body').innerHTML = `
+    <div class="generation-options">
+      <h4>📊 Document Analysis Complete</h4>
+      
+      <div class="analysis-summary">
+        <p><strong>Document Type:</strong> ${documentAnalysis.document_type}</p>
+        <p><strong>Complexity:</strong> ${documentAnalysis.complexity}</p>
+        <p><strong>Estimated Total Items:</strong> ${documentAnalysis.total_estimated_items}</p>
+      </div>
+      
+      <div class="workstreams-detected">
+        <h5>Detected Workstreams (${documentAnalysis.workstreams.length}):</h5>
+        <ul class="workstreams-list">
+          ${workstreamsList}
+        </ul>
+      </div>
+      
+      <div class="ai-recommendation">
+        <strong>🤖 AI Recommendation:</strong>
+        <p>${documentAnalysis.reasoning}</p>
+      </div>
+      
+      <div class="generation-choice">
+        <h5>How would you like to generate checklists?</h5>
+        
+        <div class="option-card" onclick="selectGenerationOption('single')">
+          <div class="option-header">
+            <input type="radio" name="generation-type" value="single" id="optionSingle">
+            <label for="optionSingle">
+              <strong>📋 One Comprehensive Checklist</strong>
+            </label>
+          </div>
+          <p class="option-desc">
+            Generate a single large checklist with all ${documentAnalysis.total_estimated_items} 
+            items organized into sections. Best for smaller teams or when one person manages everything.
+          </p>
+          <div class="option-meta">
+            <span>~${documentAnalysis.total_estimated_items} items</span>
+            <span>1 checklist</span>
+            <span>Faster generation</span>
+          </div>
+        </div>
+        
+        <div class="option-card" onclick="selectGenerationOption('multiple')">
+          <div class="option-header">
+            <input type="radio" name="generation-type" value="multiple" id="optionMultiple" checked>
+            <label for="optionMultiple">
+              <strong>📚 ${documentAnalysis.workstreams.length} Focused Checklists</strong>
+            </label>
+          </div>
+          <p class="option-desc">
+            Generate ${documentAnalysis.workstreams.length} separate checklists, each focused on 
+            one workstream. Best for larger teams where different people handle different areas.
+          </p>
+          <div class="option-meta">
+            <span>~${documentAnalysis.total_estimated_items} items total</span>
+            <span>${documentAnalysis.workstreams.length} checklists</span>
+            <span>Better organization</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-actions">
+        <button onclick="confirmGenerationChoice('${sourceType}', ${sourceId}, ${useDescription}, [${attachmentIds}])" 
+                class="btn-primary btn-large">
+          🚀 Generate Checklists
+        </button>
+        <button onclick="hideGenerationOptionsModal()" class="btn-secondary">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  modal.style.display = 'block';
+}
+
+function selectGenerationOption(type) {
+  document.getElementById(`option${type === 'single' ? 'Single' : 'Multiple'}`).checked = true;
+}
+
+function createGenerationOptionsModal() {
+  const modalHTML = `
+    <div id="generationOptionsModal" class="modal">
+      <div class="modal-content modal-xlarge">
+        <div class="modal-header">
+          <h3>🤖 Choose Generation Method</h3>
+          <button onclick="hideGenerationOptionsModal()" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body"></div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  return document.getElementById('generationOptionsModal');
+}
+
+function hideGenerationOptionsModal() {
+  const modal = document.getElementById('generationOptionsModal');
+  if (modal) modal.style.display = 'none';
+}
+
+/**
+ * Confirm generation choice and proceed
+ */
+async function confirmGenerationChoice(sourceType, sourceId, useDescription, attachmentIds) {
+  const selectedOption = document.querySelector('input[name="generation-type"]:checked')?.value;
+  
+  hideGenerationOptionsModal();
+  
+  if (selectedOption === 'single') {
+    await generateSingleChecklist(sourceType, sourceId, useDescription, attachmentIds);
+  } else {
+    await generateMultipleChecklists(sourceType, sourceId, useDescription, attachmentIds);
+  }
+}
+
+/**
+ * Generate single comprehensive checklist (existing flow)
+ */
+async function generateSingleChecklist(sourceType, sourceId, useDescription, attachmentIds) {
+  showAIGenerationModal(sourceType);
+  
+  try {
+    const response = await fetch('/api/checklists/generate-with-options', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_type: sourceType,
+        source_id: sourceId,
+        use_description: useDescription,
+        attachment_ids: attachmentIds
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || error.error);
+    }
+    
+    currentPreview = await response.json();
+    displayChecklistPreview(currentPreview);
+    
+  } catch (error) {
+    console.error('Generation error:', error);
+    hideAIGenerationModal();
+    showToast(`Failed to generate: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Generate multiple checklists from workstreams
+ */
+async function generateMultipleChecklists(sourceType, sourceId, useDescription, attachmentIds) {
+  try {
+    showLoadingModal(`Generating ${documentAnalysis.workstreams.length} checklists...`);
+    
+    const response = await fetch('/api/checklists/generate-batch', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_type: sourceType,
+        source_id: sourceId,
+        use_description: useDescription,
+        attachment_ids: attachmentIds,
+        workstreams: documentAnalysis.workstreams
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Batch generation failed');
+    }
+    
+    batchPreviews = await response.json();
+    
+    hideLoadingModal();
+    showBatchPreviewModal(batchPreviews);
+    
+  } catch (error) {
+    console.error('Batch generation error:', error);
+    hideLoadingModal();
+    showToast(`Batch generation failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Show multi-checklist preview modal
+ */
+function showBatchPreviewModal(batch) {
+  const modal = document.getElementById('batchPreviewModal') || createBatchPreviewModal();
+  
+  const checklistPreviews = batch.results.map((result, index) => {
+    if (!result.success) {
+      return `
+        <div class="batch-preview-item error">
+          <h5>❌ ${result.workstream_name}</h5>
+          <p class="error-text">Generation failed: ${result.error}</p>
+        </div>
+      `;
+    }
+    
+    const cl = result.checklist;
+    const totalItems = cl.sections.reduce((sum, s) => sum + s.items.length, 0);
+    
+    return `
+      <div class="batch-preview-item" id="preview-${index}">
+        <div class="preview-header">
+          <h5>${index + 1}. ${cl.title}</h5>
+          <span class="item-count">${totalItems} items, ${cl.sections.length} sections</span>
+        </div>
+        <p class="preview-desc">${cl.description}</p>
+        <div class="preview-sections-summary">
+          ${cl.sections.slice(0, 3).map(s => 
+            `<span class="section-badge">${s.title} (${s.items.length})</span>`
+          ).join('')}
+          ${cl.sections.length > 3 ? `<span class="more">+${cl.sections.length - 3} more</span>` : ''}
+        </div>
+        <button onclick="expandPreview(${index})" class="btn-link">
+          👁️ View Details
+        </button>
+      </div>
+    `;
+  }).join('');
+  
+  const successCount = batch.results.filter(r => r.success).length;
+  
+  modal.querySelector('.modal-body').innerHTML = `
+    <div class="batch-preview-container">
+      <div class="batch-summary">
+        <h4>✅ Generated ${successCount} of ${batch.workstreams_requested} Checklists</h4>
+        <p>Review the checklists below and confirm to create them all.</p>
+      </div>
+      
+      <div class="batch-previews">
+        ${checklistPreviews}
+      </div>
+      
+      <div class="modal-actions">
+        <button onclick="confirmBatchCreation()" class="btn-primary btn-large">
+          ✅ Create All ${successCount} Checklists
+        </button>
+        <button onclick="hideBatchPreviewModal()" class="btn-secondary">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  modal.style.display = 'block';
+}
+
+function createBatchPreviewModal() {
+  const modalHTML = `
+    <div id="batchPreviewModal" class="modal">
+      <div class="modal-content modal-xlarge">
+        <div class="modal-header">
+          <h3>📚 Preview Multiple Checklists</h3>
+          <button onclick="hideBatchPreviewModal()" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body"></div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  return document.getElementById('batchPreviewModal');
+}
+
+function hideBatchPreviewModal() {
+  const modal = document.getElementById('batchPreviewModal');
+  if (modal) modal.style.display = 'none';
+}
+
+/**
+ * Confirm and create all checklists
+ */
+async function confirmBatchCreation() {
+  try {
+    showLoadingModal('Creating checklists...');
+    
+    const successfulPreviews = batchPreviews.results
+      .filter(r => r.success)
+      .map(r => r.checklist);
+    
+    const response = await fetch('/api/checklists/confirm-batch', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        previews: successfulPreviews,
+        source_id: batchPreviews.source_id,
+        source_type: batchPreviews.source_type,
+        project_id: batchPreviews.project_id
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to create checklists');
+    }
+    
+    const result = await response.json();
+    
+    hideLoadingModal();
+    hideBatchPreviewModal();
+    
+    showToast(`✅ Created ${result.count} checklists successfully!`, 'success');
+    
+    // Refresh the page or navigate to checklists
+    setTimeout(() => {
+      window.location.href = `/projects/${batchPreviews.project_id}/checklists`;
+    }, 1500);
+    
+  } catch (error) {
+    console.error('Batch creation error:', error);
+    hideLoadingModal();
+    showToast(`Failed to create checklists: ${error.message}`, 'error');
+  }
+}
+
+// Loading modal helper
+function showLoadingModal(message) {
+  let modal = document.getElementById('loadingModal');
+  if (!modal) {
+    const html = `
+      <div id="loadingModal" class="modal">
+        <div class="modal-content modal-small">
+          <div class="loading-content">
+            <div class="spinner"></div>
+            <p id="loadingMessage"></p>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', html);
+    modal = document.getElementById('loadingModal');
+  }
+  document.getElementById('loadingMessage').textContent = message;
+  modal.style.display = 'block';
+}
+
+function hideLoadingModal() {
+  const modal = document.getElementById('loadingModal');
+  if (modal) modal.style.display = 'none';
+}
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 6: Add CSS Styles (public/css/checklists.css)                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ADD to public/css/checklists.css:
+
+/* Generation Options Modal */
+.generation-options {
+  padding: 20px;
+}
+
+.analysis-summary {
+  background: #f0f9ff;
+  padding: 15px;
+  border-radius: 8px;
+  margin: 15px 0;
+  border-left: 4px solid #3b82f6;
+}
+
+.analysis-summary p {
+  margin: 5px 0;
+  color: #1f2937;
+}
+
+.workstreams-detected {
+  margin: 20px 0;
+}
+
+.workstreams-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+}
+
+.workstream-item {
+  background: #f9fafb;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  border: 2px solid #e5e7eb;
+}
+
+.workstream-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.workstream-desc {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+.workstream-deliverables {
+  font-size: 13px;
+  color: #4b5563;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.item-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ai-recommendation {
+  background: #fef3c7;
+  padding: 15px;
+  border-radius: 8px;
+  margin: 20px 0;
+  border-left: 4px solid #f59e0b;
+}
+
+.generation-choice {
+  margin: 25px 0;
+}
+
+.option-card {
+  background: white;
+  border: 3px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 15px 0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.option-card:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+}
+
+.option-card input[type="radio"]:checked + label {
+  color: #3b82f6;
+  font-weight: 700;
+}
+
+.option-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.option-header input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.option-desc {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 10px 0;
+  padding-left: 32px;
+}
+
+.option-meta {
+  display: flex;
+  gap: 15px;
+  padding-left: 32px;
+  margin-top: 10px;
+}
+
+.option-meta span {
+  background: #f3f4f6;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+/* Batch Preview Modal */
+.batch-preview-container {
+  padding: 20px;
+}
+
+.batch-summary {
+  background: #d1fae5;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  border-left: 4px solid #10b981;
+}
+
+.batch-previews {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-height: 500px;
+  overflow-y: auto;
+  margin: 20px 0;
+}
+
+.batch-preview-item {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 20px;
+  transition: all 0.2s;
+}
+
+.batch-preview-item:hover {
+  border-color: #3b82f6;
+  background: white;
+}
+
+.batch-preview-item.error {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.preview-sections-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 15px 0;
+}
+
+.section-badge {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.section-badge .more {
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Loading Modal */
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 40px;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.modal-xlarge {
+  max-width: 1000px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, test:
+
+✅ Single Checklist Generation:
+   1. Generate from issue with SOW attachment
+   2. Should get 100-150 items instead of 40
+   3. Items should be SOW-specific
+
+✅ Document Analysis:
+   1. Upload SOW to issue
+   2. Click "Generate Checklist"
+   3. Should analyze and show 5-8 workstreams
+   4. Each workstream should have 20-40 estimated items
+
+✅ Multiple Checklist Generation:
+   1. Choose "Multiple Checklists" option
+   2. Should generate 5-8 separate checklists
+   3. Each checklist focused on one workstream
+   4. Total items should be 100-200 across all
+
+✅ Batch Preview:
+   1. Review all generated checklists
+   2. Each should have correct items
+   3. Confirm to create all at once
+
+✅ Rate Limiting:
+   1. Batch generation counts as N generations
+   2. Should respect 10/hour limit
