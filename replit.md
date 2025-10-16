@@ -10,7 +10,7 @@ Preferred communication style: Simple, everyday language.
 
 - **AI Service Comprehensive Extraction Fix - 7-Point Enhancement** (October 16, 2025):
   - **Fixed Unicode Characters**: Replaced corrupted emoji (⚠️, ✅, ❌) with plain text ([!], [OK], [X]) to prevent parsing issues
-  - **Increased Token Limits**: Raised max_tokens from 16,000 to 20,000 for OpenAI (allows 150+ item responses without truncation)
+  - **Increased Token Limits**: Set max_tokens to 16,384 for OpenAI GPT-4o (maximum supported by model, allows 150+ item responses)
   - **Debug Logging Added**: 
     - Context length logging in buildEnhancedPrompt() shows attachment text extraction success
     - Character count logging after file processing to verify SOW content is being used
@@ -18,8 +18,9 @@ Preferred communication style: Simple, everyday language.
   - **Mandatory Targets Section**: Added non-negotiable minimum targets (100 items for attachments, 40 for descriptions) with failure warnings
   - **Granularity Examples**: Added concrete 15-item examples showing how to decompose "Migrate Active Directory" and "Set up AWS infrastructure" tasks
   - **Strengthened Final Reminder**: Replaced weak "Requirements" with "ABSOLUTE REQUIREMENTS - NON-NEGOTIABLE" and item count verification
+  - **Fixed PDF Extraction**: Corrected pdf-parse import to use pdfParse.PDFParse() (resolves "pdf is not a function" error)
   - **Expected Results**: 100-180 items (up from 40), 10-20 items per section (up from 8), SOW-specific technical details throughout
-  - **Files Modified**: services/ai-service.js (buildEnhancedPrompt, callAI, getAttachmentContent functions)
+  - **Files Modified**: services/ai-service.js (buildEnhancedPrompt, callAI, getAttachmentContent), services/file-processor.js (PDF extraction fix)
 
 - **Comprehensive Extraction AI Enhancement** (October 15, 2025):
   - **Extraction-Focused Prompts**: Changed from "summarization" to "comprehensive extraction" approach in buildEnhancedPrompt()
