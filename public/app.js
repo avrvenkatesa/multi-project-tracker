@@ -4181,13 +4181,13 @@ let uploadedFiles = [];
 let workstreamAnalysis = null;
 
 // Update step indicator
-function updateChecklistGenerationStep(stepNumber) {
+function updateChecklistGenerationStep(stepNumber, markComplete = false) {
   const stepNames = ['', 'Source Selection', 'Source Analysis', 'Checklist Generation', 'Preview', 'Checklist Creation'];
   
   // Update step name in title
   const stepNameEl = document.getElementById('ai-checklist-step-name');
   if (stepNameEl) {
-    stepNameEl.textContent = ` - ${stepNames[stepNumber]}`;
+    stepNameEl.textContent = markComplete ? '' : ` - ${stepNames[stepNumber]}`;
   }
   
   // Update step indicators
@@ -4197,7 +4197,7 @@ function updateChecklistGenerationStep(stepNumber) {
     const label = indicator?.querySelector('span');
     const line = document.getElementById(`step-line-${i}`);
     
-    if (i < stepNumber) {
+    if (i < stepNumber || (i === stepNumber && markComplete)) {
       // Completed steps
       if (circle) {
         circle.className = 'w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-semibold';
@@ -4205,7 +4205,7 @@ function updateChecklistGenerationStep(stepNumber) {
       }
       if (label) label.className = 'text-xs text-green-600 ml-1.5';
       if (line) line.className = 'w-8 h-0.5 bg-green-500';
-    } else if (i === stepNumber) {
+    } else if (i === stepNumber && !markComplete) {
       // Current step
       if (circle) {
         circle.className = 'w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-semibold';
@@ -4508,6 +4508,8 @@ async function generateWithSelectedSources() {
   
   // If attachments selected, analyze for workstreams first
   if (selectedAttachmentIds.length > 0) {
+    // Set to Step 2: Source Analysis (active during loading)
+    updateChecklistGenerationStep(2);
     try {
       const analysisResponse = await axios.post('/api/checklists/analyze-document', {
         source_type: currentAIChecklistData.itemType,
@@ -4522,8 +4524,8 @@ async function generateWithSelectedSources() {
       renderWorkstreamAnalysis(workstreamAnalysis);
       document.getElementById('ai-checklist-workstream-analysis').classList.remove('hidden');
       
-      // Set to Step 2: Source Analysis
-      updateChecklistGenerationStep(2);
+      // Mark Step 2 as complete (analysis done, showing results)
+      updateChecklistGenerationStep(2, true);
       
     } catch (error) {
       document.getElementById('ai-checklist-loading').classList.add('hidden');
