@@ -1,5 +1,5 @@
 const fs = require('fs').promises;
-const pdf = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const mammoth = require('mammoth');
 const path = require('path');
 
@@ -27,9 +27,12 @@ async function extractTextFromFile(filePath, mimeType) {
 }
 
 async function extractFromPDF(filePath) {
+  let parser = null;
   try {
     const dataBuffer = await fs.readFile(filePath);
-    const data = await pdf.PDFParse(dataBuffer);
+    parser = new PDFParse({ data: dataBuffer });
+    
+    const data = await parser.getText();
     
     if (!data.text || data.text.trim().length === 0) {
       throw new Error('PDF appears to be empty or contains only images');
@@ -41,6 +44,10 @@ async function extractFromPDF(filePath) {
       throw error;
     }
     throw new Error(`PDF extraction failed: ${error.message}`);
+  } finally {
+    if (parser) {
+      await parser.destroy();
+    }
   }
 }
 
