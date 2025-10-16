@@ -8,6 +8,19 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **AI Service Comprehensive Extraction Fix - 7-Point Enhancement** (October 16, 2025):
+  - **Fixed Unicode Characters**: Replaced corrupted emoji (⚠️, ✅, ❌) with plain text ([!], [OK], [X]) to prevent parsing issues
+  - **Increased Token Limits**: Raised max_tokens from 16,000 to 20,000 for OpenAI (allows 150+ item responses without truncation)
+  - **Debug Logging Added**: 
+    - Context length logging in buildEnhancedPrompt() shows attachment text extraction success
+    - Character count logging after file processing to verify SOW content is being used
+  - **Strengthened System Message**: Changed from "comprehensive task decomposition" to "EXHAUSTIVELY DETAILED checklists with 100-200+ items" with explicit 100-item minimum for attachments
+  - **Mandatory Targets Section**: Added non-negotiable minimum targets (100 items for attachments, 40 for descriptions) with failure warnings
+  - **Granularity Examples**: Added concrete 15-item examples showing how to decompose "Migrate Active Directory" and "Set up AWS infrastructure" tasks
+  - **Strengthened Final Reminder**: Replaced weak "Requirements" with "ABSOLUTE REQUIREMENTS - NON-NEGOTIABLE" and item count verification
+  - **Expected Results**: 100-180 items (up from 40), 10-20 items per section (up from 8), SOW-specific technical details throughout
+  - **Files Modified**: services/ai-service.js (buildEnhancedPrompt, callAI, getAttachmentContent functions)
+
 - **Comprehensive Extraction AI Enhancement** (October 15, 2025):
   - **Extraction-Focused Prompts**: Changed from "summarization" to "comprehensive extraction" approach in buildEnhancedPrompt()
   - **Document-Size-Based Targets**: 
