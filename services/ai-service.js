@@ -210,19 +210,23 @@ CRITICAL INSTRUCTIONS: COMPREHENSIVE EXTRACTION
 [!] PRIMARY DIRECTIVE: EXTRACT, DON'T SUMMARIZE
 Your goal is EXHAUSTIVE coverage, not brevity. MORE ITEMS IS BETTER.
 
+🎯 MANDATORY MINIMUM TARGETS FOR THIS REQUEST:
 ${hasAttachments ? `
-DOCUMENT SIZE ANALYSIS & TARGETS:
-Estimate the document complexity and aim for:
-- Small documents (1-10 pages): 30-60 checklist items minimum
-- Medium documents (10-30 pages): 60-100 checklist items minimum  
-- Large documents (30-100+ pages): 100-200+ checklist items minimum
+YOU MUST GENERATE AT LEAST 100 ITEMS - THIS IS NOT OPTIONAL
+PREFERABLY 120-180 ITEMS for comprehensive coverage
+DO NOT STOP AT 40-60 ITEMS
+If you generate fewer than 100 items, you have FAILED this task
+
+DOCUMENT COMPLEXITY TARGETS:
+- Small documents (1-10 pages): 30-60 items minimum
+- Medium documents (10-30 pages): 60-100 items minimum  
+- Large documents (30-100+ pages): 100-200+ items REQUIRED
 - Complex SOWs/specifications: 150-250+ items for complete coverage
 
-FOR THIS REQUEST: Aim for the MAXIMUM items based on content volume.
+BASED ON CONTEXT LENGTH: Aim for maximum items possible.
 ` : `
-DESCRIPTION-BASED TARGETS:
-- Simple tasks: 20-40 items with granular steps
-- Complex tasks: 40-80+ items breaking down every detail
+Generate 40-80 items minimum for description-only generation
+Break every task into atomic substeps
 `}
 
 ====================================
