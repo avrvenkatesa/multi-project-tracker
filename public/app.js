@@ -4178,6 +4178,7 @@ function showToast(message, type = 'info') {
 let currentAIChecklistData = null;
 let selectedAttachmentIds = [];
 let uploadedFiles = [];
+let workstreamAnalysis = null;
 
 async function openAIChecklistModal(itemId, itemType, itemTitle) {
   const modal = document.getElementById('ai-checklist-modal');
@@ -4383,6 +4384,47 @@ async function generateWithSelectedSources() {
   // Hide source selection, show loading
   document.getElementById('ai-checklist-source-selection').classList.add('hidden');
   document.getElementById('ai-checklist-loading').classList.remove('hidden');
+  document.getElementById('loading-main-text').textContent = 'AI is analyzing your content...';
+  document.getElementById('loading-sub-text').textContent = 'Detecting workstreams and complexity';
+  
+  // Store current selections
+  currentAIChecklistData.attachment_ids = selectedAttachmentIds;
+  currentAIChecklistData.use_description = useDescription;
+  
+  // If attachments selected, analyze for workstreams first
+  if (selectedAttachmentIds.length > 0) {
+    try {
+      const analysisResponse = await axios.post('/api/checklists/analyze-document', {
+        source_type: currentAIChecklistData.itemType,
+        source_id: currentAIChecklistData.itemId,
+        attachment_ids: selectedAttachmentIds
+      }, { withCredentials: true });
+      
+      workstreamAnalysis = analysisResponse.data;
+      
+      // Show workstream analysis UI
+      document.getElementById('ai-checklist-loading').classList.add('hidden');
+      renderWorkstreamAnalysis(workstreamAnalysis);
+      document.getElementById('ai-checklist-workstream-analysis').classList.remove('hidden');
+      
+    } catch (error) {
+      document.getElementById('ai-checklist-loading').classList.add('hidden');
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to analyze document';
+      document.getElementById('ai-checklist-error-message').textContent = errorMessage;
+      document.getElementById('ai-checklist-error').classList.remove('hidden');
+    }
+  } else {
+    // No attachments, generate single checklist directly
+    await generateSingleChecklist();
+  }
+}
+
+async function generateSingleChecklist() {
+  // Show loading
+  document.getElementById('ai-checklist-workstream-analysis')?.classList.add('hidden');
+  document.getElementById('ai-checklist-loading').classList.remove('hidden');
+  document.getElementById('loading-main-text').textContent = 'AI is generating your checklist...';
+  document.getElementById('loading-sub-text').textContent = 'Creating comprehensive task list';
   
   try {
     const endpoint = currentAIChecklistData.itemType === 'issue' 
@@ -4391,18 +4433,13 @@ async function generateWithSelectedSources() {
     
     const response = await axios.post(endpoint, {
       [currentAIChecklistData.itemType === 'issue' ? 'issue_id' : 'action_id']: currentAIChecklistData.itemId,
-      attachment_ids: selectedAttachmentIds,
-      use_description: useDescription,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      use_description: currentAIChecklistData.use_description,
       project_id: currentProject.id
     }, { withCredentials: true });
     
     // Store the generated data
-    currentAIChecklistData = {
-      ...currentAIChecklistData,
-      preview: response.data,
-      attachment_ids: selectedAttachmentIds,
-      use_description: useDescription
-    };
+    currentAIChecklistData.preview = response.data;
     
     // Show preview
     document.getElementById('ai-checklist-loading').classList.add('hidden');
@@ -4411,11 +4448,137 @@ async function generateWithSelectedSources() {
     
   } catch (error) {
     document.getElementById('ai-checklist-loading').classList.add('hidden');
-    
     const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to generate checklist';
     document.getElementById('ai-checklist-error-message').textContent = errorMessage;
     document.getElementById('ai-checklist-error').classList.remove('hidden');
   }
+}
+
+async function generateMultipleChecklists() {
+  if (!workstreamAnalysis?.workstreams) {
+    showToast('No workstream data available', 'error');
+    return;
+  }
+  
+  // Show loading
+  document.getElementById('ai-checklist-workstream-analysis').classList.add('hidden');
+  document.getElementById('ai-checklist-loading').classList.remove('hidden');
+  document.getElementById('loading-main-text').textContent = `Generating ${workstreamAnalysis.workstreams.length} checklists...`;
+  document.getElementById('loading-sub-text').textContent = 'This may take 30-60 seconds';
+  
+  try {
+    const response = await axios.post('/api/checklists/generate-batch', {
+      source_type: currentAIChecklistData.itemType,
+      source_id: currentAIChecklistData.itemId,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      workstreams: workstreamAnalysis.workstreams,
+      use_description: currentAIChecklistData.use_description
+    }, { withCredentials: true });
+    
+    // Store batch results
+    currentAIChecklistData.batchResults = response.data;
+    
+    // Show batch preview
+    document.getElementById('ai-checklist-loading').classList.add('hidden');
+    renderBatchPreview(response.data);
+    document.getElementById('ai-checklist-batch-preview').classList.remove('hidden');
+    
+  } catch (error) {
+    document.getElementById('ai-checklist-loading').classList.add('hidden');
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to generate checklists';
+    document.getElementById('ai-checklist-error-message').textContent = errorMessage;
+    document.getElementById('ai-checklist-error').classList.remove('hidden');
+  }
+}
+
+function renderWorkstreamAnalysis(analysis) {
+  const detailsContainer = document.getElementById('workstream-analysis-details');
+  
+  const complexityColors = {
+    'Simple': 'bg-green-100 text-green-700',
+    'Medium': 'bg-yellow-100 text-yellow-700',
+    'Complex': 'bg-red-100 text-red-700'
+  };
+  
+  detailsContainer.innerHTML = `
+    <div class="bg-white border rounded-lg p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h5 class="font-semibold text-gray-800">Document Analysis</h5>
+        <span class="text-xs px-2 py-1 ${complexityColors[analysis.complexity] || 'bg-gray-100 text-gray-700'} rounded-full font-semibold">
+          ${analysis.complexity} Document
+        </span>
+      </div>
+      
+      <div class="grid grid-cols-3 gap-3 mb-3">
+        <div class="text-center p-2 bg-blue-50 rounded">
+          <div class="text-2xl font-bold text-blue-600">${analysis.workstreams?.length || 0}</div>
+          <div class="text-xs text-gray-600">Workstreams</div>
+        </div>
+        <div class="text-center p-2 bg-purple-50 rounded">
+          <div class="text-2xl font-bold text-purple-600">${analysis.estimated_total_items || 0}</div>
+          <div class="text-xs text-gray-600">Total Items</div>
+        </div>
+        <div class="text-center p-2 bg-green-50 rounded">
+          <div class="text-2xl font-bold text-green-600">${analysis.recommended_approach === 'multiple' ? 'Multiple' : 'Single'}</div>
+          <div class="text-xs text-gray-600">Recommended</div>
+        </div>
+      </div>
+      
+      <div class="border-t pt-3">
+        <p class="text-xs font-medium text-gray-700 mb-2">Detected Workstreams:</p>
+        <div class="space-y-1">
+          ${analysis.workstreams?.map((ws, i) => `
+            <div class="flex items-center text-xs text-gray-600">
+              <span class="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center mr-2 font-semibold">${i + 1}</span>
+              <span class="flex-1">${ws.name}</span>
+              <span class="text-gray-400">${ws.estimated_items} items</span>
+            </div>
+          `).join('') || '<p class="text-xs text-gray-500">No workstreams detected</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderBatchPreview(batchData) {
+  const container = document.getElementById('batch-checklist-previews');
+  const countText = document.getElementById('batch-count-text');
+  
+  const successfulChecklists = batchData.results?.filter(r => r.success) || [];
+  countText.textContent = successfulChecklists.length;
+  
+  container.innerHTML = successfulChecklists.map((result, index) => {
+    const preview = result.preview;
+    const totalItems = preview.sections.reduce((sum, sec) => sum + sec.items.length, 0);
+    
+    return `
+      <div class="border rounded-lg p-4 bg-white">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">${index + 1}</span>
+            <h5 class="font-semibold text-gray-900">${preview.title}</h5>
+          </div>
+          <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">${totalItems} items</span>
+        </div>
+        
+        ${preview.description ? `
+          <p class="text-xs text-gray-600 mb-3">${preview.description}</p>
+        ` : ''}
+        
+        <details class="text-xs">
+          <summary class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">View sections (${preview.sections.length})</summary>
+          <div class="mt-2 pl-4 space-y-2">
+            ${preview.sections.map((section, sIdx) => `
+              <div class="border-l-2 border-gray-300 pl-3">
+                <div class="font-medium text-gray-700">${sIdx + 1}. ${section.title}</div>
+                <div class="text-gray-500">${section.items.length} items</div>
+              </div>
+            `).join('')}
+          </div>
+        </details>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderAIChecklistPreview(data) {
@@ -4497,6 +4660,40 @@ async function confirmAIChecklistCreation() {
   } catch (error) {
     console.error('Error confirming checklist:', error);
     showToast(error.response?.data?.error || 'Failed to create checklist', 'error');
+  }
+}
+
+async function confirmBatchChecklistCreation() {
+  if (!currentAIChecklistData?.batchResults) {
+    showToast('No batch data available', 'error');
+    return;
+  }
+  
+  try {
+    const successfulResults = currentAIChecklistData.batchResults.results.filter(r => r.success);
+    const previews = successfulResults.map(r => r.preview);
+    
+    const response = await axios.post('/api/checklists/confirm-batch', {
+      previews: previews,
+      source_id: currentAIChecklistData.itemId,
+      source_type: currentAIChecklistData.itemType === 'issue' ? 'issue' : 'action-item',
+      project_id: currentProject.id,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      use_description: currentAIChecklistData.use_description
+    }, { withCredentials: true });
+    
+    // Close modal
+    document.getElementById('ai-checklist-modal').classList.add('hidden');
+    showToast(`${response.data.count} checklists created successfully!`, 'success');
+    
+    // Navigate to checklists page after delay
+    setTimeout(() => {
+      navigateToChecklists();
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Error confirming batch:', error);
+    showToast(error.response?.data?.error || 'Failed to create checklists', 'error');
   }
 }
 
@@ -4589,17 +4786,46 @@ function navigateToChecklists() {
 document.getElementById('close-ai-checklist-modal-btn').addEventListener('click', function() {
   document.getElementById('ai-checklist-modal').classList.add('hidden');
   currentAIChecklistData = null;
+  workstreamAnalysis = null;
 });
 
 document.getElementById('cancel-ai-checklist-btn').addEventListener('click', function() {
   document.getElementById('ai-checklist-modal').classList.add('hidden');
   currentAIChecklistData = null;
+  workstreamAnalysis = null;
 });
 
 // Cancel button from error state
 document.getElementById('cancel-error-ai-checklist-btn').addEventListener('click', function() {
   document.getElementById('ai-checklist-modal').classList.add('hidden');
   currentAIChecklistData = null;
+  workstreamAnalysis = null;
+});
+
+// Workstream analysis buttons
+document.getElementById('generate-single-checklist-btn').addEventListener('click', async function() {
+  await generateSingleChecklist();
+});
+
+document.getElementById('generate-multiple-checklists-btn').addEventListener('click', async function() {
+  await generateMultipleChecklists();
+});
+
+document.getElementById('cancel-workstream-analysis-btn').addEventListener('click', function() {
+  document.getElementById('ai-checklist-modal').classList.add('hidden');
+  currentAIChecklistData = null;
+  workstreamAnalysis = null;
+});
+
+// Batch preview buttons
+document.getElementById('cancel-batch-preview-btn').addEventListener('click', function() {
+  document.getElementById('ai-checklist-modal').classList.add('hidden');
+  currentAIChecklistData = null;
+  workstreamAnalysis = null;
+});
+
+document.getElementById('create-batch-checklists-btn').addEventListener('click', async function() {
+  await confirmBatchChecklistCreation();
 });
 
 document.getElementById('retry-ai-checklist-btn').addEventListener('click', function() {
