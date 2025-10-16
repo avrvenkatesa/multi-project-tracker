@@ -230,6 +230,50 @@ Break every task into atomic substeps
 `}
 
 ====================================
+GRANULARITY EXAMPLES (REQUIRED PATTERN)
+====================================
+
+[X] TOO VAGUE (1 item): "Migrate Active Directory"
+
+[OK] REQUIRED GRANULARITY (15+ items):
+1. Document current DC inventory and FSMO role holders
+2. Run dcdiag and fix any AD health issues
+3. Install Windows Server 2022 on new VMs
+4. Promote new servers to domain controllers
+5. Configure AD Sites and Services topology
+6. Transfer PDC Emulator FSMO role
+7. Transfer RID Master FSMO role
+8. Transfer Infrastructure Master FSMO role
+9. Transfer Schema Master role
+10. Transfer Domain Naming Master role
+11. Validate FSMO role transfers with netdom query fsmo
+12. Configure replication between old and new DCs
+13. Validate replication health with repadmin
+14. Update DNS settings to point to new DCs
+15. Decommission old domain controllers
+
+[X] TOO VAGUE (1 item): "Set up AWS infrastructure"
+
+[OK] REQUIRED GRANULARITY (15+ items):
+1. Create AWS account and enable root account MFA
+2. Set up billing alerts and budget limits
+3. Create IAM admin user with least privilege
+4. Create VPC with /16 CIDR block
+5. Create public subnets in 2 availability zones
+6. Create private subnets in 2 availability zones
+7. Create and attach Internet Gateway
+8. Configure route tables for public subnets
+9. Create NAT Gateway in public subnet
+10. Configure route tables for private subnets
+11. Create security groups for web tier
+12. Create security groups for app tier
+13. Create security groups for database tier
+14. Configure Network ACLs for additional security
+15. Set up VPC Flow Logs for monitoring
+
+THIS LEVEL OF GRANULAR DETAIL IS MANDATORY FOR EVERY TASK IN THE CHECKLIST.
+
+====================================
 EXTRACTION RULES (MANDATORY)
 ====================================
 
