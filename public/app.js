@@ -4460,11 +4460,38 @@ async function generateMultipleChecklists() {
     return;
   }
   
-  // Show loading
+  const totalChecklists = workstreamAnalysis.workstreams.length;
+  
+  // Show loading with progress
   document.getElementById('ai-checklist-workstream-analysis').classList.add('hidden');
   document.getElementById('ai-checklist-loading').classList.remove('hidden');
-  document.getElementById('loading-main-text').textContent = `Generating ${workstreamAnalysis.workstreams.length} checklists...`;
-  document.getElementById('loading-sub-text').textContent = 'This may take 30-60 seconds';
+  document.getElementById('loading-main-text').textContent = `Generating ${totalChecklists} checklists...`;
+  document.getElementById('loading-sub-text').textContent = 'AI is analyzing each workstream';
+  
+  // Show progress bar
+  const progressContainer = document.getElementById('batch-progress-container');
+  const progressBar = document.getElementById('batch-progress-bar');
+  const progressText = document.getElementById('batch-progress-text');
+  const progressPercent = document.getElementById('batch-progress-percent');
+  const timeEstimate = document.getElementById('loading-time-estimate');
+  
+  progressContainer.classList.remove('hidden');
+  
+  // Estimate: ~8 seconds per checklist
+  const estimatedTime = totalChecklists * 8;
+  timeEstimate.textContent = `Estimated time: ${estimatedTime}-${estimatedTime + 20} seconds`;
+  
+  // Simulate progress (since backend doesn't send real-time updates)
+  let currentProgress = 0;
+  const progressInterval = setInterval(() => {
+    // Increment progress slowly (95% max before completion)
+    currentProgress = Math.min(currentProgress + (95 / (estimatedTime * 1.2)), 95);
+    const currentChecklist = Math.min(Math.ceil((currentProgress / 95) * totalChecklists), totalChecklists);
+    
+    progressBar.style.width = `${currentProgress}%`;
+    progressPercent.textContent = `${Math.round(currentProgress)}%`;
+    progressText.textContent = `Generating checklist ${currentChecklist} of ${totalChecklists}...`;
+  }, 1000);
   
   try {
     const response = await axios.post('/api/checklists/generate-batch', {
@@ -4475,16 +4502,33 @@ async function generateMultipleChecklists() {
       use_description: currentAIChecklistData.use_description
     }, { withCredentials: true });
     
+    // Complete progress
+    clearInterval(progressInterval);
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    progressText.textContent = `All ${totalChecklists} checklists generated!`;
+    
     // Store batch results
     currentAIChecklistData.batchResults = response.data;
     
-    // Show batch preview
-    document.getElementById('ai-checklist-loading').classList.add('hidden');
-    renderBatchPreview(response.data);
-    document.getElementById('ai-checklist-batch-preview').classList.remove('hidden');
+    // Small delay to show completion
+    setTimeout(() => {
+      // Hide loading and reset progress
+      document.getElementById('ai-checklist-loading').classList.add('hidden');
+      progressContainer.classList.add('hidden');
+      progressBar.style.width = '0%';
+      
+      // Show batch preview
+      renderBatchPreview(response.data);
+      document.getElementById('ai-checklist-batch-preview').classList.remove('hidden');
+    }, 500);
     
   } catch (error) {
+    clearInterval(progressInterval);
     document.getElementById('ai-checklist-loading').classList.add('hidden');
+    progressContainer.classList.add('hidden');
+    progressBar.style.width = '0%';
+    
     const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to generate checklists';
     document.getElementById('ai-checklist-error-message').textContent = errorMessage;
     document.getElementById('ai-checklist-error').classList.remove('hidden');

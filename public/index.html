@@ -917,6 +917,17 @@
                                 <p id="loading-main-text" class="text-base text-gray-700 font-semibold">AI is analyzing your content...</p>
                                 <p id="loading-sub-text" class="text-sm text-gray-600">Creating a comprehensive checklist</p>
                                 
+                                <!-- Batch Progress Bar (hidden by default) -->
+                                <div id="batch-progress-container" class="hidden mt-4 px-8">
+                                    <div class="flex justify-between text-xs text-gray-600 mb-1">
+                                        <span id="batch-progress-text">Generating checklist 1 of 6...</span>
+                                        <span id="batch-progress-percent">17%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div id="batch-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                
                                 <!-- Progress dots -->
                                 <div class="flex items-center justify-center gap-1.5 mt-4">
                                     <div class="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
@@ -924,7 +935,7 @@
                                     <div class="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
                                 </div>
                                 
-                                <p class="text-xs text-gray-500 mt-3">This usually takes 10-30 seconds</p>
+                                <p id="loading-time-estimate" class="text-xs text-gray-500 mt-3">This usually takes 10-30 seconds</p>
                             </div>
                         </div>
 

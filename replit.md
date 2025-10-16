@@ -8,6 +8,22 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Multi-Checklist Generation Fixes & Progress Indicator** (October 16, 2025):
+  - **Critical Backend Fix**: Fixed batch generation response structure (changed `checklist` to `preview` in generateMultipleChecklists())
+    - Frontend expected `result.preview` but backend was returning `result.checklist`
+    - This was causing "Failed to generate checklists" errors despite successful backend generation
+  - **Progress Indicator Added**: Implemented visual progress tracking for batch generation
+    - Shows real-time progress bar with percentage (0-100%)
+    - Displays "Generating checklist X of Y..." text updates
+    - Estimated time calculation based on number of checklists (~8 seconds per checklist)
+    - Smooth completion animation before showing preview
+  - **PDF Extraction Fix v2**: Corrected pdf-parse v2.3.12 API usage
+    - Changed from `pdf(dataBuffer)` to `new PDFParse({ data: dataBuffer })`
+    - Added proper `await parser.getText()` call
+    - Implemented resource cleanup with `parser.destroy()` in finally block
+  - **UI Enhancements**: Added batch progress UI elements (progress bar, percentage, status text)
+  - **Files Modified**: services/ai-service.js (preview fix), services/file-processor.js (PDF v2 API), public/index.html (progress UI), public/app.js (progress logic)
+
 - **Phase 2B: Multi-Checklist Generation from Documents** (October 16, 2025):
   - **Backend Complete**: Implemented full backend support for analyzing documents and generating multiple focused checklists
   - **Document Analyzer Service** (services/document-analyzer.js):

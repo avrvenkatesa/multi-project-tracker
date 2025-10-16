@@ -531,7 +531,7 @@ async function generateMultipleChecklists(sourceType, sourceData, attachmentIds,
       
       results.push({
         workstream_name: workstream.name,
-        checklist: checklist,
+        preview: checklist,
         success: true
       });
       
