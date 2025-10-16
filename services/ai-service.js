@@ -150,6 +150,8 @@ async function getAttachmentContent(attachmentIds) {
         console.log(`Extracting text from attachment ${attachment.id}: ${attachment.original_name}`);
         text = await extractTextFromFile(attachment.file_path, attachment.file_type);
         
+        console.log(`✅ Extracted ${text.length} characters from ${attachment.original_name}`);
+        
         await pool.query(
           `UPDATE attachments 
            SET extracted_text = $1, 
@@ -187,6 +189,15 @@ async function getAttachmentContent(attachmentIds) {
 function buildEnhancedPrompt(type, data, contextText, attachmentIds = []) {
   const sourceLabel = type === 'issue' ? 'issue' : 'action item';
   const hasAttachments = attachmentIds && attachmentIds.length > 0;
+  
+  // Debug logging
+  console.log('=== AI GENERATION DEBUG ===');
+  console.log('Has attachments:', hasAttachments);
+  console.log('Attachment IDs:', attachmentIds);
+  console.log('Context text length:', contextText.length, 'characters');
+  console.log('Context preview:', contextText.substring(0, 300));
+  console.log('Expected: 20000+ chars for large documents');
+  console.log('========================');
   
   let prompt = `You are a technical project expert specializing in comprehensive task decomposition. Based on the following ${sourceLabel} information${hasAttachments ? ' and attached documents' : ''}, generate an EXHAUSTIVE, MAXIMUM COVERAGE checklist.
 
