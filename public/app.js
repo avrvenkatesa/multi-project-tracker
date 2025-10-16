@@ -4788,12 +4788,29 @@ function renderBatchPreview(batchData) {
             ` : ''}
             
             <details class="text-xs">
-              <summary class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">View sections (${preview.sections.length})</summary>
-              <div class="mt-2 pl-4 space-y-2">
+              <summary class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">▶ View sections (${preview.sections.length})</summary>
+              <div class="mt-3 space-y-3">
                 ${preview.sections.map((section, sIdx) => `
-                  <div class="border-l-2 border-gray-300 pl-3">
-                    <div class="font-medium text-gray-700">${sIdx + 1}. ${section.title}</div>
-                    <div class="text-gray-500">${section.items.length} items</div>
+                  <div class="border-l-2 border-blue-400 pl-3 pb-2">
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="font-semibold text-gray-800">${sIdx + 1}. ${section.title}</div>
+                      <span class="text-gray-500 text-xs">${section.items.length} items</span>
+                    </div>
+                    ${section.description ? `
+                      <p class="text-gray-600 italic mb-2 text-xs">${section.description}</p>
+                    ` : ''}
+                    <div class="space-y-1.5 mt-2">
+                      ${section.items.map((item, itemIdx) => `
+                        <div class="flex items-start gap-2 text-gray-700 bg-gray-50 rounded px-2 py-1.5">
+                          <span class="text-gray-400 font-mono text-xs mt-0.5 flex-shrink-0">${itemIdx + 1}.</span>
+                          <span class="flex-1 text-xs">
+                            ${item.text || item.title || item.item_text}
+                            ${item.is_required ? '<span class="text-red-500 font-bold ml-1" title="Required">*</span>' : ''}
+                            ${item.field_type && item.field_type !== 'checkbox' ? `<span class="text-gray-400 ml-2">(${item.field_type})</span>` : ''}
+                          </span>
+                        </div>
+                      `).join('')}
+                    </div>
                   </div>
                 `).join('')}
               </div>
