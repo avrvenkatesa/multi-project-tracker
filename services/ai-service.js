@@ -349,7 +349,7 @@ async function callAI(prompt, sourceType) {
         messages: [
           { 
             role: 'system', 
-            content: 'You are a technical project expert specializing in comprehensive task decomposition. Create exhaustive, detailed checklists with maximum coverage. Always respond with valid JSON only, no markdown formatting, no code blocks.' 
+            content: 'You are a technical project expert who creates EXHAUSTIVELY DETAILED checklists with 100-200+ items for large documents. Break every complex task into 5-15 atomic substeps. NEVER summarize - always extract every single detail mentioned. Generate MORE items rather than fewer. Your checklists should be so detailed that someone could execute them without reading source documents. You MUST generate at least 100 items when attachments are provided. Respond with valid JSON only, no markdown formatting, no code blocks.' 
           },
           { role: 'user', content: prompt }
         ],
