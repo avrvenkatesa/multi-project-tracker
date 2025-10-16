@@ -4197,10 +4197,14 @@ async function openAIChecklistModal(itemId, itemType, itemTitle) {
   };
   selectedAttachmentIds = [];
   uploadedFiles = [];
+  workstreamAnalysis = null; // Clear cached analysis
   loadingEl.classList.add('hidden');
   errorEl.classList.add('hidden');
   previewEl.classList.add('hidden');
   sourceSelectionEl.classList.add('hidden');
+  document.getElementById('ai-checklist-workstream-analysis')?.classList.add('hidden');
+  document.getElementById('ai-checklist-batch-preview')?.classList.add('hidden');
+  document.getElementById('newly-uploaded-files').innerHTML = ''; // Clear uploaded files UI
   
   // Set title with project name and issue/action item
   const itemTypeLabel = itemType === 'issue' ? 'Issue' : 'Action Item';
@@ -4386,6 +4390,9 @@ async function generateWithSelectedSources() {
     showToast('Please select at least one source (description or attachments)', 'error');
     return;
   }
+  
+  // Clear previous analysis to ensure fresh generation
+  workstreamAnalysis = null;
   
   // Hide source selection, show loading
   document.getElementById('ai-checklist-source-selection').classList.add('hidden');
@@ -4581,7 +4588,7 @@ function renderWorkstreamAnalysis(analysis) {
           <div class="text-xs text-gray-600">Workstreams</div>
         </div>
         <div class="text-center p-2 bg-purple-50 rounded">
-          <div class="text-2xl font-bold text-purple-600">${analysis.estimated_total_items || 0}</div>
+          <div class="text-2xl font-bold text-purple-600">${analysis.total_estimated_items || 0}</div>
           <div class="text-xs text-gray-600">Total Items</div>
         </div>
         <div class="text-center p-2 bg-green-50 rounded">

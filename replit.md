@@ -19,6 +19,9 @@ Preferred communication style: Simple, everyday language.
 - **Bug Fixes** (October 16, 2025):
   - Fixed "null" prefix in checklist section headings (public/js/checklists.js)
   - Fixed action item attachment upload failure - corrected response data structure handling (public/app.js)
+  - Fixed stale analysis cache causing old results to display in new generations (public/app.js)
+  - Fixed total items showing 0 by correcting field name from `estimated_total_items` to `total_estimated_items` (public/app.js)
+  - Fixed identical checklists from different documents by clearing analysis cache on each generation (public/app.js)
 
 - **Enhanced Progress UI & Context Display** (October 16, 2025):
   - **Improved Modal Header**: Shows Issue/Action Item title below the modal heading for better context
