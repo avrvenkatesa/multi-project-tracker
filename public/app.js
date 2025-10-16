@@ -4586,7 +4586,7 @@ async function generateMultipleChecklists() {
       use_description: currentAIChecklistData.use_description
     }, { 
       withCredentials: true,
-      timeout: 120000 // 2 minute timeout (90s per checklist + buffer)
+      timeout: 300000 // 5 minute timeout (for large batch generations)
     });
     
     // Complete progress
