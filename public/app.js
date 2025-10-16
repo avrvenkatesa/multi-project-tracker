@@ -4436,6 +4436,7 @@ function updateSourcesDisplay() {
 }
 
 async function generateWithSelectedSources() {
+  console.log('[DEBUG] generateWithSelectedSources called');
   const useDescription = document.getElementById('use-description-checkbox').checked;
   
   if (!useDescription && selectedAttachmentIds.length === 0) {
@@ -4444,6 +4445,7 @@ async function generateWithSelectedSources() {
   }
   
   // Clear previous analysis to ensure fresh generation
+  console.log('[DEBUG] Clearing workstreamAnalysis');
   workstreamAnalysis = null;
   
   // Hide source selection, show loading
@@ -4526,11 +4528,16 @@ async function generateSingleChecklist() {
 }
 
 async function generateMultipleChecklists() {
+  console.log('[DEBUG] generateMultipleChecklists called');
+  console.log('[DEBUG] workstreamAnalysis:', workstreamAnalysis);
+  
   if (!workstreamAnalysis?.workstreams) {
+    console.error('[DEBUG] No workstream data!');
     showToast('No workstream data available', 'error');
     return;
   }
   
+  console.log('[DEBUG] Starting batch generation for', workstreamAnalysis.workstreams.length, 'workstreams');
   const totalChecklists = workstreamAnalysis.workstreams.length;
   
   // Show loading with progress
