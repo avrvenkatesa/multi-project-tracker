@@ -4186,14 +4186,14 @@ async function openAIChecklistModal(itemId, itemType, itemTitle) {
   const loadingEl = document.getElementById('ai-checklist-loading');
   const errorEl = document.getElementById('ai-checklist-error');
   const previewEl = document.getElementById('ai-checklist-preview');
-  const titleEl = document.getElementById('ai-checklist-item-title');
   
   // Reset state
   currentAIChecklistData = { 
     itemId, 
     itemType, 
     itemTitle,
-    projectName: currentProject?.name || 'Unknown Project'
+    projectName: currentProject?.name || 'Unknown Project',
+    attachments: []
   };
   selectedAttachmentIds = [];
   uploadedFiles = [];
@@ -4206,9 +4206,11 @@ async function openAIChecklistModal(itemId, itemType, itemTitle) {
   document.getElementById('ai-checklist-batch-preview')?.classList.add('hidden');
   document.getElementById('newly-uploaded-files').innerHTML = ''; // Clear uploaded files UI
   
-  // Set title with project name and issue/action item
+  // Set header information
   const itemTypeLabel = itemType === 'issue' ? 'Issue' : 'Action Item';
-  titleEl.innerHTML = `<div class="text-gray-600 text-xs font-normal">${itemTypeLabel}: ${itemTitle}</div>`;
+  document.getElementById('ai-checklist-project-name').textContent = currentProject?.name || 'Unknown Project';
+  document.getElementById('ai-checklist-item-info').textContent = `${itemTypeLabel}: ${itemTitle}`;
+  updateSourcesDisplay();
   
   // Show modal and source selection
   modal.classList.remove('hidden');
@@ -4264,6 +4266,14 @@ function formatFileSize(bytes) {
 }
 
 function setupSourceSelectionListeners() {
+  // Description checkbox
+  const descCheckbox = document.getElementById('use-description-checkbox');
+  if (descCheckbox) {
+    descCheckbox.onchange = () => {
+      updateSourcesDisplay();
+    };
+  }
+  
   // Upload button
   document.getElementById('upload-attachment-btn').onclick = () => {
     document.getElementById('attachment-upload-input').click();
@@ -4381,6 +4391,48 @@ function removeUploadedFile(attachmentId) {
 function updateAttachmentCount() {
   const badge = document.getElementById('attachment-count-badge');
   badge.textContent = `${selectedAttachmentIds.length} selected`;
+  updateSourcesDisplay();
+}
+
+function updateSourcesDisplay() {
+  const sourcesEl = document.getElementById('ai-checklist-sources');
+  const useDescription = document.getElementById('use-description-checkbox')?.checked;
+  const sources = [];
+  
+  // Add description if selected
+  if (useDescription) {
+    sources.push('Description');
+  }
+  
+  // Add attachment names
+  const attachmentNames = [];
+  
+  // Get names from uploaded files
+  uploadedFiles.forEach(file => {
+    if (selectedAttachmentIds.includes(file.id)) {
+      attachmentNames.push(file.original_name);
+    }
+  });
+  
+  // Get names from existing attachments
+  document.querySelectorAll('.attachment-checkbox:checked').forEach(cb => {
+    const label = cb.closest('label');
+    const nameEl = label?.querySelector('.text-sm.font-medium');
+    if (nameEl && !attachmentNames.includes(nameEl.textContent)) {
+      attachmentNames.push(nameEl.textContent);
+    }
+  });
+  
+  if (attachmentNames.length > 0) {
+    sources.push(`Files: ${attachmentNames.join(', ')}`);
+  }
+  
+  // Update display
+  if (sources.length > 0) {
+    sourcesEl.textContent = `Sources: ${sources.join(' • ')}`;
+  } else {
+    sourcesEl.textContent = 'Sources: None selected';
+  }
 }
 
 async function generateWithSelectedSources() {

@@ -23,8 +23,13 @@ Preferred communication style: Simple, everyday language.
   - Fixed total items showing 0 by correcting field name from `estimated_total_items` to `total_estimated_items` (public/app.js)
   - Fixed identical checklists from different documents by clearing analysis cache on each generation (public/app.js)
 
-- **Enhanced Progress UI & Context Display** (October 16, 2025):
-  - **Improved Modal Header**: Shows Issue/Action Item title below the modal heading for better context
+- **Enhanced Modal Context Display** (October 16, 2025):
+  - **Redesigned AI Checklist Modal Header**: 
+    - Removed icon from modal title for cleaner appearance
+    - Shows project name prominently below title
+    - Displays item type (Issue/Action Item) and name
+    - Real-time sources display showing selected attachments and description
+    - Sources update dynamically as user selects/deselects options
   - **Project-Aware Progress**: Progress indicators now display "Generating <checklist name> for <project name>"
     - During generation: Shows current workstream name being processed with project context
     - During creation: Shows current checklist being saved to database
@@ -32,7 +37,7 @@ Preferred communication style: Simple, everyday language.
     - Shows real-time progress as each checklist is saved to database
     - Displays checklist names during creation process
     - Smooth completion animation before navigation
-  - **Files Modified**: public/app.js (openAIChecklistModal, generateSingleChecklist, generateMultipleChecklists, confirmBatchChecklistCreation)
+  - **Files Modified**: public/index.html (modal header), public/app.js (openAIChecklistModal, updateSourcesDisplay, setupSourceSelectionListeners)
 
 - **Database Schema Fixes** (October 16, 2025):
   - Fixed `checklist_template_items` column name: changed `text` to `item_text` in batch creation

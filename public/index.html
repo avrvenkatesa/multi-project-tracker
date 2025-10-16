@@ -772,9 +772,11 @@
             <div id="ai-checklist-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
                 <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
                     <div class="flex items-center justify-between p-6 border-b">
-                        <div>
-                            <h3 class="text-xl font-semibold text-gray-800">🤖 AI Checklist Generation</h3>
-                            <p class="text-xs text-gray-500 mt-1" id="ai-checklist-item-title"></p>
+                        <div class="flex-1">
+                            <h3 class="text-xl font-semibold text-gray-800">AI Checklist Generation</h3>
+                            <p class="text-sm text-gray-600 mt-2" id="ai-checklist-project-name"></p>
+                            <p class="text-sm text-gray-700 mt-1" id="ai-checklist-item-info"></p>
+                            <p class="text-xs text-gray-500 mt-1" id="ai-checklist-sources"></p>
                         </div>
                         <button id="close-ai-checklist-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                     </div>
