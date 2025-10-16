@@ -8186,7 +8186,7 @@ app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) =>
               const item = section.items[i];
               await client.query(
                 `INSERT INTO checklist_template_items (
-                  section_id, text, field_type, field_options, is_required, 
+                  section_id, item_text, field_type, field_options, is_required, 
                   help_text, display_order
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [

@@ -12,6 +12,10 @@ Preferred communication style: Simple, everyday language.
   - **Critical Backend Fix**: Fixed batch generation response structure (changed `checklist` to `preview` in generateMultipleChecklists())
     - Frontend expected `result.preview` but backend was returning `result.checklist`
     - This was causing "Failed to generate checklists" errors despite successful backend generation
+  - **Database Column Fix**: Fixed checklist creation failure (changed `text` to `item_text` in confirm-batch endpoint)
+    - SQL error: "column 'text' does not exist in checklist_template_items"
+    - Corrected INSERT statement to use proper column name `item_text`
+    - Batch checklist creation now works successfully
   - **Progress Indicator Added**: Implemented visual progress tracking for batch generation
     - Shows real-time progress bar with percentage (0-100%)
     - Displays "Generating checklist X of Y..." text updates
@@ -27,7 +31,7 @@ Preferred communication style: Simple, everyday language.
     - Visual highlighting: recommended button has blue border and background, non-recommended is plain gray
     - Both analysis summary and button badges now show consistent recommendation
   - **UI Enhancements**: Added batch progress UI elements (progress bar, percentage, status text), dynamic recommendation badges
-  - **Files Modified**: services/ai-service.js (preview fix), services/file-processor.js (PDF v2 API), public/index.html (progress UI, dynamic badges), public/app.js (progress logic, recommendation sync)
+  - **Files Modified**: services/ai-service.js (preview fix), services/file-processor.js (PDF v2 API), server.js (database fix), public/index.html (progress UI, dynamic badges), public/app.js (progress logic, recommendation sync)
 
 - **Phase 2B: Multi-Checklist Generation from Documents** (October 16, 2025):
   - **Backend Complete**: Implemented full backend support for analyzing documents and generating multiple focused checklists
