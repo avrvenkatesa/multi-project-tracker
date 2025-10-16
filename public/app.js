@@ -4179,6 +4179,7 @@ let currentAIChecklistData = null;
 let selectedAttachmentIds = [];
 let uploadedFiles = [];
 let workstreamAnalysis = null;
+let selectedChecklistIndices = [];
 
 // Update step indicator
 function updateChecklistGenerationStep(stepNumber, markComplete = false) {
@@ -4758,38 +4759,87 @@ function renderBatchPreview(batchData) {
   const successfulChecklists = batchData.results?.filter(r => r.success) || [];
   countText.textContent = successfulChecklists.length;
   
+  // Initialize all checklists as selected
+  selectedChecklistIndices = successfulChecklists.map((_, index) => index);
+  
   container.innerHTML = successfulChecklists.map((result, index) => {
     const preview = result.preview;
     const totalItems = preview.sections.reduce((sum, sec) => sum + sec.items.length, 0);
     
     return `
       <div class="border rounded-lg p-4 bg-white">
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-2">
-            <span class="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">${index + 1}</span>
-            <h5 class="font-semibold text-gray-900">${preview.title}</h5>
-          </div>
-          <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">${totalItems} items</span>
-        </div>
-        
-        ${preview.description ? `
-          <p class="text-xs text-gray-600 mb-3">${preview.description}</p>
-        ` : ''}
-        
-        <details class="text-xs">
-          <summary class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">View sections (${preview.sections.length})</summary>
-          <div class="mt-2 pl-4 space-y-2">
-            ${preview.sections.map((section, sIdx) => `
-              <div class="border-l-2 border-gray-300 pl-3">
-                <div class="font-medium text-gray-700">${sIdx + 1}. ${section.title}</div>
-                <div class="text-gray-500">${section.items.length} items</div>
+        <div class="flex items-start gap-3 mb-3">
+          <input type="checkbox" 
+                 id="checklist-select-${index}" 
+                 data-index="${index}"
+                 class="checklist-select-checkbox mt-1 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" 
+                 checked>
+          <div class="flex-1">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">${index + 1}</span>
+                <h5 class="font-semibold text-gray-900">${preview.title}</h5>
               </div>
-            `).join('')}
+              <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">${totalItems} items</span>
+            </div>
+            
+            ${preview.description ? `
+              <p class="text-xs text-gray-600 mb-3">${preview.description}</p>
+            ` : ''}
+            
+            <details class="text-xs">
+              <summary class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">View sections (${preview.sections.length})</summary>
+              <div class="mt-2 pl-4 space-y-2">
+                ${preview.sections.map((section, sIdx) => `
+                  <div class="border-l-2 border-gray-300 pl-3">
+                    <div class="font-medium text-gray-700">${sIdx + 1}. ${section.title}</div>
+                    <div class="text-gray-500">${section.items.length} items</div>
+                  </div>
+                `).join('')}
+              </div>
+            </details>
           </div>
-        </details>
+        </div>
       </div>
     `;
   }).join('');
+  
+  // Add event listeners to checkboxes
+  document.querySelectorAll('.checklist-select-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', updateChecklistSelection);
+  });
+  
+  // Update button text
+  updateBatchCreateButtonText();
+}
+
+function updateChecklistSelection(event) {
+  const index = parseInt(event.target.dataset.index);
+  
+  if (event.target.checked) {
+    // Add to selection if not already there
+    if (!selectedChecklistIndices.includes(index)) {
+      selectedChecklistIndices.push(index);
+    }
+  } else {
+    // Remove from selection
+    selectedChecklistIndices = selectedChecklistIndices.filter(i => i !== index);
+  }
+  
+  updateBatchCreateButtonText();
+}
+
+function updateBatchCreateButtonText() {
+  const buttonText = document.getElementById('create-batch-btn-text');
+  const count = selectedChecklistIndices.length;
+  
+  if (count === 0) {
+    buttonText.textContent = 'Select checklists to create';
+  } else if (count === 1) {
+    buttonText.textContent = 'Create 1 Checklist';
+  } else {
+    buttonText.textContent = `Create ${count} Checklists`;
+  }
 }
 
 function renderAIChecklistPreview(data) {
@@ -4883,10 +4933,21 @@ async function confirmBatchChecklistCreation() {
     return;
   }
   
+  // Check if any checklists are selected
+  if (selectedChecklistIndices.length === 0) {
+    showToast('Please select at least one checklist to create', 'error');
+    return;
+  }
+  
   try {
     const successfulResults = currentAIChecklistData.batchResults.results.filter(r => r.success);
-    const previews = successfulResults.map(r => r.preview);
-    const totalChecklists = previews.length;
+    
+    // Filter to only selected checklists
+    const selectedPreviews = selectedChecklistIndices
+      .sort((a, b) => a - b) // Sort to maintain order
+      .map(index => successfulResults[index].preview);
+    
+    const totalChecklists = selectedPreviews.length;
     
     // Hide preview and show loading with creation progress
     document.getElementById('ai-checklist-batch-preview').classList.add('hidden');
@@ -4913,7 +4974,7 @@ async function confirmBatchChecklistCreation() {
     const progressInterval = setInterval(() => {
       currentProgress = Math.min(currentProgress + (95 / (estimatedTime * 1.2)), 95);
       const currentChecklistIndex = Math.min(Math.ceil((currentProgress / 95) * totalChecklists), totalChecklists);
-      const currentChecklistName = previews[currentChecklistIndex - 1]?.title || 'Checklist';
+      const currentChecklistName = selectedPreviews[currentChecklistIndex - 1]?.title || 'Checklist';
       
       progressBar.style.width = `${currentProgress}%`;
       progressPercent.textContent = `${Math.round(currentProgress)}%`;
@@ -4923,7 +4984,7 @@ async function confirmBatchChecklistCreation() {
     }, 300);
     
     const response = await axios.post('/api/checklists/confirm-batch', {
-      previews: previews,
+      previews: selectedPreviews,
       source_id: currentAIChecklistData.itemId,
       source_type: currentAIChecklistData.itemType === 'issue' ? 'issue' : 'action-item',
       project_id: currentProject.id,
