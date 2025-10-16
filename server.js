@@ -8104,13 +8104,18 @@ app.post('/api/checklists/generate-batch', authenticateToken, async (req, res) =
     sourceData.use_description = use_description;
     
     // Generate multiple checklists
-    console.log(`Batch generation: ${workstreams.length} checklists for ${source_type} #${source_id}`);
+    console.log(`[BATCH] Starting batch generation: ${workstreams.length} checklists for ${source_type} #${source_id}`);
+    console.log(`[BATCH] Attachment IDs: ${attachment_ids?.join(', ') || 'none'}`);
+    console.log(`[BATCH] Use description: ${use_description}`);
+    
     const results = await generateMultipleChecklists(
       source_type,
       sourceData,
       attachment_ids,
       workstreams
     );
+    
+    console.log(`[BATCH] Batch generation complete: ${results.filter(r => r.success).length} succeeded, ${results.filter(r => !r.success).length} failed`);
     
     // Add metadata
     const response = {

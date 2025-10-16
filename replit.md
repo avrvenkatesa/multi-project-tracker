@@ -23,6 +23,9 @@ Preferred communication style: Simple, everyday language.
   - Fixed total items showing 0 by correcting field name from `estimated_total_items` to `total_estimated_items` (public/app.js)
   - Fixed identical checklists from different documents by clearing analysis cache on each generation (public/app.js)
   - Fixed modal close button positioning with multi-line header content (public/index.html)
+  - Fixed AI generation hanging indefinitely by adding 90-second timeout to AI API calls (services/ai-service.js)
+  - Added 2-minute timeout to frontend batch generation requests (public/app.js)
+  - Enhanced batch generation logging for better debugging (server.js, services/ai-service.js)
 
 - **Enhanced Modal Context Display** (October 16, 2025):
   - **Redesigned AI Checklist Modal Header**: 

@@ -398,10 +398,16 @@ ${hasAttachments ? `
  */
 async function callAI(prompt, sourceType) {
   try {
+    console.log(`[AI] Starting generation request (provider: ${AI_PROVIDER})`);
     let response;
     
+    // Create a timeout promise
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('AI request timeout after 90 seconds')), 90000);
+    });
+    
     if (AI_PROVIDER === 'openai') {
-      const completion = await aiClient.chat.completions.create({
+      const completionPromise = aiClient.chat.completions.create({
         model: process.env.AI_MODEL || 'gpt-4o',
         messages: [
           { 
@@ -414,10 +420,11 @@ async function callAI(prompt, sourceType) {
         max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 16384
       });
       
+      const completion = await Promise.race([completionPromise, timeout]);
       response = completion.choices[0].message.content;
       
     } else if (AI_PROVIDER === 'anthropic') {
-      const message = await aiClient.messages.create({
+      const messagePromise = aiClient.messages.create({
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 8000,
         messages: [
@@ -428,8 +435,11 @@ async function callAI(prompt, sourceType) {
         ]
       });
       
+      const message = await Promise.race([messagePromise, timeout]);
       response = message.content[0].text;
     }
+    
+    console.log(`[AI] Generation complete, parsing response...`);
     
     // Clean response - remove markdown code blocks if AI included them
     response = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();

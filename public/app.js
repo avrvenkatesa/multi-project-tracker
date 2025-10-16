@@ -4581,7 +4581,10 @@ async function generateMultipleChecklists() {
       attachment_ids: currentAIChecklistData.attachment_ids || [],
       workstreams: workstreamAnalysis.workstreams,
       use_description: currentAIChecklistData.use_description
-    }, { withCredentials: true });
+    }, { 
+      withCredentials: true,
+      timeout: 120000 // 2 minute timeout (90s per checklist + buffer)
+    });
     
     // Complete progress
     clearInterval(progressInterval);
