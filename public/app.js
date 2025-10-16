@@ -4323,7 +4323,7 @@ async function handleFileUploads(files) {
         }
       );
       
-      const uploadedFile = response.data[0];
+      const uploadedFile = response.data.attachments ? response.data.attachments[0] : response.data[0];
       uploadedFiles.push(uploadedFile);
       selectedAttachmentIds.push(uploadedFile.id);
       

@@ -16,6 +16,10 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Bug Fixes** (October 16, 2025):
+  - Fixed "null" prefix in checklist section headings (public/js/checklists.js)
+  - Fixed action item attachment upload failure - corrected response data structure handling (public/app.js)
+
 - **Enhanced Progress UI & Context Display** (October 16, 2025):
   - **Improved Modal Header**: Shows Issue/Action Item title below the modal heading for better context
   - **Project-Aware Progress**: Progress indicators now display "Generating <checklist name> for <project name>"
