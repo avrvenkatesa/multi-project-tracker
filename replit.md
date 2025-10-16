@@ -22,6 +22,7 @@ Preferred communication style: Simple, everyday language.
   - Fixed stale analysis cache causing old results to display in new generations (public/app.js)
   - Fixed total items showing 0 by correcting field name from `estimated_total_items` to `total_estimated_items` (public/app.js)
   - Fixed identical checklists from different documents by clearing analysis cache on each generation (public/app.js)
+  - Fixed modal close button positioning with multi-line header content (public/index.html)
 
 - **Enhanced Modal Context Display** (October 16, 2025):
   - **Redesigned AI Checklist Modal Header**: 
