@@ -8208,8 +8208,8 @@ app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) =>
           `INSERT INTO checklists (
             title, description, project_id, template_id, 
             related_issue_id, related_action_id, created_by,
-            is_ai_generated, ai_confidence
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            is_ai_generated
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           RETURNING *`,
           [
             preview.title,
@@ -8219,8 +8219,7 @@ app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) =>
             source_type === 'issue' ? source_id : null,
             source_type === 'action-item' ? source_id : null,
             userId,
-            true,
-            preview.confidence || 85
+            true
           ]
         );
         
