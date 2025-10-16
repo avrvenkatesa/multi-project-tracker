@@ -4883,10 +4883,15 @@ async function confirmBatchChecklistCreation() {
       
       showToast(`${response.data.count} checklists created successfully!`, 'success');
       
-      // Navigate to checklists page
-      setTimeout(() => {
-        navigateToChecklists();
-      }, 1500);
+      // Show template promotion prompts if there are new templates
+      if (response.data.has_new_templates && response.data.new_template_ids.length > 0) {
+        showBatchTemplatePromotionPrompt(response.data.new_template_ids);
+      } else {
+        // Navigate to checklists page
+        setTimeout(() => {
+          navigateToChecklists();
+        }, 1500);
+      }
     }, 800);
     
   } catch (error) {
@@ -4975,6 +4980,78 @@ function dismissPromotionPrompt() {
   setTimeout(() => {
     navigateToChecklists();
   }, 500);
+}
+
+function showBatchTemplatePromotionPrompt(templateIds) {
+  const count = templateIds.length;
+  const promptHtml = `
+    <div id="template-promotion-toast" class="fixed bottom-4 right-4 bg-white rounded-lg shadow-2xl border-2 border-blue-200 p-5 z-50 max-w-md animate-slide-up">
+      <div class="flex items-start gap-3">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+            <span class="text-white text-xl">✨</span>
+          </div>
+        </div>
+        <div class="flex-1">
+          <h4 class="font-bold text-gray-900 mb-1 flex items-center gap-2">
+            Make these ${count} templates reusable?
+            <span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-semibold">Recommended</span>
+          </h4>
+          <p class="text-sm text-gray-600 mb-3">Save time on future projects by making these AI templates available to your team.</p>
+          
+          <div class="bg-blue-50 rounded-md p-2 mb-3 border border-blue-100">
+            <p class="text-xs text-blue-800 font-medium mb-1">✓ Benefits:</p>
+            <ul class="text-xs text-blue-700 space-y-0.5">
+              <li>• Reuse for similar tasks</li>
+              <li>• Available to all team members</li>
+              <li>• Appear in template library</li>
+            </ul>
+          </div>
+          
+          <div class="flex gap-2">
+            <button onclick="promoteBatchTemplates(${JSON.stringify(templateIds)})" class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm">
+              ✨ Promote All ${count}
+            </button>
+            <button onclick="dismissPromotionPrompt()" class="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+              Not Now
+            </button>
+          </div>
+        </div>
+        <button onclick="dismissPromotionPrompt()" class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', promptHtml);
+  
+  // Auto-dismiss after 20 seconds
+  setTimeout(() => {
+    dismissPromotionPrompt();
+  }, 20000);
+}
+
+async function promoteBatchTemplates(templateIds) {
+  try {
+    // Promote all templates in parallel
+    await Promise.all(
+      templateIds.map(id => 
+        axios.post(`/api/templates/${id}/promote`, {}, { withCredentials: true })
+      )
+    );
+    showToast(`${templateIds.length} templates promoted to reusable!`, 'success');
+    dismissPromotionPrompt();
+    // Delay navigation to show toast
+    setTimeout(() => {
+      navigateToChecklists();
+    }, 2000);
+  } catch (error) {
+    console.error('Error promoting templates:', error);
+    showToast(error.response?.data?.error || 'Failed to promote templates', 'error');
+  }
 }
 
 function navigateToChecklists() {

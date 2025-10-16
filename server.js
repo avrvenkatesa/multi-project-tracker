@@ -8152,6 +8152,7 @@ app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) =>
     
     const client = await pool.connect();
     const createdChecklists = [];
+    const newTemplateIds = []; // Track new templates for promotion
     
     try {
       await client.query('BEGIN');
@@ -8160,6 +8161,7 @@ app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) =>
       for (const preview of previews) {
         // Create template if needed
         let templateId = null;
+        let isNewTemplate = false;
         if (!preview.use_template) {
           const templateResult = await client.query(
             `INSERT INTO checklist_templates (
@@ -8175,6 +8177,8 @@ app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) =>
             ]
           );
           templateId = templateResult.rows[0].id;
+          isNewTemplate = true;
+          newTemplateIds.push(templateId);
           
           // Create template sections and items
           for (const section of preview.sections) {
@@ -8257,6 +8261,8 @@ app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) =>
         success: true,
         checklists: createdChecklists,
         count: createdChecklists.length,
+        new_template_ids: newTemplateIds,
+        has_new_templates: newTemplateIds.length > 0,
         message: `Successfully created ${createdChecklists.length} checklists`
       });
       
