@@ -7916,23 +7916,19 @@ app.post('/api/checklists/confirm-generated', authenticateToken, async (req, res
         totalItems = parseInt(countResult.rows[0].count);
       }
       
-      // Create checklist
-      const checklistId = generateChecklistId();
-      
       // Determine which foreign key to set
       const relatedIssueId = source_type === 'issue' ? source_id : null;
       const relatedActionId = source_type === 'action-item' ? source_id : null;
       
       const checklistResult = await client.query(
         `INSERT INTO checklists (
-          checklist_id, template_id, project_id, title, description,
+          template_id, project_id, title, description,
           related_issue_id, related_action_id, 
           is_ai_generated, generation_source,
           total_items, created_by, used_attachments, used_description
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *`,
         [
-          checklistId,
           templateId,
           project_id,
           preview.title,
