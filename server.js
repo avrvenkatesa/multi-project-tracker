@@ -8009,7 +8009,7 @@ app.post('/api/checklists/analyze-document', authenticateToken, async (req, res)
       `SELECT id, original_name, file_path, file_type, extracted_text, file_size
        FROM attachments 
        WHERE id = ANY($1)
-       ORDER BY id`,
+       ORDER BY file_size DESC`,
       [attachment_ids]
     );
     
@@ -8017,16 +8017,19 @@ app.post('/api/checklists/analyze-document', authenticateToken, async (req, res)
       return res.status(404).json({ error: 'Attachments not found' });
     }
     
-    // Extract text from first/largest attachment
+    // Extract text from largest attachment (most content)
     const attachment = result.rows[0];
     let documentText = attachment.extracted_text;
+    
+    console.log(`Selected attachment for analysis: ${attachment.original_name} (ID: ${attachment.id}, Size: ${attachment.file_size} bytes)`);
+    console.log(`Attachment IDs requested: ${attachment_ids.join(', ')}`);
     
     if (!documentText) {
       documentText = await extractTextFromFile(attachment.file_path, attachment.file_type);
     }
     
     // Analyze for workstreams
-    console.log(`Analyzing ${attachment.original_name} for workstreams...`);
+    console.log(`Analyzing ${attachment.original_name} for workstreams (${documentText.length} characters)...`);
     const analysis = await analyzeDocumentForWorkstreams(documentText, attachment.original_name);
     
     res.json(analysis);
