@@ -411,7 +411,7 @@ async function callAI(prompt, sourceType) {
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 20000
+        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 16384
       });
       
       response = completion.choices[0].message.content;
