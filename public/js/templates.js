@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize template library page
   if (currentPage.includes('templates.html')) {
     initTemplateLibrary();
+    setupTemplatePageListeners();
   }
   
   // Initialize save as template functionality on checklist fill page
@@ -21,6 +22,38 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTemplateCategories();
   }
 });
+
+// =====================================================
+// TEMPLATE PAGE LISTENERS
+// =====================================================
+
+function setupTemplatePageListeners() {
+  // Logout functionality
+  document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+    if (typeof AuthManager !== 'undefined') {
+      await AuthManager.logout();
+    } else {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      window.location.href = 'index.html';
+    }
+  });
+  
+  // Display user info once AuthManager is ready
+  const displayUserInfo = async () => {
+    let retries = 0;
+    while (typeof AuthManager === 'undefined' && retries < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      retries++;
+    }
+    
+    if (typeof AuthManager !== 'undefined' && AuthManager.currentUser) {
+      const user = AuthManager.currentUser;
+      document.getElementById('userName').textContent = user.username;
+      document.getElementById('userRole').textContent = user.role;
+    }
+  };
+  displayUserInfo();
+}
 
 // =====================================================
 // SAVE AS TEMPLATE FUNCTIONALITY

@@ -16,6 +16,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Template Library UI Consistency & CSP Compliance** (October 17, 2025):
+  - **Consistent Navigation**: Changed "Back to Projects" from icon button to text link with arrow "← Back to Projects" to match other pages (tags.html, risks.html, checklists.html)
+  - **Blue Header Design**: Updated templates.html to use consistent blue header (`bg-blue-600`) with white text matching main app design
+  - **User Info Display**: Added stacked username/role display in header, hidden on mobile devices (responsive design)
+  - **CSP Compliance**: Moved inline JavaScript to templates.js to fix Content Security Policy violations - all scripts now external
+  - **Clean Navigation**: Changed back button from icon to standard text link, logout remains as icon button for consistency
+  - **Files Modified**: public/templates.html, public/js/templates.js
+
 - **Phase 3a: Template Library System** (October 17, 2025):
   - **Database Enhancements**: Extended checklist_templates table with new columns (is_public, is_featured, tags, usage_count, avg_rating)
   - **Template Management Tables**: Created template_ratings, template_usage, and template_categories tables with proper indexes

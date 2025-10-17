@@ -21,12 +21,10 @@
         
         <!-- Auth Section -->
         <div class="flex items-center gap-4">
-          <!-- Back to Projects Button -->
-          <button id="backToProjectsBtn" class="p-2 hover:bg-blue-700 rounded-lg transition" title="Back to Projects">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-            </svg>
-          </button>
+          <!-- Back to Projects Link -->
+          <a href="index.html" class="text-white hover:text-blue-100 transition-colors">
+            ← Back to Projects
+          </a>
           
           <!-- User Info - Stacked Vertically (hidden on mobile) -->
           <div class="hidden md:flex flex-col items-end text-right">
@@ -100,38 +98,5 @@
 
   <script src="auth.js"></script>
   <script src="js/templates.js"></script>
-  
-  <script>
-    // Logout functionality
-    document.getElementById('logoutBtn')?.addEventListener('click', async () => {
-      if (typeof AuthManager !== 'undefined') {
-        await AuthManager.logout();
-      } else {
-        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-        window.location.href = 'index.html';
-      }
-    });
-    
-    // Back to projects
-    document.getElementById('backToProjectsBtn')?.addEventListener('click', () => {
-      window.location.href = 'index.html';
-    });
-    
-    // Display user info once AuthManager is ready
-    const displayUserInfo = async () => {
-      let retries = 0;
-      while (typeof AuthManager === 'undefined' && retries < 50) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        retries++;
-      }
-      
-      if (typeof AuthManager !== 'undefined' && AuthManager.currentUser) {
-        const user = AuthManager.currentUser;
-        document.getElementById('userName').textContent = user.username;
-        document.getElementById('userRole').textContent = user.role;
-      }
-    };
-    displayUserInfo();
-  </script>
 </body>
 </html>
