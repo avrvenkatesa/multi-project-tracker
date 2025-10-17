@@ -4509,6 +4509,23 @@ async function generateWithSelectedSources() {
   
   // If attachments selected, analyze for workstreams first
   if (selectedAttachmentIds.length > 0) {
+    // Show warning for unsupported file types
+    const selectedAttachments = currentAIChecklistData.attachments?.filter(
+      a => selectedAttachmentIds.includes(a.id)
+    ) || [];
+    
+    const unsupportedTypes = selectedAttachments.filter(
+      a => !['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(a.file_type)
+    );
+    
+    if (unsupportedTypes.length > 0) {
+      showToast(
+        `⚠️ ${unsupportedTypes.length} file${unsupportedTypes.length > 1 ? 's' : ''} may not extract properly (only PDF, DOCX, TXT supported)`,
+        'warning',
+        4000
+      );
+    }
+    
     // Set to Step 2: Source Analysis (active during loading)
     updateChecklistGenerationStep(2);
     try {
@@ -4565,6 +4582,16 @@ async function generateSingleChecklist() {
     
     // Store the generated data
     currentAIChecklistData.preview = response.data;
+    
+    // Show rate limit info if available
+    if (response.data.rate_limit_remaining !== undefined) {
+      const remaining = response.data.rate_limit_remaining;
+      if (remaining <= 3 && remaining > 0) {
+        showToast(`⚠️ ${remaining} generation${remaining !== 1 ? 's' : ''} remaining this hour`, 'warning', 5000);
+      } else if (remaining === 0) {
+        showToast('🚫 Rate limit reached for this hour', 'warning', 5000);
+      }
+    }
     
     // Show preview
     document.getElementById('ai-checklist-loading').classList.add('hidden');
