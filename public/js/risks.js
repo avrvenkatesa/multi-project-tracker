@@ -168,6 +168,9 @@ function setupEventListeners() {
       window.location.href = 'risks.html';
     }
   });
+  document.getElementById('view-templates-btn')?.addEventListener('click', () => {
+    window.location.href = 'templates.html';
+  });
   
   // Create dropdown navigation
   document.getElementById('create-issue-btn')?.addEventListener('click', () => {

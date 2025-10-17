@@ -73,6 +73,9 @@ function setupEventListeners() {
   document.getElementById('view-risks-btn')?.addEventListener('click', () => {
     window.location.href = `risks.html?projectId=${currentProjectId}`;
   });
+  document.getElementById('view-templates-btn')?.addEventListener('click', () => {
+    window.location.href = 'templates.html';
+  });
   
   // Create dropdown navigation
   document.getElementById('create-issue-btn')?.addEventListener('click', () => {

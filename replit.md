@@ -43,6 +43,12 @@ Preferred communication style: Simple, everyday language.
   - **Visual Feedback**: Active category button updates to "All Templates" when user performs a search
   - **Files Modified**: public/js/templates.js
 
+- **Template Navigation Fixed on All Pages** (October 17, 2025):
+  - **Missing Event Handlers**: Added click event handlers for "Templates" button in View dropdown across all pages
+  - **Navigation Now Works**: Clicking View → Templates now properly navigates to templates.html from Dashboard, Risks, Checklists, and Tags pages
+  - **Consistent Behavior**: All navigation buttons in View dropdown now function correctly
+  - **Files Modified**: public/dashboard.js, public/js/checklists.js, public/js/risks.js, public/js/tags.js
+
 - **Template Navigation Added to All Pages** (October 17, 2025):
   - **View Dropdown Enhancement**: Added "Templates" option to View dropdown on Dashboard, Risks, Checklists, and Tags pages
   - **Consistent Navigation**: Templates now accessible from all major project views, not just the main index page
