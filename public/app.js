@@ -476,6 +476,9 @@ function setupEventListeners() {
             window.location.href = 'checklists.html';
         }
     });
+    document.getElementById('view-templates-btn')?.addEventListener('click', () => {
+        window.location.href = 'templates.html';
+    });
     
     // Dropdown menu functionality
     const viewDropdownBtn = document.getElementById('view-dropdown-btn');
