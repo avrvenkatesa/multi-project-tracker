@@ -79,14 +79,17 @@
   </main>
 
   <script src="auth.js"></script>
-  <script src="app.js"></script>
   <script src="js/templates.js"></script>
   
   <script>
     // Logout functionality
     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-      window.location.href = 'index.html';
+      if (typeof AuthManager !== 'undefined') {
+        await AuthManager.logout();
+      } else {
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+        window.location.href = 'index.html';
+      }
     });
     
     // Back to projects
@@ -94,20 +97,20 @@
       window.location.href = 'index.html';
     });
     
-    // Load user info
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then(r => {
-        if (r.status === 401) {
-          window.location.href = 'index.html';
-          return null;
-        }
-        return r.json();
-      })
-      .then(user => {
-        if (user) {
-          document.getElementById('userDisplay').textContent = `${user.username} (${user.role})`;
-        }
-      });
+    // Display user info once AuthManager is ready
+    const displayUserInfo = async () => {
+      let retries = 0;
+      while (typeof AuthManager === 'undefined' && retries < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        retries++;
+      }
+      
+      if (typeof AuthManager !== 'undefined' && AuthManager.currentUser) {
+        const user = AuthManager.currentUser;
+        document.getElementById('userDisplay').textContent = `${user.username} (${user.role})`;
+      }
+    };
+    displayUserInfo();
   </script>
 </body>
 </html>

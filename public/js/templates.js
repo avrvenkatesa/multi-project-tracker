@@ -165,32 +165,31 @@ async function saveChecklistAsTemplate() {
 // =====================================================
 
 async function initTemplateLibrary() {
-  // Wait for AuthManager to be available
+  // Wait for AuthManager to be available (it's a global, not window.AuthManager)
   const maxRetries = 50; // 5 seconds max wait
   let retries = 0;
   
-  while (!window.AuthManager && retries < maxRetries) {
+  while (typeof AuthManager === 'undefined' && retries < maxRetries) {
     await new Promise(resolve => setTimeout(resolve, 100));
     retries++;
   }
   
-  // If AuthManager is not available after waiting, redirect
-  if (!window.AuthManager) {
+  if (typeof AuthManager === 'undefined') {
+    console.error('AuthManager not available');
     window.location.href = '/';
     return;
   }
   
-  // Initialize AuthManager if not already initialized
-  if (window.AuthManager.currentUser === null && !window.AuthManager.isAuthenticated) {
-    await window.AuthManager.init();
-  }
+  // Initialize AuthManager (check authentication status)
+  await AuthManager.init();
   
-  // If not authenticated after init, redirect to home
-  if (!window.AuthManager.isAuthenticated) {
+  // If not authenticated, redirect to home
+  if (!AuthManager.isAuthenticated) {
     window.location.href = '/';
     return;
   }
   
+  // User is authenticated, load template library
   await loadTemplateLibraryCategories();
   setupTemplateLibraryListeners();
   loadTemplates();
