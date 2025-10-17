@@ -14,6 +14,14 @@ The project aims to be a leading solution for centralized project oversight and 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (October 2025)
+
+- **Template Navigation Added to All Pages** (October 17, 2025):
+  - **View Dropdown Enhancement**: Added "Templates" option to View dropdown on Dashboard, Risks, Checklists, and Tags pages
+  - **Consistent Navigation**: Templates now accessible from all major project views, not just the main index page
+  - **UI Consistency**: Templates button uses indigo color scheme with bookmark icon to match main navigation
+  - **Files Modified**: public/dashboard.html, public/risks.html, public/checklists.html, public/tags.html
+
 ## System Architecture
 
 ### Frontend
