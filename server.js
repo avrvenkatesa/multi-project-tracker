@@ -17,6 +17,17 @@ const notificationService = require('./services/notificationService');
 const reportService = require('./services/reportService');
 const teamsNotifications = require('./services/teamsNotifications');
 const { generateChecklistFromIssue, generateChecklistFromActionItem, generateMultipleChecklists, checkRateLimit } = require('./services/ai-service');
+const { 
+  saveChecklistAsTemplate, 
+  getTemplateLibrary, 
+  getTemplateDetails, 
+  updateTemplateMetadata, 
+  deactivateTemplate, 
+  rateTemplate, 
+  toggleFeatured, 
+  applyTemplate,
+  getTemplateCategories
+} = require('./services/template-service');
 const { analyzeDocumentForWorkstreams } = require('./services/document-analyzer');
 const { extractTextFromFile } = require('./services/file-processor');
 const { initializeDailyJobs } = require('./jobs/dailyNotifications');
@@ -229,6 +240,14 @@ function authenticateToken(req, res, next) {
     req.user = user;
     next();
   });
+}
+
+// Admin Authorization Middleware
+function requireAdmin(req, res, next) {
+  if (req.user.role !== 'admin' && req.user.role !== 'System Administrator') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
 }
 
 // Role-based access control middleware
@@ -8279,6 +8298,187 @@ app.post('/api/checklists/confirm-batch', authenticateToken, async (req, res) =>
       error: 'Failed to create checklists',
       message: error.message 
     });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TEMPLATE LIBRARY ENDPOINTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/templates/categories - Get template categories
+app.get('/api/templates/categories', authenticateToken, async (req, res) => {
+  try {
+    const categories = await getTemplateCategories();
+    res.json(categories);
+  } catch (error) {
+    console.error('Get categories error:', error);
+    res.status(500).json({ error: 'Failed to get categories', message: error.message });
+  }
+});
+
+// GET /api/templates - Get template library with filters
+app.get('/api/templates', authenticateToken, async (req, res) => {
+  try {
+    const filters = {
+      category: req.query.category,
+      tags: req.query.tags ? req.query.tags.split(',') : null,
+      search: req.query.search,
+      is_public: req.query.is_public !== 'false',
+      sort_by: req.query.sort_by || 'usage',
+      limit: parseInt(req.query.limit) || 50,
+      offset: parseInt(req.query.offset) || 0,
+      created_by: req.query.my_templates === 'true' ? req.user.id : null
+    };
+    
+    const result = await getTemplateLibrary(filters);
+    res.json(result);
+  } catch (error) {
+    console.error('Get templates error:', error);
+    res.status(500).json({ error: 'Failed to get templates', message: error.message });
+  }
+});
+
+// GET /api/templates/:id - Get template details
+app.get('/api/templates/:id', authenticateToken, async (req, res) => {
+  try {
+    const templateId = parseInt(req.params.id);
+    const template = await getTemplateDetails(templateId, req.user.id);
+    res.json(template);
+  } catch (error) {
+    console.error('Get template details error:', error);
+    res.status(404).json({ error: error.message });
+  }
+});
+
+// POST /api/templates - Save checklist as template
+app.post('/api/templates', authenticateToken, async (req, res) => {
+  try {
+    const { checklist_id, name, description, category, tags, is_public } = req.body;
+    
+    if (!checklist_id) {
+      return res.status(400).json({ error: 'Checklist ID is required' });
+    }
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Template name is required' });
+    }
+    
+    const templateData = {
+      name,
+      description,
+      category: category || 'General',
+      tags: tags || [],
+      is_public: is_public || false
+    };
+    
+    const template = await saveChecklistAsTemplate(checklist_id, req.user.id, templateData);
+    
+    res.status(201).json({
+      success: true,
+      template,
+      message: 'Template created successfully'
+    });
+  } catch (error) {
+    console.error('Save template error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/templates/:id - Update template metadata
+app.put('/api/templates/:id', authenticateToken, async (req, res) => {
+  try {
+    const templateId = parseInt(req.params.id);
+    const { name, description, category, tags, is_public } = req.body;
+    
+    const template = await updateTemplateMetadata(templateId, req.user.id, {
+      name,
+      description,
+      category,
+      tags,
+      is_public
+    });
+    
+    res.json({
+      success: true,
+      template,
+      message: 'Template updated successfully'
+    });
+  } catch (error) {
+    console.error('Update template error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/templates/:id - Soft delete template
+app.delete('/api/templates/:id', authenticateToken, async (req, res) => {
+  try {
+    const templateId = parseInt(req.params.id);
+    const result = await deactivateTemplate(templateId, req.user.id, req.user.role);
+    res.json(result);
+  } catch (error) {
+    console.error('Delete template error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/templates/:id/rate - Rate template
+app.post('/api/templates/:id/rate', authenticateToken, async (req, res) => {
+  try {
+    const templateId = parseInt(req.params.id);
+    const { rating, review } = req.body;
+    
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+    
+    const result = await rateTemplate(templateId, req.user.id, rating, review);
+    res.json(result);
+  } catch (error) {
+    console.error('Rate template error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/templates/:id/feature - Feature/unfeature template (admin only)
+app.post('/api/templates/:id/feature', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const templateId = parseInt(req.params.id);
+    const { is_featured } = req.body;
+    
+    const result = await toggleFeatured(templateId, is_featured);
+    res.json(result);
+  } catch (error) {
+    console.error('Feature template error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/templates/:id/apply - Create checklist from template
+app.post('/api/templates/:id/apply', authenticateToken, async (req, res) => {
+  try {
+    const templateId = parseInt(req.params.id);
+    const { project_id, title, description, assigned_to } = req.body;
+    
+    if (!project_id) {
+      return res.status(400).json({ error: 'Project ID is required' });
+    }
+    
+    const checklistData = {
+      title,
+      description,
+      assigned_to
+    };
+    
+    const checklist = await applyTemplate(templateId, req.user.id, project_id, checklistData);
+    
+    res.status(201).json({
+      success: true,
+      checklist,
+      message: 'Checklist created from template successfully'
+    });
+  } catch (error) {
+    console.error('Apply template error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
