@@ -4754,79 +4754,178 @@ function renderWorkstreamAnalysis(analysis) {
 
 function renderBatchPreview(batchData) {
   const container = document.getElementById('batch-checklist-previews');
-  const countText = document.getElementById('batch-count-text');
+  const summaryContainer = document.getElementById('batch-summary');
   
   const successfulChecklists = batchData.results?.filter(r => r.success) || [];
-  countText.textContent = successfulChecklists.length;
+  const failedChecklists = batchData.results?.filter(r => !r.success) || [];
+  const totalRequested = batchData.workstreams_requested || batchData.results?.length || 0;
   
-  // Initialize all checklists as selected
+  // Store failed checklists for retry
+  currentAIChecklistData.failedChecklists = failedChecklists;
+  
+  // Render summary
+  const allSuccess = failedChecklists.length === 0;
+  const partialSuccess = successfulChecklists.length > 0 && failedChecklists.length > 0;
+  const allFailed = successfulChecklists.length === 0;
+  
+  summaryContainer.innerHTML = `
+    <div class="flex items-start">
+      ${allSuccess ? `
+        <svg class="w-5 h-5 text-green-500 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+        </svg>
+        <div class="flex-1">
+          <p class="text-sm font-medium text-green-800">All Checklists Generated Successfully!</p>
+          <p class="text-xs text-green-600 mt-1">${successfulChecklists.length} of ${totalRequested} checklists ready to create</p>
+        </div>
+      ` : partialSuccess ? `
+        <svg class="w-5 h-5 text-yellow-500 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+        <div class="flex-1">
+          <p class="text-sm font-medium text-yellow-800">Partial Success</p>
+          <p class="text-xs text-yellow-600 mt-1">
+            <span class="font-semibold">${successfulChecklists.length} of ${totalRequested}</span> checklists generated successfully. 
+            <span class="font-semibold">${failedChecklists.length}</span> failed.
+          </p>
+        </div>
+      ` : `
+        <svg class="w-5 h-5 text-red-500 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+        </svg>
+        <div class="flex-1">
+          <p class="text-sm font-medium text-red-800">All Checklists Failed</p>
+          <p class="text-xs text-red-600 mt-1">None of the ${totalRequested} checklists could be generated. See errors below.</p>
+        </div>
+      `}
+    </div>
+  `;
+  
+  // Show rate limit warning if applicable
+  const rateLimitWarning = document.getElementById('batch-rate-limit-warning');
+  const rateLimitText = document.getElementById('rate-limit-warning-text');
+  
+  if (batchData.rate_limit_remaining !== undefined) {
+    const remaining = batchData.rate_limit_remaining;
+    if (remaining <= 3 && remaining > 0) {
+      rateLimitWarning.classList.remove('hidden');
+      rateLimitText.textContent = `⚠️ Rate limit warning: Only ${remaining} generation${remaining !== 1 ? 's' : ''} remaining this hour`;
+    } else if (remaining === 0) {
+      rateLimitWarning.classList.remove('hidden');
+      rateLimitText.textContent = '🚫 Rate limit reached: Maximum generations per hour exceeded';
+    } else {
+      rateLimitWarning.classList.add('hidden');
+    }
+  }
+  
+  // Initialize all successful checklists as selected
   selectedChecklistIndices = successfulChecklists.map((_, index) => index);
   
-  container.innerHTML = successfulChecklists.map((result, index) => {
-    const preview = result.preview;
-    const totalItems = preview.sections.reduce((sum, sec) => sum + sec.items.length, 0);
-    
-    return `
-      <div class="border rounded-lg p-4 bg-white">
-        <div class="flex items-start gap-3 mb-3">
-          <input type="checkbox" 
-                 id="checklist-select-${index}" 
-                 data-index="${index}"
-                 class="checklist-select-checkbox mt-1 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" 
-                 checked>
-          <div class="flex-1">
-            <div class="flex items-center justify-between mb-2">
-              <div class="flex items-center gap-2">
-                <span class="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">${index + 1}</span>
-                <h5 class="font-semibold text-gray-900">${preview.title}</h5>
+  // Render both successful and failed checklists
+  container.innerHTML = [
+    // Successful checklists
+    ...successfulChecklists.map((result, index) => {
+      const preview = result.preview;
+      const totalItems = preview.sections.reduce((sum, sec) => sum + sec.items.length, 0);
+      
+      return `
+        <div class="border border-green-200 rounded-lg p-4 bg-white">
+          <div class="flex items-start gap-3 mb-3">
+            <input type="checkbox" 
+                   id="checklist-select-${index}" 
+                   data-index="${index}"
+                   class="checklist-select-checkbox mt-1 w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500" 
+                   checked>
+            <div class="flex-1">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                  </svg>
+                  <h5 class="font-semibold text-gray-900">${preview.title}</h5>
+                </div>
+                <span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">${totalItems} items</span>
               </div>
-              <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">${totalItems} items</span>
+              
+              ${preview.description ? `
+                <p class="text-xs text-gray-600 mb-3">${preview.description}</p>
+              ` : ''}
+              
+              <details class="text-xs">
+                <summary class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">▶ View sections (${preview.sections.length})</summary>
+                <div class="mt-3 space-y-3">
+                  ${preview.sections.map((section, sIdx) => `
+                    <div class="border-l-2 border-blue-400 pl-3 pb-2">
+                      <div class="flex items-center justify-between mb-2">
+                        <div class="font-semibold text-gray-800">${sIdx + 1}. ${section.title}</div>
+                        <span class="text-gray-500 text-xs">${section.items.length} items</span>
+                      </div>
+                      ${section.description ? `
+                        <p class="text-gray-600 italic mb-2 text-xs">${section.description}</p>
+                      ` : ''}
+                      <div class="space-y-1.5 mt-2">
+                        ${section.items.map((item, itemIdx) => `
+                          <div class="flex items-start gap-2 text-gray-700 bg-gray-50 rounded px-2 py-1.5">
+                            <span class="text-gray-400 font-mono text-xs mt-0.5 flex-shrink-0">${itemIdx + 1}.</span>
+                            <span class="flex-1 text-xs">
+                              ${item.text || item.title || item.item_text}
+                              ${item.is_required ? '<span class="text-red-500 font-bold ml-1" title="Required">*</span>' : ''}
+                              ${item.field_type && item.field_type !== 'checkbox' ? `<span class="text-gray-400 ml-2">(${item.field_type})</span>` : ''}
+                            </span>
+                          </div>
+                        `).join('')}
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </details>
             </div>
-            
-            ${preview.description ? `
-              <p class="text-xs text-gray-600 mb-3">${preview.description}</p>
-            ` : ''}
-            
-            <details class="text-xs">
-              <summary class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">▶ View sections (${preview.sections.length})</summary>
-              <div class="mt-3 space-y-3">
-                ${preview.sections.map((section, sIdx) => `
-                  <div class="border-l-2 border-blue-400 pl-3 pb-2">
-                    <div class="flex items-center justify-between mb-2">
-                      <div class="font-semibold text-gray-800">${sIdx + 1}. ${section.title}</div>
-                      <span class="text-gray-500 text-xs">${section.items.length} items</span>
-                    </div>
-                    ${section.description ? `
-                      <p class="text-gray-600 italic mb-2 text-xs">${section.description}</p>
-                    ` : ''}
-                    <div class="space-y-1.5 mt-2">
-                      ${section.items.map((item, itemIdx) => `
-                        <div class="flex items-start gap-2 text-gray-700 bg-gray-50 rounded px-2 py-1.5">
-                          <span class="text-gray-400 font-mono text-xs mt-0.5 flex-shrink-0">${itemIdx + 1}.</span>
-                          <span class="flex-1 text-xs">
-                            ${item.text || item.title || item.item_text}
-                            ${item.is_required ? '<span class="text-red-500 font-bold ml-1" title="Required">*</span>' : ''}
-                            ${item.field_type && item.field_type !== 'checkbox' ? `<span class="text-gray-400 ml-2">(${item.field_type})</span>` : ''}
-                          </span>
-                        </div>
-                      `).join('')}
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </details>
           </div>
         </div>
-      </div>
-    `;
-  }).join('');
+      `;
+    }),
+    // Failed checklists
+    ...failedChecklists.map((result, index) => {
+      return `
+        <div class="border border-red-200 rounded-lg p-4 bg-red-50">
+          <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+            </svg>
+            <div class="flex-1">
+              <div class="flex items-center justify-between mb-2">
+                <h5 class="font-semibold text-red-900">${result.workstream_name}</h5>
+                <button onclick="retryFailedChecklist(${index})" 
+                        class="text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors">
+                  Retry
+                </button>
+              </div>
+              <p class="text-xs text-red-700">
+                <span class="font-medium">Error:</span> ${result.error || 'Unknown error occurred'}
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+  ].join('');
   
   // Add event listeners to checkboxes
   document.querySelectorAll('.checklist-select-checkbox').forEach(checkbox => {
     checkbox.addEventListener('change', updateChecklistSelection);
   });
   
-  // Update button text
+  // Show/hide retry all button
+  const retryBtn = document.getElementById('retry-failed-checklists-btn');
+  const retryBtnText = document.getElementById('retry-btn-text');
+  if (failedChecklists.length > 0) {
+    retryBtn.classList.remove('hidden');
+    retryBtnText.textContent = failedChecklists.length === 1 ? 'Retry Failed' : `Retry ${failedChecklists.length} Failed`;
+  } else {
+    retryBtn.classList.add('hidden');
+  }
+  
+  // Update create button text
   updateBatchCreateButtonText();
 }
 
@@ -4856,6 +4955,108 @@ function updateBatchCreateButtonText() {
     buttonText.textContent = 'Create 1 Checklist';
   } else {
     buttonText.textContent = `Create ${count} Checklists`;
+  }
+}
+
+// Retry a single failed checklist
+async function retryFailedChecklist(failedIndex) {
+  const failedChecklist = currentAIChecklistData.failedChecklists[failedIndex];
+  if (!failedChecklist) {
+    showToast('Failed checklist not found', 'error');
+    return;
+  }
+  
+  showToast(`Retrying generation for ${failedChecklist.workstream_name}...`, 'info');
+  
+  try {
+    const response = await axios.post('/api/checklists/generate-batch', {
+      source_type: currentAIChecklistData.itemType,
+      source_id: currentAIChecklistData.itemId,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      workstreams: [{ name: failedChecklist.workstream_name }],
+      use_description: currentAIChecklistData.use_description
+    }, { 
+      withCredentials: true,
+      timeout: 90000
+    });
+    
+    if (response.data.results && response.data.results[0]?.success) {
+      // Replace failed checklist with successful one
+      currentAIChecklistData.batchResults.results = currentAIChecklistData.batchResults.results.map((result, idx) => {
+        if (result.workstream_name === failedChecklist.workstream_name && !result.success) {
+          return response.data.results[0];
+        }
+        return result;
+      });
+      
+      // Update rate limit info
+      currentAIChecklistData.batchResults.rate_limit_remaining = response.data.rate_limit_remaining;
+      
+      // Re-render preview
+      renderBatchPreview(currentAIChecklistData.batchResults);
+      showToast(`Successfully generated ${failedChecklist.workstream_name}`, 'success');
+    } else {
+      showToast(`Retry failed: ${response.data.results[0]?.error || 'Unknown error'}`, 'error');
+    }
+  } catch (error) {
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Retry failed';
+    showToast(errorMessage, 'error');
+  }
+}
+
+// Retry all failed checklists
+async function retryAllFailedChecklists() {
+  const failedChecklists = currentAIChecklistData.failedChecklists || [];
+  if (failedChecklists.length === 0) {
+    return;
+  }
+  
+  const failedWorkstreams = failedChecklists.map(fc => ({ name: fc.workstream_name }));
+  showToast(`Retrying ${failedWorkstreams.length} failed checklist${failedWorkstreams.length > 1 ? 's' : ''}...`, 'info');
+  
+  try {
+    const response = await axios.post('/api/checklists/generate-batch', {
+      source_type: currentAIChecklistData.itemType,
+      source_id: currentAIChecklistData.itemId,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      workstreams: failedWorkstreams,
+      use_description: currentAIChecklistData.use_description
+    }, { 
+      withCredentials: true,
+      timeout: 300000
+    });
+    
+    // Merge retry results with existing results
+    const retryResultsMap = new Map(
+      response.data.results.map(r => [r.workstream_name, r])
+    );
+    
+    currentAIChecklistData.batchResults.results = currentAIChecklistData.batchResults.results.map(result => {
+      if (!result.success && retryResultsMap.has(result.workstream_name)) {
+        return retryResultsMap.get(result.workstream_name);
+      }
+      return result;
+    });
+    
+    // Update rate limit info
+    currentAIChecklistData.batchResults.rate_limit_remaining = response.data.rate_limit_remaining;
+    
+    // Re-render preview
+    renderBatchPreview(currentAIChecklistData.batchResults);
+    
+    const successCount = response.data.results.filter(r => r.success).length;
+    const failCount = response.data.results.filter(r => !r.success).length;
+    
+    if (successCount > 0 && failCount === 0) {
+      showToast(`All ${successCount} checklists generated successfully!`, 'success');
+    } else if (successCount > 0) {
+      showToast(`${successCount} succeeded, ${failCount} still failed`, 'warning');
+    } else {
+      showToast('All retry attempts failed', 'error');
+    }
+  } catch (error) {
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Retry failed';
+    showToast(errorMessage, 'error');
   }
 }
 
@@ -5253,6 +5454,10 @@ document.getElementById('cancel-batch-preview-btn').addEventListener('click', fu
 
 document.getElementById('create-batch-checklists-btn').addEventListener('click', async function() {
   await confirmBatchChecklistCreation();
+});
+
+document.getElementById('retry-failed-checklists-btn').addEventListener('click', async function() {
+  await retryAllFailedChecklists();
 });
 
 document.getElementById('retry-ai-checklist-btn').addEventListener('click', function() {
