@@ -266,6 +266,11 @@ function setupTemplateLibraryListeners() {
     if (btn) {
       document.querySelectorAll('.category-filter-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      
+      // Clear search input when selecting a category
+      const searchInput = document.getElementById('templateSearch');
+      if (searchInput) searchInput.value = '';
+      
       const category = btn.dataset.category;
       loadTemplates({ category: category || undefined });
     }
@@ -276,6 +281,13 @@ function setupTemplateLibraryListeners() {
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
       const search = e.target.value.trim();
+      
+      // Reset category filter to "All Templates" when searching
+      if (search) {
+        document.querySelectorAll('.category-filter-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector('.category-filter-btn[data-category=""]')?.classList.add('active');
+      }
+      
       loadTemplates({ search: search || undefined });
     });
   }

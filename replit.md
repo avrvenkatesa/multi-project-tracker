@@ -16,6 +16,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Template Library Search & Filter Fixes** (October 17, 2025):
+  - **Search Resets Category**: When searching templates, category filter automatically resets to "All Templates" to show results across all categories
+  - **Category Clears Search**: Clicking a category filter now clears the search input for better UX
+  - **Cross-Category Search**: Search now works across all categories instead of being limited to the selected category
+  - **Visual Feedback**: Active category button updates to "All Templates" when user performs a search
+  - **Files Modified**: public/js/templates.js
+
 - **Template Navigation Added to All Pages** (October 17, 2025):
   - **View Dropdown Enhancement**: Added "Templates" option to View dropdown on Dashboard, Risks, Checklists, and Tags pages
   - **Consistent Navigation**: Templates now accessible from all major project views, not just the main index page
