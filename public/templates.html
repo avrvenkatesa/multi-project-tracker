@@ -8,25 +8,45 @@
   <link rel="stylesheet" href="css/templates.css">
 </head>
 <body class="bg-gray-50">
-  <!-- Navigation -->
-  <nav class="bg-white shadow-sm border-b border-gray-200">
-    <div class="max-w-7xl mx-auto px-4 py-3">
+  <!-- Header -->
+  <header class="bg-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-6">
       <div class="flex justify-between items-center">
-        <div class="flex items-center gap-4">
-          <h1 class="text-2xl font-bold text-gray-900">📋 Template Library</h1>
+        <div>
+          <h1 class="text-3xl font-bold">Template Library</h1>
+          <p class="text-blue-100 mt-2">
+            Browse and use pre-built checklist templates for your projects
+          </p>
         </div>
-        <div class="flex items-center gap-3">
-          <button id="backToProjectsBtn" class="btn-secondary">
-            ← Back to Projects
+        
+        <!-- Auth Section -->
+        <div class="flex items-center gap-4">
+          <!-- Back to Projects Button -->
+          <button id="backToProjectsBtn" class="p-2 hover:bg-blue-700 rounded-lg transition" title="Back to Projects">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            </svg>
           </button>
-          <span id="userDisplay" class="text-sm text-gray-600"></span>
-          <button id="logoutBtn" class="btn-secondary">Logout</button>
+          
+          <!-- User Info - Stacked Vertically (hidden on mobile) -->
+          <div class="hidden md:flex flex-col items-end text-right">
+            <span id="userName" class="font-semibold text-sm"></span>
+            <span id="userRole" class="bg-blue-800 px-2 py-0.5 rounded text-xs"></span>
+          </div>
+          
+          <!-- Logout Icon Button -->
+          <button id="logoutBtn" class="p-2 hover:bg-blue-700 rounded-lg transition" title="Logout">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+            </svg>
+          </button>
         </div>
       </div>
     </div>
-  </nav>
+  </header>
 
-  <main class="main-content">
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-8">
     <!-- Header -->
     <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
       <div class="flex items-center justify-between mb-4">
@@ -107,7 +127,8 @@
       
       if (typeof AuthManager !== 'undefined' && AuthManager.currentUser) {
         const user = AuthManager.currentUser;
-        document.getElementById('userDisplay').textContent = `${user.username} (${user.role})`;
+        document.getElementById('userName').textContent = user.username;
+        document.getElementById('userRole').textContent = user.role;
       }
     };
     displayUserInfo();
