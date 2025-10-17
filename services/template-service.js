@@ -281,9 +281,7 @@ async function getTemplateDetails(templateId, userId = null) {
       t.*,
       u.username as creator_name,
       (t.rating_sum::float / NULLIF(t.rating_count, 0)) as avg_rating,
-      CASE WHEN $2 IS NOT NULL THEN 
-        (SELECT rating FROM template_ratings WHERE template_id = t.id AND user_id = $2)
-      ELSE NULL END as user_rating
+      (SELECT rating FROM template_ratings WHERE template_id = t.id AND user_id = $2::integer) as user_rating
     FROM checklist_templates t
     INNER JOIN users u ON t.created_by = u.id
     WHERE t.id = $1`,

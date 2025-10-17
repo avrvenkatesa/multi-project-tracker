@@ -16,6 +16,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Template Details Loading Fix** (October 17, 2025):
+  - **SQL Parameter Type Error**: Fixed PostgreSQL error "could not determine data type of parameter $2" in getTemplateDetails function
+  - **Root Cause**: When userId was null, PostgreSQL couldn't infer the parameter type in the CASE statement
+  - **Solution**: Added explicit `::integer` type cast to $2 parameter in the user_rating subquery
+  - **Impact**: Template detail modals now load successfully without 404 errors
+  - **Files Modified**: services/template-service.js
+
 - **Template CSP Compliance Fix** (October 17, 2025):
   - **Removed Inline Event Handlers**: Eliminated all inline `onclick` handlers from template library to comply with Content Security Policy
   - **Event Delegation**: Implemented proper event listeners using event delegation for template cards
