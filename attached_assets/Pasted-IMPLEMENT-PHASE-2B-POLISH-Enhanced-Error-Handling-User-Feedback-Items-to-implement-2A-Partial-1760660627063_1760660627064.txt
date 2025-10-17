@@ -1,0 +1,1253 @@
+IMPLEMENT PHASE 2B POLISH: Enhanced Error Handling & User Feedback
+
+Items to implement:
+2A - Partial Batch Failure Handling (show which checklists succeeded/failed)
+2B - Attachment Extraction Error Handling (graceful fallbacks)
+2C - Rate Limiting Display (warnings and remaining count)
+
+ESTIMATED TIME: 2-3 hours
+
+═══════════════════════════════════════════════════════════════════════════════
+ITEM 2A: PARTIAL BATCH FAILURE HANDLING
+═══════════════════════════════════════════════════════════════════════════════
+
+GOAL: When generating 5 checklists, if 3 succeed and 2 fail, show the user 
+which ones worked and offer options to proceed with successful ones or retry.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: Update Frontend - Show Partial Success (public/js/ai-checklist.js) │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+FIND the showBatchPreviewModal() function and UPDATE it to handle partial failures:
+
+function showBatchPreviewModal(batch) {
+  const modal = document.getElementById('batchPreviewModal') || createBatchPreviewModal();
+  
+  const successCount = batch.results.filter(r => r.success).length;
+  const failCount = batch.results.filter(r => !r.success).length;
+  const hasFailures = failCount > 0;
+  
+  const checklistPreviews = batch.results.map((result, index) => {
+    if (!result.success) {
+      return `
+        <div class="batch-preview-item error">
+          <div class="preview-header">
+            <h5>❌ ${result.workstream_name}</h5>
+            <span class="status-badge status-failed">Failed</span>
+          </div>
+          <p class="error-text">Generation failed: ${result.error}</p>
+          <button onclick="retryFailedChecklist(${index})" class="btn-link btn-retry">
+            🔄 Retry This Checklist
+          </button>
+        </div>
+      `;
+    }
+    
+    const cl = result.checklist;
+    const totalItems = cl.sections.reduce((sum, s) => sum + s.items.length, 0);
+    
+    return `
+      <div class="batch-preview-item success" id="preview-${index}">
+        <div class="preview-header">
+          <h5>✅ ${index + 1}. ${cl.title}</h5>
+          <div class="preview-meta">
+            <span class="item-count">${totalItems} items</span>
+            <span class="section-count">${cl.sections.length} sections</span>
+            <span class="status-badge status-success">Ready</span>
+          </div>
+        </div>
+        <p class="preview-desc">${cl.description}</p>
+        <div class="preview-sections-summary">
+          ${cl.sections.slice(0, 3).map(s => 
+            `<span class="section-badge">${s.title} (${s.items.length})</span>`
+          ).join('')}
+          ${cl.sections.length > 3 ? `<span class="more">+${cl.sections.length - 3} more</span>` : ''}
+        </div>
+        <button onclick="expandPreview(${index})" class="btn-link">
+          👁️ View Details
+        </button>
+      </div>
+    `;
+  }).join('');
+  
+  // Different messaging based on success/failure mix
+  let summaryHTML = '';
+  if (hasFailures && successCount > 0) {
+    summaryHTML = `
+      <div class="batch-summary partial-success">
+        <h4>⚠️ Partial Success: ${successCount} of ${batch.workstreams_requested} Checklists Generated</h4>
+        <p><strong>${successCount} succeeded</strong> and are ready to create. <strong>${failCount} failed</strong> during generation.</p>
+        <div class="partial-options">
+          <p>You can:</p>
+          <ul>
+            <li>✅ Create the ${successCount} successful checklist${successCount > 1 ? 's' : ''} now</li>
+            <li>🔄 Retry the ${failCount} failed checklist${failCount > 1 ? 's' : ''}</li>
+            <li>❌ Cancel and try again later</li>
+          </ul>
+        </div>
+      </div>
+    `;
+  } else if (hasFailures && successCount === 0) {
+    summaryHTML = `
+      <div class="batch-summary all-failed">
+        <h4>❌ All Checklists Failed to Generate</h4>
+        <p>Unfortunately, none of the ${batch.workstreams_requested} checklists could be generated successfully.</p>
+        <div class="failure-help">
+          <p><strong>Common causes:</strong></p>
+          <ul>
+            <li>AI service timeout or rate limits</li>
+            <li>Document too complex or large</li>
+            <li>Network connectivity issues</li>
+          </ul>
+          <p><strong>Try:</strong> Simplifying the document or generating fewer checklists at once.</p>
+        </div>
+      </div>
+    `;
+  } else {
+    summaryHTML = `
+      <div class="batch-summary all-success">
+        <h4>✅ All ${successCount} Checklists Generated Successfully!</h4>
+        <p>Review the checklists below and confirm to create them all.</p>
+      </div>
+    `;
+  }
+  
+  // Action buttons based on success/failure state
+  let actionButtons = '';
+  if (successCount > 0 && failCount > 0) {
+    actionButtons = `
+      <button onclick="confirmBatchCreation()" class="btn-primary btn-large">
+        ✅ Create ${successCount} Successful Checklist${successCount > 1 ? 's' : ''}
+      </button>
+      <button onclick="retryFailedChecklists()" class="btn-warning">
+        🔄 Retry ${failCount} Failed
+      </button>
+      <button onclick="hideBatchPreviewModal()" class="btn-secondary">
+        Cancel
+      </button>
+    `;
+  } else if (successCount > 0 && failCount === 0) {
+    actionButtons = `
+      <button onclick="confirmBatchCreation()" class="btn-primary btn-large">
+        ✅ Create All ${successCount} Checklists
+      </button>
+      <button onclick="hideBatchPreviewModal()" class="btn-secondary">
+        Cancel
+      </button>
+    `;
+  } else {
+    actionButtons = `
+      <button onclick="retryFailedChecklists()" class="btn-warning btn-large">
+        🔄 Retry All
+      </button>
+      <button onclick="hideBatchPreviewModal()" class="btn-secondary">
+        Cancel
+      </button>
+    `;
+  }
+  
+  modal.querySelector('.modal-body').innerHTML = `
+    <div class="batch-preview-container">
+      ${summaryHTML}
+      
+      <div class="batch-previews">
+        ${checklistPreviews}
+      </div>
+      
+      <div class="modal-actions">
+        ${actionButtons}
+      </div>
+    </div>
+  `;
+  
+  modal.style.display = 'block';
+}
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: Add Retry Functions (public/js/ai-checklist.js)                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ADD these new functions to public/js/ai-checklist.js:
+
+/**
+ * Retry a single failed checklist
+ */
+async function retryFailedChecklist(index) {
+  const failedResult = batchPreviews.results[index];
+  const workstream = documentAnalysis.workstreams.find(w => w.name === failedResult.workstream_name);
+  
+  if (!workstream) {
+    showToast('Cannot find workstream information for retry', 'error');
+    return;
+  }
+  
+  try {
+    showLoadingModal(`Retrying: ${workstream.name}...`);
+    
+    const response = await fetch('/api/checklists/generate-batch', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_type: batchPreviews.source_type,
+        source_id: batchPreviews.source_id,
+        use_description: true,
+        attachment_ids: batchPreviews.attachment_ids || [],
+        workstreams: [workstream] // Retry just this one
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Retry failed');
+    }
+    
+    const result = await response.json();
+    
+    // Update the failed result with new attempt
+    if (result.results[0].success) {
+      batchPreviews.results[index] = result.results[0];
+      showToast(`✅ Successfully regenerated ${workstream.name}`, 'success');
+    } else {
+      throw new Error(result.results[0].error);
+    }
+    
+    hideLoadingModal();
+    
+    // Refresh the preview modal
+    showBatchPreviewModal(batchPreviews);
+    
+  } catch (error) {
+    console.error('Retry error:', error);
+    hideLoadingModal();
+    showToast(`Retry failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Retry all failed checklists
+ */
+async function retryFailedChecklists() {
+  const failedWorkstreams = batchPreviews.results
+    .filter(r => !r.success)
+    .map(r => documentAnalysis.workstreams.find(w => w.name === r.workstream_name))
+    .filter(w => w !== undefined);
+  
+  if (failedWorkstreams.length === 0) {
+    showToast('No failed checklists to retry', 'info');
+    return;
+  }
+  
+  try {
+    showLoadingModal(`Retrying ${failedWorkstreams.length} failed checklist${failedWorkstreams.length > 1 ? 's' : ''}...`);
+    
+    const response = await fetch('/api/checklists/generate-batch', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_type: batchPreviews.source_type,
+        source_id: batchPreviews.source_id,
+        use_description: true,
+        attachment_ids: batchPreviews.attachment_ids || [],
+        workstreams: failedWorkstreams
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Batch retry failed');
+    }
+    
+    const retryResults = await response.json();
+    
+    // Update the batch previews with retry results
+    let retryIndex = 0;
+    for (let i = 0; i < batchPreviews.results.length; i++) {
+      if (!batchPreviews.results[i].success) {
+        batchPreviews.results[i] = retryResults.results[retryIndex];
+        retryIndex++;
+      }
+    }
+    
+    const newSuccessCount = batchPreviews.results.filter(r => r.success).length;
+    const stillFailedCount = batchPreviews.results.filter(r => !r.success).length;
+    
+    hideLoadingModal();
+    
+    if (stillFailedCount === 0) {
+      showToast(`✅ All checklists now successful!`, 'success');
+    } else {
+      showToast(`Retry complete: ${newSuccessCount} successful, ${stillFailedCount} still failed`, 'warning');
+    }
+    
+    // Refresh the preview modal
+    showBatchPreviewModal(batchPreviews);
+    
+  } catch (error) {
+    console.error('Retry error:', error);
+    hideLoadingModal();
+    showToast(`Batch retry failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Update confirmBatchCreation to only create successful checklists
+ */
+async function confirmBatchCreation() {
+  try {
+    showLoadingModal('Creating checklists...');
+    
+    // Only include successful previews
+    const successfulPreviews = batchPreviews.results
+      .filter(r => r.success)
+      .map(r => r.checklist);
+    
+    if (successfulPreviews.length === 0) {
+      hideLoadingModal();
+      showToast('No successful checklists to create', 'error');
+      return;
+    }
+    
+    const response = await fetch('/api/checklists/confirm-batch', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        previews: successfulPreviews,
+        source_id: batchPreviews.source_id,
+        source_type: batchPreviews.source_type,
+        project_id: batchPreviews.project_id
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to create checklists');
+    }
+    
+    const result = await response.json();
+    
+    hideLoadingModal();
+    hideBatchPreviewModal();
+    
+    showToast(`✅ Created ${result.count} checklist${result.count > 1 ? 's' : ''} successfully!`, 'success');
+    
+    // Redirect to checklists page
+    setTimeout(() => {
+      window.location.href = `/projects/${batchPreviews.project_id}/checklists`;
+    }, 1500);
+    
+  } catch (error) {
+    console.error('Batch creation error:', error);
+    hideLoadingModal();
+    showToast(`Failed to create checklists: ${error.message}`, 'error');
+  }
+}
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ITEM 2B: ATTACHMENT EXTRACTION ERROR HANDLING
+═══════════════════════════════════════════════════════════════════════════════
+
+GOAL: Handle attachment extraction failures gracefully with clear error messages 
+and fallback options.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: Update Source Selection Modal (public/js/ai-checklist.js)          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+FIND the showSourceSelectionModal() function and UPDATE the attachment display:
+
+// In showSourceSelectionModal(), UPDATE the attachments list rendering:
+
+${availableAttachments.length > 0 ? `
+  <div class="source-option">
+    <div class="option-header">
+      <strong>📎 Attached Documents (${availableAttachments.length})</strong>
+      <p class="text-muted">Select documents for AI to analyze</p>
+    </div>
+    
+    <div class="attachments-list">
+      ${availableAttachments.map(att => {
+        const isSupported = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(att.file_type);
+        const isTooLarge = att.file_size > 10 * 1024 * 1024;
+        const hasError = att.processing_error;
+        const isDisabled = !isSupported || isTooLarge || hasError;
+        
+        let statusBadge = '';
+        let statusClass = '';
+        
+        if (hasError) {
+          statusBadge = `<span class="status-badge status-error" title="${att.processing_error}">❌ Error</span>`;
+          statusClass = 'disabled';
+        } else if (!isSupported) {
+          statusBadge = '<span class="status-badge status-unsupported">⚠️ Unsupported</span>';
+          statusClass = 'disabled';
+        } else if (isTooLarge) {
+          statusBadge = '<span class="status-badge status-too-large">⚠️ Too Large</span>';
+          statusClass = 'disabled';
+        } else if (att.is_processed) {
+          statusBadge = '<span class="status-badge status-ready">✅ Ready</span>';
+        } else {
+          statusBadge = '<span class="status-badge status-pending">⏳ Not Processed</span>';
+        }
+        
+        return `
+          <label class="attachment-checkbox ${statusClass}">
+            <input 
+              type="checkbox" 
+              class="attachment-select" 
+              data-attachment-id="${att.id}"
+              ${isDisabled ? 'disabled' : ''}
+              ${!isDisabled && att.is_processed ? 'checked' : ''}
+            >
+            <div class="attachment-info">
+              <div class="attachment-name">
+                ${getFileIcon(att.file_type)} ${att.original_name}
+              </div>
+              <div class="attachment-meta">
+                ${formatFileSize(att.file_size)}
+                ${statusBadge}
+              </div>
+              ${hasError ? `
+                <div class="attachment-error">
+                  <strong>Error:</strong> ${att.processing_error}
+                </div>
+              ` : ''}
+              ${!isSupported ? `
+                <div class="attachment-help">
+                  <strong>Supported formats:</strong> PDF, DOCX, TXT
+                </div>
+              ` : ''}
+              ${isTooLarge ? `
+                <div class="attachment-help">
+                  <strong>Max file size:</strong> 10MB
+                </div>
+              ` : ''}
+            </div>
+          </label>
+        `;
+      }).join('')}
+    </div>
+    
+    <div class="attachment-summary">
+      <small>
+        ${availableAttachments.filter(a => a.is_processed).length} ready • 
+        ${availableAttachments.filter(a => !['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(a.file_type)).length} unsupported • 
+        ${availableAttachments.filter(a => a.file_size > 10485760).length} too large
+      </small>
+    </div>
+    
+    <div class="select-actions">
+      <button onclick="selectAllValidAttachments()" class="btn-link">Select All Valid</button>
+      <button onclick="deselectAllAttachments()" class="btn-link">Deselect All</button>
+    </div>
+  </div>
+` : `...`}
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: Add Helper Functions (public/js/ai-checklist.js)                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ADD these helper functions:
+
+/**
+ * Select only valid attachments (processed, supported, not too large)
+ */
+function selectAllValidAttachments() {
+  document.querySelectorAll('.attachment-select:not(:disabled)').forEach(cb => {
+    const attachmentId = parseInt(cb.dataset.attachmentId);
+    const attachment = availableAttachments.find(a => a.id === attachmentId);
+    
+    if (attachment && attachment.is_processed && !attachment.processing_error) {
+      cb.checked = true;
+    }
+  });
+  updateSelectionSummary();
+}
+
+/**
+ * Show warning if selecting unprocessed attachments
+ */
+function updateSelectionSummary() {
+  const useDescription = document.getElementById('useDescription')?.checked;
+  const selectedCheckboxes = document.querySelectorAll('.attachment-select:checked');
+  selectedAttachments = Array.from(selectedCheckboxes).map(cb => parseInt(cb.dataset.attachmentId));
+  
+  const summaryList = document.getElementById('summaryList');
+  const generateBtn = document.getElementById('generateBtn');
+  
+  let items = [];
+  let warnings = [];
+  
+  if (useDescription) {
+    items.push('<li>📝 Description text</li>');
+  }
+  
+  if (selectedAttachments.length > 0) {
+    const selectedDetails = availableAttachments.filter(a => selectedAttachments.includes(a.id));
+    const unprocessed = selectedDetails.filter(a => !a.is_processed);
+    
+    const attachmentNames = selectedDetails
+      .map(a => a.original_name)
+      .slice(0, 3)
+      .join(', ');
+    
+    const remaining = selectedAttachments.length > 3 ? ` and ${selectedAttachments.length - 3} more` : '';
+    items.push(`<li>📎 ${attachmentNames}${remaining}</li>`);
+    
+    if (unprocessed.length > 0) {
+      warnings.push(`⚠️ ${unprocessed.length} attachment${unprocessed.length > 1 ? 's' : ''} not yet processed - text extraction will happen during generation`);
+    }
+  }
+  
+  if (items.length === 0) {
+    summaryList.innerHTML = '<li class="text-warning">⚠️ Please select at least one source</li>';
+    generateBtn.disabled = true;
+  } else {
+    summaryList.innerHTML = items.join('') + 
+      (warnings.length > 0 ? `<li class="text-warning">${warnings.join('<br>')}</li>` : '');
+    generateBtn.disabled = false;
+  }
+}
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: Add Extraction Error Handling in Backend (server/ai-service.js)    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+UPDATE the getAttachmentContent() function with better error handling:
+
+async function getAttachmentContent(attachmentIds) {
+  const result = await pool.query(
+    `SELECT id, original_name, file_path, file_type, extracted_text, file_size
+     FROM attachments 
+     WHERE id = ANY($1)
+     ORDER BY id`,
+    [attachmentIds]
+  );
+  
+  if (result.rows.length === 0) {
+    throw new Error('No attachments found with provided IDs');
+  }
+  
+  let content = '\n====================================\n';
+  content += 'SOURCE: Attached Documents\n';
+  content += '====================================\n\n';
+  
+  let successCount = 0;
+  let failCount = 0;
+  const errors = [];
+  
+  for (const attachment of result.rows) {
+    // Check file size
+    if (attachment.file_size > 10 * 1024 * 1024) {
+      content += `--- Document: ${attachment.original_name} ---\n`;
+      content += '[File too large to process (>10MB)]\n\n';
+      failCount++;
+      errors.push(`${attachment.original_name}: File too large`);
+      continue;
+    }
+    
+    let text = attachment.extracted_text;
+    
+    // If not cached, extract now
+    if (!text) {
+      try {
+        console.log(`Extracting text from attachment ${attachment.id}: ${attachment.original_name}`);
+        text = await extractTextFromFile(attachment.file_path, attachment.file_type);
+        
+        // Cache the extracted text
+        await pool.query(
+          `UPDATE attachments 
+           SET extracted_text = $1, 
+               is_processed = true,
+               processing_error = NULL
+           WHERE id = $2`,
+          [text, attachment.id]
+        );
+        
+        console.log(`✅ Successfully extracted ${text.length} characters from ${attachment.original_name}`);
+        
+      } catch (error) {
+        console.error(`Failed to extract text from ${attachment.original_name}:`, error);
+        
+        // Log error to database
+        await pool.query(
+          `UPDATE attachments 
+           SET processing_error = $1,
+               is_processed = false
+           WHERE id = $2`,
+          [error.message, attachment.id]
+        );
+        
+        content += `--- Document: ${attachment.original_name} ---\n`;
+        content += `[Could not extract text: ${error.message}]\n\n`;
+        failCount++;
+        errors.push(`${attachment.original_name}: ${error.message}`);
+        continue;
+      }
+    }
+    
+    // Truncate if too long (3000 tokens per document)
+    text = truncateToTokenLimit(text, 3000);
+    
+    content += `--- Document: ${attachment.original_name} ---\n${text}\n\n`;
+    successCount++;
+  }
+  
+  // Add summary
+  content += '\n====================================\n';
+  content += `EXTRACTION SUMMARY: ${successCount} successful, ${failCount} failed\n`;
+  if (errors.length > 0) {
+    content += 'Errors:\n' + errors.map(e => `  - ${e}`).join('\n') + '\n';
+  }
+  content += '====================================\n';
+  
+  // If all failed, throw error
+  if (successCount === 0) {
+    throw new Error(`All attachment extractions failed: ${errors.join(', ')}`);
+  }
+  
+  return content;
+}
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ITEM 2C: RATE LIMITING DISPLAY
+═══════════════════════════════════════════════════════════════════════════════
+
+GOAL: Show users their remaining generation count and warn before exceeding limits.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: Update checkRateLimit Function (server/ai-service.js)              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+UPDATE the checkRateLimit function to handle batch requests:
+
+function checkRateLimit(userId, requestCount = 1) {
+  const key = `ai-gen-${userId}`;
+  const now = Date.now();
+  const userRequests = rateLimitMap.get(key) || [];
+  
+  // Remove requests older than 1 hour
+  const recentRequests = userRequests.filter(time => now - time < 3600000);
+  
+  const remaining = 10 - recentRequests.length;
+  
+  // Check if this request would exceed limit
+  if (recentRequests.length + requestCount > 10) {
+    const oldestRequest = Math.min(...recentRequests);
+    const minutesUntilReset = Math.ceil((3600000 - (now - oldestRequest)) / 60000);
+    return { 
+      allowed: false, 
+      remaining: remaining,
+      minutesUntilReset,
+      requestCount,
+      required: requestCount,
+      available: remaining
+    };
+  }
+  
+  // Add the request(s)
+  for (let i = 0; i < requestCount; i++) {
+    recentRequests.push(now);
+  }
+  
+  rateLimitMap.set(key, recentRequests);
+  
+  return { 
+    allowed: true, 
+    remaining: 10 - recentRequests.length,
+    requestCount,
+    total: 10
+  };
+}
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: Add Rate Limit Check Before Batch Generation (server.js)           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+UPDATE /api/checklists/generate-batch endpoint:
+
+app.post('/api/checklists/generate-batch', authenticateToken, async (req, res) => {
+  try {
+    const { 
+      source_type, 
+      source_id, 
+      attachment_ids,
+      workstreams,
+      use_description 
+    } = req.body;
+    const userId = req.user.id;
+    
+    // Validation
+    if (!workstreams || workstreams.length === 0) {
+      return res.status(400).json({ error: 'Workstreams required' });
+    }
+    
+    if (workstreams.length > 10) {
+      return res.status(400).json({ error: 'Maximum 10 checklists per batch' });
+    }
+    
+    // Rate limiting - check if user has enough remaining
+    const rateLimit = checkRateLimit(userId, workstreams.length);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({ 
+        error: 'Rate limit exceeded',
+        message: `This batch requires ${rateLimit.required} generations but you only have ${rateLimit.available} remaining. Limit resets in ${rateLimit.minutesUntilReset} minutes.`,
+        rate_limit: {
+          required: rateLimit.required,
+          available: rateLimit.available,
+          minutes_until_reset: rateLimit.minutesUntilReset
+        }
+      });
+    }
+    
+    // ... rest of generation code
+    
+    // Add rate limit info to response
+    response.rate_limit = {
+      remaining: rateLimit.remaining,
+      total: rateLimit.total,
+      used_by_this_request: workstreams.length
+    };
+    
+    res.json(response);
+    
+  } catch (error) {
+    console.error('Batch generation error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate checklists',
+      message: error.message 
+    });
+  }
+});
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: Add Rate Limit Warning in Frontend (public/js/ai-checklist.js)     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+UPDATE analyzeAndOfferOptions() function to check rate limits:
+
+async function analyzeAndOfferOptions(sourceType, sourceId, useDescription, attachmentIds) {
+  try {
+    showLoadingModal('Analyzing document...');
+    
+    const response = await fetch('/api/checklists/analyze-document', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_type: sourceType,
+        source_id: sourceId,
+        attachment_ids: attachmentIds
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Document analysis failed');
+    }
+    
+    documentAnalysis = await response.json();
+    
+    hideLoadingModal();
+    
+    // Check rate limit before showing options
+    await checkRateLimitBeforeGeneration(sourceType, sourceId, useDescription, attachmentIds);
+    
+  } catch (error) {
+    console.error('Analysis error:', error);
+    hideLoadingModal();
+    showToast(`Analysis failed: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Check rate limit and warn user before generation
+ */
+async function checkRateLimitBeforeGeneration(sourceType, sourceId, useDescription, attachmentIds) {
+  try {
+    // Make a dry-run check to the batch endpoint (we'll add this)
+    const response = await fetch('/api/checklists/check-rate-limit', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workstreams_count: documentAnalysis.workstreams.length
+      })
+    });
+    
+    const rateLimitInfo = await response.json();
+    
+    if (!rateLimitInfo.allowed) {
+      // Show warning modal
+      showRateLimitWarning(rateLimitInfo, sourceType, sourceId, useDescription, attachmentIds);
+    } else {
+      // Show options modal with rate limit info
+      showGenerationOptionsModal(sourceType, sourceId, useDescription, attachmentIds, rateLimitInfo);
+    }
+    
+  } catch (error) {
+    console.error('Rate limit check error:', error);
+    // Continue anyway if check fails
+    showGenerationOptionsModal(sourceType, sourceId, useDescription, attachmentIds);
+  }
+}
+
+/**
+ * Show rate limit warning modal
+ */
+function showRateLimitWarning(rateLimitInfo, sourceType, sourceId, useDescription, attachmentIds) {
+  const modal = document.getElementById('rateLimitWarningModal') || createRateLimitWarningModal();
+  
+  modal.querySelector('.modal-body').innerHTML = `
+    <div class="rate-limit-warning">
+      <div class="warning-icon">⚠️</div>
+      <h3>Rate Limit Warning</h3>
+      
+      <div class="rate-limit-details">
+        <p>This batch generation requires <strong>${rateLimitInfo.required} generations</strong></p>
+        <p>You have <strong>${rateLimitInfo.available} generations</strong> remaining</p>
+        <p>Your limit resets in <strong>${rateLimitInfo.minutes_until_reset} minutes</strong></p>
+      </div>
+      
+      <div class="rate-limit-options">
+        <h4>What would you like to do?</h4>
+        <ul>
+          <li>✅ Wait ${rateLimitInfo.minutes_until_reset} minutes for limit to reset</li>
+          <li>📋 Generate a single comprehensive checklist instead (uses 1 generation)</li>
+          <li>❌ Cancel and try later</li>
+        </ul>
+      </div>
+      
+      <div class="modal-actions">
+        <button onclick="generateSingleChecklistInstead('${sourceType}', ${sourceId}, ${useDescription}, [${attachmentIds}])" 
+                class="btn-primary">
+          📋 Generate Single Checklist (1 generation)
+        </button>
+        <button onclick="hideRateLimitWarningModal()" class="btn-secondary">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  modal.style.display = 'block';
+}
+
+function createRateLimitWarningModal() {
+  const modalHTML = `
+    <div id="rateLimitWarningModal" class="modal">
+      <div class="modal-content modal-medium">
+        <div class="modal-header">
+          <h3>⚠️ Rate Limit</h3>
+          <button onclick="hideRateLimitWarningModal()" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body"></div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  return document.getElementById('rateLimitWarningModal');
+}
+
+function hideRateLimitWarningModal() {
+  const modal = document.getElementById('rateLimitWarningModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function generateSingleChecklistInstead(sourceType, sourceId, useDescription, attachmentIds) {
+  hideRateLimitWarningModal();
+  generateSingleChecklist(sourceType, sourceId, useDescription, attachmentIds);
+}
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: Add Rate Limit Info to Generation Options Modal                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+UPDATE showGenerationOptionsModal() to include rate limit info:
+
+function showGenerationOptionsModal(sourceType, sourceId, useDescription, attachmentIds, rateLimitInfo) {
+  const modal = document.getElementById('generationOptionsModal') || createGenerationOptionsModal();
+  
+  // ... existing workstreams display code ...
+  
+  // Add rate limit info before the generation choice
+  let rateLimitHTML = '';
+  if (rateLimitInfo) {
+    const willUseForMultiple = documentAnalysis.workstreams.length;
+    const willUseForSingle = 1;
+    const remaining = rateLimitInfo.available || rateLimitInfo.remaining || 10;
+    
+    rateLimitHTML = `
+      <div class="rate-limit-info">
+        <h5>⏱️ Rate Limit Status</h5>
+        <div class="rate-limit-bar">
+          <div class="rate-limit-used" style="width: ${((10 - remaining) / 10) * 100}%"></div>
+          <div class="rate-limit-text">${remaining} of 10 generations remaining</div>
+        </div>
+        <div class="rate-limit-usage">
+          <p>
+            <strong>Multiple checklists:</strong> Will use ${willUseForMultiple} generations 
+            ${remaining >= willUseForMultiple ? '✅' : '❌ Insufficient'}
+          </p>
+          <p>
+            <strong>Single checklist:</strong> Will use ${willUseForSingle} generation ✅
+          </p>
+        </div>
+      </div>
+    `;
+  }
+  
+  modal.querySelector('.modal-body').innerHTML = `
+    <div class="generation-options">
+      <h4>📊 Document Analysis Complete</h4>
+      
+      ${/* existing analysis summary */}
+      
+      ${rateLimitHTML}
+      
+      ${/* existing workstreams and options */}
+      
+    </div>
+  `;
+  
+  modal.style.display = 'block';
+}
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: Add Rate Limit Check Endpoint (server.js)                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ADD new endpoint to check rate limit without consuming it:
+
+// POST /api/checklists/check-rate-limit - Check rate limit without consuming
+app.post('/api/checklists/check-rate-limit', authenticateToken, async (req, res) => {
+  try {
+    const { workstreams_count } = req.body;
+    const userId = req.user.id;
+    
+    const count = workstreams_count || 1;
+    
+    // Check without consuming
+    const key = `ai-gen-${userId}`;
+    const now = Date.now();
+    const userRequests = rateLimitMap.get(key) || [];
+    const recentRequests = userRequests.filter(time => now - time < 3600000);
+    
+    const remaining = 10 - recentRequests.length;
+    const allowed = remaining >= count;
+    
+    let result = {
+      allowed,
+      remaining,
+      total: 10,
+      required: count,
+      available: remaining
+    };
+    
+    if (!allowed) {
+      const oldestRequest = Math.min(...recentRequests);
+      result.minutes_until_reset = Math.ceil((3600000 - (now - oldestRequest)) / 60000);
+    }
+    
+    res.json(result);
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+═══════════════════════════════════════════════════════════════════════════════
+CSS STYLES (public/css/checklists.css)
+═══════════════════════════════════════════════════════════════════════════════
+
+ADD these styles:
+
+/* Partial Success States */
+.batch-summary.partial-success {
+  background: #fff3cd;
+  border-left-color: #f59e0b;
+}
+
+.batch-summary.all-failed {
+  background: #fee2e2;
+  border-left-color: #ef4444;
+}
+
+.batch-summary.all-success {
+  background: #d1fae5;
+  border-left-color: #10b981;
+}
+
+.partial-options, .failure-help {
+  margin-top: 15px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+}
+
+.partial-options ul, .failure-help ul {
+  margin: 10px 0;
+  padding-left: 20px;
+}
+
+/* Status Badges */
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.status-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.status-ready {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-badge.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.status-error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.status-unsupported,
+.status-badge.status-too-large {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Preview Item States */
+.batch-preview-item.success {
+  border-left: 4px solid #10b981;
+}
+
+.batch-preview-item.error {
+  border-left: 4px solid #ef4444;
+  background: #fef2f2;
+}
+
+.batch-preview-item .preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.batch-preview-item .preview-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-retry {
+  color: #f59e0b;
+  margin-top: 10px;
+}
+
+.btn-retry:hover {
+  color: #d97706;
+}
+
+/* Attachment Errors */
+.attachment-error,
+.attachment-help {
+  margin-top: 8px;
+  padding: 8px;
+  background: #fef2f2;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #991b1b;
+}
+
+.attachment-help {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.attachment-summary {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Rate Limit Warning */
+.rate-limit-warning {
+  text-align: center;
+  padding: 30px;
+}
+
+.warning-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.rate-limit-details {
+  background: #fef3c7;
+  padding: 20px;
+  border-radius: 10px;
+  margin: 20px 0;
+}
+
+.rate-limit-details p {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.rate-limit-options {
+  text-align: left;
+  margin: 20px 0;
+}
+
+.rate-limit-options ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.rate-limit-options li {
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+/* Rate Limit Info in Options Modal */
+.rate-limit-info {
+  background: #f0f9ff;
+  padding: 20px;
+  border-radius: 10px;
+  margin: 20px 0;
+  border-left: 4px solid #3b82f6;
+}
+
+.rate-limit-bar {
+  position: relative;
+  height: 30px;
+  background: #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 15px 0;
+}
+
+.rate-limit-used {
+  position: absolute;
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  transition: width 0.3s ease;
+}
+
+.rate-limit-text {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.rate-limit-usage {
+  margin-top: 15px;
+}
+
+.rate-limit-usage p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+/* Button Variants */
+.btn-warning {
+  background: #f59e0b;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-warning:hover {
+  background: #d97706;
+}
+
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, test:
+
+ITEM 2A - Partial Batch Failure:
+[ ] Generate 5 checklists - simulate 2 failures (disconnect network midway)
+[ ] Verify UI shows 3 succeeded, 2 failed
+[ ] Verify "Create 3 Successful" button works
+[ ] Verify "Retry 2 Failed" button works
+[ ] Verify retry succeeds and updates preview
+[ ] Verify can create after retry
+
+ITEM 2B - Attachment Errors:
+[ ] Upload corrupted PDF - verify error shown in selection modal
+[ ] Upload 15MB file - verify "too large" badge
+[ ] Upload .xlsx file - verify "unsupported" badge
+[ ] Select unsupported file - verify checkbox disabled
+[ ] Generate with 1 valid + 1 failed attachment - verify fallback works
+[ ] All attachments fail - verify clear error message
+
+ITEM 2C - Rate Limiting:
+[ ] Make 10 single generations - verify limit reached
+[ ] Try 11th generation - verify error with reset time
+[ ] Try batch of 5 with only 3 remaining - verify warning
+[ ] Warning modal shows "wait" or "single instead" options
+[ ] Rate limit bar displays correctly in options modal
+[ ] Rate limit resets after 1 hour
+
+═══════════════════════════════════════════════════════════════════════════════
+COMMIT MESSAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+git add .
+git commit -m "Implement enhanced error handling for Phase 2b
+
+2A - Partial Batch Failure Handling:
+- Show success/failure status for each checklist
+- Offer to create successful ones or retry failed ones
+- Add retry individual or retry all functionality
+- Update UI with status badges and warnings
+
+2B - Attachment Extraction Error Handling:
+- Display file status badges (ready, error, unsupported, too large)
+- Show clear error messages for failed extractions
+- Disable selection of invalid attachments
+- Add fallback to description-only if attachments fail
+- Show extraction summary with success/fail counts
+
+2C - Rate Limiting Display:
+- Show remaining generations count
+- Warn before batch if insufficient generations available
+- Add rate limit check endpoint (non-consuming)
+- Display rate limit bar in options modal
+- Offer single checklist option when batch exceeds limit
+- Show reset time when limit exceeded
+
+Relates to #48"
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Implement all three items (2A, 2B, 2C) now.
