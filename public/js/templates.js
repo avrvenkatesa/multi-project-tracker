@@ -165,6 +165,32 @@ async function saveChecklistAsTemplate() {
 // =====================================================
 
 async function initTemplateLibrary() {
+  // Wait for AuthManager to be available
+  const maxRetries = 50; // 5 seconds max wait
+  let retries = 0;
+  
+  while (!window.AuthManager && retries < maxRetries) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries++;
+  }
+  
+  // If AuthManager is not available after waiting, redirect
+  if (!window.AuthManager) {
+    window.location.href = '/';
+    return;
+  }
+  
+  // Initialize AuthManager if not already initialized
+  if (window.AuthManager.currentUser === null && !window.AuthManager.isAuthenticated) {
+    await window.AuthManager.init();
+  }
+  
+  // If not authenticated after init, redirect to home
+  if (!window.AuthManager.isAuthenticated) {
+    window.location.href = '/';
+    return;
+  }
+  
   await loadTemplateLibraryCategories();
   setupTemplateLibraryListeners();
   loadTemplates();
