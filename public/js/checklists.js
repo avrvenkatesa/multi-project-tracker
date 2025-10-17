@@ -699,7 +699,7 @@ async function loadChecklistForFilling(checklistId) {
 function displayChecklistForFilling(checklist) {
   // Update header
   document.getElementById('checklistTitle').textContent = checklist.title;
-  document.getElementById('checklistId').textContent = `ID: ${checklist.checklist_id}`;
+  document.getElementById('checklistId').textContent = `ID: ${checklist.id}`;
   document.getElementById('projectName').textContent = `📁 ${checklist.project_name}`;
   
   if (checklist.assigned_to_name) {

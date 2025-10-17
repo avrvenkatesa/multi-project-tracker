@@ -38,6 +38,7 @@ Preferred communication style: Simple, everyday language.
   - Fixed null element error in batch creation by removing reference to non-existent UI element in confirmBatchChecklistCreation (public/app.js)
   - Fixed "Generation Failed" error with successful backend - increased frontend timeout to 5 minutes for large batch generations (public/app.js)
   - Fixed step indicator showing incorrect step - analysis results now correctly show Step 2 as complete rather than active (public/app.js)
+  - Fixed checklist ID showing as "null" - corrected field name from `checklist_id` to `id` to match database schema (public/js/checklists.js)
 
 - **Enhanced Modal Context Display** (October 16, 2025):
   - **Redesigned AI Checklist Modal Header**: 
