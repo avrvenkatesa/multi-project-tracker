@@ -16,6 +16,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Template CSP Compliance Fix** (October 17, 2025):
+  - **Removed Inline Event Handlers**: Eliminated all inline `onclick` handlers from template library to comply with Content Security Policy
+  - **Event Delegation**: Implemented proper event listeners using event delegation for template cards
+  - **Modal Interactions**: Fixed all modal buttons (close, apply template, rate template, cancel) to use proper event listeners
+  - **Security Enhancement**: All JavaScript now executes from external files, preventing CSP violations
+  - **Files Modified**: public/js/templates.js
+
 - **Template Card Display Enhancements** (October 17, 2025):
   - **Tags on Cards**: Template cards now display up to 3 tags with a "+X more" indicator if additional tags exist
   - **Category Display**: Category is prominently shown below the template name on each card

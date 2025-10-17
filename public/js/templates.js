@@ -260,6 +260,17 @@ function renderCategoryFilters() {
 }
 
 function setupTemplateLibraryListeners() {
+  // Template card clicks (event delegation)
+  document.getElementById('templatesGrid')?.addEventListener('click', (e) => {
+    const card = e.target.closest('.template-card');
+    if (card) {
+      const templateId = card.dataset.templateId;
+      if (templateId) {
+        showTemplateDetail(parseInt(templateId));
+      }
+    }
+  });
+  
   // Category filters
   document.getElementById('categoryFilters')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.category-filter-btn');
@@ -369,7 +380,7 @@ function renderTemplateCard(template) {
   
   return `
     <div class="template-card bg-white rounded-lg border border-gray-200 p-5 hover:shadow-lg transition-all cursor-pointer"
-         onclick="showTemplateDetail(${template.id})">
+         data-template-id="${template.id}">
       <div class="flex items-start justify-between mb-3">
         <div class="flex-1">
           <h3 class="font-semibold text-gray-900 mb-1">${template.name}</h3>
@@ -484,10 +495,10 @@ function renderTemplateDetailModal() {
       </div>
       
       <div class="border-t pt-4 flex gap-3">
-        <button onclick="applyTemplate(${template.id})" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-all">
+        <button id="applyTemplateBtn" data-template-id="${template.id}" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-all">
           Use This Template
         </button>
-        <button onclick="rateTemplateModal(${template.id})" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-all">
+        <button id="rateTemplateBtn" data-template-id="${template.id}" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-all">
           Rate Template
         </button>
       </div>
@@ -495,6 +506,15 @@ function renderTemplateDetailModal() {
   `;
   
   document.getElementById('templateDetailModal').style.display = 'flex';
+  
+  // Add event listeners for action buttons
+  document.getElementById('applyTemplateBtn')?.addEventListener('click', () => {
+    applyTemplate(template.id);
+  });
+  
+  document.getElementById('rateTemplateBtn')?.addEventListener('click', () => {
+    rateTemplateModal(template.id);
+  });
 }
 
 function createTemplateDetailModal() {
@@ -506,12 +526,22 @@ function createTemplateDetailModal() {
     <div class="modal-content max-w-3xl">
       <div class="modal-header">
         <h3 class="text-xl font-bold">Template Details</h3>
-        <button onclick="closeTemplateDetailModal()" class="close-btn">&times;</button>
+        <button id="closeTemplateDetailBtn" class="close-btn">&times;</button>
       </div>
       <div id="templateDetailContent" class="p-6"></div>
     </div>
   `;
   document.body.appendChild(modal);
+  
+  // Add event listeners for modal buttons
+  document.getElementById('closeTemplateDetailBtn').addEventListener('click', closeTemplateDetailModal);
+  
+  // Close modal when clicking outside
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeTemplateDetailModal();
+    }
+  });
 }
 
 function closeTemplateDetailModal() {
@@ -593,8 +623,8 @@ function selectProject(projects) {
           </select>
         </div>
         <div class="modal-actions">
-          <button onclick="this.closest('.modal').remove(); resolve(null)" class="btn-secondary">Cancel</button>
-          <button onclick="const pid = document.getElementById('projectSelect').value; this.closest('.modal').remove(); resolve(parseInt(pid))" class="btn-primary">Create Checklist</button>
+          <button class="btn-secondary">Cancel</button>
+          <button class="btn-primary">Create Checklist</button>
         </div>
       </div>
     `;
@@ -626,24 +656,41 @@ async function rateTemplateModal(templateId) {
     <div class="modal-content max-w-md">
       <div class="modal-header">
         <h3 class="text-xl font-bold">Rate Template</h3>
-        <button onclick="this.closest('.modal').remove()" class="close-btn">&times;</button>
+        <button id="closeRatingModal" class="close-btn">&times;</button>
       </div>
       <div class="p-6">
         <p class="text-sm text-gray-600 mb-4">How would you rate this template?</p>
-        <div class="flex justify-center gap-2 mb-4">
+        <div id="ratingStarsContainer" class="flex justify-center gap-2 mb-4">
           ${[1,2,3,4,5].map(n => `
-            <button onclick="selectRating(${n})" data-rating="${n}" class="rating-star text-3xl hover:scale-110 transition-transform">☆</button>
+            <button data-rating="${n}" class="rating-star text-3xl hover:scale-110 transition-transform">☆</button>
           `).join('')}
         </div>
         <textarea id="ratingReview" placeholder="Optional: Share your thoughts..." rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
       </div>
       <div class="modal-actions">
-        <button onclick="this.closest('.modal').remove()" class="btn-secondary">Cancel</button>
-        <button onclick="submitRating(${templateId}, this.closest('.modal'))" class="btn-primary">Submit Rating</button>
+        <button id="cancelRatingBtn" class="btn-secondary">Cancel</button>
+        <button id="submitRatingBtn" class="btn-primary">Submit Rating</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
+  
+  // Add event listeners
+  document.getElementById('closeRatingModal').addEventListener('click', () => modal.remove());
+  document.getElementById('cancelRatingBtn').addEventListener('click', () => modal.remove());
+  
+  // Rating stars
+  document.querySelectorAll('.rating-star').forEach((star) => {
+    star.addEventListener('click', () => {
+      const rating = parseInt(star.dataset.rating);
+      selectRating(rating);
+    });
+  });
+  
+  // Submit rating
+  document.getElementById('submitRatingBtn').addEventListener('click', () => {
+    submitRating(templateId, modal);
+  });
 }
 
 function selectRating(rating) {
