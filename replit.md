@@ -16,6 +16,12 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Template Card Display Enhancements** (October 17, 2025):
+  - **Tags on Cards**: Template cards now display up to 3 tags with a "+X more" indicator if additional tags exist
+  - **Category Display**: Category is prominently shown below the template name on each card
+  - **Visual Design**: Tags use subtle blue styling (bg-blue-50, text-blue-600) to maintain clean card appearance
+  - **Files Modified**: public/js/templates.js
+
 - **Template Library Search & Filter Fixes** (October 17, 2025):
   - **Search Resets Category**: When searching templates, category filter automatically resets to "All Templates" to show results across all categories
   - **Category Clears Search**: Clicking a category filter now clears the search input for better UX

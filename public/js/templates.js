@@ -380,6 +380,15 @@ function renderTemplateCard(template) {
       
       <p class="text-sm text-gray-600 mb-3 line-clamp-2">${template.description || 'No description'}</p>
       
+      ${template.tags && template.tags.length > 0 ? `
+        <div class="flex flex-wrap gap-1 mb-3">
+          ${template.tags.slice(0, 3).map(tag => `
+            <span class="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">${tag}</span>
+          `).join('')}
+          ${template.tags.length > 3 ? `<span class="text-xs text-gray-400">+${template.tags.length - 3} more</span>` : ''}
+        </div>
+      ` : ''}
+      
       <div class="flex items-center justify-between text-xs text-gray-500 mb-3">
         <span>📊 ${template.section_count} sections</span>
         <span>✓ ${template.item_count} items</span>
