@@ -1,134 +1,148 @@
 # Multi-Project Tracker
 
 ## Overview
-Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system includes advanced AI meeting analysis with two-phase processing (item extraction + status update detection), in-modal search for matching items, and a persistent review queue for unmatched status updates. The system aims to enhance project oversight and efficiency through AI-driven insights and robust security measures, envisioning a leading solution for centralized project oversight and efficient team collaboration.
+The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include:
+
+-   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection, with in-modal search and a persistent review queue for unmatched status updates.
+-   **AI Checklist Generation**: Generates checklists from issue/action descriptions and uploaded documents, supporting focused multi-checklist generation from extensive documents.
+-   **Checklist Validation**: An intelligent quality scoring system with required fields validation, consistency checks, and quality assessments.
+-   **Comprehensive Reporting**: PDF and CSV export capabilities for checklists and project data.
+-   **Enhanced Collaboration**: A comment system with markdown support and @mention autocomplete.
+
+The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
-- **Checklist Validation System - Phase 2a Prompt 3 - COMPLETE** (October 15, 2025):
-  - **Database Schema**: New checklist_validations table tracking validation history, quality scores, errors, warnings, and recommendations; added validation status columns to checklists table
-  - **Validation Service**: Intelligent quality scoring system (services/validation-service.js) with three validation layers:
-    - Required Fields Validation: Flags missing required items
-    - Consistency Validation: Checks date validity, text length, placeholder detection, section completion consistency
-    - Quality Assessment: Evaluates comments, completion time, AI-generated checklist specifics
-  - **Quality Scoring Algorithm**: Weighted scoring system (0-100) with three components:
-    - Completeness Score (50% weight): Based on required item completion
-    - Consistency Score (30% weight): Deducts points for errors (-10) and warnings (-3)
-    - Quality Rating (20% weight): Bonuses for comments (+2 each), detailed responses (+3 each), penalties for placeholders (-5)
-  - **Validation Status**: Auto-calculated status (passed/warnings/failed) based on score thresholds and error count
-  - **API Endpoints**: POST /api/checklists/:id/validate, GET /api/checklists/:id/validations, GET /api/checklists/:id/validation/latest
-  - **Frontend UI**: 
-    - Validate Quality button with loading states
-    - Rich validation results panel showing score breakdown, errors, warnings, and recommendations
-    - Color-coded quality badge (green ≥80, yellow ≥60, red <60)
-    - Jump-to-item functionality for quick issue resolution
-    - Score-based validation messages (Excellent/Good/Fair/Acceptable/Needs Work)
-  - **Validation Rules**:
-    - Errors: Required fields missing, invalid dates
-    - Warnings: Optional items incomplete >30%, dates >5 years future or >10 years past, brief textarea responses <10 chars, very long responses >5000 chars, placeholder text (todo/tbd/pending/n/a/none/test/xxx), sections <25% complete
-    - Recommendations: Add comments for large checklists, verify AI-generated items, complete 50%+ before approval, aim for 80%+ quality
-  - **Files**: services/validation-service.js, public/js/checklist-validation.js, server.js, public/checklist-fill.html, public/js/checklists.js
 
-- **PDF Export for Checklists - Phase 2a - COMPLETE & ALL BUGS FIXED** (October 15, 2025):
-  - **Backend**: Comprehensive PDF service (services/pdf-service.js) using pdfkit and stream-buffers with native progress bar rendering
-  - **API**: GET /api/checklists/:id/export/pdf endpoint with format and inclusion query parameters
-  - **Frontend**: Export button on checklist detail page, modal with format selection (full/summary/completed-only) and inclusion options (comments/charts/metadata)
-  - **PDF Features**: Professional formatting with header/footer, metadata section, native progress bar (replaced chartjs to avoid antivirus false positives), checklist items with responses, sign-off section with signatures or placeholders
-  - **Format Options**: Full Report (all data), Summary (key info only), Completed Items Only (filtered view)
-  - **Inclusion Options**: Toggle comments, progress charts, and metadata sections
-  - **File Management**: Clean filenames using checklist title (e.g., "Checklist_Title_Report.pdf"), enhanced security headers (X-Content-Type-Options, Cache-Control), proper content-disposition headers for downloads
-  - **Download Mechanism**: Improved browser compatibility with delayed triggers, fallback to open-in-tab if download blocked
-  - **Error Handling**: Authentication checks, project access validation, graceful error handling
-  - **Antivirus Fix**: Complete rewrite using dashboard report PDF generation pattern (proven to work without antivirus issues):
-    - Removed problematic chartjs-node-canvas library (failed libuuid.so.1 dependency)
-    - Replaced with native PDFKit drawing for progress visualization
-    - Switched from stream-buffers to Buffer.concat(chunks) approach (same as dashboard reports)
-    - Using event-based PDF generation (doc.on('data'), doc.on('end'))
-    - Proper page numbering using bufferedPageRange() method
-    - Clean metadata matching dashboard reports (Title, Author, Subject, Keywords, Creator, Producer)
-    - PDF structure validation (magic bytes %PDF-, trailer %%EOF)
-    - Simple filenames matching dashboard pattern (checklist-report-{id}-{timestamp}.pdf)
-    - Minimal HTTP headers (exact same as dashboard reports - Content-Type and Content-Disposition only)
-    - Standard fonts only (Helvetica, Helvetica-Bold, Helvetica-Oblique)
-    - ASCII-only checkbox symbols ([ ] and [X] instead of Unicode checkboxes)
-    - A4 page size for consistency with other reports
-  - **Critical Bug Fix - Completion Percentage & Checkbox Display** (October 15, 2025):
-    - Fixed incorrect completion calculation: Changed from checking `response_value IS NOT NULL` to `is_completed = true`
-    - Fixed missing checkbox responses: Query now includes all response fields (response_boolean, response_date, response_value, is_completed, notes)
-    - Fixed PDF display logic: Now properly checks `is_completed` flag instead of just `response_value`
-    - Fixed response value extraction: Correctly retrieves data from response_boolean for checkboxes, response_date for dates, response_value for text fields
-    - Result: PDFs now show correct 100% completion and display all filled checkbox entries with proper [X] or [ ] symbols
-  - **Deliverables**: TESTING_PDF_EXPORT.md (comprehensive testing guide with 10 manual test cases)
-  - **Files**: services/pdf-service.js, server.js, public/checklist-fill.html, public/js/checklists.js, TESTING_PDF_EXPORT.md
+- **Phase 2B: Enhanced Error Handling & User Feedback** (October 17, 2025):
+  - **Partial Batch Failure UI**: Batch preview now displays both successful and failed checklists with distinct visual indicators
+    - ✅ Green borders for successful checklists
+    - ❌ Red borders for failed checklists with error messages
+    - Summary statistics showing "X of Y succeeded" with appropriate icons (success/warning/error)
+  - **Retry Functionality**: 
+    - Individual retry buttons on each failed checklist
+    - "Retry All Failed" button for bulk retry operations
+    - Auto-updates preview after successful retry
+    - Preserves rate limit information across retries
+  - **Rate Limiting Display**: 
+    - Shows remaining generations count in warnings
+    - Yellow warning when ≤3 generations remaining
+    - Clear error messaging when rate limit exceeded
+    - Rate limit info displayed in both single and batch generation flows
+  - **Attachment Error Handling**:
+    - Warns users about unsupported file types (only PDF, DOCX, TXT supported)
+    - Backend gracefully handles extraction failures with descriptive error messages
+    - Files >10MB automatically skipped with notification
+  - **Files Modified**: public/index.html (batch preview UI), public/app.js (retry functions, rate limit display, attachment warnings)
 
-- **AI Checklist Generation - Phase 2a - ALL 4 STAGES COMPLETE** (October 15, 2025):
-  - **Stage 1 (Foundation)**: Backend AI service, database schema, 4 API endpoints, dual provider support (OpenAI GPT-4o/Anthropic Claude)
-  - **Stage 2 (Integration)**: UI buttons on all cards, generation modal with 3 states (loading/error/preview)
-  - **Stage 3 (Polish)**: Enhanced animations (pulse rings, sparkle, bouncing dots), improved error messages with troubleshooting, numbered sections with item counts, template promotion toast with benefits, keyboard shortcuts (Escape/Enter/R), tooltips with rate limits
-  - **Stage 4 (Testing)**: Comprehensive test suite with 20 manual test cases + 7 automated tests covering authentication, generation, rate limiting, error handling, template promotion, and data persistence
-  - **Deliverables**: TESTING_AI_CHECKLIST.md (comprehensive guide), test-ai-checklist.js (automated script), STAGE4_QUICKSTART.md (quick start guide)
-  - **Test Coverage**: Functional (generation, templates, errors), UI/UX (animations, shortcuts, tooltips), Integration (end-to-end), Database (persistence), Performance (speed), Security (auth, validation), Regression (existing features)
-  - **Rate Limiting**: 10 AI generations per hour per user (in-memory, Phase 2b: persist to database)
-  - **Known Limitations**: In-memory rate limiting, no custom instructions yet, no cost tracking (all Phase 2b)
-  - **Files**: services/ai-service.js, server.js, public/app.js, public/index.html, TESTING_AI_CHECKLIST.md, test-ai-checklist.js, STAGE4_QUICKSTART.md
+- **New Features** (October 16, 2025):
+  - **Batch Template Promotion**: Added template promotion prompts for multiple checklist creation, allowing users to promote all newly created templates to reusable status at once (server.js, public/app.js)
+  - **Visual Step Indicator**: Added 5-step progress indicator to AI Checklist Generation modal showing current progress through: Source Selection → Source Analysis → Checklist Generation → Preview → Checklist Creation (public/index.html, public/app.js)
+  - **Selective Checklist Creation**: Added checkboxes to preview screen allowing users to select which checklists to create; button text updates dynamically to show "Create X Checklists" based on selection (public/index.html, public/app.js)
+  - **Enhanced Preview Display**: Batch checklist preview now shows all individual items under each section when expanded, allowing users to review the complete checklist content before creating (public/app.js)
+  - **Improved Button Labels**: Changed "Generate Checklist" to "Analyze Sources", and updated analysis result buttons to "Generate Single Comprehensive Checklist" and "Generate Multiple Focused Checklists" for clarity (public/index.html)
+
+- **Bug Fixes** (October 16, 2025):
+  - Fixed "null" prefix in checklist section headings (public/js/checklists.js)
+  - Fixed action item attachment upload failure - corrected response data structure handling (public/app.js)
+  - Fixed stale analysis cache causing old results to display in new generations (public/app.js)
+  - Fixed total items showing 0 by correcting field name from `estimated_total_items` to `total_estimated_items` (public/app.js)
+  - Fixed identical checklists from different documents by clearing analysis cache on each generation (public/app.js)
+  - Fixed modal close button positioning with multi-line header content (public/index.html)
+  - Fixed AI generation hanging indefinitely by adding 90-second timeout to AI API calls (services/ai-service.js)
+  - Added 2-minute timeout to frontend batch generation requests (public/app.js)
+  - Enhanced batch generation logging for better debugging (server.js, services/ai-service.js)
+  - Fixed "Multiple Focused Checklists" button triggering wrong function - added event propagation prevention (public/app.js)
+  - Fixed null element error in batch generation by removing reference to non-existent UI element in generateMultipleChecklists (public/app.js)
+  - Fixed null element error in batch creation by removing reference to non-existent UI element in confirmBatchChecklistCreation (public/app.js)
+  - Fixed "Generation Failed" error with successful backend - increased frontend timeout to 5 minutes for large batch generations (public/app.js)
+  - Fixed step indicator showing incorrect step - analysis results now correctly show Step 2 as complete rather than active (public/app.js)
+  - Fixed checklist ID showing as "null" - corrected field name from `checklist_id` to `id` to match database schema (public/js/checklists.js)
+
+- **Enhanced Modal Context Display** (October 16, 2025):
+  - **Redesigned AI Checklist Modal Header**: 
+    - Removed icon from modal title for cleaner appearance
+    - Shows project name prominently below title
+    - Displays item type (Issue/Action Item) and name
+    - Real-time sources display showing selected attachments and description
+    - Sources update dynamically as user selects/deselects options
+  - **Project-Aware Progress**: Progress indicators now display "Generating <checklist name> for <project name>"
+    - During generation: Shows current workstream name being processed with project context
+    - During creation: Shows current checklist being saved to database
+  - **Creation Progress Tracking**: Added visual progress bar when clicking "Create All Checklists"
+    - Shows real-time progress as each checklist is saved to database
+    - Displays checklist names during creation process
+    - Smooth completion animation before navigation
+  - **Files Modified**: public/index.html (modal header), public/app.js (openAIChecklistModal, updateSourcesDisplay, setupSourceSelectionListeners)
+
+- **Database Schema Fixes** (October 16, 2025):
+  - Fixed `checklist_template_items` column name: changed `text` to `item_text` in batch creation
+  - Fixed `checklists` table: made `checklist_id` nullable and removed from INSERT statements
+  - Removed non-existent `ai_confidence` column from checklist creation queries
+  - All multi-checklist generation now works successfully
 
 ## System Architecture
 
 ### Frontend
-The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS. It features a dynamic UI based on user roles, real-time AI analysis capabilities (in-modal search, review queue), a comprehensive comment system with markdown support and @mention autocomplete, and a Project Dashboard with analytics, Chart.js visualizations, and team performance metrics. UI elements like Kanban boards, tag displays, risk cards, and a comprehensive checklist system prioritize clarity and interactivity. Consistent header design and universal dropdown navigation are applied across all project-aware pages.
+The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS. It features a dynamic UI based on user roles, real-time AI analysis capabilities, a comprehensive comment system, and a Project Dashboard with analytics and Chart.js visualizations. UI elements such as Kanban boards, tag displays, risk cards, and a comprehensive checklist system prioritize clarity and interactivity.
 
 ### Backend
-The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations for core entities, including atomic transactions for tag management, project-level authorization, and checklist management. Status changes are logged to a `status_history` table for auditing.
+The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations, atomic transactions for tag management, project-level authorization, and comprehensive checklist management. Status changes are logged to a `status_history` table for auditing.
 
 ### Data Management
-A PostgreSQL database stores core entities such as Users, Projects, Issues, Action Items, Meeting Transcripts, and the Risk Register. It manages relationships, AI-specific data (Status Update Review Queue, AI analysis audit trail), collaboration data (comments, mention notifications), user preferences, and comprehensive risk management with automatic risk scoring and tracking. Tags are managed with a type system supporting Issues/Actions, Risks, or Both. A dedicated `status_history` table tracks all status transitions. A comprehensive checklist system stores templates, sections, items, responses, comments, and signoffs, with generated completion percentages and performance indexes.
+A PostgreSQL database stores core entities such as Users, Projects, Issues, Action Items, Meeting Transcripts, and the Risk Register. It manages relationships, AI-specific data (Status Update Review Queue, AI analysis audit trail, checklist generation sources), collaboration data (comments, mention notifications), user preferences, and comprehensive risk management with automatic risk scoring and tracking. Tags are managed with a type system. A dedicated `status_history` table tracks all status transitions. A comprehensive checklist system stores templates, sections, items, responses, comments, and signoffs, with generated completion percentages, performance indexes, and validation history.
 
-### Request Handling
-Express.js handles requests, incorporating `express-rate-limit` for API protection and comprehensive error handling. It supports JSON and URL-encoded data parsing.
+### AI Features
+-   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection, with in-modal search and a persistent review queue.
+-   **AI Checklist Generation**: Generates comprehensive and granular checklists from issue/action descriptions and uploaded documents (PDF, DOCX, TXT), supporting multi-checklist generation from complex documents with focused workstreams. It leverages large token limits and specific prompting techniques for exhaustive extraction.
+-   **Checklist Validation**: Provides intelligent quality scoring, required field validation, consistency checks, and recommendations.
 
-### Notifications
-The system integrates with Microsoft Teams for instant notifications (issue/action item creation, status changes) and daily scheduled reports (overdue items, project health summaries) using Adaptive Cards.
+### Reporting & Export
+-   **PDF Export**: Generates professional PDF reports for checklists with progress bar rendering.
+-   **CSV Export**: Provides CSV file generation for data export.
 
 ## External Dependencies
 
 ### Core Frameworks
-- **Express.js**: Backend web application framework.
-- **Axios**: Frontend HTTP client.
-- **Tailwind CSS**: Frontend styling.
+-   **Express.js**: Backend web application framework.
+-   **Axios**: Frontend HTTP client.
+-   **Tailwind CSS**: Frontend styling.
 
 ### Security Libraries
-- **Helmet**: Express security headers.
-- **CORS**: Cross-Origin Resource Sharing.
-- **bcryptjs**: Password hashing.
-- **jsonwebtoken**: JWT implementation.
-- **express-rate-limit**: API rate limiting.
+-   **Helmet**: Express security headers.
+-   **CORS**: Cross-Origin Resource Sharing.
+-   **bcryptjs**: Password hashing.
+-   **jsonwebtoken**: JWT implementation.
+-   **express-rate-limit**: API rate limiting.
 
 ### Validation & Utilities
-- **Joi**: Data validation.
-- **Multer**: File uploads.
-- **uuid**: Unique ID generation.
-- **string-similarity**: Duplicate detection.
+-   **Joi**: Data validation.
+-   **Multer**: File uploads.
+-   **uuid**: Unique ID generation.
+-   **string-similarity**: Duplicate detection.
+-   **pdf-parse**: PDF text extraction.
+-   **mammoth**: DOCX text extraction.
+-   **file-type**: File type detection.
 
 ### AI Integration
-- **OpenAI**: GPT-3.5-Turbo for AI-powered meeting transcript analysis, GPT-4o for AI checklist generation.
-- **Anthropic**: Claude 3.5 Sonnet support for AI checklist generation (alternative to OpenAI).
+-   **OpenAI**: GPT-3.5-Turbo and GPT-4o for AI-powered analysis and checklist generation.
+-   **Anthropic**: Claude 3.5 Sonnet support for AI checklist generation.
 
 ### Database & ORM
-- **@neondatabase/serverless**: Neon PostgreSQL driver.
-- **drizzle-orm**: TypeScript ORM.
-- **drizzle-kit**: Schema migration tools.
+-   **@neondatabase/serverless**: Neon PostgreSQL driver.
+-   **drizzle-orm**: TypeScript ORM.
+-   **drizzle-kit**: Schema migration tools.
 
 ### Email & Notifications
-- **nodemailer**: SMTP email sending library.
-- **node-cron**: Scheduled task manager for daily notifications.
+-   **nodemailer**: SMTP email sending library.
+-   **node-cron**: Scheduled task manager for daily notifications.
 
 ### Reporting & Export
-- **pdfkit**: Server-side PDF generation for reports and checklist exports with native drawing capabilities for progress bars and visualizations.
-- **stream-buffers**: Buffer management for PDF generation and streaming.
-- **csv-writer**: CSV file generation for data export.
-- **Note**: chartjs-node-canvas removed due to system library conflicts (libuuid.so.1) that caused antivirus false positives; replaced with native PDFKit drawing.
+-   **pdfkit**: Server-side PDF generation.
+-   **stream-buffers**: Buffer management for PDF generation.
+-   **csv-writer**: CSV file generation.
 
 ### CDN Services
-- **Chart.js**: Data visualization charts for dashboard analytics.
+-   **Chart.js**: Data visualization charts.

@@ -1,0 +1,220 @@
+FIX AI SERVICE TO GENERATE COMPREHENSIVE CHECKLISTS (100-150 items instead of 40)
+
+PROBLEM ANALYSIS:
+The AI is only generating 40 generic items instead of 100-150 SOW-specific items due to:
+1. Corrupted unicode characters in prompt (âš ï¸ instead of ⚠️)
+2. max_tokens too low (16000, need 20000)
+3. Weak enforcement language (AI ignores "minimum 100 items")
+4. No concrete examples showing required granularity level
+5. Weak system message not emphasizing exhaustive detail
+
+FILE TO UPDATE: server/ai-service.js
+
+REQUIRED CHANGES:
+
+═══════════════════════════════════════════════════════════
+CHANGE 1: Fix Unicode Characters
+═══════════════════════════════════════════════════════════
+
+In buildEnhancedPrompt() function, FIND these corrupted lines:
+âš ï¸ PRIMARY DIRECTIVE
+âœ… MORE IS BETTER
+âŒ Bad:
+âœ… Good:
+
+REPLACE ALL with proper characters:
+⚠️ PRIMARY DIRECTIVE
+✅ MORE IS BETTER  
+❌ Bad:
+✅ Good:
+
+Or use plain text if unicode issues persist:
+[!] PRIMARY DIRECTIVE
+[OK] MORE IS BETTER
+[X] Bad:
+[OK] Good:
+
+═══════════════════════════════════════════════════════════
+CHANGE 2: Increase max_tokens
+═══════════════════════════════════════════════════════════
+
+Line ~384 in callAI() function:
+FIND:
+max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 16000
+
+REPLACE WITH:
+max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 20000
+
+REASON: 150-item checklist needs ~15K tokens, leaving no margin
+
+═══════════════════════════════════════════════════════════
+CHANGE 3: Add Debug Logging
+═══════════════════════════════════════════════════════════
+
+At START of buildEnhancedPrompt() function (after variable declarations):
+ADD these debug logs:
+
+console.log('=== AI GENERATION DEBUG ===');
+console.log('Has attachments:', hasAttachments);
+console.log('Attachment IDs:', attachmentIds);
+console.log('Context text length:', contextText.length, 'characters');
+console.log('Context preview:', contextText.substring(0, 300));
+console.log('Expected: 20000+ chars for large documents');
+console.log('========================');
+
+In getAttachmentContent() function, AFTER successful text extraction (line ~160):
+ADD:
+console.log(`✅ Extracted ${text.length} characters from ${attachment.original_name}`);
+
+═══════════════════════════════════════════════════════════
+CHANGE 4: Strengthen System Message
+═══════════════════════════════════════════════════════════
+
+In callAI() function, line ~376-379:
+FIND:
+{ 
+  role: 'system', 
+  content: 'You are a technical project expert specializing in comprehensive task decomposition. Create exhaustive, detailed checklists with maximum coverage. Always respond with valid JSON only, no markdown formatting, no code blocks.' 
+}
+
+REPLACE WITH:
+{ 
+  role: 'system', 
+  content: 'You are a technical project expert who creates EXHAUSTIVELY DETAILED checklists with 100-200+ items for large documents. Break every complex task into 5-15 atomic substeps. NEVER summarize - always extract every single detail mentioned. Generate MORE items rather than fewer. Your checklists should be so detailed that someone could execute them without reading source documents. You MUST generate at least 100 items when attachments are provided. Respond with valid JSON only, no markdown.' 
+}
+
+═══════════════════════════════════════════════════════════
+CHANGE 5: Add Mandatory Targets Section
+═══════════════════════════════════════════════════════════
+
+In buildEnhancedPrompt() function, IMMEDIATELY AFTER the "PRIMARY DIRECTIVE" section:
+
+ADD this new section (insert around line ~210-220):
+
+🎯 MANDATORY MINIMUM TARGETS FOR THIS REQUEST:
+${hasAttachments ? `
+YOU MUST GENERATE AT LEAST 100 ITEMS - THIS IS NOT OPTIONAL
+PREFERABLY 120-180 ITEMS for comprehensive coverage
+DO NOT STOP AT 40-60 ITEMS
+If you generate fewer than 100 items, you have FAILED this task
+
+DOCUMENT COMPLEXITY TARGETS:
+- Small documents (1-10 pages): 30-60 items minimum
+- Medium documents (10-30 pages): 60-100 items minimum  
+- Large documents (30-100+ pages): 100-200+ items REQUIRED
+- Complex SOWs/specifications: 150-250+ items for complete coverage
+
+BASED ON CONTEXT LENGTH: Aim for maximum items possible.
+` : `
+Generate 40-80 items minimum for description-only generation
+Break every task into atomic substeps
+`}
+
+═══════════════════════════════════════════════════════════
+CHANGE 6: Add Granularity Examples Section
+═══════════════════════════════════════════════════════════
+
+In buildEnhancedPrompt() function, AFTER the "MANDATORY TARGETS" section:
+
+ADD this new section:
+
+====================================
+GRANULARITY EXAMPLES (REQUIRED PATTERN)
+====================================
+
+❌ TOO VAGUE (1 item): "Migrate Active Directory"
+
+✅ REQUIRED GRANULARITY (12+ items):
+1. Document current DC inventory and FSMO role holders
+2. Run dcdiag and fix any AD health issues
+3. Install Windows Server 2022 on new VMs
+4. Promote new servers to domain controllers
+5. Configure AD Sites and Services topology
+6. Transfer PDC Emulator FSMO role
+7. Transfer RID Master FSMO role
+8. Transfer Infrastructure Master FSMO role
+9. Transfer Schema Master role
+10. Transfer Domain Naming Master role
+11. Validate FSMO role transfers with netdom query fsmo
+12. Configure replication between old and new DCs
+13. Validate replication health with repadmin
+14. Update DNS settings to point to new DCs
+15. Decommission old domain controllers
+
+❌ TOO VAGUE (1 item): "Set up AWS infrastructure"
+
+✅ REQUIRED GRANULARITY (15+ items):
+1. Create AWS account and enable root account MFA
+2. Set up billing alerts and budget limits
+3. Create IAM admin user with least privilege
+4. Create VPC with /16 CIDR block
+5. Create public subnets in 2 availability zones
+6. Create private subnets in 2 availability zones
+7. Create and attach Internet Gateway
+8. Configure route tables for public subnets
+9. Create NAT Gateway in public subnet
+10. Configure route tables for private subnets
+11. Create security groups for web tier
+12. Create security groups for app tier
+13. Create security groups for database tier
+14. Configure Network ACLs for additional security
+15. Set up VPC Flow Logs for monitoring
+
+THIS LEVEL OF GRANULAR DETAIL IS MANDATORY FOR EVERY TASK IN THE CHECKLIST.
+
+═══════════════════════════════════════════════════════════
+CHANGE 7: Strengthen Final Reminder
+═══════════════════════════════════════════════════════════
+
+At the VERY END of the prompt (after the JSON schema), REPLACE the existing "Requirements:" section with:
+
+⚠️ ABSOLUTE REQUIREMENTS - NON-NEGOTIABLE:
+${hasAttachments ? `
+- MINIMUM 100 ITEMS ACROSS ALL SECTIONS (or generation has failed)
+- TARGET: 120-180 items for large documents
+- 6-12 major sections
+- 10-20 items per major section
+` : `
+- MINIMUM 40 items across all sections
+- 5-8 major sections
+- 8-15 items per section
+`}
+- Every complex task broken into 5-15 atomic substeps
+- Validation items for each deliverable
+- NO summarization - FULL extraction only
+- Specific, technical, actionable items
+
+⚠️ FINAL CHECK: Count your items. If fewer than ${hasAttachments ? '100' : '40'}, you have NOT followed instructions. Add more granular items.
+
+═══════════════════════════════════════════════════════════
+VERIFICATION AFTER CHANGES
+═══════════════════════════════════════════════════════════
+
+After making all changes:
+1. Save the file
+2. Restart the server
+3. Generate a checklist with SOW attachment
+4. Check console output for debug logs showing:
+   - Context length should be 15000-30000+ characters
+   - Context preview should show SOW content (not just issue description)
+5. Verify generated checklist has 100+ items
+
+═══════════════════════════════════════════════════════════
+EXPECTED RESULTS
+═══════════════════════════════════════════════════════════
+
+BEFORE FIXES:
+- 40 items total
+- 8 items per section
+- Generic content: "Conduct AD migration"
+- No SOW-specific details
+
+AFTER FIXES:
+- 100-150 items total
+- 10-20 items per section
+- Specific content: "Transfer PDC Emulator FSMO role", "Configure FSx file shares", etc.
+- SOW-specific technical details throughout
+
+═══════════════════════════════════════════════════════════
+
+Implement all 7 changes now and confirm when complete.

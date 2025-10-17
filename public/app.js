@@ -3702,6 +3702,9 @@ async function openEditModal(itemId, itemType) {
       // Load tags and pre-select current ones
       await loadTagsForEditIssue(item.id);
       
+      // Load attachments
+      await loadEditAttachments(item.id, 'issue');
+      
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
     } else {
@@ -3721,6 +3724,9 @@ async function openEditModal(itemId, itemType) {
       
       // Load tags and pre-select current ones
       await loadTagsForEditActionItem(item.id);
+      
+      // Load attachments
+      await loadEditAttachments(item.id, 'action-item');
       
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
@@ -3918,6 +3924,115 @@ async function loadTeamMembersForEdit(type, currentAssignee = '') {
   }
 }
 
+// Load attachments for edit modals
+async function loadEditAttachments(itemId, itemType) {
+  try {
+    const entityType = itemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${entityType}/${itemId}/attachments`, { withCredentials: true });
+    
+    const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
+    const attachmentsList = document.getElementById(`${prefix}-attachments-list`);
+    const attachments = response.data;
+    
+    if (attachments.length === 0) {
+      attachmentsList.innerHTML = '<p class="text-sm text-gray-500 italic">No attachments yet</p>';
+    } else {
+      attachmentsList.innerHTML = attachments.map(att => `
+        <div class="flex items-center justify-between p-2 border rounded hover:bg-gray-50">
+          <div class="flex items-center space-x-2 flex-1 min-w-0">
+            <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+            </svg>
+            <span class="text-sm truncate">${att.file_name}</span>
+            <span class="text-xs text-gray-400">(${formatFileSize(att.file_size)})</span>
+          </div>
+          <div class="flex items-center space-x-2 flex-shrink-0">
+            <button type="button" onclick="downloadAttachment(${att.id}, '${att.file_name}')" 
+                    class="text-blue-600 hover:text-blue-800 p-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+            </button>
+            <button type="button" onclick="deleteEditAttachment(${att.id}, ${itemId}, '${itemType}')" 
+                    class="text-red-600 hover:text-red-800 p-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (error) {
+    console.error('Error loading attachments:', error);
+    const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
+    document.getElementById(`${prefix}-attachments-list`).innerHTML = 
+      '<p class="text-sm text-red-500">Failed to load attachments</p>';
+  }
+}
+
+// Download attachment
+async function downloadAttachment(attachmentId, fileName) {
+  try {
+    const response = await axios.get(`/api/attachments/${attachmentId}/download`, {
+      withCredentials: true,
+      responseType: 'blob'
+    });
+    
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Error downloading attachment:', error);
+    alert('Failed to download attachment');
+  }
+}
+
+// Delete attachment from edit modal
+async function deleteEditAttachment(attachmentId, itemId, itemType) {
+  if (!confirm('Are you sure you want to delete this attachment?')) {
+    return;
+  }
+  
+  try {
+    await axios.delete(`/api/attachments/${attachmentId}`, { withCredentials: true });
+    await loadEditAttachments(itemId, itemType);
+    showToast('Attachment deleted successfully', 'success');
+  } catch (error) {
+    console.error('Error deleting attachment:', error);
+    alert('Failed to delete attachment');
+  }
+}
+
+// Upload attachment from edit modal
+async function uploadEditAttachment(files, itemId, itemType) {
+  if (!files || files.length === 0) return;
+  
+  const formData = new FormData();
+  Array.from(files).forEach(file => {
+    formData.append('files', file);
+  });
+  
+  try {
+    const entityType = itemType === 'issue' ? 'issues' : 'action-items';
+    await axios.post(`/api/${entityType}/${itemId}/attachments`, formData, {
+      withCredentials: true,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    
+    await loadEditAttachments(itemId, itemType);
+    showToast('Files uploaded successfully', 'success');
+  } catch (error) {
+    console.error('Error uploading attachments:', error);
+    alert(error.response?.data?.error || 'Failed to upload files');
+  }
+}
+
 // Handle edit issue form submission
 document.getElementById('editIssueForm').addEventListener('submit', async function(e) {
   e.preventDefault();
@@ -4061,55 +4176,914 @@ function showToast(message, type = 'info') {
 
 // AI Checklist Generation
 let currentAIChecklistData = null;
+let selectedAttachmentIds = [];
+let uploadedFiles = [];
+let workstreamAnalysis = null;
+let selectedChecklistIndices = [];
+
+// Update step indicator
+function updateChecklistGenerationStep(stepNumber, markComplete = false) {
+  const stepNames = ['', 'Source Selection', 'Source Analysis', 'Checklist Generation', 'Preview', 'Checklist Creation'];
+  
+  // Update step name in title
+  const stepNameEl = document.getElementById('ai-checklist-step-name');
+  if (stepNameEl) {
+    stepNameEl.textContent = markComplete ? '' : ` - ${stepNames[stepNumber]}`;
+  }
+  
+  // Update step indicators
+  for (let i = 1; i <= 5; i++) {
+    const indicator = document.getElementById(`step-indicator-${i}`);
+    const circle = indicator?.querySelector('div');
+    const label = indicator?.querySelector('span');
+    const line = document.getElementById(`step-line-${i}`);
+    
+    if (i < stepNumber || (i === stepNumber && markComplete)) {
+      // Completed steps
+      if (circle) {
+        circle.className = 'w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-semibold';
+        circle.innerHTML = '✓';
+      }
+      if (label) label.className = 'text-xs text-green-600 ml-1.5';
+      if (line) line.className = 'w-8 h-0.5 bg-green-500';
+    } else if (i === stepNumber && !markComplete) {
+      // Current step
+      if (circle) {
+        circle.className = 'w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-semibold';
+        circle.textContent = i;
+      }
+      if (label) label.className = 'text-xs text-blue-600 ml-1.5 font-semibold';
+      if (line) line.className = 'w-8 h-0.5 bg-gray-300';
+    } else {
+      // Future steps
+      if (circle) {
+        circle.className = 'w-6 h-6 rounded-full bg-gray-300 text-gray-500 flex items-center justify-center text-xs font-semibold';
+        circle.textContent = i;
+      }
+      if (label) label.className = 'text-xs text-gray-500 ml-1.5';
+      if (line) line.className = 'w-8 h-0.5 bg-gray-300';
+    }
+  }
+}
 
 async function openAIChecklistModal(itemId, itemType, itemTitle) {
   const modal = document.getElementById('ai-checklist-modal');
+  const sourceSelectionEl = document.getElementById('ai-checklist-source-selection');
   const loadingEl = document.getElementById('ai-checklist-loading');
   const errorEl = document.getElementById('ai-checklist-error');
   const previewEl = document.getElementById('ai-checklist-preview');
-  const titleEl = document.getElementById('ai-checklist-item-title');
   
   // Reset state
-  currentAIChecklistData = { itemId, itemType, itemTitle };
+  currentAIChecklistData = { 
+    itemId, 
+    itemType, 
+    itemTitle,
+    projectName: currentProject?.name || 'Unknown Project',
+    attachments: []
+  };
+  selectedAttachmentIds = [];
+  uploadedFiles = [];
+  workstreamAnalysis = null; // Clear cached analysis
   loadingEl.classList.add('hidden');
   errorEl.classList.add('hidden');
   previewEl.classList.add('hidden');
+  sourceSelectionEl.classList.add('hidden');
+  document.getElementById('ai-checklist-workstream-analysis')?.classList.add('hidden');
+  document.getElementById('ai-checklist-batch-preview')?.classList.add('hidden');
+  document.getElementById('newly-uploaded-files').innerHTML = ''; // Clear uploaded files UI
   
-  // Set title
-  titleEl.textContent = `Generating checklist for: ${itemTitle}`;
+  // Set header information
+  const itemTypeLabel = itemType === 'issue' ? 'Issue' : 'Action Item';
+  document.getElementById('ai-checklist-project-name').textContent = currentProject?.name || 'Unknown Project';
+  document.getElementById('ai-checklist-item-info').textContent = `${itemTypeLabel}: ${itemTitle}`;
+  updateSourcesDisplay();
   
-  // Show modal and loading
+  // Show modal and source selection
   modal.classList.remove('hidden');
-  loadingEl.classList.remove('hidden');
+  sourceSelectionEl.classList.remove('hidden');
   
-  // Call API to generate checklist
+  // Set to Step 1: Source Selection
+  updateChecklistGenerationStep(1);
+  
+  // Load existing attachments
+  await loadExistingAttachments(itemId, itemType);
+  
+  // Setup event listeners
+  setupSourceSelectionListeners();
+}
+
+async function loadExistingAttachments(itemId, itemType) {
   try {
-    const endpoint = itemType === 'issue' 
+    const entityType = itemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${entityType}/${itemId}/attachments`, { withCredentials: true });
+    
+    const attachmentsList = document.getElementById('existing-attachments-list');
+    const attachments = response.data;
+    
+    if (attachments.length === 0) {
+      attachmentsList.innerHTML = '<p class="text-xs text-gray-400 italic">No existing attachments</p>';
+    } else {
+      attachmentsList.innerHTML = attachments.map(att => {
+        const supportedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+        const isSupported = supportedTypes.includes(att.file_type);
+        
+        return `
+          <label class="flex items-center space-x-2 p-2 border rounded cursor-pointer hover:bg-gray-50 ${!isSupported ? 'opacity-50' : ''}">
+            <input type="checkbox" class="attachment-checkbox" data-attachment-id="${att.id}" ${!isSupported ? 'disabled' : ''}>
+            <div class="flex-1">
+              <div class="text-sm font-medium text-gray-900">${att.original_name}</div>
+              <div class="text-xs text-gray-500">${formatFileSize(att.file_size)}${!isSupported ? ' - Unsupported format' : ''}</div>
+            </div>
+          </label>
+        `;
+      }).join('');
+    }
+    
+    updateAttachmentCount();
+  } catch (error) {
+    console.error('Error loading attachments:', error);
+    document.getElementById('existing-attachments-list').innerHTML = '<p class="text-xs text-red-500">Failed to load attachments</p>';
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function setupSourceSelectionListeners() {
+  // Description checkbox
+  const descCheckbox = document.getElementById('use-description-checkbox');
+  if (descCheckbox) {
+    descCheckbox.onchange = () => {
+      updateSourcesDisplay();
+    };
+  }
+  
+  // Upload button
+  document.getElementById('upload-attachment-btn').onclick = () => {
+    document.getElementById('attachment-upload-input').click();
+  };
+  
+  // File upload handler
+  document.getElementById('attachment-upload-input').onchange = async (e) => {
+    const files = Array.from(e.target.files);
+    await handleFileUploads(files);
+    e.target.value = ''; // Reset input
+  };
+  
+  // Attachment checkboxes
+  document.querySelectorAll('.attachment-checkbox').forEach(cb => {
+    cb.onchange = () => {
+      const id = parseInt(cb.dataset.attachmentId);
+      if (cb.checked) {
+        if (!selectedAttachmentIds.includes(id)) {
+          selectedAttachmentIds.push(id);
+        }
+      } else {
+        selectedAttachmentIds = selectedAttachmentIds.filter(aid => aid !== id);
+      }
+      updateAttachmentCount();
+    };
+  });
+  
+  // Cancel button
+  document.getElementById('cancel-source-selection-btn').onclick = () => {
+    document.getElementById('ai-checklist-modal').classList.add('hidden');
+  };
+  
+  // Generate button
+  document.getElementById('generate-with-sources-btn').onclick = async () => {
+    await generateWithSelectedSources();
+  };
+}
+
+async function handleFileUploads(files) {
+  const newlyUploadedEl = document.getElementById('newly-uploaded-files');
+  const entityType = currentAIChecklistData.itemType === 'issue' ? 'issues' : 'action-items';
+  
+  for (const file of files) {
+    // Validate file size
+    if (file.size > 10 * 1024 * 1024) {
+      showToast(`${file.name} is too large (max 10MB)`, 'error');
+      continue;
+    }
+    
+    // Upload file
+    try {
+      const formData = new FormData();
+      formData.append('files', file);
+      
+      const response = await axios.post(
+        `/api/${entityType}/${currentAIChecklistData.itemId}/attachments`,
+        formData,
+        { 
+          withCredentials: true,
+          headers: { 'Content-Type': 'multipart/form-data' }
+        }
+      );
+      
+      const uploadedFile = response.data.attachments ? response.data.attachments[0] : response.data[0];
+      uploadedFiles.push(uploadedFile);
+      selectedAttachmentIds.push(uploadedFile.id);
+      
+      // Add to UI
+      const fileEl = document.createElement('div');
+      fileEl.className = 'flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded';
+      fileEl.innerHTML = `
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+          <div>
+            <div class="text-sm font-medium text-gray-900">${uploadedFile.original_name}</div>
+            <div class="text-xs text-gray-500">${formatFileSize(uploadedFile.file_size)}</div>
+          </div>
+        </div>
+        <button class="text-red-500 hover:text-red-700" onclick="removeUploadedFile(${uploadedFile.id})">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      `;
+      newlyUploadedEl.appendChild(fileEl);
+      
+      updateAttachmentCount();
+      showToast(`${file.name} uploaded successfully`, 'success');
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      showToast(`Failed to upload ${file.name}`, 'error');
+    }
+  }
+}
+
+function removeUploadedFile(attachmentId) {
+  selectedAttachmentIds = selectedAttachmentIds.filter(id => id !== attachmentId);
+  uploadedFiles = uploadedFiles.filter(f => f.id !== attachmentId);
+  updateAttachmentCount();
+  
+  // Remove from UI
+  const container = document.getElementById('newly-uploaded-files');
+  const fileElements = container.children;
+  for (let el of fileElements) {
+    if (el.querySelector('button').onclick.toString().includes(attachmentId)) {
+      el.remove();
+      break;
+    }
+  }
+}
+
+function updateAttachmentCount() {
+  const badge = document.getElementById('attachment-count-badge');
+  badge.textContent = `${selectedAttachmentIds.length} selected`;
+  updateSourcesDisplay();
+}
+
+function updateSourcesDisplay() {
+  const sourcesEl = document.getElementById('ai-checklist-sources');
+  const useDescription = document.getElementById('use-description-checkbox')?.checked;
+  const sources = [];
+  
+  // Add description if selected
+  if (useDescription) {
+    sources.push('Description');
+  }
+  
+  // Add attachment names
+  const attachmentNames = [];
+  
+  // Get names from uploaded files
+  uploadedFiles.forEach(file => {
+    if (selectedAttachmentIds.includes(file.id)) {
+      attachmentNames.push(file.original_name);
+    }
+  });
+  
+  // Get names from existing attachments
+  document.querySelectorAll('.attachment-checkbox:checked').forEach(cb => {
+    const label = cb.closest('label');
+    const nameEl = label?.querySelector('.text-sm.font-medium');
+    if (nameEl && !attachmentNames.includes(nameEl.textContent)) {
+      attachmentNames.push(nameEl.textContent);
+    }
+  });
+  
+  if (attachmentNames.length > 0) {
+    sources.push(`Files: ${attachmentNames.join(', ')}`);
+  }
+  
+  // Update display
+  if (sources.length > 0) {
+    sourcesEl.textContent = `Sources: ${sources.join(' • ')}`;
+  } else {
+    sourcesEl.textContent = 'Sources: None selected';
+  }
+}
+
+async function generateWithSelectedSources() {
+  console.log('[DEBUG] generateWithSelectedSources called');
+  const useDescription = document.getElementById('use-description-checkbox').checked;
+  
+  if (!useDescription && selectedAttachmentIds.length === 0) {
+    showToast('Please select at least one source (description or attachments)', 'error');
+    return;
+  }
+  
+  // Clear previous analysis to ensure fresh generation
+  console.log('[DEBUG] Clearing workstreamAnalysis');
+  workstreamAnalysis = null;
+  
+  // Hide source selection, show loading
+  document.getElementById('ai-checklist-source-selection').classList.add('hidden');
+  document.getElementById('ai-checklist-loading').classList.remove('hidden');
+  document.getElementById('loading-main-text').textContent = 'AI is analyzing your content...';
+  document.getElementById('loading-sub-text').textContent = 'Detecting workstreams and complexity';
+  
+  // Store current selections
+  currentAIChecklistData.attachment_ids = selectedAttachmentIds;
+  currentAIChecklistData.use_description = useDescription;
+  
+  // If attachments selected, analyze for workstreams first
+  if (selectedAttachmentIds.length > 0) {
+    // Show warning for unsupported file types
+    const selectedAttachments = currentAIChecklistData.attachments?.filter(
+      a => selectedAttachmentIds.includes(a.id)
+    ) || [];
+    
+    const unsupportedTypes = selectedAttachments.filter(
+      a => !['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(a.file_type)
+    );
+    
+    if (unsupportedTypes.length > 0) {
+      showToast(
+        `⚠️ ${unsupportedTypes.length} file${unsupportedTypes.length > 1 ? 's' : ''} may not extract properly (only PDF, DOCX, TXT supported)`,
+        'warning',
+        4000
+      );
+    }
+    
+    // Set to Step 2: Source Analysis (active during loading)
+    updateChecklistGenerationStep(2);
+    try {
+      const analysisResponse = await axios.post('/api/checklists/analyze-document', {
+        source_type: currentAIChecklistData.itemType,
+        source_id: currentAIChecklistData.itemId,
+        attachment_ids: selectedAttachmentIds
+      }, { withCredentials: true });
+      
+      workstreamAnalysis = analysisResponse.data;
+      
+      // Show workstream analysis UI
+      document.getElementById('ai-checklist-loading').classList.add('hidden');
+      renderWorkstreamAnalysis(workstreamAnalysis);
+      document.getElementById('ai-checklist-workstream-analysis').classList.remove('hidden');
+      
+      // Mark Step 2 as complete (analysis done, showing results)
+      updateChecklistGenerationStep(2, true);
+      
+    } catch (error) {
+      document.getElementById('ai-checklist-loading').classList.add('hidden');
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to analyze document';
+      document.getElementById('ai-checklist-error-message').textContent = errorMessage;
+      document.getElementById('ai-checklist-error').classList.remove('hidden');
+    }
+  } else {
+    // No attachments, generate single checklist directly
+    await generateSingleChecklist();
+  }
+}
+
+async function generateSingleChecklist() {
+  // Show loading
+  document.getElementById('ai-checklist-workstream-analysis')?.classList.add('hidden');
+  document.getElementById('ai-checklist-loading').classList.remove('hidden');
+  
+  // Set to Step 3: Checklist Generation
+  updateChecklistGenerationStep(3);
+  
+  document.getElementById('loading-main-text').textContent = `Generating checklist for ${currentAIChecklistData.projectName}`;
+  document.getElementById('loading-sub-text').textContent = 'Creating comprehensive task list';
+  
+  try {
+    const endpoint = currentAIChecklistData.itemType === 'issue' 
       ? `/api/checklists/generate-from-issue` 
       : `/api/checklists/generate-from-action`;
     
     const response = await axios.post(endpoint, {
-      [itemType === 'issue' ? 'issue_id' : 'action_item_id']: itemId,
+      [currentAIChecklistData.itemType === 'issue' ? 'issue_id' : 'action_id']: currentAIChecklistData.itemId,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      use_description: currentAIChecklistData.use_description,
       project_id: currentProject.id
     }, { withCredentials: true });
     
-    // Store the generated data (full preview object)
-    currentAIChecklistData = {
-      ...currentAIChecklistData,
-      preview: response.data  // Store complete preview object
-    };
+    // Store the generated data
+    currentAIChecklistData.preview = response.data;
+    
+    // Show rate limit info if available
+    if (response.data.rate_limit_remaining !== undefined) {
+      const remaining = response.data.rate_limit_remaining;
+      if (remaining <= 3 && remaining > 0) {
+        showToast(`⚠️ ${remaining} generation${remaining !== 1 ? 's' : ''} remaining this hour`, 'warning', 5000);
+      } else if (remaining === 0) {
+        showToast('🚫 Rate limit reached for this hour', 'warning', 5000);
+      }
+    }
     
     // Show preview
-    loadingEl.classList.add('hidden');
+    document.getElementById('ai-checklist-loading').classList.add('hidden');
     renderAIChecklistPreview(response.data);
-    previewEl.classList.remove('hidden');
+    document.getElementById('ai-checklist-preview').classList.remove('hidden');
+    
+    // Set to Step 4: Preview
+    updateChecklistGenerationStep(4);
     
   } catch (error) {
-    loadingEl.classList.add('hidden');
-    
-    const errorMessage = error.response?.data?.error || 'Failed to generate checklist';
+    document.getElementById('ai-checklist-loading').classList.add('hidden');
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to generate checklist';
     document.getElementById('ai-checklist-error-message').textContent = errorMessage;
-    errorEl.classList.remove('hidden');
+    document.getElementById('ai-checklist-error').classList.remove('hidden');
+  }
+}
+
+async function generateMultipleChecklists() {
+  console.log('[DEBUG] generateMultipleChecklists called');
+  console.log('[DEBUG] workstreamAnalysis:', workstreamAnalysis);
+  
+  if (!workstreamAnalysis?.workstreams) {
+    console.error('[DEBUG] No workstream data!');
+    showToast('No workstream data available', 'error');
+    return;
+  }
+  
+  console.log('[DEBUG] Starting batch generation for', workstreamAnalysis.workstreams.length, 'workstreams');
+  const totalChecklists = workstreamAnalysis.workstreams.length;
+  
+  // Show loading with progress
+  document.getElementById('ai-checklist-workstream-analysis').classList.add('hidden');
+  document.getElementById('ai-checklist-loading').classList.remove('hidden');
+  
+  // Set to Step 3: Checklist Generation
+  updateChecklistGenerationStep(3);
+  
+  // Update loading text
+  document.getElementById('loading-main-text').textContent = `Generating ${totalChecklists} checklists for ${currentAIChecklistData.projectName}`;
+  document.getElementById('loading-sub-text').textContent = 'AI is analyzing each workstream';
+  
+  // Show progress bar
+  const progressContainer = document.getElementById('batch-progress-container');
+  const progressBar = document.getElementById('batch-progress-bar');
+  const progressText = document.getElementById('batch-progress-text');
+  const progressPercent = document.getElementById('batch-progress-percent');
+  const timeEstimate = document.getElementById('loading-time-estimate');
+  
+  progressContainer.classList.remove('hidden');
+  
+  // Estimate: ~8 seconds per checklist
+  const estimatedTime = totalChecklists * 8;
+  timeEstimate.textContent = `Estimated time: ${estimatedTime}-${estimatedTime + 20} seconds`;
+  
+  // Simulate progress (since backend doesn't send real-time updates)
+  let currentProgress = 0;
+  const progressInterval = setInterval(() => {
+    // Increment progress slowly (95% max before completion)
+    currentProgress = Math.min(currentProgress + (95 / (estimatedTime * 1.2)), 95);
+    const currentChecklistIndex = Math.min(Math.ceil((currentProgress / 95) * totalChecklists), totalChecklists);
+    const currentChecklistName = workstreamAnalysis.workstreams[currentChecklistIndex - 1]?.name || 'Checklist';
+    
+    progressBar.style.width = `${currentProgress}%`;
+    progressPercent.textContent = `${Math.round(currentProgress)}%`;
+    progressText.textContent = `Generating ${currentChecklistName} for ${currentAIChecklistData.projectName}`;
+    
+    // Update main text with checklist number
+    document.getElementById('loading-main-text').textContent = `Generating checklist ${currentChecklistIndex} of ${totalChecklists}`;
+  }, 1000);
+  
+  try {
+    const response = await axios.post('/api/checklists/generate-batch', {
+      source_type: currentAIChecklistData.itemType,
+      source_id: currentAIChecklistData.itemId,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      workstreams: workstreamAnalysis.workstreams,
+      use_description: currentAIChecklistData.use_description
+    }, { 
+      withCredentials: true,
+      timeout: 300000 // 5 minute timeout (for large batch generations)
+    });
+    
+    // Complete progress
+    clearInterval(progressInterval);
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    progressText.textContent = `All ${totalChecklists} checklists generated!`;
+    
+    // Store batch results
+    currentAIChecklistData.batchResults = response.data;
+    
+    // Small delay to show completion
+    setTimeout(() => {
+      // Hide loading and reset progress
+      document.getElementById('ai-checklist-loading').classList.add('hidden');
+      progressContainer.classList.add('hidden');
+      progressBar.style.width = '0%';
+      
+      // Show batch preview
+      renderBatchPreview(response.data);
+      document.getElementById('ai-checklist-batch-preview').classList.remove('hidden');
+      
+      // Set to Step 4: Preview
+      updateChecklistGenerationStep(4);
+    }, 500);
+    
+  } catch (error) {
+    clearInterval(progressInterval);
+    document.getElementById('ai-checklist-loading').classList.add('hidden');
+    progressContainer.classList.add('hidden');
+    progressBar.style.width = '0%';
+    
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to generate checklists';
+    document.getElementById('ai-checklist-error-message').textContent = errorMessage;
+    document.getElementById('ai-checklist-error').classList.remove('hidden');
+  }
+}
+
+function renderWorkstreamAnalysis(analysis) {
+  const detailsContainer = document.getElementById('workstream-analysis-details');
+  
+  const complexityColors = {
+    'Simple': 'bg-green-100 text-green-700',
+    'Medium': 'bg-yellow-100 text-yellow-700',
+    'Complex': 'bg-red-100 text-red-700'
+  };
+  
+  detailsContainer.innerHTML = `
+    <div class="bg-white border rounded-lg p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h5 class="font-semibold text-gray-800">Document Analysis</h5>
+        <span class="text-xs px-2 py-1 ${complexityColors[analysis.complexity] || 'bg-gray-100 text-gray-700'} rounded-full font-semibold">
+          ${analysis.complexity} Document
+        </span>
+      </div>
+      
+      <div class="grid grid-cols-3 gap-3 mb-3">
+        <div class="text-center p-2 bg-blue-50 rounded">
+          <div class="text-2xl font-bold text-blue-600">${analysis.workstreams?.length || 0}</div>
+          <div class="text-xs text-gray-600">Workstreams</div>
+        </div>
+        <div class="text-center p-2 bg-purple-50 rounded">
+          <div class="text-2xl font-bold text-purple-600">${analysis.total_estimated_items || 0}</div>
+          <div class="text-xs text-gray-600">Total Items</div>
+        </div>
+        <div class="text-center p-2 bg-green-50 rounded">
+          <div class="text-2xl font-bold text-green-600">${analysis.recommendation === 'multiple' ? 'Multiple' : 'Single'}</div>
+          <div class="text-xs text-gray-600">Recommended</div>
+        </div>
+      </div>
+      
+      <div class="border-t pt-3">
+        <p class="text-xs font-medium text-gray-700 mb-2">Detected Workstreams:</p>
+        <div class="space-y-1">
+          ${analysis.workstreams?.map((ws, i) => `
+            <div class="flex items-center text-xs text-gray-600">
+              <span class="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center mr-2 font-semibold">${i + 1}</span>
+              <span class="flex-1">${ws.name}</span>
+              <span class="text-gray-400">${ws.estimated_items} items</span>
+            </div>
+          `).join('') || '<p class="text-xs text-gray-500">No workstreams detected</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Update button styling and badges based on recommendation
+  const singleBtn = document.getElementById('generate-single-checklist-btn');
+  const multipleBtn = document.getElementById('generate-multiple-checklists-btn');
+  const singleBadge = document.getElementById('single-recommended-badge');
+  const multipleBadge = document.getElementById('multiple-recommended-badge');
+  
+  if (analysis.recommendation === 'multiple') {
+    // Multiple is recommended
+    multipleBadge.classList.remove('hidden');
+    singleBadge.classList.add('hidden');
+    multipleBtn.className = 'w-full text-left border-2 border-blue-500 bg-blue-50 rounded-lg p-4 hover:bg-blue-100 transition-colors';
+    singleBtn.className = 'w-full text-left border rounded-lg p-4 hover:bg-gray-50 transition-colors';
+  } else {
+    // Single is recommended
+    singleBadge.classList.remove('hidden');
+    multipleBadge.classList.add('hidden');
+    singleBtn.className = 'w-full text-left border-2 border-blue-500 bg-blue-50 rounded-lg p-4 hover:bg-blue-100 transition-colors';
+    multipleBtn.className = 'w-full text-left border rounded-lg p-4 hover:bg-gray-50 transition-colors';
+  }
+}
+
+function renderBatchPreview(batchData) {
+  const container = document.getElementById('batch-checklist-previews');
+  const summaryContainer = document.getElementById('batch-summary');
+  
+  const successfulChecklists = batchData.results?.filter(r => r.success) || [];
+  const failedChecklists = batchData.results?.filter(r => !r.success) || [];
+  const totalRequested = batchData.workstreams_requested || batchData.results?.length || 0;
+  
+  // Store failed checklists for retry
+  currentAIChecklistData.failedChecklists = failedChecklists;
+  
+  // Render summary
+  const allSuccess = failedChecklists.length === 0;
+  const partialSuccess = successfulChecklists.length > 0 && failedChecklists.length > 0;
+  const allFailed = successfulChecklists.length === 0;
+  
+  summaryContainer.innerHTML = `
+    <div class="flex items-start">
+      ${allSuccess ? `
+        <svg class="w-5 h-5 text-green-500 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+        </svg>
+        <div class="flex-1">
+          <p class="text-sm font-medium text-green-800">All Checklists Generated Successfully!</p>
+          <p class="text-xs text-green-600 mt-1">${successfulChecklists.length} of ${totalRequested} checklists ready to create</p>
+        </div>
+      ` : partialSuccess ? `
+        <svg class="w-5 h-5 text-yellow-500 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+        <div class="flex-1">
+          <p class="text-sm font-medium text-yellow-800">Partial Success</p>
+          <p class="text-xs text-yellow-600 mt-1">
+            <span class="font-semibold">${successfulChecklists.length} of ${totalRequested}</span> checklists generated successfully. 
+            <span class="font-semibold">${failedChecklists.length}</span> failed.
+          </p>
+        </div>
+      ` : `
+        <svg class="w-5 h-5 text-red-500 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+        </svg>
+        <div class="flex-1">
+          <p class="text-sm font-medium text-red-800">All Checklists Failed</p>
+          <p class="text-xs text-red-600 mt-1">None of the ${totalRequested} checklists could be generated. See errors below.</p>
+        </div>
+      `}
+    </div>
+  `;
+  
+  // Show rate limit warning if applicable
+  const rateLimitWarning = document.getElementById('batch-rate-limit-warning');
+  const rateLimitText = document.getElementById('rate-limit-warning-text');
+  
+  if (batchData.rate_limit_remaining !== undefined) {
+    const remaining = batchData.rate_limit_remaining;
+    if (remaining <= 3 && remaining > 0) {
+      rateLimitWarning.classList.remove('hidden');
+      rateLimitText.textContent = `⚠️ Rate limit warning: Only ${remaining} generation${remaining !== 1 ? 's' : ''} remaining this hour`;
+    } else if (remaining === 0) {
+      rateLimitWarning.classList.remove('hidden');
+      rateLimitText.textContent = '🚫 Rate limit reached: Maximum generations per hour exceeded';
+    } else {
+      rateLimitWarning.classList.add('hidden');
+    }
+  }
+  
+  // Initialize all successful checklists as selected
+  selectedChecklistIndices = successfulChecklists.map((_, index) => index);
+  
+  // Render both successful and failed checklists
+  container.innerHTML = [
+    // Successful checklists
+    ...successfulChecklists.map((result, index) => {
+      const preview = result.preview;
+      const totalItems = preview.sections.reduce((sum, sec) => sum + sec.items.length, 0);
+      
+      return `
+        <div class="border border-green-200 rounded-lg p-4 bg-white">
+          <div class="flex items-start gap-3 mb-3">
+            <input type="checkbox" 
+                   id="checklist-select-${index}" 
+                   data-index="${index}"
+                   class="checklist-select-checkbox mt-1 w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500" 
+                   checked>
+            <div class="flex-1">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                  </svg>
+                  <h5 class="font-semibold text-gray-900">${preview.title}</h5>
+                </div>
+                <span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">${totalItems} items</span>
+              </div>
+              
+              ${preview.description ? `
+                <p class="text-xs text-gray-600 mb-3">${preview.description}</p>
+              ` : ''}
+              
+              <details class="text-xs">
+                <summary class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">▶ View sections (${preview.sections.length})</summary>
+                <div class="mt-3 space-y-3">
+                  ${preview.sections.map((section, sIdx) => `
+                    <div class="border-l-2 border-blue-400 pl-3 pb-2">
+                      <div class="flex items-center justify-between mb-2">
+                        <div class="font-semibold text-gray-800">${sIdx + 1}. ${section.title}</div>
+                        <span class="text-gray-500 text-xs">${section.items.length} items</span>
+                      </div>
+                      ${section.description ? `
+                        <p class="text-gray-600 italic mb-2 text-xs">${section.description}</p>
+                      ` : ''}
+                      <div class="space-y-1.5 mt-2">
+                        ${section.items.map((item, itemIdx) => `
+                          <div class="flex items-start gap-2 text-gray-700 bg-gray-50 rounded px-2 py-1.5">
+                            <span class="text-gray-400 font-mono text-xs mt-0.5 flex-shrink-0">${itemIdx + 1}.</span>
+                            <span class="flex-1 text-xs">
+                              ${item.text || item.title || item.item_text}
+                              ${item.is_required ? '<span class="text-red-500 font-bold ml-1" title="Required">*</span>' : ''}
+                              ${item.field_type && item.field_type !== 'checkbox' ? `<span class="text-gray-400 ml-2">(${item.field_type})</span>` : ''}
+                            </span>
+                          </div>
+                        `).join('')}
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+      `;
+    }),
+    // Failed checklists
+    ...failedChecklists.map((result, index) => {
+      return `
+        <div class="border border-red-200 rounded-lg p-4 bg-red-50">
+          <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+            </svg>
+            <div class="flex-1">
+              <div class="flex items-center justify-between mb-2">
+                <h5 class="font-semibold text-red-900">${result.workstream_name}</h5>
+                <button onclick="retryFailedChecklist(${index})" 
+                        class="text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors">
+                  Retry
+                </button>
+              </div>
+              <p class="text-xs text-red-700">
+                <span class="font-medium">Error:</span> ${result.error || 'Unknown error occurred'}
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+  ].join('');
+  
+  // Add event listeners to checkboxes
+  document.querySelectorAll('.checklist-select-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', updateChecklistSelection);
+  });
+  
+  // Show/hide retry all button
+  const retryBtn = document.getElementById('retry-failed-checklists-btn');
+  const retryBtnText = document.getElementById('retry-btn-text');
+  if (failedChecklists.length > 0) {
+    retryBtn.classList.remove('hidden');
+    retryBtnText.textContent = failedChecklists.length === 1 ? 'Retry Failed' : `Retry ${failedChecklists.length} Failed`;
+  } else {
+    retryBtn.classList.add('hidden');
+  }
+  
+  // Update create button text
+  updateBatchCreateButtonText();
+}
+
+function updateChecklistSelection(event) {
+  const index = parseInt(event.target.dataset.index);
+  
+  if (event.target.checked) {
+    // Add to selection if not already there
+    if (!selectedChecklistIndices.includes(index)) {
+      selectedChecklistIndices.push(index);
+    }
+  } else {
+    // Remove from selection
+    selectedChecklistIndices = selectedChecklistIndices.filter(i => i !== index);
+  }
+  
+  updateBatchCreateButtonText();
+}
+
+function updateBatchCreateButtonText() {
+  const buttonText = document.getElementById('create-batch-btn-text');
+  const count = selectedChecklistIndices.length;
+  
+  if (count === 0) {
+    buttonText.textContent = 'Select checklists to create';
+  } else if (count === 1) {
+    buttonText.textContent = 'Create 1 Checklist';
+  } else {
+    buttonText.textContent = `Create ${count} Checklists`;
+  }
+}
+
+// Retry a single failed checklist
+async function retryFailedChecklist(failedIndex) {
+  const failedChecklist = currentAIChecklistData.failedChecklists[failedIndex];
+  if (!failedChecklist) {
+    showToast('Failed checklist not found', 'error');
+    return;
+  }
+  
+  showToast(`Retrying generation for ${failedChecklist.workstream_name}...`, 'info');
+  
+  try {
+    const response = await axios.post('/api/checklists/generate-batch', {
+      source_type: currentAIChecklistData.itemType,
+      source_id: currentAIChecklistData.itemId,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      workstreams: [{ name: failedChecklist.workstream_name }],
+      use_description: currentAIChecklistData.use_description
+    }, { 
+      withCredentials: true,
+      timeout: 90000
+    });
+    
+    if (response.data.results && response.data.results[0]?.success) {
+      // Replace failed checklist with successful one
+      currentAIChecklistData.batchResults.results = currentAIChecklistData.batchResults.results.map((result, idx) => {
+        if (result.workstream_name === failedChecklist.workstream_name && !result.success) {
+          return response.data.results[0];
+        }
+        return result;
+      });
+      
+      // Update rate limit info
+      currentAIChecklistData.batchResults.rate_limit_remaining = response.data.rate_limit_remaining;
+      
+      // Re-render preview
+      renderBatchPreview(currentAIChecklistData.batchResults);
+      showToast(`Successfully generated ${failedChecklist.workstream_name}`, 'success');
+    } else {
+      showToast(`Retry failed: ${response.data.results[0]?.error || 'Unknown error'}`, 'error');
+    }
+  } catch (error) {
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Retry failed';
+    showToast(errorMessage, 'error');
+  }
+}
+
+// Retry all failed checklists
+async function retryAllFailedChecklists() {
+  const failedChecklists = currentAIChecklistData.failedChecklists || [];
+  if (failedChecklists.length === 0) {
+    return;
+  }
+  
+  const failedWorkstreams = failedChecklists.map(fc => ({ name: fc.workstream_name }));
+  showToast(`Retrying ${failedWorkstreams.length} failed checklist${failedWorkstreams.length > 1 ? 's' : ''}...`, 'info');
+  
+  try {
+    const response = await axios.post('/api/checklists/generate-batch', {
+      source_type: currentAIChecklistData.itemType,
+      source_id: currentAIChecklistData.itemId,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      workstreams: failedWorkstreams,
+      use_description: currentAIChecklistData.use_description
+    }, { 
+      withCredentials: true,
+      timeout: 300000
+    });
+    
+    // Merge retry results with existing results
+    const retryResultsMap = new Map(
+      response.data.results.map(r => [r.workstream_name, r])
+    );
+    
+    currentAIChecklistData.batchResults.results = currentAIChecklistData.batchResults.results.map(result => {
+      if (!result.success && retryResultsMap.has(result.workstream_name)) {
+        return retryResultsMap.get(result.workstream_name);
+      }
+      return result;
+    });
+    
+    // Update rate limit info
+    currentAIChecklistData.batchResults.rate_limit_remaining = response.data.rate_limit_remaining;
+    
+    // Re-render preview
+    renderBatchPreview(currentAIChecklistData.batchResults);
+    
+    const successCount = response.data.results.filter(r => r.success).length;
+    const failCount = response.data.results.filter(r => !r.success).length;
+    
+    if (successCount > 0 && failCount === 0) {
+      showToast(`All ${successCount} checklists generated successfully!`, 'success');
+    } else if (successCount > 0) {
+      showToast(`${successCount} succeeded, ${failCount} still failed`, 'warning');
+    } else {
+      showToast('All retry attempts failed', 'error');
+    }
+  } catch (error) {
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Retry failed';
+    showToast(errorMessage, 'error');
   }
 }
 
@@ -4165,12 +5139,17 @@ async function confirmAIChecklistCreation() {
     return;
   }
   
+  // Set to Step 5: Checklist Creation
+  updateChecklistGenerationStep(5);
+  
   try {
     const response = await axios.post('/api/checklists/confirm-generated', {
       preview: currentAIChecklistData.preview,
       source_id: currentAIChecklistData.itemId,
       source_type: currentAIChecklistData.itemType === 'issue' ? 'issue' : 'action-item',
-      project_id: currentProject.id
+      project_id: currentProject.id,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      use_description: currentAIChecklistData.use_description !== undefined ? currentAIChecklistData.use_description : true
     }, { withCredentials: true });
     
     // Close modal
@@ -4181,13 +5160,120 @@ async function confirmAIChecklistCreation() {
     if (response.data.is_new_template && response.data.template_id) {
       showTemplatePromotionPrompt(response.data.template_id);
     } else {
-      // Navigate to checklists page
-      navigateToChecklists();
+      // Navigate to checklists page after delay to show toast
+      setTimeout(() => {
+        navigateToChecklists();
+      }, 2000);
     }
     
   } catch (error) {
     console.error('Error confirming checklist:', error);
     showToast(error.response?.data?.error || 'Failed to create checklist', 'error');
+  }
+}
+
+async function confirmBatchChecklistCreation() {
+  if (!currentAIChecklistData?.batchResults) {
+    showToast('No batch data available', 'error');
+    return;
+  }
+  
+  // Check if any checklists are selected
+  if (selectedChecklistIndices.length === 0) {
+    showToast('Please select at least one checklist to create', 'error');
+    return;
+  }
+  
+  try {
+    const successfulResults = currentAIChecklistData.batchResults.results.filter(r => r.success);
+    
+    // Filter to only selected checklists
+    const selectedPreviews = selectedChecklistIndices
+      .sort((a, b) => a - b) // Sort to maintain order
+      .map(index => successfulResults[index].preview);
+    
+    const totalChecklists = selectedPreviews.length;
+    
+    // Hide preview and show loading with creation progress
+    document.getElementById('ai-checklist-batch-preview').classList.add('hidden');
+    document.getElementById('ai-checklist-loading').classList.remove('hidden');
+    
+    // Set to Step 5: Checklist Creation
+    updateChecklistGenerationStep(5);
+    
+    // Setup progress UI
+    document.getElementById('loading-main-text').textContent = `Creating ${totalChecklists} checklists...`;
+    document.getElementById('loading-sub-text').textContent = 'Saving to database';
+    
+    const progressContainer = document.getElementById('batch-progress-container');
+    const progressBar = document.getElementById('batch-progress-bar');
+    const progressText = document.getElementById('batch-progress-text');
+    const progressPercent = document.getElementById('batch-progress-percent');
+    
+    progressContainer.classList.remove('hidden');
+    progressBar.style.width = '0%';
+    
+    // Simulate progress during database creation
+    let currentProgress = 0;
+    const estimatedTime = totalChecklists * 1.5; // ~1.5 seconds per checklist for DB operations
+    const progressInterval = setInterval(() => {
+      currentProgress = Math.min(currentProgress + (95 / (estimatedTime * 1.2)), 95);
+      const currentChecklistIndex = Math.min(Math.ceil((currentProgress / 95) * totalChecklists), totalChecklists);
+      const currentChecklistName = selectedPreviews[currentChecklistIndex - 1]?.title || 'Checklist';
+      
+      progressBar.style.width = `${currentProgress}%`;
+      progressPercent.textContent = `${Math.round(currentProgress)}%`;
+      progressText.textContent = `Creating ${currentChecklistName}...`;
+      
+      document.getElementById('loading-main-text').textContent = `Creating checklist ${currentChecklistIndex} of ${totalChecklists}`;
+    }, 300);
+    
+    const response = await axios.post('/api/checklists/confirm-batch', {
+      previews: selectedPreviews,
+      source_id: currentAIChecklistData.itemId,
+      source_type: currentAIChecklistData.itemType === 'issue' ? 'issue' : 'action-item',
+      project_id: currentProject.id,
+      attachment_ids: currentAIChecklistData.attachment_ids || [],
+      use_description: currentAIChecklistData.use_description
+    }, { withCredentials: true });
+    
+    // Complete progress
+    clearInterval(progressInterval);
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    progressText.textContent = `All ${totalChecklists} checklists created!`;
+    document.getElementById('loading-main-text').textContent = 'Checklists created successfully!';
+    
+    // Small delay to show completion
+    setTimeout(() => {
+      // Close modal
+      document.getElementById('ai-checklist-modal').classList.add('hidden');
+      
+      // Reset progress
+      progressContainer.classList.add('hidden');
+      progressBar.style.width = '0%';
+      
+      showToast(`${response.data.count} checklists created successfully!`, 'success');
+      
+      // Show template promotion prompts if there are new templates
+      if (response.data.has_new_templates && response.data.new_template_ids.length > 0) {
+        showBatchTemplatePromotionPrompt(response.data.new_template_ids);
+      } else {
+        // Navigate to checklists page
+        setTimeout(() => {
+          navigateToChecklists();
+        }, 1500);
+      }
+    }, 800);
+    
+  } catch (error) {
+    console.error('Error confirming batch:', error);
+    
+    // Hide loading and show error
+    document.getElementById('ai-checklist-loading').classList.add('hidden');
+    document.getElementById('batch-progress-container').classList.add('hidden');
+    
+    showToast(error.response?.data?.error || 'Failed to create checklists', 'error');
   }
 }
 
@@ -4247,7 +5333,10 @@ async function promoteTemplate(templateId) {
     await axios.post(`/api/templates/${templateId}/promote`, {}, { withCredentials: true });
     showToast('Template promoted to reusable!', 'success');
     dismissPromotionPrompt();
-    navigateToChecklists();
+    // Delay navigation to show toast
+    setTimeout(() => {
+      navigateToChecklists();
+    }, 2000);
   } catch (error) {
     console.error('Error promoting template:', error);
     showToast(error.response?.data?.error || 'Failed to promote template', 'error');
@@ -4259,7 +5348,82 @@ function dismissPromotionPrompt() {
   if (toast) {
     toast.remove();
   }
-  navigateToChecklists();
+  // Delay navigation after dismissing prompt
+  setTimeout(() => {
+    navigateToChecklists();
+  }, 500);
+}
+
+function showBatchTemplatePromotionPrompt(templateIds) {
+  const count = templateIds.length;
+  const promptHtml = `
+    <div id="template-promotion-toast" class="fixed bottom-4 right-4 bg-white rounded-lg shadow-2xl border-2 border-blue-200 p-5 z-50 max-w-md animate-slide-up">
+      <div class="flex items-start gap-3">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+            <span class="text-white text-xl">✨</span>
+          </div>
+        </div>
+        <div class="flex-1">
+          <h4 class="font-bold text-gray-900 mb-1 flex items-center gap-2">
+            Make these ${count} templates reusable?
+            <span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-semibold">Recommended</span>
+          </h4>
+          <p class="text-sm text-gray-600 mb-3">Save time on future projects by making these AI templates available to your team.</p>
+          
+          <div class="bg-blue-50 rounded-md p-2 mb-3 border border-blue-100">
+            <p class="text-xs text-blue-800 font-medium mb-1">✓ Benefits:</p>
+            <ul class="text-xs text-blue-700 space-y-0.5">
+              <li>• Reuse for similar tasks</li>
+              <li>• Available to all team members</li>
+              <li>• Appear in template library</li>
+            </ul>
+          </div>
+          
+          <div class="flex gap-2">
+            <button onclick="promoteBatchTemplates(${JSON.stringify(templateIds)})" class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm">
+              ✨ Promote All ${count}
+            </button>
+            <button onclick="dismissPromotionPrompt()" class="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+              Not Now
+            </button>
+          </div>
+        </div>
+        <button onclick="dismissPromotionPrompt()" class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', promptHtml);
+  
+  // Auto-dismiss after 20 seconds
+  setTimeout(() => {
+    dismissPromotionPrompt();
+  }, 20000);
+}
+
+async function promoteBatchTemplates(templateIds) {
+  try {
+    // Promote all templates in parallel
+    await Promise.all(
+      templateIds.map(id => 
+        axios.post(`/api/templates/${id}/promote`, {}, { withCredentials: true })
+      )
+    );
+    showToast(`${templateIds.length} templates promoted to reusable!`, 'success');
+    dismissPromotionPrompt();
+    // Delay navigation to show toast
+    setTimeout(() => {
+      navigateToChecklists();
+    }, 2000);
+  } catch (error) {
+    console.error('Error promoting templates:', error);
+    showToast(error.response?.data?.error || 'Failed to promote templates', 'error');
+  }
 }
 
 function navigateToChecklists() {
@@ -4274,17 +5438,53 @@ function navigateToChecklists() {
 document.getElementById('close-ai-checklist-modal-btn').addEventListener('click', function() {
   document.getElementById('ai-checklist-modal').classList.add('hidden');
   currentAIChecklistData = null;
+  workstreamAnalysis = null;
 });
 
 document.getElementById('cancel-ai-checklist-btn').addEventListener('click', function() {
   document.getElementById('ai-checklist-modal').classList.add('hidden');
   currentAIChecklistData = null;
+  workstreamAnalysis = null;
 });
 
 // Cancel button from error state
 document.getElementById('cancel-error-ai-checklist-btn').addEventListener('click', function() {
   document.getElementById('ai-checklist-modal').classList.add('hidden');
   currentAIChecklistData = null;
+  workstreamAnalysis = null;
+});
+
+// Workstream analysis buttons
+document.getElementById('generate-single-checklist-btn').addEventListener('click', async function() {
+  await generateSingleChecklist();
+});
+
+document.getElementById('generate-multiple-checklists-btn').addEventListener('click', async function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('[DEBUG] Multiple checklists button clicked');
+  await generateMultipleChecklists();
+});
+
+document.getElementById('cancel-workstream-analysis-btn').addEventListener('click', function() {
+  document.getElementById('ai-checklist-modal').classList.add('hidden');
+  currentAIChecklistData = null;
+  workstreamAnalysis = null;
+});
+
+// Batch preview buttons
+document.getElementById('cancel-batch-preview-btn').addEventListener('click', function() {
+  document.getElementById('ai-checklist-modal').classList.add('hidden');
+  currentAIChecklistData = null;
+  workstreamAnalysis = null;
+});
+
+document.getElementById('create-batch-checklists-btn').addEventListener('click', async function() {
+  await confirmBatchChecklistCreation();
+});
+
+document.getElementById('retry-failed-checklists-btn').addEventListener('click', async function() {
+  await retryAllFailedChecklists();
 });
 
 document.getElementById('retry-ai-checklist-btn').addEventListener('click', function() {
@@ -4325,6 +5525,31 @@ document.addEventListener('keydown', function(e) {
   if ((e.key === 'r' || e.key === 'R') && !document.getElementById('ai-checklist-error').classList.contains('hidden')) {
     e.preventDefault();
     document.getElementById('retry-ai-checklist-btn').click();
+  }
+});
+
+// Event listeners for edit modal attachment uploads
+document.getElementById('edit-issue-upload-btn')?.addEventListener('click', function() {
+  document.getElementById('edit-issue-file-input').click();
+});
+
+document.getElementById('edit-issue-file-input')?.addEventListener('change', async function(e) {
+  const itemId = document.getElementById('edit-issue-id').value;
+  if (itemId && e.target.files.length > 0) {
+    await uploadEditAttachment(e.target.files, itemId, 'issue');
+    e.target.value = '';
+  }
+});
+
+document.getElementById('edit-action-item-upload-btn')?.addEventListener('click', function() {
+  document.getElementById('edit-action-item-file-input').click();
+});
+
+document.getElementById('edit-action-item-file-input')?.addEventListener('change', async function(e) {
+  const itemId = document.getElementById('edit-action-item-id').value;
+  if (itemId && e.target.files.length > 0) {
+    await uploadEditAttachment(e.target.files, itemId, 'action-item');
+    e.target.value = '';
   }
 });
 

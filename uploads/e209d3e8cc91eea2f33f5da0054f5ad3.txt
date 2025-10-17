@@ -1,0 +1,60 @@
+Milestone 1 Deliverables and Review Planning
+The team aligned on finalizing Milestone 1 deliverables through a detailed walkthrough and feedback process with a clear timeline for acceptance and sign-off.
+
+Milestone 1 includes three deliverables: current state assessment report, AWS target architecture document, and migration strategy with risk assessment (04:37) as defined in SOW section 2.3, with agreement from all parties.
+
+One Cloud Hub clarified the assessment and design documents are ready ahead of schedule, with the design document submitted earlier than the committed date (10:32).
+Magesh explained the assessment report follows AWS standard templates, but acknowledged gaps due to differing expectations and proposed sharing the report skeleton early for ongoing feedback (08:17).
+The team agreed to conduct a walkthrough session to map feedback points to the deliverables, identifying covered, pending, or excluded gaps for clarity and mutual understanding (15:09).
+Performance baseline data for sizing validation is in progress, with infrastructure mapping completed and application benchmarking expected within two days (25:17).
+A review meeting will be scheduled on October 21st to walk through the revised deliverables and feedback, targeting final acceptance and sign-off by October 24th to accommodate stakeholder availability and ensure quality (29:00).
+
+This schedule represents a delay of four working days but can be compensated for without affecting the final project end date, as confirmed by Gajalakshmi (30:24).
+Magesh and team committed to updating reports with performance data by end of day October 16th and conducting the walkthrough on October 21st (31:25).
+Venkatesa emphasized consistent terminology aligned with the SOW to avoid confusion, preferring “AWS target architecture document” over “design document” (17:00).
+Communication and Coordination Protocols
+Communication clarity and timely updates were reinforced as critical success factors for the project’s progress and stakeholder trust.
+
+Venkatesa stressed the importance of following through on commitments and proactively communicating delays or changes to avoid “black holes” in updates that risk project momentum (07:35).
+Magesh acknowledged the communication gap regarding the delayed report submission and committed to preventing recurrence (07:12).
+The daily stand-up meeting at 2:30 pm will be rescheduled by Gajalakshmi to accommodate Sriravi’s availability, ensuring full team participation (34:34).
+The team agreed to maintain tight communication loops to support timely decision-making and risk mitigation (33:56).
+Project Progress and Phase Overlaps
+The team reviewed current progress and outlined readiness for upcoming phases, confirming no major risks despite minor schedule shifts.
+
+Phase one deliverables (assessment and discovery) are largely complete except for minor items like performance testing and final report updates, while phase two (design and architecture) is ahead of schedule (32:33).
+Magesh pointed out phase two deliverables such as network security framework, rollback procedures, and migration documentation are already documented in the design document (33:31).
+Phase three activities, including AD modernization and replication, have started or will start imminently, with POC planned for next week (38:13).
+Replication and migration sync are reported as started and progressing ahead of schedule, supporting smooth transition into later phases (35:52).
+Travel Impact and Resource Availability
+Upcoming travel plans by key personnel were communicated with assurances that deliverables and project timelines will remain unaffected.
+
+Magesh and Sri Hari will travel to the Philippines for a major business meeting from Tuesday night returning Sunday but confirmed no impact on deliverables (35:52).
+They may request minor meeting schedule adjustments but will remain available for coordination across time zones (37:11).
+The trip is tied to a new large migration and modernization project, indicating expanding business opportunities for the team (36:37).
+Gajalakshmi and team will coordinate to ensure seamless project progress during this period (37:48).
+AWS Partnership Compliance and Next Steps
+The team outlined formal AWS partnership requirements and next steps post-assessment to maintain compliance and project closure.
+
+After assessment completion, an official AWS customer sign-off template must be submitted to validate the work done for S4C (39:04).
+A separate closure document will be submitted after migration completion as part of AWS partner obligations (39:58).
+Venkatesa offered full cooperation to support these AWS partnership commitments and documentation (39:58).
+Magesh indicated AWS may update their template based on the deliverables submitted, implying ongoing alignment with AWS standards (39:58).
+
+Action items
+Gajalakshmi Vaasan
+Reschedule daily stand-up meeting to accommodate availability of Sriravi (34:00)
+Coordinate and schedule walkthrough session for deliverables and feedback review by Oct 21 (11:50)
+Incorporate application benchmarking data into updated reports post-benchmark completion (27:00)
+Send invites for review meetings and follow-up communication updates promptly (34:53)
+Magesh Kumar Selvaraj
+Review and update assessment report and AWS target architecture document to address feedback and incorporate benchmarking results (07:05)
+Conduct internal comparison of feedback document against assessment and design documents before walkthrough (19:05)
+Participate in walkthrough session with S4C to validate feedback coverage and gaps (15:40)
+Inform Venkatesa AVR and team about team travel plans and manage availability for meetings during Philippines trip (35:50)
+Coordinate reporting and sign-off processes required by AWS for assessment and migration phases (39:00)
+Venkatesa AVR
+Provide feedback on deliverables after walkthrough meeting (31:25)
+Approve revised timeline and milestone acceptance sign-off by Oct 23-24 (32:20)
+Ensure availability to attend and follow up on all scheduled calls and acceptances (34:43)
+Assist with AWS partnership documentation and sign-offs as required post-project deliverables (39:15)

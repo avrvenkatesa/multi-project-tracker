@@ -699,7 +699,7 @@ async function loadChecklistForFilling(checklistId) {
 function displayChecklistForFilling(checklist) {
   // Update header
   document.getElementById('checklistTitle').textContent = checklist.title;
-  document.getElementById('checklistId').textContent = `ID: ${checklist.checklist_id}`;
+  document.getElementById('checklistId').textContent = `ID: ${checklist.id}`;
   document.getElementById('projectName').textContent = `📁 ${checklist.project_name}`;
   
   if (checklist.assigned_to_name) {
@@ -742,7 +742,7 @@ function renderSection(section, directSubsections, allSections, level = 0) {
       <div class="section-header" data-section-id="${sectionId}">
         <div class="flex items-center gap-2">
           <span class="section-toggle" id="${sectionId}-toggle">▼</span>
-          <h3 class="section-title">${section.section_number} ${escapeHtml(section.title)}</h3>
+          <h3 class="section-title">${section.section_number ? section.section_number + ' ' : ''}${escapeHtml(section.title)}</h3>
         </div>
       </div>
       
