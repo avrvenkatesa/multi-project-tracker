@@ -16,6 +16,27 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Phase 2B: Enhanced Error Handling & User Feedback** (October 17, 2025):
+  - **Partial Batch Failure UI**: Batch preview now displays both successful and failed checklists with distinct visual indicators
+    - ✅ Green borders for successful checklists
+    - ❌ Red borders for failed checklists with error messages
+    - Summary statistics showing "X of Y succeeded" with appropriate icons (success/warning/error)
+  - **Retry Functionality**: 
+    - Individual retry buttons on each failed checklist
+    - "Retry All Failed" button for bulk retry operations
+    - Auto-updates preview after successful retry
+    - Preserves rate limit information across retries
+  - **Rate Limiting Display**: 
+    - Shows remaining generations count in warnings
+    - Yellow warning when ≤3 generations remaining
+    - Clear error messaging when rate limit exceeded
+    - Rate limit info displayed in both single and batch generation flows
+  - **Attachment Error Handling**:
+    - Warns users about unsupported file types (only PDF, DOCX, TXT supported)
+    - Backend gracefully handles extraction failures with descriptive error messages
+    - Files >10MB automatically skipped with notification
+  - **Files Modified**: public/index.html (batch preview UI), public/app.js (retry functions, rate limit display, attachment warnings)
+
 - **New Features** (October 16, 2025):
   - **Batch Template Promotion**: Added template promotion prompts for multiple checklist creation, allowing users to promote all newly created templates to reusable status at once (server.js, public/app.js)
   - **Visual Step Indicator**: Added 5-step progress indicator to AI Checklist Generation modal showing current progress through: Source Selection → Source Analysis → Checklist Generation → Preview → Checklist Creation (public/index.html, public/app.js)
