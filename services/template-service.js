@@ -48,12 +48,17 @@ async function saveChecklistAsTemplate(checklistId, userId, templateData) {
       throw new Error('You already have a template with this name. Please choose a different name.');
     }
     
-    // Get sections for size validation
+    // Get the template that this checklist was created from
+    if (!checklist.template_id) {
+      throw new Error('Cannot create template from checklist without a source template');
+    }
+    
+    // Get sections from the source template for size validation
     const sectionsResult = await client.query(
-      `SELECT * FROM checklist_sections 
-       WHERE checklist_id = $1 
+      `SELECT * FROM checklist_template_sections 
+       WHERE template_id = $1 
        ORDER BY display_order`,
-      [checklistId]
+      [checklist.template_id]
     );
     
     const sections = sectionsResult.rows;
@@ -63,7 +68,7 @@ async function saveChecklistAsTemplate(checklistId, userId, templateData) {
     let totalItems = 0;
     for (const section of sections) {
       const itemsResult = await client.query(
-        'SELECT COUNT(*) as count FROM checklist_items WHERE section_id = $1',
+        'SELECT COUNT(*) as count FROM checklist_template_items WHERE section_id = $1',
         [section.id]
       );
       totalItems += parseInt(itemsResult.rows[0].count);
@@ -117,9 +122,9 @@ async function saveChecklistAsTemplate(checklistId, userId, templateData) {
       
       const templateSectionId = sectionResult.rows[0].id;
       
-      // Get items for this section
+      // Get items for this section from the source template
       const itemsResult = await client.query(
-        `SELECT * FROM checklist_items 
+        `SELECT * FROM checklist_template_items 
          WHERE section_id = $1 
          ORDER BY display_order`,
         [section.id]
@@ -521,33 +526,18 @@ async function applyTemplate(templateId, userId, projectId, checklistData = {}) 
     
     const checklist = checklistResult.rows[0];
     
-    // Copy sections and items from template
+    // Create responses for all template items
+    // The checklist references the template, so responses link to template items directly
     for (const section of template.sections) {
-      const sectionResult = await client.query(
-        `INSERT INTO checklist_sections (
-          checklist_id, title, description, display_order
-        ) VALUES ($1, $2, $3, $4)
-        RETURNING id`,
-        [checklist.id, section.title, section.description, section.display_order]
-      );
-      
-      const checklistSectionId = sectionResult.rows[0].id;
-      
-      // Copy items
       for (const item of section.items) {
         await client.query(
-          `INSERT INTO checklist_items (
-            section_id, item_text, field_type, field_options, 
-            is_required, help_text, display_order
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          `INSERT INTO checklist_responses (
+            checklist_id, template_item_id, is_completed
+          ) VALUES ($1, $2, $3)`,
           [
-            checklistSectionId,
-            item.item_text,
-            item.field_type,
-            item.field_options,
-            item.is_required,
-            item.help_text,
-            item.display_order
+            checklist.id,
+            item.id,
+            false
           ]
         );
       }
