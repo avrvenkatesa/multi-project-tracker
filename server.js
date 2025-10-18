@@ -8749,6 +8749,66 @@ app.delete('/api/templates/action-category-mappings/:id', authenticateToken, asy
   }
 });
 
+// ============================================
+// TEMPORARY TEST ENDPOINT - Remove after Phase 3b testing
+// ============================================
+app.get('/api/test/completion-service', async (req, res) => {
+  try {
+    const completionService = require('./services/completion-service.js');
+    
+    console.log('Testing completion service functions...');
+    
+    // Test 1: Get all completion actions
+    const allActions = await completionService.getCompletionActions();
+    console.log('All actions:', allActions.length);
+    
+    // Test 2: Get issue-specific actions
+    const issueActions = await completionService.getCompletionActions(null, 'issue');
+    console.log('Issue actions:', issueActions.length);
+    
+    // Test 3: Get action_item-specific actions
+    const actionActions = await completionService.getCompletionActions(null, 'action_item');
+    console.log('Action item actions:', actionActions.length);
+    
+    // Test 4: Calculate completion for checklist 30 (from Feature 1 tests)
+    let completion = null;
+    try {
+      completion = await completionService.calculateChecklistCompletion(30);
+      console.log('Checklist 30 completion:', completion);
+    } catch (error) {
+      console.log('Checklist 30 not found or error:', error.message);
+      completion = { error: 'Checklist not found' };
+    }
+    
+    res.json({
+      success: true,
+      message: 'All tests passed',
+      tests: {
+        allActions: {
+          count: allActions.length,
+          data: allActions
+        },
+        issueActions: {
+          count: issueActions.length,
+          data: issueActions
+        },
+        actionItemActions: {
+          count: actionActions.length,
+          data: actionActions
+        },
+        checklistCompletion: completion
+      }
+    });
+  } catch (error) {
+    console.error('Test endpoint error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // ========================================
 // PDF EXPORT ENDPOINT
 // ========================================

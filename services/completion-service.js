@@ -145,10 +145,9 @@ async function calculateChecklistCompletion(checklistId) {
     const result = await pool.query(
       `SELECT 
         COUNT(*) as total_items,
-        COUNT(*) FILTER (WHERE status = 'completed') as completed_items
-      FROM checklist_items ci
-      JOIN checklist_sections cs ON ci.section_id = cs.id
-      WHERE cs.checklist_id = $1`,
+        COUNT(*) FILTER (WHERE is_completed = true) as completed_items
+      FROM checklist_responses
+      WHERE checklist_id = $1`,
       [checklistId]
     );
     
