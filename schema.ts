@@ -49,6 +49,17 @@ export const issues = pgTable('issues', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Action Item Categories
+export const actionItemCategories = pgTable('action_item_categories', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  description: text('description'),
+  icon: text('icon'),
+  displayOrder: integer('display_order').default(0),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export const actionItems = pgTable('action_items', {
   id: serial('id').primaryKey(),
   projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
@@ -58,6 +69,7 @@ export const actionItems = pgTable('action_items', {
   priority: varchar('priority', { length: 50 }).default('medium'),
   assignee: varchar('assignee', { length: 255 }),
   dueDate: timestamp('due_date'),
+  categoryId: integer('category_id').references(() => actionItemCategories.id),
   createdBy: varchar('created_by', { length: 255 }),
   createdViaAiBy: integer('created_via_ai_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
@@ -312,4 +324,29 @@ export const checklistSignoffs = pgTable('checklist_signoffs', {
   signature: text('signature'),
   comments: text('comments'),
   createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Auto-Create Checklist Mapping Tables (Phase 3b Feature 1)
+export const issueTypeTemplates = pgTable('issue_type_templates', {
+  id: serial('id').primaryKey(),
+  issueType: text('issue_type').notNull(),
+  templateId: integer('template_id').references(() => checklistTemplates.id, { onDelete: 'cascade' }),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  isActive: boolean('is_active').default(true),
+  autoCreate: boolean('auto_create').default(true),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const actionItemCategoryTemplates = pgTable('action_item_category_templates', {
+  id: serial('id').primaryKey(),
+  categoryId: integer('category_id').references(() => actionItemCategories.id, { onDelete: 'cascade' }),
+  templateId: integer('template_id').references(() => checklistTemplates.id, { onDelete: 'cascade' }),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  isActive: boolean('is_active').default(true),
+  autoCreate: boolean('auto_create').default(true),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });

@@ -1,0 +1,125 @@
+PROMPT 1: Database Migration (Run First)Create database migration for Phase 3b Feature 1: Auto-Create Checklist from Issue Type/Action Item Category
+
+CONTEXT:
+- We're on branch: feature/checklist-system-phase3
+- Phase 3a (template library) is complete
+- This is Feature 1 of Phase 3b (5 features total)
+- Database: PostgreSQL (Neon)
+- Existing tables: issues, action_items, checklist_templates, projects, users
+
+TASK:
+Create and execute a database migration file that:
+
+1. Creates action_item_categories table with 10 default categories
+2. Adds category_id column to action_items table
+3. Creates issue_type_templates mapping table
+4. Creates action_item_category_templates mapping table
+5. Adds appropriate indexes for performance
+
+IMPLEMENTATION:
+
+File: server/migrations/008_auto_create_checklists.sql
+```sql-- Migration: Auto-create checklists from issue types and action item categories
+-- Phase 3b Feature 1-- 1. Create action_item_categories table
+CREATE TABLE IF NOT EXISTS action_item_categories (
+id SERIAL PRIMARY KEY,
+name TEXT NOT NULL UNIQUE,
+description TEXT,
+icon TEXT,
+display_order INTEGER DEFAULT 0,
+is_active BOOLEAN DEFAULT TRUE,
+created_at TIMESTAMP DEFAULT NOW()
+);-- 2. Insert 10 default categories
+INSERT INTO action_item_categories (name, description, icon, display_order) VALUES
+('Administrative', 'Paperwork, approvals, documentation', 'folder', 1),
+('Technical', 'Code, configuration, technical tasks', 'code', 2),
+('Communication', 'Meetings, emails, notifications', 'message-circle', 3),
+('Review', 'Code reviews, document reviews, QA', 'check-circle', 4),
+('Planning', 'Research, design, estimation', 'clipboard', 5),
+('Testing', 'QA, UAT, validation', 'test-tube', 6),
+('Deployment', 'Releases, migrations, rollouts', 'upload', 7),
+('Training', 'Documentation, tutorials, knowledge transfer', 'book-open', 8),
+('Support', 'Bug fixes, troubleshooting, helpdesk', 'help-circle', 9),
+('General', 'Uncategorized tasks', 'tag', 10)
+ON CONFLICT (name) DO NOTHING;-- 3. Add category_id to action_items (check if exists first)
+DO $$
+BEGIN
+IF NOT EXISTS (
+SELECT 1 FROM information_schema.columns
+WHERE table_name = 'action_items' AND column_name = 'category_id'
+) THEN
+ALTER TABLE action_items ADD COLUMN category_id INTEGER REFERENCES action_item_categories(id);
+END IF;
+END $$;-- 4. Create issue_type_templates mapping table
+CREATE TABLE IF NOT EXISTS issue_type_templates (
+id SERIAL PRIMARY KEY,
+issue_type TEXT NOT NULL,
+template_id INTEGER REFERENCES checklist_templates(id) ON DELETE CASCADE,
+project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+is_active BOOLEAN DEFAULT TRUE,
+auto_create BOOLEAN DEFAULT TRUE,
+created_by INTEGER REFERENCES users(id),
+created_at TIMESTAMP DEFAULT NOW(),
+updated_at TIMESTAMP DEFAULT NOW(),
+UNIQUE(issue_type, project_id)
+);-- 5. Create action_item_category_templates mapping table
+CREATE TABLE IF NOT EXISTS action_item_category_templates (
+id SERIAL PRIMARY KEY,
+category_id INTEGER REFERENCES action_item_categories(id) ON DELETE CASCADE,
+template_id INTEGER REFERENCES checklist_templates(id) ON DELETE CASCADE,
+project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+is_active BOOLEAN DEFAULT TRUE,
+auto_create BOOLEAN DEFAULT TRUE,
+created_by INTEGER REFERENCES users(id),
+created_at TIMESTAMP DEFAULT NOW(),
+updated_at TIMESTAMP DEFAULT NOW(),
+UNIQUE(category_id, project_id)
+);-- 6. Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_action_items_category_id ON action_items(category_id);
+CREATE INDEX IF NOT EXISTS idx_issue_type_templates_type ON issue_type_templates(issue_type);
+CREATE INDEX IF NOT EXISTS idx_issue_type_templates_project ON issue_type_templates(project_id);
+CREATE INDEX IF NOT EXISTS idx_action_category_templates_category ON action_item_category_templates(category_id);
+CREATE INDEX IF NOT EXISTS idx_action_category_templates_project ON action_item_category_templates(project_id);-- 7. Add updated_at trigger for issue_type_templates
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+NEW.updated_at = NOW();
+RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;DROP TRIGGER IF EXISTS update_issue_type_templates_updated_at ON issue_type_templates;
+CREATE TRIGGER update_issue_type_templates_updated_at
+BEFORE UPDATE ON issue_type_templates
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();DROP TRIGGER IF EXISTS update_action_category_templates_updated_at ON action_item_category_templates;
+CREATE TRIGGER update_action_category_templates_updated_at
+BEFORE UPDATE ON action_item_category_templates
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();-- Migration complete
+
+EXECUTION STEPS:
+1. Create the migration file at: server/migrations/008_auto_create_checklists.sql
+2. Run the migration using your database connection
+3. Verify tables created successfully:
+   - SELECT * FROM action_item_categories;
+   - \d issue_type_templates
+   - \d action_item_category_templates
+4. Verify category_id column added to action_items
+
+VALIDATION:
+After running, confirm:
+- 10 categories exist in action_item_categories
+- action_items table has category_id column
+- Both mapping tables exist with proper foreign keys
+- All indexes created successfully
+
+COMMIT MESSAGE:
+"feat(phase3b): add auto-create checklist tables and action item categories
+
+- Create action_item_categories table with 10 defaults
+- Add category_id to action_items
+- Create issue_type_templates mapping table
+- Create action_item_category_templates mapping table
+- Add indexes for performance
+- Add updated_at triggers
+
+Part of Phase 3b Feature 1"

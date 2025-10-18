@@ -16,6 +16,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Phase 3b Feature 1: Auto-Create Checklists Database Migration** (October 18, 2025):
+  - **Action Item Categories**: Created action_item_categories table with 10 default categories (Administrative, Technical, Communication, Review, Planning, Testing, Deployment, Training, Support, General)
+  - **Category Support**: Added category_id column to action_items table for categorization
+  - **Issue Type Mapping**: Created issue_type_templates table to link issue types to checklist templates
+  - **Category Mapping**: Created action_item_category_templates table to link action item categories to checklist templates
+  - **Performance Optimizations**: Added indexes on category_id, issue_type, and project_id for faster queries
+  - **Auto-Update Triggers**: Added updated_at triggers for both mapping tables
+  - **Schema Update**: Updated schema.ts with new tables using Drizzle ORM
+  - **Database Tables**: action_item_categories, issue_type_templates, action_item_category_templates
+  - **Files Modified**: schema.ts
+
 - **Template Details Loading Fix** (October 17, 2025):
   - **SQL Parameter Type Error**: Fixed PostgreSQL error "could not determine data type of parameter $2" in getTemplateDetails function
   - **Root Cause**: When userId was null, PostgreSQL couldn't infer the parameter type in the CASE statement
