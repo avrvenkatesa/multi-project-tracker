@@ -579,6 +579,226 @@ async function getTemplateCategories() {
   return result.rows;
 }
 
+// ============================================
+// Phase 3b Feature 1: Auto-Create Checklists
+// ============================================
+
+/**
+ * Get all active action item categories
+ */
+async function getActionItemCategories() {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM action_item_categories
+       WHERE is_active = TRUE
+       ORDER BY display_order, name`
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching action item categories:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get template mappings for issue types
+ * @param {number|null} projectId - Filter by project (null = global mappings)
+ */
+async function getIssueTypeTemplateMappings(projectId = null) {
+  try {
+    const result = await pool.query(
+      `SELECT 
+        itt.*,
+        ct.name as template_name,
+        ct.description as template_description,
+        ct.usage_count as template_usage_count
+      FROM issue_type_templates itt
+      LEFT JOIN checklist_templates ct ON itt.template_id = ct.id
+      WHERE (itt.project_id = $1 OR (itt.project_id IS NULL AND $1 IS NULL))
+        AND itt.is_active = TRUE
+      ORDER BY itt.project_id NULLS LAST, itt.issue_type`,
+      [projectId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching issue type mappings:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get template mappings for action item categories
+ * @param {number|null} projectId - Filter by project (null = global mappings)
+ */
+async function getActionCategoryTemplateMappings(projectId = null) {
+  try {
+    const result = await pool.query(
+      `SELECT 
+        actt.*,
+        ac.name as category_name,
+        ac.description as category_description,
+        ac.icon as category_icon,
+        ct.name as template_name,
+        ct.description as template_description,
+        ct.usage_count as template_usage_count
+      FROM action_item_category_templates actt
+      LEFT JOIN action_item_categories ac ON actt.category_id = ac.id
+      LEFT JOIN checklist_templates ct ON actt.template_id = ct.id
+      WHERE (actt.project_id = $1 OR (actt.project_id IS NULL AND $1 IS NULL))
+        AND actt.is_active = TRUE
+      ORDER BY actt.project_id NULLS LAST, ac.display_order, ac.name`,
+      [projectId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching action category mappings:', error);
+    throw error;
+  }
+}
+
+/**
+ * Save or update issue type template mapping
+ * @param {string} issueType - Issue type (Bug, Feature, etc.)
+ * @param {number} templateId - Template ID to map
+ * @param {number|null} projectId - Project ID (null = global)
+ * @param {number} userId - User creating the mapping
+ */
+async function saveIssueTypeTemplateMapping(issueType, templateId, projectId, userId) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO issue_type_templates (issue_type, template_id, project_id, created_by)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (issue_type, project_id) 
+       DO UPDATE SET 
+         template_id = $2,
+         updated_at = NOW(),
+         is_active = TRUE
+       RETURNING *`,
+      [issueType, templateId, projectId, userId]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving issue type mapping:', error);
+    throw error;
+  }
+}
+
+/**
+ * Save or update action category template mapping
+ * @param {number} categoryId - Action item category ID
+ * @param {number} templateId - Template ID to map
+ * @param {number|null} projectId - Project ID (null = global)
+ * @param {number} userId - User creating the mapping
+ */
+async function saveActionCategoryTemplateMapping(categoryId, templateId, projectId, userId) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO action_item_category_templates (category_id, template_id, project_id, created_by)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (category_id, project_id)
+       DO UPDATE SET
+         template_id = $2,
+         updated_at = NOW(),
+         is_active = TRUE
+       RETURNING *`,
+      [categoryId, templateId, projectId, userId]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving action category mapping:', error);
+    throw error;
+  }
+}
+
+/**
+ * Auto-create checklist when issue is created
+ * Called from issue creation endpoint
+ * @param {number} issueId - ID of newly created issue
+ * @param {string} issueType - Type of issue
+ * @param {number} projectId - Project ID
+ * @param {number} userId - User creating the issue
+ */
+async function autoCreateChecklistForIssue(issueId, issueType, projectId, userId) {
+  try {
+    // Find template mapping (project-specific first, then global)
+    const mapping = await pool.query(
+      `SELECT template_id
+       FROM issue_type_templates
+       WHERE issue_type = $1
+         AND (project_id = $2 OR project_id IS NULL)
+         AND is_active = TRUE
+         AND auto_create = TRUE
+       ORDER BY project_id NULLS LAST
+       LIMIT 1`,
+      [issueType, projectId]
+    );
+
+    if (mapping.rows.length === 0) {
+      console.log(`No template mapping found for issue type: ${issueType}`);
+      return null;
+    }
+
+    const templateId = mapping.rows[0].template_id;
+    console.log(`Auto-creating checklist from template ${templateId} for issue ${issueId}`);
+
+    // Apply template to create checklist (reuse existing function)
+    const checklist = await applyTemplate(templateId, projectId, userId, issueId, null);
+    
+    return checklist;
+  } catch (error) {
+    console.error('Error auto-creating checklist for issue:', error);
+    // Don't throw - let issue creation succeed even if checklist fails
+    return null;
+  }
+}
+
+/**
+ * Auto-create checklist when action item is created
+ * Called from action item creation endpoint
+ * @param {number} actionItemId - ID of newly created action item
+ * @param {number|null} categoryId - Category ID (may be null)
+ * @param {number} projectId - Project ID
+ * @param {number} userId - User creating the action item
+ */
+async function autoCreateChecklistForActionItem(actionItemId, categoryId, projectId, userId) {
+  try {
+    if (!categoryId) {
+      console.log('No category specified for action item, skipping auto-checklist');
+      return null;
+    }
+
+    // Find template mapping (project-specific first, then global)
+    const mapping = await pool.query(
+      `SELECT template_id
+       FROM action_item_category_templates
+       WHERE category_id = $1
+         AND (project_id = $2 OR project_id IS NULL)
+         AND is_active = TRUE
+         AND auto_create = TRUE
+       ORDER BY project_id NULLS LAST
+       LIMIT 1`,
+      [categoryId, projectId]
+    );
+
+    if (mapping.rows.length === 0) {
+      console.log(`No template mapping found for category ID: ${categoryId}`);
+      return null;
+    }
+
+    const templateId = mapping.rows[0].template_id;
+    console.log(`Auto-creating checklist from template ${templateId} for action item ${actionItemId}`);
+
+    // Apply template to create checklist (reuse existing function)
+    const checklist = await applyTemplate(templateId, projectId, userId, null, actionItemId);
+    
+    return checklist;
+  } catch (error) {
+    console.error('Error auto-creating checklist for action item:', error);
+    // Don't throw - let action item creation succeed even if checklist fails
+    return null;
+  }
+}
+
 module.exports = {
   saveChecklistAsTemplate,
   getTemplateLibrary,
@@ -588,5 +808,13 @@ module.exports = {
   rateTemplate,
   toggleFeatured,
   applyTemplate,
-  getTemplateCategories
+  getTemplateCategories,
+  // Phase 3b Feature 1 exports
+  getActionItemCategories,
+  getIssueTypeTemplateMappings,
+  getActionCategoryTemplateMappings,
+  saveIssueTypeTemplateMapping,
+  saveActionCategoryTemplateMapping,
+  autoCreateChecklistForIssue,
+  autoCreateChecklistForActionItem
 };

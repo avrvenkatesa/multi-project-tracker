@@ -16,6 +16,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Phase 3b Feature 1: Auto-Create Checklists Service Functions** (October 18, 2025):
+  - **Service Layer Complete**: Added 7 new functions to services/template-service.js for managing auto-create checklist functionality
+  - **Category Management**: getActionItemCategories() fetches all 10 active action item categories
+  - **Template Mapping Queries**: getIssueTypeTemplateMappings() and getActionCategoryTemplateMappings() retrieve template mappings with project filtering
+  - **Mapping Management**: saveIssueTypeTemplateMapping() and saveActionCategoryTemplateMapping() create/update template associations
+  - **Auto-Creation Logic**: autoCreateChecklistForIssue() and autoCreateChecklistForActionItem() automatically create checklists based on mappings
+  - **Smart Fallback**: Auto-creation prioritizes project-specific mappings first, then falls back to global mappings
+  - **Non-Blocking**: Auto-creation failures don't prevent issue/action item creation (graceful degradation)
+  - **Files Modified**: services/template-service.js
+
 - **Phase 3b Feature 1: Auto-Create Checklists Database Migration** (October 18, 2025):
   - **Action Item Categories**: Created action_item_categories table with 10 default categories (Administrative, Technical, Communication, Review, Planning, Testing, Deployment, Training, Support, General)
   - **Category Support**: Added category_id column to action_items table for categorization
