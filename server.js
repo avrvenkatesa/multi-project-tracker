@@ -8393,6 +8393,32 @@ app.get('/api/templates', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/templates/issue-type-mappings - Get issue type template mappings (must be before :id route)
+app.get('/api/templates/issue-type-mappings', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    const parsedProjectId = projectId && projectId !== '' ? parseInt(projectId) : null;
+    const mappings = await getIssueTypeTemplateMappings(parsedProjectId);
+    res.json(mappings);
+  } catch (error) {
+    console.error('Error fetching issue type mappings:', error);
+    res.status(500).json({ error: 'Failed to fetch mappings' });
+  }
+});
+
+// GET /api/templates/action-category-mappings - Get action category template mappings (must be before :id route)
+app.get('/api/templates/action-category-mappings', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    const parsedProjectId = projectId && projectId !== '' ? parseInt(projectId) : null;
+    const mappings = await getActionCategoryTemplateMappings(parsedProjectId);
+    res.json(mappings);
+  } catch (error) {
+    console.error('Error fetching action category mappings:', error);
+    res.status(500).json({ error: 'Failed to fetch mappings' });
+  }
+});
+
 // GET /api/templates/:id - Get template details
 app.get('/api/templates/:id', authenticateToken, async (req, res) => {
   try {
@@ -8608,32 +8634,6 @@ app.get('/api/action-item-categories', async (req, res) => {
   } catch (error) {
     console.error('Error fetching action item categories:', error);
     res.status(500).json({ error: 'Failed to fetch categories' });
-  }
-});
-
-// GET /api/templates/issue-type-mappings - Get issue type template mappings
-app.get('/api/templates/issue-type-mappings', async (req, res) => {
-  try {
-    const { projectId } = req.query;
-    const parsedProjectId = projectId && projectId !== '' ? parseInt(projectId) : null;
-    const mappings = await getIssueTypeTemplateMappings(parsedProjectId);
-    res.json(mappings);
-  } catch (error) {
-    console.error('Error fetching issue type mappings:', error);
-    res.status(500).json({ error: 'Failed to fetch mappings' });
-  }
-});
-
-// GET /api/templates/action-category-mappings - Get action category template mappings
-app.get('/api/templates/action-category-mappings', async (req, res) => {
-  try {
-    const { projectId } = req.query;
-    const parsedProjectId = projectId && projectId !== '' ? parseInt(projectId) : null;
-    const mappings = await getActionCategoryTemplateMappings(parsedProjectId);
-    res.json(mappings);
-  } catch (error) {
-    console.error('Error fetching action category mappings:', error);
-    res.status(500).json({ error: 'Failed to fetch mappings' });
   }
 });
 
