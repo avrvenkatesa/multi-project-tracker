@@ -7606,7 +7606,7 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
   try {
     const checklistId = req.params.id;
     const userId = req.user.id;
-    const { responses } = req.body; // Array of {template_item_id, value, type}
+    const { responses } = req.body; // Array of {template_item_id OR item_id, value, type, notes, is_completed}
     
     // Check access
     const hasAccess = await canAccessChecklist(userId, checklistId);
@@ -7621,7 +7621,13 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
       await client.query('BEGIN');
       
       for (const response of responses) {
-        const { template_item_id, value, type, notes, is_completed } = response;
+        // Accept both item_id and template_item_id for compatibility
+        const templateItemId = response.template_item_id || response.item_id;
+        const { value, type, notes, is_completed } = response;
+        
+        if (!templateItemId) {
+          throw new Error('Missing required field: template_item_id or item_id');
+        }
         
         // Determine which field to use based on type
         let responseValue = null;
@@ -7654,7 +7660,7 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
             updated_at = CURRENT_TIMESTAMP`,
           [
             checklistId,
-            template_item_id,
+            templateItemId,
             responseValue,
             responseDate,
             responseBoolean,
