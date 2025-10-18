@@ -8609,9 +8609,8 @@ app.get('/api/action-item-categories', async (req, res) => {
 app.get('/api/templates/issue-type-mappings', async (req, res) => {
   try {
     const { projectId } = req.query;
-    const mappings = await getIssueTypeTemplateMappings(
-      projectId ? parseInt(projectId) : null
-    );
+    const parsedProjectId = projectId && projectId !== '' ? parseInt(projectId) : null;
+    const mappings = await getIssueTypeTemplateMappings(parsedProjectId);
     res.json(mappings);
   } catch (error) {
     console.error('Error fetching issue type mappings:', error);
@@ -8623,9 +8622,8 @@ app.get('/api/templates/issue-type-mappings', async (req, res) => {
 app.get('/api/templates/action-category-mappings', async (req, res) => {
   try {
     const { projectId } = req.query;
-    const mappings = await getActionCategoryTemplateMappings(
-      projectId ? parseInt(projectId) : null
-    );
+    const parsedProjectId = projectId && projectId !== '' ? parseInt(projectId) : null;
+    const mappings = await getActionCategoryTemplateMappings(parsedProjectId);
     res.json(mappings);
   } catch (error) {
     console.error('Error fetching action category mappings:', error);
