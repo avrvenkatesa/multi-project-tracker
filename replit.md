@@ -16,7 +16,7 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 
 **Service Layer:**
 - **completion-service.js**: Manages checklist completion actions, including rule management (get, save, delete), completion percentage calculation, and automatic status updates for issues/action items when checklists reach completion thresholds. Supports project-specific and global rules with smart priority-based matching. Integrated into `POST /api/checklists/:id/responses` to automatically trigger status updates.
-- **template-service.js**: Handles checklist template operations, auto-create checklist mappings, and template library features.
+- **template-service.js**: Handles checklist template operations, auto-create checklist mappings, template library features, and bulk template application. Includes `bulkApplyTemplate()` for applying templates to multiple issues or action items simultaneously (max 100 entities per request) with sequential processing, partial failure support, and detailed success/failure tracking.
 - **ai-service.js**: Provides AI-powered meeting analysis and checklist generation capabilities.
 
 ### Data Management

@@ -8668,6 +8668,93 @@ app.post('/api/templates/:id/promote', authenticateToken, async (req, res) => {
 });
 
 // ============================================
+// Phase 3b Feature 3: Bulk Apply Template
+// ============================================
+
+/**
+ * Bulk apply template to multiple issues or action items
+ * POST /api/templates/bulk-apply
+ * Body: {
+ *   templateId: number,
+ *   entityType: 'issue' or 'action_item',
+ *   entityIds: number[],
+ *   projectId: number
+ * }
+ */
+app.post('/api/templates/bulk-apply', authenticateToken, async (req, res) => {
+  try {
+    const templateService = require('./services/template-service.js');
+    
+    const { templateId, entityType, entityIds, projectId } = req.body;
+    
+    // Validation
+    if (!templateId || !entityType || !entityIds || !Array.isArray(entityIds)) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: templateId, entityType, entityIds (array)' 
+      });
+    }
+    
+    if (!['issue', 'action_item'].includes(entityType)) {
+      return res.status(400).json({ 
+        error: 'Invalid entityType. Must be "issue" or "action_item"' 
+      });
+    }
+    
+    if (entityIds.length === 0) {
+      return res.status(400).json({ 
+        error: 'entityIds array cannot be empty' 
+      });
+    }
+    
+    if (entityIds.length > 100) {
+      return res.status(400).json({ 
+        error: 'Cannot bulk apply to more than 100 entities at once' 
+      });
+    }
+    
+    if (!projectId) {
+      return res.status(400).json({ 
+        error: 'projectId is required' 
+      });
+    }
+    
+    const userId = req.user?.id || 1;
+    
+    console.log(`📋 Bulk apply request: template ${templateId} to ${entityIds.length} ${entityType}s`);
+    
+    // Execute bulk apply
+    const results = await templateService.bulkApplyTemplate(
+      parseInt(templateId),
+      entityType,
+      entityIds.map(id => parseInt(id)),
+      parseInt(projectId),
+      userId
+    );
+    
+    // Return results with appropriate status code
+    const statusCode = results.failed.length === 0 ? 200 : 207; // 207 = Multi-Status
+    
+    res.status(statusCode).json({
+      success: true,
+      message: `Applied template to ${results.successful.length} of ${results.total} ${entityType}s`,
+      results: {
+        total: results.total,
+        successful: results.successful.length,
+        failed: results.failed.length,
+        details: results
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error in bulk apply:', error);
+    res.status(500).json({ 
+      error: 'Failed to bulk apply template',
+      details: error.message 
+    });
+  }
+});
+
+// ============================================
 // Phase 3b Feature 1: Auto-Create Checklist APIs
 // ============================================
 

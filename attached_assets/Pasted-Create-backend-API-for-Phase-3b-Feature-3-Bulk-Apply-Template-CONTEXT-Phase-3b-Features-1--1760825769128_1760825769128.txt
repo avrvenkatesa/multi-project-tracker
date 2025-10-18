@@ -1,0 +1,334 @@
+Create backend API for Phase 3b Feature 3: Bulk Apply Template
+
+CONTEXT:
+- Phase 3b Features 1 & 2 are complete
+- Working on branch: feature/checklist-system-phase3
+- Template system exists with applyTemplate() function in template-service.js
+- Need ability to apply same template to multiple issues/action items at once
+- Goal: Save time when applying standardized checklists to many entities
+
+TASK:
+Create a new API endpoint and service function to bulk apply a template to multiple 
+issues or action items in a single operation.
+
+IMPLEMENTATION:
+
+Part 1: Add Service Function to services/template-service.js
+
+Add this new function to the template-service.js file (after existing functions):
+```javascript
+// ============================================
+// Phase 3b Feature 3: Bulk Apply Template
+// ============================================
+
+/**
+ * Bulk apply a template to multiple issues or action items
+ * @param {number} templateId - Template to apply
+ * @param {string} entityType - 'issue' or 'action_item'
+ * @param {number[]} entityIds - Array of entity IDs to apply template to
+ * @param {number} projectId - Project ID
+ * @param {number} userId - User applying the template
+ * @returns {object} { successful: [], failed: [] }
+ */
+async function bulkApplyTemplate(templateId, entityType, entityIds, projectId, userId) {
+  console.log(`🔄 Bulk applying template ${templateId} to ${entityIds.length} ${entityType}s`);
+  
+  const results = {
+    successful: [],
+    failed: [],
+    total: entityIds.length
+  };
+  
+  // Process each entity
+  for (let i = 0; i < entityIds.length; i++) {
+    const entityId = entityIds[i];
+    
+    try {
+      console.log(`  [${i + 1}/${entityIds.length}] Applying template to ${entityType} ${entityId}...`);
+      
+      // Determine which ID parameter to use based on entity type
+      const issueId = entityType === 'issue' ? entityId : null;
+      const actionItemId = entityType === 'action_item' ? entityId : null;
+      
+      // Apply template using existing function
+      const checklist = await applyTemplate(
+        templateId,
+        userId,
+        projectId,
+        {
+          title: `Checklist for ${entityType} ${entityId}`,
+          issue_id: issueId,
+          action_item_id: actionItemId
+        }
+      );
+      
+      if (checklist) {
+        results.successful.push({
+          entityType,
+          entityId,
+          checklistId: checklist.id,
+          checklistTitle: checklist.title
+        });
+        console.log(`    ✅ Created checklist ${checklist.id}`);
+      } else {
+        throw new Error('applyTemplate returned null');
+      }
+      
+    } catch (error) {
+      console.error(`    ❌ Failed for ${entityType} ${entityId}:`, error.message);
+      results.failed.push({
+        entityType,
+        entityId,
+        error: error.message
+      });
+    }
+  }
+  
+  console.log(`✅ Bulk apply complete: ${results.successful.length} succeeded, ${results.failed.length} failed`);
+  
+  return results;
+}
+
+// Add to module.exports at the bottom of the file:
+module.exports = {
+  // ... existing exports
+  bulkApplyTemplate  // ADD THIS
+};
+```
+
+Part 2: Add API Endpoint to server.js
+
+Add this endpoint with the other template endpoints:
+```javascript
+// ============================================
+// Phase 3b Feature 3: Bulk Apply Template
+// ============================================
+
+/**
+ * Bulk apply template to multiple issues or action items
+ * POST /api/templates/bulk-apply
+ * Body: {
+ *   templateId: number,
+ *   entityType: 'issue' or 'action_item',
+ *   entityIds: number[],
+ *   projectId: number
+ * }
+ */
+app.post('/api/templates/bulk-apply', async (req, res) => {
+  try {
+    const templateService = require('./services/template-service.js');
+    
+    const { templateId, entityType, entityIds, projectId } = req.body;
+    
+    // Validation
+    if (!templateId || !entityType || !entityIds || !Array.isArray(entityIds)) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: templateId, entityType, entityIds (array)' 
+      });
+    }
+    
+    if (!['issue', 'action_item'].includes(entityType)) {
+      return res.status(400).json({ 
+        error: 'Invalid entityType. Must be "issue" or "action_item"' 
+      });
+    }
+    
+    if (entityIds.length === 0) {
+      return res.status(400).json({ 
+        error: 'entityIds array cannot be empty' 
+      });
+    }
+    
+    if (entityIds.length > 100) {
+      return res.status(400).json({ 
+        error: 'Cannot bulk apply to more than 100 entities at once' 
+      });
+    }
+    
+    if (!projectId) {
+      return res.status(400).json({ 
+        error: 'projectId is required' 
+      });
+    }
+    
+    const userId = req.user?.id || 1; // TODO: Get from actual auth
+    
+    console.log(`📋 Bulk apply request: template ${templateId} to ${entityIds.length} ${entityType}s`);
+    
+    // Execute bulk apply
+    const results = await templateService.bulkApplyTemplate(
+      parseInt(templateId),
+      entityType,
+      entityIds.map(id => parseInt(id)),
+      parseInt(projectId),
+      userId
+    );
+    
+    // Return results with appropriate status code
+    const statusCode = results.failed.length === 0 ? 200 : 207; // 207 = Multi-Status
+    
+    res.status(statusCode).json({
+      success: true,
+      message: `Applied template to ${results.successful.length} of ${results.total} ${entityType}s`,
+      results: {
+        total: results.total,
+        successful: results.successful.length,
+        failed: results.failed.length,
+        details: results
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error in bulk apply:', error);
+    res.status(500).json({ 
+      error: 'Failed to bulk apply template',
+      details: error.message 
+    });
+  }
+});
+```
+
+KEY FEATURES:
+1. ✅ Validates all input parameters
+2. ✅ Limits to max 100 entities (prevent overload)
+3. ✅ Uses existing applyTemplate() function (reuses tested code)
+4. ✅ Processes entities sequentially (predictable, easier to debug)
+5. ✅ Tracks success/failure for each entity
+6. ✅ Returns 207 Multi-Status if partial failure
+7. ✅ Detailed logging with progress indicators
+8. ✅ Graceful error handling (one failure doesn't stop the rest)
+
+TESTING:
+
+Add temporary test endpoint to verify it works:
+```javascript
+// TEMPORARY TEST ENDPOINT
+app.get('/api/test/bulk-apply', async (req, res) => {
+  try {
+    const templateService = require('./services/template-service.js');
+    
+    // Test: Apply template 27 to issues 71, 72, 73
+    const results = await templateService.bulkApplyTemplate(
+      27,           // template ID
+      'issue',      // entity type
+      [71, 72, 73], // entity IDs
+      1,            // project ID
+      1             // user ID
+    );
+    
+    res.json({
+      testComplete: true,
+      results: results
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+VALIDATION TESTS:
+
+Test 1: Successful bulk apply
+```bash
+curl -X POST http://localhost:3000/api/templates/bulk-apply \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": 27,
+    "entityType": "issue",
+    "entityIds": [71, 72],
+    "projectId": 1
+  }'
+```
+
+Expected: 200 OK with successful count = 2
+
+Test 2: Invalid entity type
+```bash
+curl -X POST http://localhost:3000/api/templates/bulk-apply \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": 27,
+    "entityType": "invalid",
+    "entityIds": [1],
+    "projectId": 1
+  }'
+```
+
+Expected: 400 Bad Request with "Invalid entityType" error
+
+Test 3: Empty array
+```bash
+curl -X POST http://localhost:3000/api/templates/bulk-apply \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": 27,
+    "entityType": "issue",
+    "entityIds": [],
+    "projectId": 1
+  }'
+```
+
+Expected: 400 Bad Request with "entityIds array cannot be empty" error
+
+EXPECTED RESPONSE FORMAT:
+
+Success (all applied):
+```json
+{
+  "success": true,
+  "message": "Applied template to 3 of 3 issues",
+  "results": {
+    "total": 3,
+    "successful": 3,
+    "failed": 0,
+    "details": {
+      "successful": [
+        {
+          "entityType": "issue",
+          "entityId": 71,
+          "checklistId": 33,
+          "checklistTitle": "Checklist for issue 71"
+        },
+        ...
+      ],
+      "failed": []
+    }
+  }
+}
+```
+
+Partial success (some failed):
+```json
+{
+  "success": true,
+  "message": "Applied template to 2 of 3 issues",
+  "results": {
+    "total": 3,
+    "successful": 2,
+    "failed": 1,
+    "details": {
+      "successful": [...],
+      "failed": [
+        {
+          "entityType": "issue",
+          "entityId": 999,
+          "error": "Issue not found"
+        }
+      ]
+    }
+  }
+}
+```
+
+COMMIT MESSAGE:
+"feat(phase3b): add bulk apply template API
+
+- Add bulkApplyTemplate() service function
+- POST /api/templates/bulk-apply endpoint
+- Apply same template to multiple issues/action items
+- Sequential processing with detailed progress logging
+- Partial failure support (207 Multi-Status)
+- Max 100 entities per request limit
+- Detailed success/failure tracking
+
+Part of Phase 3b Feature 3: Bulk Apply Template"

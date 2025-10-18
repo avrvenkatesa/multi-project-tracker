@@ -852,6 +852,78 @@ async function autoCreateChecklistForActionItem(actionItemId, categoryId, projec
   }
 }
 
+// ============================================
+// Phase 3b Feature 3: Bulk Apply Template
+// ============================================
+
+/**
+ * Bulk apply a template to multiple issues or action items
+ * @param {number} templateId - Template to apply
+ * @param {string} entityType - 'issue' or 'action_item'
+ * @param {number[]} entityIds - Array of entity IDs to apply template to
+ * @param {number} projectId - Project ID
+ * @param {number} userId - User applying the template
+ * @returns {object} { successful: [], failed: [] }
+ */
+async function bulkApplyTemplate(templateId, entityType, entityIds, projectId, userId) {
+  console.log(`🔄 Bulk applying template ${templateId} to ${entityIds.length} ${entityType}s`);
+  
+  const results = {
+    successful: [],
+    failed: [],
+    total: entityIds.length
+  };
+  
+  // Process each entity
+  for (let i = 0; i < entityIds.length; i++) {
+    const entityId = entityIds[i];
+    
+    try {
+      console.log(`  [${i + 1}/${entityIds.length}] Applying template to ${entityType} ${entityId}...`);
+      
+      // Determine which ID parameter to use based on entity type
+      const issueId = entityType === 'issue' ? entityId : null;
+      const actionItemId = entityType === 'action_item' ? entityId : null;
+      
+      // Apply template using existing function
+      const checklist = await applyTemplate(
+        templateId,
+        userId,
+        projectId,
+        {
+          title: `Checklist for ${entityType} ${entityId}`,
+          issue_id: issueId,
+          action_item_id: actionItemId
+        }
+      );
+      
+      if (checklist) {
+        results.successful.push({
+          entityType,
+          entityId,
+          checklistId: checklist.id,
+          checklistTitle: checklist.title
+        });
+        console.log(`    ✅ Created checklist ${checklist.id}`);
+      } else {
+        throw new Error('applyTemplate returned null');
+      }
+      
+    } catch (error) {
+      console.error(`    ❌ Failed for ${entityType} ${entityId}:`, error.message);
+      results.failed.push({
+        entityType,
+        entityId,
+        error: error.message
+      });
+    }
+  }
+  
+  console.log(`✅ Bulk apply complete: ${results.successful.length} succeeded, ${results.failed.length} failed`);
+  
+  return results;
+}
+
 module.exports = {
   saveChecklistAsTemplate,
   getTemplateLibrary,
@@ -869,5 +941,7 @@ module.exports = {
   saveIssueTypeTemplateMapping,
   saveActionCategoryTemplateMapping,
   autoCreateChecklistForIssue,
-  autoCreateChecklistForActionItem
+  autoCreateChecklistForActionItem,
+  // Phase 3b Feature 3 exports
+  bulkApplyTemplate
 };
