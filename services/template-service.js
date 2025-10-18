@@ -784,7 +784,11 @@ async function autoCreateChecklistForIssue(issueId, issueType, projectId, userId
     console.log(`Auto-creating checklist from template ${templateId} for issue ${issueId}`);
 
     // Apply template to create checklist (reuse existing function)
-    const checklist = await applyTemplate(templateId, projectId, userId, issueId, null);
+    // applyTemplate signature: (templateId, userId, projectId, checklistData)
+    const checklist = await applyTemplate(templateId, userId, projectId, {
+      title: `Auto-generated checklist for issue ${issueId}`,
+      issue_id: issueId
+    });
     
     return checklist;
   } catch (error) {
@@ -831,7 +835,11 @@ async function autoCreateChecklistForActionItem(actionItemId, categoryId, projec
     console.log(`Auto-creating checklist from template ${templateId} for action item ${actionItemId}`);
 
     // Apply template to create checklist (reuse existing function)
-    const checklist = await applyTemplate(templateId, projectId, userId, null, actionItemId);
+    // applyTemplate signature: (templateId, userId, projectId, checklistData)
+    const checklist = await applyTemplate(templateId, userId, projectId, {
+      title: `Auto-generated checklist for action item ${actionItemId}`,
+      action_item_id: actionItemId
+    });
     
     return checklist;
   } catch (error) {
