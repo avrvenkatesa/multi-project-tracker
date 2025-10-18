@@ -3702,23 +3702,33 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
       }
     }
     
-    // NEW: Auto-create checklist if template mapping exists for this action item category
+    // Auto-create checklist if template mapping exists for this action item category
     let checklist = null;
-    if (categoryId && projectId) {
+    if (newItem.category_id && newItem.project_id) {
+      console.log(`🔍 Attempting auto-checklist for action item category: ${newItem.category_id}, project: ${newItem.project_id}`);
+      
       try {
         checklist = await autoCreateChecklistForActionItem(
           newItem.id,
-          parseInt(categoryId),
-          parseInt(projectId),
+          newItem.category_id,
+          newItem.project_id,
           req.user.id
         );
+        
         if (checklist) {
-          console.log(`Auto-created checklist ${checklist.id} for action item ${newItem.id}`);
+          console.log(`✅ Auto-created checklist ${checklist.id} for action item ${newItem.id} (category: ${newItem.category_id})`);
+        } else {
+          console.log(`ℹ️ No template mapping found for action item category ${newItem.category_id} in project ${newItem.project_id}`);
         }
       } catch (autoChecklistError) {
-        console.error('Failed to auto-create checklist for action item:', autoChecklistError);
+        console.error('❌ Failed to auto-create checklist for action item:', autoChecklistError);
         // Continue - don't fail action item creation if checklist fails
       }
+    } else {
+      console.log('⚠️ Skipping auto-checklist: missing category_id or project_id', {
+        category_id: newItem.category_id,
+        project_id: newItem.project_id
+      });
     }
     
     res.status(201).json({
