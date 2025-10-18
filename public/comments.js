@@ -607,6 +607,12 @@ async function openItemDetailModal(itemId, itemType) {
     
     modal.classList.remove('hidden');
     
+    // Reset to details tab
+    switchItemDetailTab('details');
+    
+    // Setup tabs
+    setupItemDetailTabs();
+    
     if (currentProject) {
       await loadProjectMembers(currentProject.id);
     }
@@ -860,6 +866,172 @@ async function uploadItemDetailAttachment() {
     AuthManager.showNotification(error.response?.data?.error || 'Failed to upload attachments', 'error');
   }
 }
+
+// ==================== TAB MANAGEMENT ====================
+
+function setupItemDetailTabs() {
+  const tabButtons = document.querySelectorAll('.item-detail-tab-btn');
+  
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const tabName = button.dataset.tab;
+      switchItemDetailTab(tabName);
+    });
+  });
+}
+
+function switchItemDetailTab(tabName) {
+  const tabButtons = document.querySelectorAll('.item-detail-tab-btn');
+  const tabPanels = document.querySelectorAll('.item-detail-tab-panel');
+  
+  // Update active button
+  tabButtons.forEach(btn => {
+    if (btn.dataset.tab === tabName) {
+      btn.classList.remove('border-transparent', 'text-gray-600');
+      btn.classList.add('border-blue-500', 'text-blue-600', 'font-medium');
+    } else {
+      btn.classList.remove('border-blue-500', 'text-blue-600', 'font-medium');
+      btn.classList.add('border-transparent', 'text-gray-600');
+    }
+  });
+  
+  // Show/hide panels
+  tabPanels.forEach(panel => {
+    if (panel.id === `${tabName}-tab`) {
+      panel.classList.remove('hidden');
+    } else {
+      panel.classList.add('hidden');
+    }
+  });
+  
+  // Load content for specific tabs
+  if (tabName === 'checklists' && currentItemId && currentItemType) {
+    loadLinkedChecklists();
+  }
+}
+
+// ==================== CHECKLISTS TAB ====================
+
+async function loadLinkedChecklists() {
+  const container = document.getElementById('linked-checklists-container');
+  if (!container) return;
+  
+  container.innerHTML = '<div class="text-center py-8 text-gray-500">Loading checklists...</div>';
+  
+  try {
+    const endpoint = currentItemType === 'issue' 
+      ? `/api/issues/${currentItemId}/checklists`
+      : `/api/action-items/${currentItemId}/checklists`;
+    
+    const response = await axios.get(endpoint, { withCredentials: true });
+    const data = response.data;
+    
+    // Update count badges
+    const countElement = document.getElementById('item-detail-checklist-count');
+    const countTabElement = document.getElementById('item-detail-checklist-count-tab');
+    if (countElement) countElement.textContent = `(${data.count})`;
+    if (countTabElement) countTabElement.textContent = `(${data.count})`;
+    
+    if (data.checklists.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-8 text-gray-500">
+          <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+          <p class="mb-2">No checklists linked to this ${currentItemType}</p>
+          <p class="text-sm">Checklists can be created from the Generate Checklist button on the card</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Render checklists
+    container.innerHTML = data.checklists.map(checklist => `
+      <div class="checklist-item p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+        <div class="flex justify-between items-start mb-3">
+          <div class="flex-1">
+            <h4 class="font-semibold text-gray-900">${escapeHtml(checklist.title)}</h4>
+            ${checklist.template_name ? `<p class="text-sm text-gray-600 mt-1">Template: ${escapeHtml(checklist.template_name)}</p>` : ''}
+            ${checklist.description ? `<p class="text-sm text-gray-500 mt-1">${escapeHtml(checklist.description)}</p>` : ''}
+          </div>
+          <span class="text-sm px-2.5 py-1 rounded-full font-medium ${
+            checklist.completion.percentage === 100 
+              ? 'bg-green-100 text-green-800' 
+              : checklist.completion.percentage > 0 
+                ? 'bg-blue-100 text-blue-800' 
+                : 'bg-gray-100 text-gray-600'
+          }">
+            ${checklist.completion.percentage}%
+          </span>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="mb-3">
+          <div class="flex justify-between text-xs text-gray-600 mb-1.5">
+            <span>${checklist.completion.completed} of ${checklist.completion.total} items completed</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2.5">
+            <div 
+              class="h-2.5 rounded-full transition-all ${
+                checklist.completion.percentage === 100 
+                  ? 'bg-green-500' 
+                  : 'bg-blue-500'
+              }" 
+              style="width: ${checklist.completion.percentage}%"
+            ></div>
+          </div>
+        </div>
+        
+        <!-- Actions -->
+        <div class="flex gap-2">
+          <a 
+            href="/checklist.html?id=${checklist.id}"
+            target="_blank"
+            class="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            View Checklist →
+          </a>
+          <button 
+            onclick="unlinkChecklist(${checklist.id})"
+            class="text-sm px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+          >
+            Unlink
+          </button>
+        </div>
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error loading checklists:', error);
+    container.innerHTML = '<div class="text-center py-8 text-red-500">Failed to load checklists</div>';
+  }
+}
+
+async function unlinkChecklist(checklistId) {
+  if (!confirm('Unlink this checklist? The checklist will not be deleted, just unlinked from this item.')) {
+    return;
+  }
+  
+  try {
+    await axios.delete(`/api/checklists/${checklistId}/link`, {
+      withCredentials: true
+    });
+    
+    AuthManager.showNotification('Checklist unlinked successfully', 'success');
+    
+    // Reload checklists
+    await loadLinkedChecklists();
+    
+  } catch (error) {
+    console.error('Error unlinking checklist:', error);
+    AuthManager.showNotification(error.response?.data?.error || 'Failed to unlink checklist', 'error');
+  }
+}
+
+// Make unlinkChecklist available globally
+window.unlinkChecklist = unlinkChecklist;
+
+// ==================== DOM READY ====================
 
 if (typeof window !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
