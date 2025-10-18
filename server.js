@@ -3088,6 +3088,7 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
   const { 
     title, 
     description, 
+    type,
     priority, 
     category, 
     assignee, 
@@ -3116,12 +3117,13 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
     
     const [newIssue] = await sql`
       INSERT INTO issues (
-        title, description, priority, category, assignee, 
+        title, description, type, priority, category, assignee, 
         due_date, project_id, status, progress, created_by,
         created_by_ai, ai_confidence, ai_analysis_id
       ) VALUES (
         ${title.trim()}, 
         ${description?.trim() || ''}, 
+        ${type || 'Task'},
         ${priority || 'medium'}, 
         ${category || 'General'}, 
         ${assignee || ''}, 
@@ -3187,23 +3189,33 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
       }
     }
     
-    // NEW: Auto-create checklist if template mapping exists for this issue category
+    // Auto-create checklist if template mapping exists for this issue type
     let checklist = null;
-    if (category && projectId) {
+    if (newIssue.type && newIssue.project_id) {
+      console.log(`🔍 Attempting auto-checklist for issue type: "${newIssue.type}", project: ${newIssue.project_id}`);
+      
       try {
         checklist = await autoCreateChecklistForIssue(
           newIssue.id,
-          category,
-          parseInt(projectId),
+          newIssue.type,
+          newIssue.project_id,
           req.user.id
         );
+        
         if (checklist) {
-          console.log(`Auto-created checklist ${checklist.id} for issue ${newIssue.id}`);
+          console.log(`✅ Auto-created checklist ${checklist.id} for issue ${newIssue.id} (type: ${newIssue.type})`);
+        } else {
+          console.log(`ℹ️ No template mapping found for issue type: "${newIssue.type}" in project ${newIssue.project_id}`);
         }
       } catch (autoChecklistError) {
-        console.error('Failed to auto-create checklist for issue:', autoChecklistError);
+        console.error('❌ Failed to auto-create checklist for issue:', autoChecklistError);
         // Continue - don't fail issue creation if checklist fails
       }
+    } else {
+      console.log('⚠️ Skipping auto-checklist: missing type or project_id', {
+        type: newIssue.type,
+        project_id: newIssue.project_id
+      });
     }
     
     res.status(201).json({

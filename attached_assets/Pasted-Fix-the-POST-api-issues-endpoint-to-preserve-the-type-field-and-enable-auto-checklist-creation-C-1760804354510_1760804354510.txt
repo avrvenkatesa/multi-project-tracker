@@ -1,0 +1,165 @@
+Fix the POST /api/issues endpoint to preserve the 'type' field and enable auto-checklist creation
+
+CONTEXT:
+- Phase 3b Feature 1 is almost complete
+- Template mappings exist (Bug → Template 1)
+- Issue creation works but auto-checklist is not being created
+- Problem: The 'type' field in the request ("Bug") is being overwritten with "issue"
+- The autoCreateChecklistForIssue function expects the actual issue type (Bug, Feature, etc.)
+
+PROBLEM IDENTIFIED:
+When creating an issue with type: "Bug", the database stores type: "issue" instead, so the auto-create logic can't find the mapping.
+
+TASK:
+Modify the POST /api/issues endpoint to:
+1. Preserve the 'type' field from the request body
+2. Ensure auto-create logic is called with correct parameters
+3. Add debug logging to track the auto-create process
+
+IMPLEMENTATION:
+
+File: server.js
+
+FIND the POST /api/issues endpoint (search for: app.post('/api/issues')
+
+EXPECTED CURRENT CODE (or similar):
+```javascript
+app.post('/api/issues', async (req, res) => {
+  try {
+    // Current code probably sets type to 'issue' as default
+    const issue = {
+      ...req.body,
+      type: 'issue',  // THIS IS THE PROBLEM
+      created_at: new Date().toISOString(),
+      // ... other fields
+    };
+    
+    const result = await sql`INSERT INTO issues ${sql(issue)} RETURNING *`;
+    const newIssue = result.rows[0];
+    
+    res.status(201).json(newIssue);
+  } catch (error) {
+    // error handling
+  }
+});
+```
+
+REPLACE WITH (or modify to match this pattern):
+```javascript
+app.post('/api/issues', async (req, res) => {
+  try {
+    const templateService = require('./server/template-service.js');
+    
+    // Preserve the type field from request (Bug, Feature, Task, etc.)
+    // Don't overwrite it with 'issue'
+    const issue = {
+      ...req.body,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: req.user?.id || 1,
+      // Don't set a default type - use what the user sends
+    };
+    
+    // Insert issue
+    const result = await sql`INSERT INTO issues ${sql(issue)} RETURNING *`;
+    const newIssue = result.rows[0];
+    
+    console.log('Issue created:', {
+      id: newIssue.id,
+      type: newIssue.type,
+      project_id: newIssue.project_id
+    });
+    
+    // Auto-create checklist if template mapping exists
+    let checklist = null;
+    if (newIssue.type && newIssue.project_id) {
+      console.log(`Attempting auto-checklist for issue type: "${newIssue.type}"`);
+      
+      try {
+        checklist = await templateService.autoCreateChecklistForIssue(
+          newIssue.id,
+          newIssue.type,
+          newIssue.project_id,
+          req.user?.id || 1
+        );
+        
+        if (checklist) {
+          console.log(`✅ Auto-created checklist ${checklist.id} for issue ${newIssue.id}`);
+        } else {
+          console.log(`ℹ️ No template mapping found for issue type: "${newIssue.type}"`);
+        }
+      } catch (autoChecklistError) {
+        console.error('Failed to auto-create checklist for issue:', autoChecklistError);
+        // Don't fail the issue creation if checklist fails
+      }
+    } else {
+      console.log('Skipping auto-checklist: missing type or project_id');
+    }
+    
+    // Return response with checklist info
+    res.status(201).json({ 
+      ...newIssue,
+      auto_checklist_created: !!checklist,
+      checklist_id: checklist?.id || null,
+      checklist: checklist,
+      message: checklist ? 'Issue created with checklist' : 'Issue created'
+    });
+    
+  } catch (error) {
+    console.error('Error creating issue:', error);
+    res.status(500).json({ error: 'Failed to create issue' });
+  }
+});
+```
+
+KEY CHANGES:
+1. Remove any line that sets `type: 'issue'` as default
+2. Let the type field come from req.body (preserves Bug, Feature, Task, etc.)
+3. Add console.log statements to debug auto-checklist process
+4. Import and call templateService.autoCreateChecklistForIssue
+5. Return enhanced response with checklist info
+
+IMPORTANT NOTES:
+- If the current code uses a different pattern (like Drizzle ORM), adapt accordingly
+- The key is: don't overwrite the 'type' field with a default value
+- Make sure req.body.type is preserved in the database insert
+
+TESTING:
+After making changes, restart server and test:
+```javascript
+fetch('/api/issues', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  credentials: 'include',
+  body: JSON.stringify({
+    title: 'Test Bug with Auto-Checklist',
+    description: 'Should auto-create checklist',
+    type: 'Bug',  // This should be preserved!
+    projectId: 1,
+    priority: 'high',
+    status: 'To Do'
+  })
+})
+.then(r => r.json())
+.then(data => {
+  console.log('Response:', data);
+  console.log('Type in DB:', data.type);  // Should be "Bug"
+  console.log('Checklist created?', data.auto_checklist_created);
+  console.log('Checklist ID:', data.checklist_id);
+})
+```
+
+EXPECTED RESULTS:
+1. Console log shows: "Attempting auto-checklist for issue type: Bug"
+2. Console log shows: "✅ Auto-created checklist..."
+3. Response has: type: "Bug" (not "issue")
+4. Response has: auto_checklist_created: true
+5. Response has: checklist_id: [number]
+6. Response has: checklist: { id, title, sections, ... }
+
+VALIDATION:
+✅ Issue type field preserved from request
+✅ Console shows auto-checklist attempt
+✅ Console shows success or "no mapping" message
+✅ Response includes checklist data when successful
+✅ Server doesn't crash if checklist creation fails
