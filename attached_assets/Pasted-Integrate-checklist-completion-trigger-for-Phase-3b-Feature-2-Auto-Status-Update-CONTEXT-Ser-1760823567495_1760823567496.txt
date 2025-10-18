@@ -1,0 +1,173 @@
+Integrate checklist completion trigger for Phase 3b Feature 2: Auto Status Update
+
+CONTEXT:
+- Services layer complete (completion-service.js working)
+- Need to trigger checkAndApplyCompletionAction() when checklist items change
+- Currently: Checklist items can be updated via PUT endpoint
+- Goal: Automatically check completion and update issue/action status after any item update
+
+TASK:
+Modify the checklist item update endpoint to trigger completion checking after each item status change.
+
+IMPLEMENTATION:
+
+File: server.js
+
+FIND the endpoint that updates checklist item status/completion.
+Look for routes like:
+- PUT /api/checklist-items/:id
+- PUT /api/checklists/:checklistId/items/:itemId
+- PATCH /api/checklist-responses/:id
+- Or similar checklist item update endpoints
+
+EXAMPLE - If endpoint looks like this:
+```javascript
+app.put('/api/checklist-responses/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_completed, response_text } = req.body;
+    
+    // Update the checklist item
+    const result = await pool.query(
+      'UPDATE checklist_responses SET is_completed = $1, response_text = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+      [is_completed, response_text, id]
+    );
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update' });
+  }
+});
+```
+
+MODIFY TO:
+```javascript
+app.put('/api/checklist-responses/:id', async (req, res) => {
+  try {
+    const completionService = require('./services/completion-service.js');
+    
+    const { id } = req.params;
+    const { is_completed, response_text } = req.body;
+    
+    // First, get the checklist_id for this item (before update)
+    const itemQuery = await pool.query(
+      `SELECT cr.*, cs.checklist_id 
+       FROM checklist_responses cr
+       JOIN checklist_sections cs ON cr.section_id = cs.id
+       WHERE cr.id = $1`,
+      [id]
+    );
+    
+    if (itemQuery.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist item not found' });
+    }
+    
+    const checklistId = itemQuery.rows[0].checklist_id;
+    const wasCompleted = itemQuery.rows[0].is_completed;
+    
+    // Update the checklist item
+    const result = await pool.query(
+      `UPDATE checklist_responses 
+       SET is_completed = $1, response_text = $2, updated_at = NOW() 
+       WHERE id = $3 
+       RETURNING *`,
+      [is_completed, response_text, id]
+    );
+    
+    const updatedItem = result.rows[0];
+    
+    // Check if completion status actually changed
+    const completionChanged = wasCompleted !== is_completed;
+    
+    if (completionChanged) {
+      console.log(`📝 Checklist item ${id} completion changed: ${wasCompleted} → ${is_completed}`);
+      
+      // Trigger completion check (don't await - let it run async)
+      // This checks if checklist reached threshold and updates status
+      completionService.checkAndApplyCompletionAction(checklistId)
+        .then(result => {
+          if (result) {
+            console.log(`✅ Auto-updated ${result.entityType} ${result.entityId}: ${result.oldStatus} → ${result.newStatus}`);
+          }
+        })
+        .catch(error => {
+          console.error('Error in completion action:', error);
+          // Don't fail the request if completion check fails
+        });
+    }
+    
+    res.json(updatedItem);
+  } catch (error) {
+    console.error('Error updating checklist item:', error);
+    res.status(500).json({ error: 'Failed to update' });
+  }
+});
+```
+
+KEY CHANGES:
+1. Import completion-service at top of handler
+2. Get checklist_id BEFORE updating (need it to check completion)
+3. Store old completion status to detect changes
+4. After successful update, trigger checkAndApplyCompletionAction()
+5. Run completion check asynchronously (don't block response)
+6. Add logging for status changes
+
+IMPORTANT NOTES:
+- The completion check runs AFTER the item update succeeds
+- We don't await it - response returns immediately
+- Errors in completion check don't fail the item update
+- Only triggers when is_completed actually changes (optimization)
+
+ALTERNATIVE APPROACH (if using different endpoint pattern):
+
+If you have a batch update endpoint or different structure, apply the same pattern:
+1. Get checklist_id for the items being updated
+2. Complete the update successfully
+3. Trigger checkAndApplyCompletionAction(checklistId) asynchronously
+4. Log the results
+
+TESTING STRATEGY:
+
+After implementing, test with these scenarios:
+
+Test 1: Complete all items in a checklist linked to an issue
+```javascript
+// Assuming checklist 30 is linked to issue 75
+// Complete each item one by one and watch console logs
+```
+
+Test 2: Complete all items in a checklist linked to action item
+```javascript
+// Assuming checklist 32 is linked to action item 123
+```
+
+Expected console output:
+```
+📝 Checklist item 123 completion changed: false → true
+🔍 Checking completion actions for checklist 30
+Checklist linked to issue 75
+Current issue status: In Progress
+Checklist completion: 100% (27/27)
+Found completion action: In Progress → Done (threshold: 100%)
+✅ Updated issue 75 status: In Progress → Done
+✅ Auto-updated issue 75: In Progress → Done
+```
+
+VALIDATION:
+✅ Checklist item updates work normally
+✅ Completion check triggers automatically
+✅ Console shows completion checking logs
+✅ Status updates when threshold reached
+✅ No errors if completion check fails
+✅ Response time not significantly impacted
+
+COMMIT MESSAGE:
+"feat(phase3b): integrate auto-status update on checklist completion
+
+- Trigger checkAndApplyCompletionAction() on item updates
+- Run completion check asynchronously (non-blocking)
+- Only trigger when is_completed status changes
+- Add detailed logging for status changes
+- Graceful error handling (don't fail item updates)
+
+Part of Phase 3b Feature 2: Checklist Completion → Status Update"

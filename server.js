@@ -7696,6 +7696,22 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
         [checklistId]
       );
       
+      // Phase 3b Feature 2: Check and apply completion actions
+      // Trigger auto-status update for linked issues/action items
+      const completionService = require('./services/completion-service');
+      
+      // Run completion check asynchronously (don't block response)
+      completionService.checkAndApplyCompletionAction(checklistId)
+        .then(result => {
+          if (result) {
+            console.log(`✅ Auto-updated ${result.entityType} ${result.entityId}: ${result.oldStatus} → ${result.newStatus}`);
+          }
+        })
+        .catch(error => {
+          console.error('❌ Error in completion action:', error);
+          // Don't fail the request if completion check fails
+        });
+      
       res.json({ 
         success: true,
         completed_items: parseInt(completedCount.rows[0].count),

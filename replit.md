@@ -15,7 +15,7 @@ The frontend is a single-page application (SPA) built with vanilla JavaScript an
 The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations, atomic transactions for tag management, project-level authorization, comprehensive checklist management, and logging of status changes to a `status_history` table.
 
 **Service Layer:**
-- **completion-service.js**: Manages checklist completion actions, including rule management (get, save, delete), completion percentage calculation, and automatic status updates for issues/action items when checklists reach completion thresholds. Supports project-specific and global rules with smart priority-based matching.
+- **completion-service.js**: Manages checklist completion actions, including rule management (get, save, delete), completion percentage calculation, and automatic status updates for issues/action items when checklists reach completion thresholds. Supports project-specific and global rules with smart priority-based matching. Integrated into `POST /api/checklists/:id/responses` to automatically trigger status updates.
 - **template-service.js**: Handles checklist template operations, auto-create checklist mappings, and template library features.
 - **ai-service.js**: Provides AI-powered meeting analysis and checklist generation capabilities.
 
