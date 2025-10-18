@@ -8397,6 +8397,12 @@ app.get('/api/templates', authenticateToken, async (req, res) => {
 app.get('/api/templates/:id', authenticateToken, async (req, res) => {
   try {
     const templateId = parseInt(req.params.id);
+    
+    // Validate templateId is a valid number
+    if (isNaN(templateId) || templateId <= 0) {
+      return res.status(400).json({ error: 'Invalid template ID' });
+    }
+    
     const template = await getTemplateDetails(templateId, req.user.id);
     res.json(template);
   } catch (error) {
