@@ -8724,7 +8724,7 @@ app.delete('/api/templates/action-category-mappings/:id', authenticateToken, asy
 });
 
 // ============================================
-// TEMPORARY TEST ENDPOINT - Remove after Phase 3b testing
+// TEMPORARY TEST ENDPOINTS - Remove after Phase 3b testing
 // ============================================
 app.get('/api/test/categories', async (req, res) => {
   try {
@@ -8733,6 +8733,40 @@ app.get('/api/test/categories', async (req, res) => {
       success: true,
       count: categories.length,
       categories: categories
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Test issue type mappings
+app.get('/api/test/issue-mappings', async (req, res) => {
+  try {
+    const mappings = await getIssueTypeTemplateMappings(null);
+    res.json({
+      success: true,
+      count: mappings.length,
+      mappings: mappings
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Test action category mappings
+app.get('/api/test/action-mappings', async (req, res) => {
+  try {
+    const mappings = await getActionCategoryTemplateMappings(null);
+    res.json({
+      success: true,
+      count: mappings.length,
+      mappings: mappings
     });
   } catch (error) {
     res.status(500).json({ 
