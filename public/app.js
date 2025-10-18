@@ -1168,8 +1168,8 @@ async function renderKanbanBoard() {
                     // Don't open modal if we just finished dragging
                     if (isDragging) return;
                     
-                    // Only open modal if clicking on the card itself, not buttons
-                    if (!e.target.closest('button')) {
+                    // Only open modal if clicking on the card itself, not buttons or checkboxes
+                    if (!e.target.closest('button') && !e.target.classList.contains('item-checkbox')) {
                         const itemId = parseInt(this.getAttribute('data-item-id'));
                         const itemType = this.getAttribute('data-item-type');
                         openItemDetailModal(itemId, itemType);
