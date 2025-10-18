@@ -16,6 +16,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Phase 3b Feature 1: Auto-Create Checklists API Endpoints** (October 18, 2025):
+  - **New API Endpoints**: Added 8 new RESTful endpoints for auto-create checklist management
+  - **Category Endpoint**: GET /api/action-item-categories returns all 10 action item categories (public)
+  - **Mapping Queries**: GET /api/templates/issue-type-mappings and GET /api/templates/action-category-mappings (requires auth)
+  - **Mapping Management**: POST endpoints for creating/updating issue type and action category template mappings (requires auth)
+  - **Soft Delete**: DELETE endpoints for deactivating mappings (sets is_active=false, requires auth)
+  - **Auto-Creation Integration**: Modified POST /api/issues and POST /api/action-items to automatically create checklists based on template mappings
+  - **Response Enhancement**: Issue and action item creation responses now include auto_checklist_created flag and checklist_id
+  - **Graceful Degradation**: Auto-checklist creation failures don't block issue/action item creation (non-blocking design)
+  - **Files Modified**: server.js
+
 - **Phase 3b Feature 1: Auto-Create Checklists Service Functions** (October 18, 2025):
   - **Service Layer Complete**: Added 7 new functions to services/template-service.js for managing auto-create checklist functionality
   - **Category Management**: getActionItemCategories() fetches all 10 active action item categories

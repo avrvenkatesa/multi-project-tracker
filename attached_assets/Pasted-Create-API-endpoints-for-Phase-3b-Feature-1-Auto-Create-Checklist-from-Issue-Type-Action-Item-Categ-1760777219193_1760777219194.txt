@@ -1,0 +1,284 @@
+Create API endpoints for Phase 3b Feature 1: Auto-Create Checklist from Issue Type/Action Item Category
+
+CONTEXT:
+- Migration (Prompt 1) and service functions (Prompt 2) are complete
+- Working on branch: feature/checklist-system-phase3
+- File to modify: server.js
+- Using template-service.js functions
+
+TASK:
+Add 4 new API endpoints and modify 2 existing endpoints to support auto-checklist creation
+
+IMPLEMENTATION:
+
+Add these endpoints to server.js (after existing template endpoints):
+```javascript
+// ============================================
+// Phase 3b Feature 1: Auto-Create Checklist APIs
+// ============================================
+
+// Get all action item categories
+app.get('/api/action-item-categories', async (req, res) => {
+  try {
+    const categories = await templateService.getActionItemCategories();
+    res.json(categories);
+  } catch (error) {
+    console.error('Error fetching action item categories:', error);
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+// Get issue type template mappings
+app.get('/api/templates/issue-type-mappings', async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    const mappings = await templateService.getIssueTypeTemplateMappings(
+      projectId ? parseInt(projectId) : null
+    );
+    res.json(mappings);
+  } catch (error) {
+    console.error('Error fetching issue type mappings:', error);
+    res.status(500).json({ error: 'Failed to fetch mappings' });
+  }
+});
+
+// Get action category template mappings
+app.get('/api/templates/action-category-mappings', async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    const mappings = await templateService.getActionCategoryTemplateMappings(
+      projectId ? parseInt(projectId) : null
+    );
+    res.json(mappings);
+  } catch (error) {
+    console.error('Error fetching action category mappings:', error);
+    res.status(500).json({ error: 'Failed to fetch mappings' });
+  }
+});
+
+// Save issue type template mapping
+app.post('/api/templates/issue-type-mappings', async (req, res) => {
+  try {
+    const { issueType, templateId, projectId } = req.body;
+    
+    // Validation
+    if (!issueType || !templateId) {
+      return res.status(400).json({ error: 'issueType and templateId are required' });
+    }
+    
+    const userId = req.user?.id || 1; // TODO: Replace with actual auth
+    
+    const mapping = await templateService.saveIssueTypeTemplateMapping(
+      issueType,
+      parseInt(templateId),
+      projectId ? parseInt(projectId) : null,
+      userId
+    );
+    
+    res.json(mapping);
+  } catch (error) {
+    console.error('Error saving issue type mapping:', error);
+    res.status(500).json({ error: 'Failed to save mapping' });
+  }
+});
+
+// Save action category template mapping
+app.post('/api/templates/action-category-mappings', async (req, res) => {
+  try {
+    const { categoryId, templateId, projectId } = req.body;
+    
+    // Validation
+    if (!categoryId || !templateId) {
+      return res.status(400).json({ error: 'categoryId and templateId are required' });
+    }
+    
+    const userId = req.user?.id || 1; // TODO: Replace with actual auth
+    
+    const mapping = await templateService.saveActionCategoryTemplateMapping(
+      parseInt(categoryId),
+      parseInt(templateId),
+      projectId ? parseInt(projectId) : null,
+      userId
+    );
+    
+    res.json(mapping);
+  } catch (error) {
+    console.error('Error saving action category mapping:', error);
+    res.status(500).json({ error: 'Failed to save mapping' });
+  }
+});
+
+// Delete issue type template mapping
+app.delete('/api/templates/issue-type-mappings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await sql`
+      UPDATE issue_type_templates 
+      SET is_active = FALSE, updated_at = NOW()
+      WHERE id = ${id}
+    `;
+    
+    res.json({ success: true, message: 'Mapping deactivated' });
+  } catch (error) {
+    console.error('Error deleting issue type mapping:', error);
+    res.status(500).json({ error: 'Failed to delete mapping' });
+  }
+});
+
+// Delete action category template mapping
+app.delete('/api/templates/action-category-mappings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await sql`
+      UPDATE action_item_category_templates 
+      SET is_active = FALSE, updated_at = NOW()
+      WHERE id = ${id}
+    `;
+    
+    res.json({ success: true, message: 'Mapping deactivated' });
+  } catch (error) {
+    console.error('Error deleting action category mapping:', error);
+    res.status(500).json({ error: 'Failed to delete mapping' });
+  }
+});
+```
+
+Now modify existing issue and action item creation endpoints:
+
+FIND the existing POST /api/issues endpoint and MODIFY it:
+```javascript
+// Modify existing POST /api/issues endpoint
+app.post('/api/issues', async (req, res) => {
+  try {
+    // Existing issue creation logic...
+    const issue = {
+      ...req.body,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    const result = await sql`
+      INSERT INTO issues ${sql(issue)}
+      RETURNING *
+    `;
+    
+    const newIssue = result.rows[0];
+    
+    // NEW: Auto-create checklist if template mapping exists
+    let checklist = null;
+    if (newIssue.type && newIssue.project_id) {
+      try {
+        checklist = await templateService.autoCreateChecklistForIssue(
+          newIssue.id,
+          newIssue.type,
+          newIssue.project_id,
+          req.user?.id || 1
+        );
+      } catch (autoChecklistError) {
+        console.error('Failed to auto-create checklist for issue:', autoChecklistError);
+        // Continue - don't fail issue creation if checklist fails
+      }
+    }
+    
+    res.status(201).json({ 
+      issue: newIssue, 
+      checklist: checklist,
+      message: checklist ? 'Issue created with checklist' : 'Issue created'
+    });
+  } catch (error) {
+    console.error('Error creating issue:', error);
+    res.status(500).json({ error: 'Failed to create issue' });
+  }
+});
+```
+
+FIND the existing POST /api/action-items endpoint and MODIFY it:
+```javascript
+// Modify existing POST /api/action-items endpoint
+app.post('/api/action-items', async (req, res) => {
+  try {
+    // Existing action item creation logic...
+    const actionItem = {
+      ...req.body,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    const result = await sql`
+      INSERT INTO action_items ${sql(actionItem)}
+      RETURNING *
+    `;
+    
+    const newActionItem = result.rows[0];
+    
+    // NEW: Auto-create checklist if template mapping exists
+    let checklist = null;
+    if (newActionItem.category_id && newActionItem.project_id) {
+      try {
+        checklist = await templateService.autoCreateChecklistForActionItem(
+          newActionItem.id,
+          newActionItem.category_id,
+          newActionItem.project_id,
+          req.user?.id || 1
+        );
+      } catch (autoChecklistError) {
+        console.error('Failed to auto-create checklist for action item:', autoChecklistError);
+        // Continue - don't fail action item creation if checklist fails
+      }
+    }
+    
+    res.status(201).json({ 
+      actionItem: newActionItem, 
+      checklist: checklist,
+      message: checklist ? 'Action item created with checklist' : 'Action item created'
+    });
+  } catch (error) {
+    console.error('Error creating action item:', error);
+    res.status(500).json({ error: 'Failed to create action item' });
+  }
+});
+```
+
+TESTING:
+Test endpoints with curl or Postman:
+```bash
+# Test 1: Get action item categories
+curl http://localhost:3000/api/action-item-categories
+
+# Test 2: Get issue type mappings
+curl "http://localhost:3000/api/templates/issue-type-mappings?projectId=1"
+
+# Test 3: Create issue type mapping
+curl -X POST http://localhost:3000/api/templates/issue-type-mappings \
+  -H "Content-Type: application/json" \
+  -d '{"issueType":"Bug","templateId":1,"projectId":1}'
+
+# Test 4: Create action category mapping
+curl -X POST http://localhost:3000/api/templates/action-category-mappings \
+  -H "Content-Type: application/json" \
+  -d '{"categoryId":2,"templateId":1,"projectId":1}'
+```
+
+VALIDATION:
+1. All 6 new endpoints respond correctly
+2. GET endpoints return proper JSON
+3. POST endpoints validate input
+4. DELETE endpoints soft-delete (set is_active=false)
+5. Modified issue/action item creation endpoints auto-create checklists
+6. Auto-creation doesn't break existing functionality
+
+COMMIT MESSAGE:
+"feat(phase3b): add auto-create checklist API endpoints
+
+- GET /api/action-item-categories
+- GET /api/templates/issue-type-mappings
+- GET /api/templates/action-category-mappings
+- POST /api/templates/issue-type-mappings
+- POST /api/templates/action-category-mappings
+- DELETE endpoints for both mapping types
+- Modified POST /api/issues to auto-create checklists
+- Modified POST /api/action-items to auto-create checklists
+
+Part of Phase 3b Feature 1"

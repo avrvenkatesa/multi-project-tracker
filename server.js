@@ -26,7 +26,14 @@ const {
   rateTemplate, 
   toggleFeatured, 
   applyTemplate,
-  getTemplateCategories
+  getTemplateCategories,
+  getActionItemCategories,
+  getIssueTypeTemplateMappings,
+  getActionCategoryTemplateMappings,
+  saveIssueTypeTemplateMapping,
+  saveActionCategoryTemplateMapping,
+  autoCreateChecklistForIssue,
+  autoCreateChecklistForActionItem
 } = require('./services/template-service');
 const { analyzeDocumentForWorkstreams } = require('./services/document-analyzer');
 const { extractTextFromFile } = require('./services/file-processor');
@@ -3180,7 +3187,30 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
       }
     }
     
-    res.status(201).json(issueWithCreator);
+    // NEW: Auto-create checklist if template mapping exists for this issue category
+    let checklist = null;
+    if (category && projectId) {
+      try {
+        checklist = await autoCreateChecklistForIssue(
+          newIssue.id,
+          category,
+          parseInt(projectId),
+          req.user.id
+        );
+        if (checklist) {
+          console.log(`Auto-created checklist ${checklist.id} for issue ${newIssue.id}`);
+        }
+      } catch (autoChecklistError) {
+        console.error('Failed to auto-create checklist for issue:', autoChecklistError);
+        // Continue - don't fail issue creation if checklist fails
+      }
+    }
+    
+    res.status(201).json({
+      ...issueWithCreator,
+      auto_checklist_created: !!checklist,
+      checklist_id: checklist?.id || null
+    });
   } catch (error) {
     console.error('Error creating issue:', error);
     res.status(500).json({ error: 'Failed to create issue' });
@@ -3572,6 +3602,7 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
       priority, 
       assignee, 
       dueDate,
+      categoryId,
       // AI-related fields
       createdByAI = false,
       aiConfidence = null,
@@ -3585,7 +3616,7 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
     const [newItem] = await sql`
       INSERT INTO action_items (
         title, description, project_id, priority, assignee, 
-        due_date, status, created_by,
+        due_date, status, created_by, category_id,
         created_by_ai, ai_confidence, ai_analysis_id
       ) VALUES (
         ${title.trim()}, 
@@ -3596,6 +3627,7 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
         ${dueDate || null}, 
         'To Do',
         ${req.user.id.toString()},
+        ${categoryId ? parseInt(categoryId) : null},
         ${createdByAI},
         ${aiConfidence},
         ${aiAnalysisId}
@@ -3658,7 +3690,30 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
       }
     }
     
-    res.status(201).json(actionItemWithCreator);
+    // NEW: Auto-create checklist if template mapping exists for this action item category
+    let checklist = null;
+    if (categoryId && projectId) {
+      try {
+        checklist = await autoCreateChecklistForActionItem(
+          newItem.id,
+          parseInt(categoryId),
+          parseInt(projectId),
+          req.user.id
+        );
+        if (checklist) {
+          console.log(`Auto-created checklist ${checklist.id} for action item ${newItem.id}`);
+        }
+      } catch (autoChecklistError) {
+        console.error('Failed to auto-create checklist for action item:', autoChecklistError);
+        // Continue - don't fail action item creation if checklist fails
+      }
+    }
+    
+    res.status(201).json({
+      ...actionItemWithCreator,
+      auto_checklist_created: !!checklist,
+      checklist_id: checklist?.id || null
+    });
   } catch (error) {
     console.error('Error creating action item:', error);
     res.status(500).json({ error: 'Failed to create action item' });
@@ -8532,6 +8587,139 @@ app.post('/api/templates/:id/promote', authenticateToken, async (req, res) => {
       error: 'Failed to promote template',
       message: error.message 
     });
+  }
+});
+
+// ============================================
+// Phase 3b Feature 1: Auto-Create Checklist APIs
+// ============================================
+
+// GET /api/action-item-categories - Get all action item categories
+app.get('/api/action-item-categories', async (req, res) => {
+  try {
+    const categories = await getActionItemCategories();
+    res.json(categories);
+  } catch (error) {
+    console.error('Error fetching action item categories:', error);
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+// GET /api/templates/issue-type-mappings - Get issue type template mappings
+app.get('/api/templates/issue-type-mappings', async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    const mappings = await getIssueTypeTemplateMappings(
+      projectId ? parseInt(projectId) : null
+    );
+    res.json(mappings);
+  } catch (error) {
+    console.error('Error fetching issue type mappings:', error);
+    res.status(500).json({ error: 'Failed to fetch mappings' });
+  }
+});
+
+// GET /api/templates/action-category-mappings - Get action category template mappings
+app.get('/api/templates/action-category-mappings', async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    const mappings = await getActionCategoryTemplateMappings(
+      projectId ? parseInt(projectId) : null
+    );
+    res.json(mappings);
+  } catch (error) {
+    console.error('Error fetching action category mappings:', error);
+    res.status(500).json({ error: 'Failed to fetch mappings' });
+  }
+});
+
+// POST /api/templates/issue-type-mappings - Save issue type template mapping
+app.post('/api/templates/issue-type-mappings', authenticateToken, async (req, res) => {
+  try {
+    const { issueType, templateId, projectId } = req.body;
+    
+    // Validation
+    if (!issueType || !templateId) {
+      return res.status(400).json({ error: 'issueType and templateId are required' });
+    }
+    
+    const userId = req.user.id;
+    
+    const mapping = await saveIssueTypeTemplateMapping(
+      issueType,
+      parseInt(templateId),
+      projectId ? parseInt(projectId) : null,
+      userId
+    );
+    
+    res.json(mapping);
+  } catch (error) {
+    console.error('Error saving issue type mapping:', error);
+    res.status(500).json({ error: 'Failed to save mapping' });
+  }
+});
+
+// POST /api/templates/action-category-mappings - Save action category template mapping
+app.post('/api/templates/action-category-mappings', authenticateToken, async (req, res) => {
+  try {
+    const { categoryId, templateId, projectId } = req.body;
+    
+    // Validation
+    if (!categoryId || !templateId) {
+      return res.status(400).json({ error: 'categoryId and templateId are required' });
+    }
+    
+    const userId = req.user.id;
+    
+    const mapping = await saveActionCategoryTemplateMapping(
+      parseInt(categoryId),
+      parseInt(templateId),
+      projectId ? parseInt(projectId) : null,
+      userId
+    );
+    
+    res.json(mapping);
+  } catch (error) {
+    console.error('Error saving action category mapping:', error);
+    res.status(500).json({ error: 'Failed to save mapping' });
+  }
+});
+
+// DELETE /api/templates/issue-type-mappings/:id - Delete (deactivate) issue type mapping
+app.delete('/api/templates/issue-type-mappings/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await pool.query(
+      `UPDATE issue_type_templates 
+       SET is_active = FALSE, updated_at = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+    
+    res.json({ success: true, message: 'Mapping deactivated' });
+  } catch (error) {
+    console.error('Error deleting issue type mapping:', error);
+    res.status(500).json({ error: 'Failed to delete mapping' });
+  }
+});
+
+// DELETE /api/templates/action-category-mappings/:id - Delete (deactivate) action category mapping
+app.delete('/api/templates/action-category-mappings/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await pool.query(
+      `UPDATE action_item_category_templates 
+       SET is_active = FALSE, updated_at = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+    
+    res.json({ success: true, message: 'Mapping deactivated' });
+  } catch (error) {
+    console.error('Error deleting action category mapping:', error);
+    res.status(500).json({ error: 'Failed to delete mapping' });
   }
 });
 
