@@ -19,6 +19,12 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 - **template-service.js**: Handles checklist template operations, auto-create checklist mappings, template library features, and bulk template application. Includes `bulkApplyTemplate()` for applying templates to multiple issues or action items simultaneously (max 100 entities per request) with sequential processing, partial failure support, and detailed success/failure tracking.
 - **ai-service.js**: Provides AI-powered meeting analysis and checklist generation capabilities.
 
+**API Endpoints - Phase 3b Features:**
+- **Feature 1**: Auto-create checklists via issue type and action item category mappings
+- **Feature 2**: Auto-update issue/action item status when checklists reach completion thresholds
+- **Feature 3**: `POST /api/templates/bulk-apply` - Bulk apply templates to multiple issues or action items (max 100 entities)
+- **Feature 4**: `GET /api/issues/:id/checklists` - Get all checklists linked to an issue with completion stats; `GET /api/action-items/:id/checklists` - Same for action items; `DELETE /api/checklists/:id/link` - Unlink checklist from entity
+
 ### Data Management
 A PostgreSQL database stores core entities such as Users, Projects, Issues, Action Items, Meeting Transcripts, and the Risk Register. It manages relationships, AI-specific data (Status Update Review Queue, AI analysis audit trail, checklist generation sources), collaboration data (comments, mention notifications), user preferences, and comprehensive risk management with automatic risk scoring and tracking. Tags are managed with a type system. A dedicated `status_history` table tracks all status transitions. A comprehensive checklist system stores templates, sections, items, responses, comments, and signoffs, with generated completion percentages, performance indexes, and validation history. Database schemas for checklist templates include `is_public`, `is_featured`, `tags`, `usage_count`, and `avg_rating`, with related `template_ratings`, `template_usage`, and `template_categories` tables. Auto-creation of checklists is supported via `issue_type_templates` and `action_item_category_templates` tables, linked to `action_item_categories` and the `action_items` table. `checklist_completion_actions` stores rules for auto-updating issue/action item status upon checklist completion.
 

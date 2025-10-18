@@ -8755,6 +8755,163 @@ app.post('/api/templates/bulk-apply', authenticateToken, async (req, res) => {
 });
 
 // ============================================
+// Phase 3b Feature 4: Improved Linking UI
+// ============================================
+
+/**
+ * Get all checklists linked to a specific issue
+ * GET /api/issues/:id/checklists
+ */
+app.get('/api/issues/:id/checklists', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const completionService = require('./services/completion-service.js');
+    
+    // Get all checklists linked to this issue
+    const checklistsResult = await pool.query(
+      `SELECT 
+        c.id,
+        c.title,
+        c.description,
+        c.template_id,
+        c.project_id,
+        c.related_issue_id,
+        c.status,
+        c.created_at,
+        c.updated_at,
+        ct.name as template_name
+      FROM checklists c
+      LEFT JOIN checklist_templates ct ON c.template_id = ct.id
+      WHERE c.related_issue_id = $1
+      ORDER BY c.created_at DESC`,
+      [id]
+    );
+    
+    const checklists = checklistsResult.rows;
+    
+    // Calculate completion stats for each checklist
+    const checklistsWithStats = await Promise.all(
+      checklists.map(async (checklist) => {
+        const completion = await completionService.calculateChecklistCompletion(checklist.id);
+        
+        return {
+          ...checklist,
+          completion: {
+            total: completion.total,
+            completed: completion.completed,
+            percentage: completion.percentage
+          }
+        };
+      })
+    );
+    
+    res.json({
+      issueId: parseInt(id),
+      count: checklistsWithStats.length,
+      checklists: checklistsWithStats
+    });
+    
+  } catch (error) {
+    console.error('Error fetching issue checklists:', error);
+    res.status(500).json({ error: 'Failed to fetch checklists' });
+  }
+});
+
+/**
+ * Get all checklists linked to a specific action item
+ * GET /api/action-items/:id/checklists
+ */
+app.get('/api/action-items/:id/checklists', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const completionService = require('./services/completion-service.js');
+    
+    // Get all checklists linked to this action item
+    const checklistsResult = await pool.query(
+      `SELECT 
+        c.id,
+        c.title,
+        c.description,
+        c.template_id,
+        c.project_id,
+        c.related_action_id,
+        c.status,
+        c.created_at,
+        c.updated_at,
+        ct.name as template_name
+      FROM checklists c
+      LEFT JOIN checklist_templates ct ON c.template_id = ct.id
+      WHERE c.related_action_id = $1
+      ORDER BY c.created_at DESC`,
+      [id]
+    );
+    
+    const checklists = checklistsResult.rows;
+    
+    // Calculate completion stats for each checklist
+    const checklistsWithStats = await Promise.all(
+      checklists.map(async (checklist) => {
+        const completion = await completionService.calculateChecklistCompletion(checklist.id);
+        
+        return {
+          ...checklist,
+          completion: {
+            total: completion.total,
+            completed: completion.completed,
+            percentage: completion.percentage
+          }
+        };
+      })
+    );
+    
+    res.json({
+      actionItemId: parseInt(id),
+      count: checklistsWithStats.length,
+      checklists: checklistsWithStats
+    });
+    
+  } catch (error) {
+    console.error('Error fetching action item checklists:', error);
+    res.status(500).json({ error: 'Failed to fetch checklists' });
+  }
+});
+
+/**
+ * Unlink a checklist from its issue or action item
+ * DELETE /api/checklists/:id/link
+ */
+app.delete('/api/checklists/:id/link', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Unlink by setting related_issue_id and related_action_id to NULL
+    const result = await pool.query(
+      `UPDATE checklists 
+       SET related_issue_id = NULL, 
+           related_action_id = NULL,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Checklist unlinked',
+      checklist: result.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('Error unlinking checklist:', error);
+    res.status(500).json({ error: 'Failed to unlink checklist' });
+  }
+});
+
+// ============================================
 // Phase 3b Feature 1: Auto-Create Checklist APIs
 // ============================================
 
