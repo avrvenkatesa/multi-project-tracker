@@ -8723,6 +8723,25 @@ app.delete('/api/templates/action-category-mappings/:id', authenticateToken, asy
   }
 });
 
+// ============================================
+// TEMPORARY TEST ENDPOINT - Remove after Phase 3b testing
+// ============================================
+app.get('/api/test/categories', async (req, res) => {
+  try {
+    const categories = await getActionItemCategories();
+    res.json({
+      success: true,
+      count: categories.length,
+      categories: categories
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // ========================================
 // PDF EXPORT ENDPOINT
 // ========================================
