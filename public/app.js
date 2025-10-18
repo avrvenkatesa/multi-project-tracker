@@ -1043,10 +1043,17 @@ async function renderKanbanBoard() {
                         const canDelete = isTeamLeadOrAbove;
                         
                         return `
-                    <div class="kanban-card ${getAICardBackgroundClass(item)} rounded p-3 shadow-sm ${getAICardBorderClass(item)} border-l-4 ${!item.created_by_ai ? getBorderColor(item.priority || "medium") : ''} cursor-pointer hover:shadow-md transition-shadow"
+                    <div class="kanban-card ${getAICardBackgroundClass(item)} rounded p-3 shadow-sm ${getAICardBorderClass(item)} border-l-4 ${!item.created_by_ai ? getBorderColor(item.priority || "medium") : ''} cursor-pointer hover:shadow-md transition-shadow relative"
                          draggable="true"
                          data-item-id="${item.id}"
                          data-item-type="${item.type || 'issue'}">
+                        <div class="flex items-start gap-2 mb-2">
+                            <input type="checkbox" 
+                                   class="item-checkbox mt-1 cursor-pointer w-4 h-4 flex-shrink-0" 
+                                   data-item-id="${item.id}"
+                                   data-item-type="${item.type || 'issue'}"
+                                   onclick="event.stopPropagation();" />
+                            <div class="flex-1">
                         <div class="flex justify-between items-start mb-2 gap-2">
                             <div class="flex items-center gap-1">
                                 <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
@@ -1142,6 +1149,8 @@ async function renderKanbanBoard() {
                                     ` : ''}
                                 </div>
                             ` : ''}
+                        </div>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -5554,5 +5563,260 @@ document.getElementById('edit-action-item-file-input')?.addEventListener('change
     await uploadEditAttachment(e.target.files, itemId, 'action-item');
     e.target.value = '';
   }
+});
+
+// ============================================
+// Phase 3b Feature 3: Bulk Apply Template UI
+// ============================================
+
+let selectedItems = new Map(); // Map of "type-id" -> {id, type}
+let allTemplates = [];
+
+// Initialize bulk actions
+function initBulkActions() {
+  // Load templates
+  loadTemplatesForBulk();
+  
+  // Select All checkbox
+  document.getElementById('selectAllItems')?.addEventListener('change', (e) => {
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    checkboxes.forEach(cb => {
+      cb.checked = e.target.checked;
+      const itemId = parseInt(cb.dataset.itemId);
+      const itemType = cb.dataset.itemType;
+      const key = `${itemType}-${itemId}`;
+      
+      if (e.target.checked) {
+        selectedItems.set(key, { id: itemId, type: itemType });
+      } else {
+        selectedItems.delete(key);
+      }
+    });
+    updateBulkActionsBar();
+  });
+  
+  // Delegate checkbox changes
+  document.addEventListener('change', (e) => {
+    if (e.target.classList.contains('item-checkbox')) {
+      const itemId = parseInt(e.target.dataset.itemId);
+      const itemType = e.target.dataset.itemType;
+      const key = `${itemType}-${itemId}`;
+      
+      if (e.target.checked) {
+        selectedItems.set(key, { id: itemId, type: itemType });
+      } else {
+        selectedItems.delete(key);
+      }
+      updateBulkActionsBar();
+    }
+  });
+  
+  // Bulk Apply button
+  document.getElementById('bulkApplyTemplateBtn')?.addEventListener('click', () => {
+    showBulkApplyModal();
+  });
+  
+  // Clear Selection button
+  document.getElementById('clearSelectionBtn')?.addEventListener('click', () => {
+    clearSelection();
+  });
+  
+  // Modal: Cancel
+  document.getElementById('cancelBulkApply')?.addEventListener('click', () => {
+    hideBulkApplyModal();
+  });
+  
+  // Modal: Confirm Apply
+  document.getElementById('confirmBulkApply')?.addEventListener('click', () => {
+    executeBulkApply();
+  });
+}
+
+// Update bulk actions bar visibility and counts
+function updateBulkActionsBar() {
+  const bar = document.getElementById('bulkActionsBar');
+  const countSpan = document.getElementById('selectedCount');
+  const applyBtn = document.getElementById('bulkApplyTemplateBtn');
+  const selectAllCheckbox = document.getElementById('selectAllItems');
+  
+  const count = selectedItems.size;
+  
+  if (count > 0) {
+    bar.style.display = 'block';
+    countSpan.textContent = `${count} selected`;
+    applyBtn.disabled = false;
+  } else {
+    bar.style.display = 'none';
+    applyBtn.disabled = true;
+    if (selectAllCheckbox) selectAllCheckbox.checked = false;
+  }
+}
+
+// Clear all selections
+function clearSelection() {
+  selectedItems.clear();
+  document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
+  document.getElementById('selectAllItems').checked = false;
+  updateBulkActionsBar();
+}
+
+// Load templates for bulk apply
+async function loadTemplatesForBulk() {
+  try {
+    const response = await axios.get('/api/templates?sort=name', { withCredentials: true });
+    allTemplates = response.data.templates || [];
+    
+    const select = document.getElementById('bulkTemplateSelect');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">Select a template...</option>';
+    
+    allTemplates.forEach(template => {
+      const option = document.createElement('option');
+      option.value = template.id;
+      option.textContent = `${template.name} (${template.usage_count || 0} uses)`;
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Error loading templates:', error);
+  }
+}
+
+// Show bulk apply modal
+function showBulkApplyModal() {
+  const modal = document.getElementById('bulkApplyModal');
+  const countSpan = document.getElementById('modalSelectedCount');
+  const entityTypeSpan = document.getElementById('modalEntityType');
+  
+  // Determine if all selected items are the same type
+  const types = new Set([...selectedItems.values()].map(item => item.type));
+  let entityTypeText = 'item(s)';
+  if (types.size === 1) {
+    const type = [...types][0];
+    entityTypeText = type === 'issue' ? 'issue(s)' : 'action item(s)';
+  }
+  
+  countSpan.textContent = selectedItems.size;
+  entityTypeSpan.textContent = entityTypeText;
+  
+  // Reset modal state
+  document.getElementById('bulkApplyProgress').classList.add('hidden');
+  document.getElementById('bulkApplyResults').classList.add('hidden');
+  document.getElementById('bulkTemplateSelect').disabled = false;
+  document.getElementById('confirmBulkApply').disabled = false;
+  
+  modal.classList.remove('hidden');
+}
+
+// Hide bulk apply modal
+function hideBulkApplyModal() {
+  document.getElementById('bulkApplyModal').classList.add('hidden');
+}
+
+// Execute bulk apply
+async function executeBulkApply() {
+  const templateId = document.getElementById('bulkTemplateSelect').value;
+  
+  if (!templateId) {
+    alert('Please select a template');
+    return;
+  }
+  
+  // Group selected items by type
+  const itemsByType = {};
+  selectedItems.forEach((item) => {
+    if (!itemsByType[item.type]) {
+      itemsByType[item.type] = [];
+    }
+    itemsByType[item.type].push(item.id);
+  });
+  
+  // Show progress
+  document.getElementById('bulkApplyProgress').classList.remove('hidden');
+  document.getElementById('confirmBulkApply').disabled = true;
+  document.getElementById('bulkTemplateSelect').disabled = true;
+  
+  let totalSuccess = 0;
+  let totalFailed = 0;
+  
+  try {
+    // Apply to each type separately
+    for (const [entityType, entityIds] of Object.entries(itemsByType)) {
+      const response = await axios.post('/api/templates/bulk-apply', {
+        templateId: parseInt(templateId),
+        entityType: entityType,
+        entityIds: entityIds,
+        projectId: currentProject?.id || parseInt(localStorage.getItem('currentProjectId'))
+      }, { withCredentials: true });
+      
+      const data = response.data;
+      totalSuccess += data.results.successful;
+      totalFailed += data.results.failed;
+      
+      // Update progress
+      document.getElementById('progressText').textContent = 
+        `${totalSuccess + totalFailed}/${selectedItems.size}`;
+      document.getElementById('progressBar').style.width = 
+        `${((totalSuccess + totalFailed) / selectedItems.size) * 100}%`;
+    }
+    
+    // Show results
+    document.getElementById('bulkApplyProgress').classList.add('hidden');
+    document.getElementById('bulkApplyResults').classList.remove('hidden');
+    document.getElementById('successCount').textContent = totalSuccess;
+    document.getElementById('failCount').textContent = totalFailed;
+    
+    // Show notification
+    if (totalFailed === 0) {
+      showNotification(`✅ Applied template to ${totalSuccess} items`, 'success');
+    } else {
+      showNotification(
+        `⚠️ Applied to ${totalSuccess} items, ${totalFailed} failed`, 
+        'warning'
+      );
+    }
+    
+    // Auto-close after 2 seconds if successful
+    if (totalFailed === 0) {
+      setTimeout(() => {
+        hideBulkApplyModal();
+        clearSelection();
+        // Reload Kanban board
+        loadProjectData(currentProject?.id || parseInt(localStorage.getItem('currentProjectId')));
+      }, 2000);
+    }
+    
+  } catch (error) {
+    console.error('Bulk apply error:', error);
+    document.getElementById('bulkApplyProgress').classList.add('hidden');
+    alert('Failed to apply template: ' + (error.response?.data?.error || error.message));
+    document.getElementById('confirmBulkApply').disabled = false;
+    document.getElementById('bulkTemplateSelect').disabled = false;
+  }
+}
+
+// Notification helper
+function showNotification(message, type = 'info') {
+  const colors = {
+    success: 'bg-green-500',
+    warning: 'bg-orange-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500'
+  };
+  
+  const notification = document.createElement('div');
+  notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+
+// Initialize bulk actions when page loads
+document.addEventListener('DOMContentLoaded', () => {
+  initBulkActions();
 });
 

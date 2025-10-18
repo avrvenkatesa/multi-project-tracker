@@ -349,6 +349,31 @@
                             </div>
                         </div>
 
+                        <!-- Bulk Actions Bar -->
+                        <div id="bulkActionsBar" class="bulk-actions-bar mb-4" style="display: none;">
+                            <div class="flex items-center gap-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                <input type="checkbox" id="selectAllItems" class="cursor-pointer w-4 h-4" />
+                                <label for="selectAllItems" class="font-medium text-gray-700">Select All</label>
+                                
+                                <span id="selectedCount" class="text-gray-600 font-medium">0 selected</span>
+                                
+                                <button 
+                                    id="bulkApplyTemplateBtn" 
+                                    class="ml-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+                                    disabled
+                                >
+                                    Apply Template to Selected
+                                </button>
+                                
+                                <button 
+                                    id="clearSelectionBtn" 
+                                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Kanban Board -->
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div class="bg-gray-100 rounded-lg p-4">
@@ -1433,6 +1458,50 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Bulk Apply Template Modal -->
+        <div id="bulkApplyModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+                <h3 class="text-xl font-bold mb-4">Apply Template to Selected Items</h3>
+                
+                <p class="text-gray-600 mb-4">
+                    Applying template to <span id="modalSelectedCount" class="font-semibold">0</span> 
+                    <span id="modalEntityType">item(s)</span>
+                </p>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Select Template:</label>
+                    <select id="bulkTemplateSelect" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">Loading templates...</option>
+                    </select>
+                </div>
+                
+                <div id="bulkApplyProgress" class="mb-4 hidden">
+                    <div class="text-sm text-gray-600 mb-2">
+                        Applying... <span id="progressText">0/0</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div id="bulkApplyResults" class="mb-4 hidden">
+                    <div class="text-sm space-y-1">
+                        <div class="text-green-600 font-medium">✅ Successful: <span id="successCount">0</span></div>
+                        <div class="text-red-600 font-medium">❌ Failed: <span id="failCount">0</span></div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2 justify-end">
+                    <button id="cancelBulkApply" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button id="confirmBulkApply" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        Apply to All
+                    </button>
+                </div>
             </div>
         </div>
 
