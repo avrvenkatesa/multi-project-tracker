@@ -699,14 +699,38 @@
                         <button id="close-item-detail-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                     </div>
                     
+                    <!-- Tabs -->
+                    <div class="border-b px-6">
+                        <div class="flex gap-6">
+                            <button class="item-detail-tab-btn py-3 border-b-2 border-blue-500 text-blue-600 font-medium" data-tab="details">
+                                Details
+                            </button>
+                            <button class="item-detail-tab-btn py-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900" data-tab="comments">
+                                Comments
+                                <span id="item-detail-comment-count-tab" class="ml-1 text-sm text-gray-500">(0)</span>
+                            </button>
+                            <button class="item-detail-tab-btn py-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900" data-tab="checklists">
+                                Checklists
+                                <span id="item-detail-checklist-count-tab" class="ml-1 text-sm text-gray-500">(0)</span>
+                            </button>
+                            <button class="item-detail-tab-btn py-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900" data-tab="attachments">
+                                Attachments
+                                <span id="item-detail-attachment-count" class="ml-1 text-sm text-gray-500">(0)</span>
+                            </button>
+                        </div>
+                    </div>
+                    
                     <div class="p-6">
-                        <!-- Item Info -->
-                        <div id="item-detail-info" class="bg-gray-50 rounded-lg p-4 mb-6">
-                            <!-- Item details will be displayed here -->
+                        <!-- Details Tab -->
+                        <div id="details-tab" class="item-detail-tab-panel">
+                            <!-- Item Info -->
+                            <div id="item-detail-info" class="bg-gray-50 rounded-lg p-4">
+                                <!-- Item details will be displayed here -->
+                            </div>
                         </div>
                         
-                        <!-- Comments Section -->
-                        <div class="border-t pt-6">
+                        <!-- Comments Tab -->
+                        <div id="comments-tab" class="item-detail-tab-panel hidden">
                             <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
                                 <span>💬</span>
                                 Comments
@@ -741,6 +765,54 @@
                             <!-- Comments List -->
                             <div id="item-detail-comments-list" class="space-y-3 max-h-96 overflow-y-auto">
                                 <!-- Comments will be populated here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Checklists Tab -->
+                        <div id="checklists-tab" class="item-detail-tab-panel hidden">
+                            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                                <span>✓</span>
+                                Checklists
+                                <span id="item-detail-checklist-count" class="text-sm text-gray-500">(0)</span>
+                            </h3>
+                            
+                            <!-- Checklists Container -->
+                            <div id="linked-checklists-container" class="space-y-3 max-h-[500px] overflow-y-auto">
+                                <!-- Checklists will be populated here -->
+                                <div class="text-center py-8 text-gray-500">
+                                    <p>Loading checklists...</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Attachments Tab -->
+                        <div id="attachments-tab" class="item-detail-tab-panel hidden">
+                            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                                <span>📎</span>
+                                Attachments
+                                <span id="item-detail-attachment-count-display" class="text-sm text-gray-500">(0)</span>
+                            </h3>
+                            
+                            <!-- Attachment Upload -->
+                            <div class="mb-4">
+                                <input 
+                                    type="file" 
+                                    id="item-detail-attachment-upload" 
+                                    multiple 
+                                    class="block w-full text-sm text-gray-500
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-full file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-blue-50 file:text-blue-700
+                                        hover:file:bg-blue-100
+                                        cursor-pointer"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">Max 10MB per file</p>
+                            </div>
+                            
+                            <!-- Attachments List -->
+                            <div id="item-detail-attachments-list">
+                                <!-- Attachments will be populated here -->
                             </div>
                         </div>
                     </div>
