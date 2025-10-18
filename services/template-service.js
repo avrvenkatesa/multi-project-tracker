@@ -606,19 +606,38 @@ async function getActionItemCategories() {
  */
 async function getIssueTypeTemplateMappings(projectId = null) {
   try {
-    const result = await pool.query(
-      `SELECT 
-        itt.*,
-        ct.name as template_name,
-        ct.description as template_description,
-        ct.usage_count as template_usage_count
-      FROM issue_type_templates itt
-      LEFT JOIN checklist_templates ct ON itt.template_id = ct.id
-      WHERE (itt.project_id = $1 OR (itt.project_id IS NULL AND $1 IS NULL))
-        AND itt.is_active = TRUE
-      ORDER BY itt.project_id NULLS LAST, itt.issue_type`,
-      [projectId]
-    );
+    let result;
+    
+    if (projectId === null) {
+      // Get all mappings when no project specified
+      result = await pool.query(
+        `SELECT 
+          itt.*,
+          ct.name as template_name,
+          ct.description as template_description,
+          ct.usage_count as template_usage_count
+        FROM issue_type_templates itt
+        LEFT JOIN checklist_templates ct ON itt.template_id = ct.id
+        WHERE itt.is_active = TRUE
+        ORDER BY itt.project_id NULLS LAST, itt.issue_type`
+      );
+    } else {
+      // Get mappings for specific project (including global ones)
+      result = await pool.query(
+        `SELECT 
+          itt.*,
+          ct.name as template_name,
+          ct.description as template_description,
+          ct.usage_count as template_usage_count
+        FROM issue_type_templates itt
+        LEFT JOIN checklist_templates ct ON itt.template_id = ct.id
+        WHERE (itt.project_id = $1 OR itt.project_id IS NULL)
+          AND itt.is_active = TRUE
+        ORDER BY itt.project_id NULLS LAST, itt.issue_type`,
+        [projectId]
+      );
+    }
+    
     return result.rows;
   } catch (error) {
     console.error('Error fetching issue type mappings:', error);
@@ -632,23 +651,46 @@ async function getIssueTypeTemplateMappings(projectId = null) {
  */
 async function getActionCategoryTemplateMappings(projectId = null) {
   try {
-    const result = await pool.query(
-      `SELECT 
-        actt.*,
-        ac.name as category_name,
-        ac.description as category_description,
-        ac.icon as category_icon,
-        ct.name as template_name,
-        ct.description as template_description,
-        ct.usage_count as template_usage_count
-      FROM action_item_category_templates actt
-      LEFT JOIN action_item_categories ac ON actt.category_id = ac.id
-      LEFT JOIN checklist_templates ct ON actt.template_id = ct.id
-      WHERE (actt.project_id = $1 OR (actt.project_id IS NULL AND $1 IS NULL))
-        AND actt.is_active = TRUE
-      ORDER BY actt.project_id NULLS LAST, ac.display_order, ac.name`,
-      [projectId]
-    );
+    let result;
+    
+    if (projectId === null) {
+      // Get all mappings when no project specified
+      result = await pool.query(
+        `SELECT 
+          actt.*,
+          ac.name as category_name,
+          ac.description as category_description,
+          ac.icon as category_icon,
+          ct.name as template_name,
+          ct.description as template_description,
+          ct.usage_count as template_usage_count
+        FROM action_item_category_templates actt
+        LEFT JOIN action_item_categories ac ON actt.category_id = ac.id
+        LEFT JOIN checklist_templates ct ON actt.template_id = ct.id
+        WHERE actt.is_active = TRUE
+        ORDER BY actt.project_id NULLS LAST, ac.display_order, ac.name`
+      );
+    } else {
+      // Get mappings for specific project (including global ones)
+      result = await pool.query(
+        `SELECT 
+          actt.*,
+          ac.name as category_name,
+          ac.description as category_description,
+          ac.icon as category_icon,
+          ct.name as template_name,
+          ct.description as template_description,
+          ct.usage_count as template_usage_count
+        FROM action_item_category_templates actt
+        LEFT JOIN action_item_categories ac ON actt.category_id = ac.id
+        LEFT JOIN checklist_templates ct ON actt.template_id = ct.id
+        WHERE (actt.project_id = $1 OR actt.project_id IS NULL)
+          AND actt.is_active = TRUE
+        ORDER BY actt.project_id NULLS LAST, ac.display_order, ac.name`,
+        [projectId]
+      );
+    }
+    
     return result.rows;
   } catch (error) {
     console.error('Error fetching action category mappings:', error);
