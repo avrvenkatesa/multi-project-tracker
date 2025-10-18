@@ -1,0 +1,87 @@
+fetch('/api/checklists/30')
+.then(r => r.json())
+.then(async checklist => {
+  console.log('=== RETRYING: MARK ALL ITEMS COMPLETE ===');
+  console.log('Current Issue Status: To Do');
+  console.log('Expected After: Done');
+  console.log('---');
+  
+  // Build responses array with item_id (now supported!)
+  const responses = [];
+  
+  checklist.sections.forEach(section => {
+    section.items.forEach(item => {
+      responses.push({
+        item_id: item.id,           // Now accepts item_id!
+        is_completed: true,
+        response_text: 'Test completion'
+      });
+    });
+  });
+  
+  console.log(`Marking ${responses.length} items as complete...`);
+  
+  try {
+    // Submit all completions
+    const result = await fetch(`/api/checklists/30/responses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ responses })
+    });
+    
+    console.log('Response status:', result.status);
+    
+    if (!result.ok) {
+      const errorData = await result.json();
+      console.error('❌ Error response:', errorData);
+      return;
+    }
+    
+    const data = await result.json();
+    console.log('✅ Checklist responses saved successfully');
+    
+    // Wait for async completion action
+    console.log('⏳ Waiting 3 seconds for auto-status update...');
+    
+    setTimeout(() => {
+      console.log('\n🔍 Checking issue status...\n');
+      
+      fetch('/api/issues')
+        .then(r => r.json())
+        .then(issues => {
+          const issue75 = issues.find(i => i.id === 75);
+          console.log('=== ISSUE 75 AFTER COMPLETION ===');
+          console.log('Previous Status: To Do');
+          console.log('Current Status:', issue75?.status);
+          console.log('Expected: Done');
+          console.log('---');
+          
+          if (issue75?.status === 'Done') {
+            console.log('🎉🎉🎉 SUCCESS! FEATURE 2 IS WORKING!');
+            console.log('✅ Checklist completed (27/27 items)');
+            console.log('✅ Issue status auto-updated: To Do → Done');
+            console.log('✅ Phase 3b Feature 2 COMPLETE!');
+          } else {
+            console.log('⚠️ Status:', issue75?.status);
+            console.log('Check server logs for completion action messages');
+          }
+        });
+    }, 3000);
+    
+  } catch (error) {
+    console.error('❌ Request failed:', error);
+  }
+})
+Promise {<pending>}
+VM36:4 === RETRYING: MARK ALL ITEMS COMPLETE ===
+VM36:5 Current Issue Status: To Do
+VM36:6 Expected After: Done
+VM36:7 ---
+VM36:22 Marking 27 items as complete...
+VM36:26   POST https://dff897e4-e0ff-4d0f-bbee-992058ffc407-00-1blhkjb371grt.pike.replit.dev/api/checklists/30/responses 500 (Internal Server Error)
+(anonymous) @ VM36:26
+Promise.then
+(anonymous) @ VM36:3
+VM36:33 Response status: 500
+VM36:37  ❌ Error response: {error: 'Failed to save responses'}

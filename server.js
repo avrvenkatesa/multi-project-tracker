@@ -7423,6 +7423,7 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
     // Get items with responses
     const itemsResult = await pool.query(
       `SELECT 
+        cti.id,
         cti.id as item_id,
         cti.id as template_item_id,
         cti.section_id,
@@ -7621,12 +7622,12 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
       await client.query('BEGIN');
       
       for (const response of responses) {
-        // Accept both item_id and template_item_id for compatibility
-        const templateItemId = response.template_item_id || response.item_id;
+        // Accept multiple field names for compatibility: template_item_id, item_id, or id
+        const templateItemId = response.template_item_id || response.item_id || response.id;
         const { value, type, notes, is_completed } = response;
         
         if (!templateItemId) {
-          throw new Error('Missing required field: template_item_id or item_id');
+          throw new Error('Missing required field: template_item_id, item_id, or id');
         }
         
         // Determine which field to use based on type
