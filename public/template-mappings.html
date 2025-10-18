@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Template Auto-Creation Settings - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/templates.css">
+</head>
+<body class="bg-gray-50">
+  <!-- Navigation -->
+  <nav class="bg-blue-600 text-white p-4">
+    <div class="container mx-auto flex justify-between items-center">
+      <div class="flex items-center gap-4">
+        <h1 class="text-xl font-bold">Multi-Project Tracker</h1>
+        <span class="text-blue-200">Template Auto-Creation Settings</span>
+      </div>
+      <div class="flex gap-4">
+        <a href="/templates.html" class="hover:text-blue-200">Template Library</a>
+        <a href="/" class="hover:text-blue-200">Dashboard</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mx-auto p-6 max-w-6xl">
+    <!-- Header -->
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-gray-800 mb-2">Auto-Create Checklist Settings</h2>
+      <p class="text-gray-600">Configure which templates automatically create checklists when issues or action items are created</p>
+    </div>
+
+    <!-- Project Filter -->
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Filter by Project:</label>
+      <select id="projectFilter" class="w-full p-2 border rounded">
+        <option value="">Global Settings (All Projects)</option>
+      </select>
+    </div>
+
+    <!-- Tabs -->
+    <div class="mb-4 border-b border-gray-200">
+      <nav class="flex gap-4">
+        <button id="issueTypesTab" class="tab-button active px-4 py-2 font-medium border-b-2 border-blue-500 text-blue-600">
+          Issue Types
+        </button>
+        <button id="actionCategoriesTab" class="tab-button px-4 py-2 font-medium text-gray-500 hover:text-gray-700">
+          Action Item Categories
+        </button>
+      </nav>
+    </div>
+
+    <!-- Issue Types Panel -->
+    <div id="issueTypesPanel" class="tab-panel">
+      <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold">Issue Type → Template Mappings</h3>
+          <button id="addIssueTypeMapping" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+            + Add Mapping
+          </button>
+        </div>
+        
+        <div id="issueTypeMappingsList" class="space-y-3">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Categories Panel -->
+    <div id="actionCategoriesPanel" class="tab-panel hidden">
+      <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold">Action Category → Template Mappings</h3>
+          <button id="addActionCategoryMapping" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+            + Add Mapping
+          </button>
+        </div>
+        
+        <div id="actionCategoryMappingsList" class="space-y-3">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Issue Type Mapping Modal -->
+  <div id="addIssueTypeMappingModal" class="modal hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full">
+      <h3 class="text-xl font-bold mb-4">Add Issue Type Mapping</h3>
+      <form id="addIssueTypeMappingForm">
+        <div class="mb-4">
+          <label class="block text-sm font-medium mb-2">Issue Type</label>
+          <input type="text" id="issueTypeInput" class="w-full p-2 border rounded" placeholder="e.g., Bug, Feature, Task" required>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-medium mb-2">Template</label>
+          <select id="issueTemplateSelect" class="w-full p-2 border rounded" required>
+            <option value="">Select template...</option>
+          </select>
+        </div>
+        <div class="flex gap-2 justify-end">
+          <button type="button" class="cancel-modal px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Save Mapping</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Action Category Mapping Modal -->
+  <div id="addActionCategoryMappingModal" class="modal hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full">
+      <h3 class="text-xl font-bold mb-4">Add Action Category Mapping</h3>
+      <form id="addActionCategoryMappingForm">
+        <div class="mb-4">
+          <label class="block text-sm font-medium mb-2">Action Item Category</label>
+          <select id="actionCategorySelect" class="w-full p-2 border rounded" required>
+            <option value="">Select category...</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-medium mb-2">Template</label>
+          <select id="actionTemplateSelect" class="w-full p-2 border rounded" required>
+            <option value="">Select template...</option>
+          </select>
+        </div>
+        <div class="flex gap-2 justify-end">
+          <button type="button" class="cancel-modal px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Save Mapping</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/template-mappings.js"></script>
+</body>
+</html>

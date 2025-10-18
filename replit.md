@@ -16,6 +16,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+- **Phase 3b Feature 1: Auto-Create Checklists Admin UI** (October 18, 2025):
+  - **New Admin Page**: Created template-mappings.html for configuring auto-create checklist mappings
+  - **Tab Interface**: Separate tabs for Issue Type mappings and Action Category mappings
+  - **Project Filtering**: Support for global settings or project-specific mappings
+  - **Add Mapping Modals**: User-friendly forms to create issue type → template and category → template associations
+  - **CRUD Operations**: Full create, read, and delete functionality for both mapping types
+  - **Visual Indicators**: Badges show whether mappings are project-specific or global
+  - **Real-time Updates**: Lists refresh automatically after adding or deleting mappings
+  - **Notification System**: Toast notifications for success/error feedback
+  - **Files Created**: public/template-mappings.html, public/js/template-mappings.js
+
 - **Phase 3b Feature 1: Auto-Create Checklists API Endpoints** (October 18, 2025):
   - **New API Endpoints**: Added 8 new RESTful endpoints for auto-create checklist management
   - **Category Endpoint**: GET /api/action-item-categories returns all 10 action item categories (public)
