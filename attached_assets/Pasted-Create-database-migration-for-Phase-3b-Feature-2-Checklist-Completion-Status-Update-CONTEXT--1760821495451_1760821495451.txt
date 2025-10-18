@@ -1,0 +1,195 @@
+Create database migration for Phase 3b Feature 2: Checklist Completion → Status Update
+
+CONTEXT:
+- Phase 3b Feature 1 (Auto-create checklists) is complete
+- Working on branch: feature/checklist-system-phase3
+- This is Feature 2 of Phase 3b (5 features total)
+- Database: PostgreSQL (Neon)
+- Need to track rules for auto-updating issue/action item status when checklist completes
+
+TASK:
+Create and execute a database migration that creates the checklist_completion_actions table
+to store rules for automatically updating entity status when checklists reach completion.
+
+IMPLEMENTATION:
+
+File: server/migrations/009_checklist_completion_actions.sql
+```sql
+-- Migration: Checklist Completion Actions
+-- Phase 3b Feature 2: Auto-update issue/action item status on checklist completion
+
+-- 1. Create checklist_completion_actions table
+CREATE TABLE IF NOT EXISTS checklist_completion_actions (
+  id SERIAL PRIMARY KEY,
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('issue', 'action_item')),
+  project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  source_status TEXT,  -- Status to transition FROM (NULL = any status)
+  target_status TEXT NOT NULL,  -- Status to transition TO
+  completion_threshold INTEGER DEFAULT 100 CHECK (completion_threshold >= 0 AND completion_threshold <= 100),
+  is_active BOOLEAN DEFAULT TRUE,
+  notify_assignee BOOLEAN DEFAULT TRUE,
+  created_by INTEGER REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Prevent duplicate rules for same entity type, project, and source status
+  UNIQUE(entity_type, project_id, source_status)
+);
+
+-- 2. Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_completion_actions_entity_type 
+  ON checklist_completion_actions(entity_type);
+
+CREATE INDEX IF NOT EXISTS idx_completion_actions_project 
+  ON checklist_completion_actions(project_id);
+
+CREATE INDEX IF NOT EXISTS idx_completion_actions_active 
+  ON checklist_completion_actions(is_active) 
+  WHERE is_active = TRUE;
+
+-- 3. Create composite index for lookup queries
+CREATE INDEX IF NOT EXISTS idx_completion_actions_lookup 
+  ON checklist_completion_actions(entity_type, project_id, is_active)
+  WHERE is_active = TRUE;
+
+-- 4. Add updated_at trigger
+CREATE OR REPLACE FUNCTION update_completion_actions_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_update_completion_actions_updated_at 
+  ON checklist_completion_actions;
+  
+CREATE TRIGGER trigger_update_completion_actions_updated_at
+  BEFORE UPDATE ON checklist_completion_actions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_completion_actions_updated_at();
+
+-- 5. Insert default completion actions (optional - can be configured via UI)
+-- These are sensible defaults that users can modify or delete
+
+-- Default for issues: Complete checklist → Mark issue as Done
+INSERT INTO checklist_completion_actions 
+  (entity_type, project_id, source_status, target_status, completion_threshold, created_by)
+VALUES 
+  ('issue', NULL, NULL, 'Done', 100, 1)
+ON CONFLICT (entity_type, project_id, source_status) DO NOTHING;
+
+-- Default for action items: Complete checklist → Mark action item as Done
+INSERT INTO checklist_completion_actions 
+  (entity_type, project_id, source_status, target_status, completion_threshold, created_by)
+VALUES 
+  ('action_item', NULL, NULL, 'Done', 100, 1)
+ON CONFLICT (entity_type, project_id, source_status) DO NOTHING;
+
+-- Migration complete
+COMMENT ON TABLE checklist_completion_actions IS 
+  'Defines rules for automatically updating issue/action item status when linked checklist reaches completion threshold';
+
+COMMENT ON COLUMN checklist_completion_actions.entity_type IS 
+  'Type of entity to update: issue or action_item';
+
+COMMENT ON COLUMN checklist_completion_actions.project_id IS 
+  'Project-specific rule (NULL = applies to all projects)';
+
+COMMENT ON COLUMN checklist_completion_actions.source_status IS 
+  'Only apply if entity is in this status (NULL = apply from any status)';
+
+COMMENT ON COLUMN checklist_completion_actions.target_status IS 
+  'Status to change entity to when checklist completes';
+
+COMMENT ON COLUMN checklist_completion_actions.completion_threshold IS 
+  'Percentage of checklist items that must be complete to trigger (0-100)';
+```
+
+EXECUTION STEPS:
+1. Create the migration file at: server/migrations/009_checklist_completion_actions.sql
+2. Run the migration using your database connection
+3. Verify table created successfully
+
+VERIFICATION QUERIES:
+
+After running migration, verify with these queries:
+```sql
+-- 1. Check table structure
+SELECT 
+    column_name,
+    data_type,
+    is_nullable,
+    column_default
+FROM information_schema.columns
+WHERE table_name = 'checklist_completion_actions'
+ORDER BY ordinal_position;
+
+-- 2. Check indexes created
+SELECT
+    indexname,
+    indexdef
+FROM pg_indexes
+WHERE tablename = 'checklist_completion_actions'
+ORDER BY indexname;
+
+-- 3. Check default completion actions inserted
+SELECT 
+    id,
+    entity_type,
+    project_id,
+    source_status,
+    target_status,
+    completion_threshold,
+    is_active
+FROM checklist_completion_actions
+ORDER BY id;
+
+-- 4. Verify trigger exists
+SELECT 
+    trigger_name,
+    event_manipulation,
+    event_object_table
+FROM information_schema.triggers
+WHERE event_object_table = 'checklist_completion_actions';
+```
+
+EXPECTED RESULTS:
+
+1. Table should have 11 columns: id, entity_type, project_id, source_status, target_status, completion_threshold, is_active, notify_assignee, created_by, created_at, updated_at
+
+2. Should have 4 indexes:
+   - idx_completion_actions_entity_type
+   - idx_completion_actions_project
+   - idx_completion_actions_active
+   - idx_completion_actions_lookup
+
+3. Should have 2 default completion actions:
+   - Row 1: issue → Done (100%)
+   - Row 2: action_item → Done (100%)
+
+4. Should have 1 trigger: trigger_update_completion_actions_updated_at
+
+VALIDATION CHECKLIST:
+✅ Table created with correct columns
+✅ All 4 indexes created
+✅ Unique constraint on (entity_type, project_id, source_status)
+✅ Check constraints on entity_type and completion_threshold
+✅ Default values set correctly (is_active=true, notify_assignee=true, completion_threshold=100)
+✅ Updated_at trigger created and attached
+✅ 2 default completion actions inserted
+✅ Foreign keys reference projects(id) and users(id)
+
+COMMIT MESSAGE:
+"feat(phase3b): add checklist_completion_actions table for auto-status updates
+
+- Create checklist_completion_actions table
+- Add indexes for entity_type, project_id, active status
+- Add unique constraint to prevent duplicate rules
+- Create updated_at trigger
+- Insert 2 default completion actions (issue and action_item)
+- Support project-specific and global rules
+- Configurable completion threshold (0-100%)
+- Optional source status filter
+
+Part of Phase 3b Feature 2: Checklist Completion → Status Update"

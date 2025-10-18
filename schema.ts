@@ -350,3 +350,19 @@ export const actionItemCategoryTemplates = pgTable('action_item_category_templat
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+// Checklist Completion Actions (Phase 3b Feature 2)
+// Auto-update issue/action item status when checklist reaches completion
+export const checklistCompletionActions = pgTable('checklist_completion_actions', {
+  id: serial('id').primaryKey(),
+  entityType: text('entity_type').notNull(), // 'issue' or 'action_item'
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  sourceStatus: text('source_status'), // Status to transition FROM (NULL = any status)
+  targetStatus: text('target_status').notNull(), // Status to transition TO
+  completionThreshold: integer('completion_threshold').default(100), // 0-100
+  isActive: boolean('is_active').default(true),
+  notifyAssignee: boolean('notify_assignee').default(true),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});

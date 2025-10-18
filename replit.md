@@ -1,117 +1,25 @@
 # Multi-Project Tracker
 
 ## Overview
-The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include:
-
--   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection, with in-modal search and a persistent review queue for unmatched status updates.
--   **AI Checklist Generation**: Generates checklists from issue/action descriptions and uploaded documents, supporting focused multi-checklist generation from extensive documents.
--   **Checklist Validation**: An intelligent quality scoring system with required fields validation, consistency checks, and quality assessments.
--   **Comprehensive Reporting**: PDF and CSV export capabilities for checklists and project data.
--   **Enhanced Collaboration**: A comment system with markdown support and @mention autocomplete.
-
-The project aims to be a leading solution for centralized project oversight and efficient team collaboration, providing a robust solution for enhanced project oversight and team collaboration.
+The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include: AI Meeting Analysis, AI Checklist Generation, Checklist Validation, comprehensive PDF and CSV reporting, and an enhanced comment system with markdown support and @mention autocomplete. The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes (October 2025)
-
-- **Phase 3b Feature 1: Auto-Create Checklists Admin UI** (October 18, 2025):
-  - **New Admin Page**: Created template-mappings.html for configuring auto-create checklist mappings
-  - **Tab Interface**: Separate tabs for Issue Type mappings and Action Category mappings
-  - **Project Filtering**: Support for global settings or project-specific mappings
-  - **Add Mapping Modals**: User-friendly forms to create issue type → template and category → template associations
-  - **CRUD Operations**: Full create, read, and delete functionality for both mapping types
-  - **Visual Indicators**: Badges show whether mappings are project-specific or global
-  - **Real-time Updates**: Lists refresh automatically after adding or deleting mappings
-  - **Notification System**: Toast notifications for success/error feedback
-  - **Files Created**: public/template-mappings.html, public/js/template-mappings.js
-
-- **Phase 3b Feature 1: Auto-Create Checklists API Endpoints** (October 18, 2025):
-  - **New API Endpoints**: Added 8 new RESTful endpoints for auto-create checklist management
-  - **Category Endpoint**: GET /api/action-item-categories returns all 10 action item categories (public)
-  - **Mapping Queries**: GET /api/templates/issue-type-mappings and GET /api/templates/action-category-mappings (requires auth)
-  - **Mapping Management**: POST endpoints for creating/updating issue type and action category template mappings (requires auth)
-  - **Soft Delete**: DELETE endpoints for deactivating mappings (sets is_active=false, requires auth)
-  - **Auto-Creation Integration**: Modified POST /api/issues and POST /api/action-items to automatically create checklists based on template mappings
-  - **Response Enhancement**: Issue and action item creation responses now include auto_checklist_created flag and checklist_id
-  - **Graceful Degradation**: Auto-checklist creation failures don't block issue/action item creation (non-blocking design)
-  - **Files Modified**: server.js
-
-- **Phase 3b Feature 1: Auto-Create Checklists Service Functions** (October 18, 2025):
-  - **Service Layer Complete**: Added 7 new functions to services/template-service.js for managing auto-create checklist functionality
-  - **Category Management**: getActionItemCategories() fetches all 10 active action item categories
-  - **Template Mapping Queries**: getIssueTypeTemplateMappings() and getActionCategoryTemplateMappings() retrieve template mappings with project filtering
-  - **Mapping Management**: saveIssueTypeTemplateMapping() and saveActionCategoryTemplateMapping() create/update template associations
-  - **Auto-Creation Logic**: autoCreateChecklistForIssue() and autoCreateChecklistForActionItem() automatically create checklists based on mappings
-  - **Smart Fallback**: Auto-creation prioritizes project-specific mappings first, then falls back to global mappings
-  - **Non-Blocking**: Auto-creation failures don't prevent issue/action item creation (graceful degradation)
-  - **Files Modified**: services/template-service.js
-
-- **Phase 3b Feature 1: Auto-Create Checklists Database Migration** (October 18, 2025):
-  - **Action Item Categories**: Created action_item_categories table with 10 default categories (Administrative, Technical, Communication, Review, Planning, Testing, Deployment, Training, Support, General)
-  - **Category Support**: Added category_id column to action_items table for categorization
-  - **Issue Type Mapping**: Created issue_type_templates table to link issue types to checklist templates
-  - **Category Mapping**: Created action_item_category_templates table to link action item categories to checklist templates
-  - **Performance Optimizations**: Added indexes on category_id, issue_type, and project_id for faster queries
-  - **Auto-Update Triggers**: Added updated_at triggers for both mapping tables
-  - **Schema Update**: Updated schema.ts with new tables using Drizzle ORM
-  - **Database Tables**: action_item_categories, issue_type_templates, action_item_category_templates
-  - **Files Modified**: schema.ts
-
-- **Template Details Loading Fix** (October 17, 2025):
-  - **SQL Parameter Type Error**: Fixed PostgreSQL error "could not determine data type of parameter $2" in getTemplateDetails function
-  - **Root Cause**: When userId was null, PostgreSQL couldn't infer the parameter type in the CASE statement
-  - **Solution**: Added explicit `::integer` type cast to $2 parameter in the user_rating subquery
-  - **Impact**: Template detail modals now load successfully without 404 errors
-  - **Files Modified**: services/template-service.js
-
-- **Template CSP Compliance Fix** (October 17, 2025):
-  - **Removed Inline Event Handlers**: Eliminated all inline `onclick` handlers from template library to comply with Content Security Policy
-  - **Event Delegation**: Implemented proper event listeners using event delegation for template cards
-  - **Modal Interactions**: Fixed all modal buttons (close, apply template, rate template, cancel) to use proper event listeners
-  - **Security Enhancement**: All JavaScript now executes from external files, preventing CSP violations
-  - **Files Modified**: public/js/templates.js
-
-- **Template Card Display Enhancements** (October 17, 2025):
-  - **Tags on Cards**: Template cards now display up to 3 tags with a "+X more" indicator if additional tags exist
-  - **Category Display**: Category is prominently shown below the template name on each card
-  - **Visual Design**: Tags use subtle blue styling (bg-blue-50, text-blue-600) to maintain clean card appearance
-  - **Files Modified**: public/js/templates.js
-
-- **Template Library Search & Filter Fixes** (October 17, 2025):
-  - **Search Resets Category**: When searching templates, category filter automatically resets to "All Templates" to show results across all categories
-  - **Category Clears Search**: Clicking a category filter now clears the search input for better UX
-  - **Cross-Category Search**: Search now works across all categories instead of being limited to the selected category
-  - **Visual Feedback**: Active category button updates to "All Templates" when user performs a search
-  - **Files Modified**: public/js/templates.js
-
-- **Template Navigation Fixed on All Pages** (October 17, 2025):
-  - **Missing Event Handlers**: Added click event handlers for "Templates" button in View dropdown across all pages
-  - **Navigation Now Works**: Clicking View → Templates now properly navigates to templates.html from Dashboard, Risks, Checklists, and Tags pages
-  - **Consistent Behavior**: All navigation buttons in View dropdown now function correctly
-  - **Files Modified**: public/dashboard.js, public/js/checklists.js, public/js/risks.js, public/js/tags.js
-
-- **Template Navigation Added to All Pages** (October 17, 2025):
-  - **View Dropdown Enhancement**: Added "Templates" option to View dropdown on Dashboard, Risks, Checklists, and Tags pages
-  - **Consistent Navigation**: Templates now accessible from all major project views, not just the main index page
-  - **UI Consistency**: Templates button uses indigo color scheme with bookmark icon to match main navigation
-  - **Files Modified**: public/dashboard.html, public/risks.html, public/checklists.html, public/tags.html
-
 ## System Architecture
 
 ### Frontend
-The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS. It features a dynamic UI based on user roles, real-time AI analysis capabilities, a comprehensive comment system, and a Project Dashboard with analytics and Chart.js visualizations. UI elements such as Kanban boards, tag displays, risk cards, and a comprehensive checklist system prioritize clarity and interactivity. The UI implements consistent navigation, blue header design with white text, and user information display with responsive design. All inline JavaScript is moved to external files for CSP compliance.
+The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles, real-time AI analysis capabilities, a comprehensive comment system, and a Project Dashboard with analytics and Chart.js visualizations. UI elements such as Kanban boards, tag displays, risk cards, and a comprehensive checklist system prioritize clarity and interactivity. The UI implements consistent navigation, blue header design with white text, and user information display with responsive design. All inline JavaScript is moved to external files for CSP compliance.
 
 ### Backend
 The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations, atomic transactions for tag management, project-level authorization, comprehensive checklist management, and logging of status changes to a `status_history` table.
 
 ### Data Management
-A PostgreSQL database stores core entities such as Users, Projects, Issues, Action Items, Meeting Transcripts, and the Risk Register. It manages relationships, AI-specific data (Status Update Review Queue, AI analysis audit trail, checklist generation sources), collaboration data (comments, mention notifications), user preferences, and comprehensive risk management with automatic risk scoring and tracking. Tags are managed with a type system. A dedicated `status_history` table tracks all status transitions. A comprehensive checklist system stores templates, sections, items, responses, comments, and signoffs, with generated completion percentages, performance indexes, and validation history. Database schemas for checklist templates include `is_public`, `is_featured`, `tags`, `usage_count`, and `avg_rating`, with related `template_ratings`, `template_usage`, and `template_categories` tables.
+A PostgreSQL database stores core entities such as Users, Projects, Issues, Action Items, Meeting Transcripts, and the Risk Register. It manages relationships, AI-specific data (Status Update Review Queue, AI analysis audit trail, checklist generation sources), collaboration data (comments, mention notifications), user preferences, and comprehensive risk management with automatic risk scoring and tracking. Tags are managed with a type system. A dedicated `status_history` table tracks all status transitions. A comprehensive checklist system stores templates, sections, items, responses, comments, and signoffs, with generated completion percentages, performance indexes, and validation history. Database schemas for checklist templates include `is_public`, `is_featured`, `tags`, `usage_count`, and `avg_rating`, with related `template_ratings`, `template_usage`, and `template_categories` tables. Auto-creation of checklists is supported via `issue_type_templates` and `action_item_category_templates` tables, linked to `action_item_categories` and the `action_items` table. `checklist_completion_actions` stores rules for auto-updating issue/action item status upon checklist completion.
 
 ### AI Features
 -   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection, with in-modal search and a persistent review queue.
--   **AI Checklist Generation**: Generates comprehensive and granular checklists from issue/action descriptions and uploaded documents (PDF, DOCX, TXT), supporting multi-checklist generation from complex documents with focused workstreams. It leverages large token limits and specific prompting techniques for exhaustive extraction. The generation process includes a 5-step visual progress indicator, selective checklist creation, and enhanced batch preview display. Error handling includes partial batch failure UI with distinct visual indicators and retry functionality, rate limiting display, and attachment error handling for unsupported file types or large files.
+-   **AI Checklist Generation**: Generates comprehensive checklists from issue/action descriptions and uploaded documents (PDF, DOCX, TXT), supporting multi-checklist generation from complex documents. It leverages large token limits and specific prompting techniques for exhaustive extraction. The generation process includes a 5-step visual progress indicator, selective checklist creation, and enhanced batch preview display. Error handling includes partial batch failure UI with distinct visual indicators and retry functionality, rate limiting display, and attachment error handling.
 -   **Checklist Validation**: Provides intelligent quality scoring, required field validation, consistency checks, and recommendations.
 
 ### Reporting & Export
