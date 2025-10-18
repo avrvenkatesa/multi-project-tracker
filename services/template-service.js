@@ -762,7 +762,7 @@ async function saveActionCategoryTemplateMapping(categoryId, templateId, project
  */
 async function autoCreateChecklistForIssue(issueId, issueType, projectId, userId) {
   try {
-    // Find template mapping (project-specific first, then global)
+    // Find template mapping (project-specific first, then global, then most recent)
     const mapping = await pool.query(
       `SELECT template_id
        FROM issue_type_templates
@@ -770,7 +770,7 @@ async function autoCreateChecklistForIssue(issueId, issueType, projectId, userId
          AND (project_id = $2 OR project_id IS NULL)
          AND is_active = TRUE
          AND auto_create = TRUE
-       ORDER BY project_id NULLS LAST
+       ORDER BY project_id NULLS LAST, updated_at DESC
        LIMIT 1`,
       [issueType, projectId]
     );
@@ -809,7 +809,7 @@ async function autoCreateChecklistForActionItem(actionItemId, categoryId, projec
       return null;
     }
 
-    // Find template mapping (project-specific first, then global)
+    // Find template mapping (project-specific first, then global, then most recent)
     const mapping = await pool.query(
       `SELECT template_id
        FROM action_item_category_templates
@@ -817,7 +817,7 @@ async function autoCreateChecklistForActionItem(actionItemId, categoryId, projec
          AND (project_id = $2 OR project_id IS NULL)
          AND is_active = TRUE
          AND auto_create = TRUE
-       ORDER BY project_id NULLS LAST
+       ORDER BY project_id NULLS LAST, updated_at DESC
        LIMIT 1`,
       [categoryId, projectId]
     );
