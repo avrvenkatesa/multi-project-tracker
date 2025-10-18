@@ -1051,8 +1051,7 @@ async function renderKanbanBoard() {
                             <input type="checkbox" 
                                    class="item-checkbox mt-1 cursor-pointer w-4 h-4 flex-shrink-0" 
                                    data-item-id="${item.id}"
-                                   data-item-type="${item.type || 'issue'}"
-                                   onclick="event.stopPropagation();" />
+                                   data-item-type="${item.type || 'issue'}" />
                             <div class="flex-1">
                         <div class="flex justify-between items-start mb-2 gap-2">
                             <div class="flex items-center gap-1">
@@ -5598,6 +5597,7 @@ function initBulkActions() {
   // Delegate checkbox changes
   document.addEventListener('change', (e) => {
     if (e.target.classList.contains('item-checkbox')) {
+      e.stopPropagation(); // Prevent bubbling to card
       const itemId = parseInt(e.target.dataset.itemId);
       const itemType = e.target.dataset.itemType;
       const key = `${itemType}-${itemId}`;
@@ -5608,6 +5608,13 @@ function initBulkActions() {
         selectedItems.delete(key);
       }
       updateBulkActionsBar();
+    }
+  });
+  
+  // Also prevent click events from bubbling
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('item-checkbox')) {
+      e.stopPropagation(); // Prevent card click handler
     }
   });
   
