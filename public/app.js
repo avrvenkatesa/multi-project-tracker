@@ -1083,70 +1083,62 @@ async function renderKanbanBoard() {
                                 `).join('')}
                             </div>
                         ` : ''}
-                        <div class="mt-2 pt-2 border-t border-gray-100 space-y-1">
-                            <button class="manage-relationships-btn flex items-center text-xs ${relCount > 0 ? 'text-blue-600 font-medium' : 'text-gray-600'} hover:text-blue-700 transition-colors w-full" 
+                        <div class="mt-2 pt-2 border-t border-gray-100 flex flex-wrap gap-1">
+                            <button class="manage-relationships-btn p-1.5 rounded hover:bg-gray-100 transition-colors ${relCount > 0 ? 'text-blue-600' : 'text-gray-600'} hover:text-blue-700 relative group" 
                                     data-item-id="${item.id}" 
                                     data-item-type="${item.type || 'issue'}" 
-                                    data-item-title="${item.title.replace(/"/g, '&quot;')}">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    data-item-title="${item.title.replace(/"/g, '&quot;')}"
+                                    title="Relationships${relCount > 0 ? ` (${relCount})` : ''}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                                 </svg>
-                                <span>Relationships</span>
-                                ${relCount > 0 ? `<span class="ml-auto px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">${relCount}</span>` : ''}
+                                ${relCount > 0 ? `<span class="absolute -top-1 -right-1 px-1 min-w-[16px] h-4 bg-blue-500 text-white rounded-full text-xs flex items-center justify-center">${relCount}</span>` : ''}
                             </button>
-                            <button class="view-comments-btn flex items-center text-xs ${commentCount > 0 ? 'text-indigo-600 font-medium' : 'text-gray-600'} hover:text-indigo-700 transition-colors w-full" 
+                            <button class="view-comments-btn p-1.5 rounded hover:bg-gray-100 transition-colors ${commentCount > 0 ? 'text-indigo-600' : 'text-gray-600'} hover:text-indigo-700 relative group" 
                                     data-item-id="${item.id}" 
-                                    data-item-type="${item.type || 'issue'}">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    data-item-type="${item.type || 'issue'}"
+                                    title="Comments${commentCount > 0 ? ` (${commentCount})` : ''}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                                 </svg>
-                                <span>Comments</span>
-                                ${commentCount > 0 ? `<span class="ml-auto px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">${commentCount}</span>` : ''}
+                                ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 px-1 min-w-[16px] h-4 bg-indigo-500 text-white rounded-full text-xs flex items-center justify-center">${commentCount}</span>` : ''}
                             </button>
-                            <button class="copy-link-btn flex items-center text-xs text-gray-600 hover:text-purple-600 transition-colors w-full" 
+                            <button class="copy-link-btn p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-600 hover:text-purple-600 group" 
                                     data-item-id="${item.id}" 
-                                    data-item-type="${item.type || 'issue'}">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    data-item-type="${item.type || 'issue'}"
+                                    title="Copy Link">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                                 </svg>
-                                <span>Copy Link</span>
                             </button>
-                            <button class="generate-checklist-btn flex items-center text-xs text-gray-600 hover:text-blue-600 transition-colors w-full group relative" 
+                            <button class="generate-checklist-btn p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-600 hover:text-blue-600 group" 
                                     data-item-id="${item.id}" 
                                     data-item-type="${item.type || 'issue'}"
                                     data-item-title="${item.title.replace(/"/g, '&quot;')}"
-                                    title="AI will analyze this ${item.type || 'issue'} and create a comprehensive checklist (10-30s)">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    title="AI Generate Checklist">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                                 </svg>
-                                <span>🤖 Generate Checklist</span>
-                                <span class="absolute left-0 bottom-full mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                                    ✨ AI analyzes & creates checklist (Limit: 10/hour)
-                                </span>
                             </button>
-                            ${canEdit || canDelete ? `
-                                <div class="flex gap-1 pt-1">
-                                    ${canEdit ? `
-                                        <button class="edit-item-btn flex-1 flex items-center justify-center text-xs text-gray-600 hover:text-green-600 transition-colors py-1 px-2 rounded hover:bg-green-50" 
-                                                data-item-id="${item.id}" 
-                                                data-item-type="${item.type || 'issue'}">
-                                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                            </svg>
-                                            <span>Edit</span>
-                                        </button>
-                                    ` : ''}
-                                    ${canDelete ? `
-                                        <button class="delete-item-btn flex-1 flex items-center justify-center text-xs text-gray-600 hover:text-red-600 transition-colors py-1 px-2 rounded hover:bg-red-50" 
-                                                data-item-id="${item.id}" 
-                                                data-item-type="${item.type || 'issue'}">
-                                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                            </svg>
-                                            <span>Delete</span>
-                                        </button>
-                                    ` : ''}
-                                </div>
+                            ${canEdit ? `
+                                <button class="edit-item-btn p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-600 hover:text-green-600 group" 
+                                        data-item-id="${item.id}" 
+                                        data-item-type="${item.type || 'issue'}"
+                                        title="Edit">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </button>
+                            ` : ''}
+                            ${canDelete ? `
+                                <button class="delete-item-btn p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-600 hover:text-red-600 group" 
+                                        data-item-id="${item.id}" 
+                                        data-item-type="${item.type || 'issue'}"
+                                        title="Delete">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
                             ` : ''}
                         </div>
                             </div>

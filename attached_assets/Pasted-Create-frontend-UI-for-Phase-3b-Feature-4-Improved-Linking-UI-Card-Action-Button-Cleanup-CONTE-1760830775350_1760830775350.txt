@@ -1,0 +1,360 @@
+Create frontend UI for Phase 3b Feature 4: Improved Linking UI + Card Action Button Cleanup
+
+CONTEXT:
+- Backend API complete: GET /api/issues/:id/checklists and /api/action-items/:id/checklists work
+- Need to add "Checklists" tab to issue/action item detail modals
+- Also need to clean up Kanban card action buttons (remove text labels, add tooltips, arrange horizontally)
+
+TASK:
+1. Add "Checklists" tab to issue detail modal showing linked checklists with progress
+2. Clean up Kanban card action buttons to icon-only with tooltips
+3. Add ability to view and unlink checklists from the tab
+
+IMPLEMENTATION:
+
+Part 1: Clean Up Kanban Card Action Buttons
+
+FIND the issue card rendering code (likely in renderKanbanBoard() function in app.js)
+
+CURRENT STRUCTURE (example):
+```html
+<div class="card-actions">
+  🔗 Relationships
+  💬 Comments
+  📋 Copy Link
+  🤖📋 Generate Checklist
+  ✏️ Edit
+  🗑️ Delete
+</div>
+```
+
+REPLACE WITH:
+```html
+<div class="card-actions flex flex-wrap gap-2 mt-2">
+  <button 
+    class="action-icon p-1 hover:bg-gray-100 rounded" 
+    title="Relationships"
+    onclick="showRelationships(${item.id}, event)"
+  >
+    🔗
+  </button>
+  
+  <button 
+    class="action-icon p-1 hover:bg-gray-100 rounded" 
+    title="Comments"
+    onclick="showComments(${item.id}, event)"
+  >
+    💬
+  </button>
+  
+  <button 
+    class="action-icon p-1 hover:bg-gray-100 rounded" 
+    title="Copy Link"
+    onclick="copyLink(${item.id}, event)"
+  >
+    📋
+  </button>
+  
+  <button 
+    class="action-icon p-1 hover:bg-gray-100 rounded" 
+    title="Generate Checklist"
+    onclick="generateChecklist(${item.id}, event)"
+  >
+    ✓
+  </button>
+  
+  <button 
+    class="action-icon p-1 hover:bg-gray-100 rounded" 
+    title="Edit"
+    onclick="editItem(${item.id}, event)"
+  >
+    ✏️
+  </button>
+  
+  <button 
+    class="action-icon p-1 hover:bg-gray-100 rounded text-red-600" 
+    title="Delete"
+    onclick="deleteItem(${item.id}, event)"
+  >
+    🗑️
+  </button>
+</div>
+```
+
+KEY CHANGES:
+- Icon-only buttons (no text labels)
+- `title` attribute for tooltips on hover
+- Horizontal flex layout with gap
+- Changed robot emoji (🤖) to checkmark (✓) for Generate Checklist
+- Each button has hover effect
+- Add `event` parameter and `event.stopPropagation()` to prevent card click when clicking buttons
+
+Part 2: Add "Checklists" Tab to Issue Detail Modal
+
+FIND the issue detail modal (might be in index.html or dynamically created in app.js)
+
+ADD "Checklists" tab to the tab navigation:
+```html
+<div class="modal-tabs flex border-b mb-4">
+  <button class="tab-button active px-4 py-2 border-b-2 border-blue-500" data-tab="details">
+    Details
+  </button>
+  <button class="tab-button px-4 py-2" data-tab="comments">
+    Comments
+  </button>
+  <button class="tab-button px-4 py-2" data-tab="checklists">
+    Checklists
+  </button>
+  <button class="tab-button px-4 py-2" data-tab="history">
+    History
+  </button>
+</div>
+
+<div class="tab-content">
+  <!-- Details tab (existing) -->
+  <div id="detailsTab" class="tab-panel">
+    <!-- Existing details content -->
+  </div>
+  
+  <!-- Comments tab (existing) -->
+  <div id="commentsTab" class="tab-panel hidden">
+    <!-- Existing comments content -->
+  </div>
+  
+  <!-- NEW: Checklists tab -->
+  <div id="checklistsTab" class="tab-panel hidden">
+    <div id="linkedChecklistsContainer">
+      <!-- Dynamically populated -->
+    </div>
+    
+    <button 
+      id="linkNewChecklistBtn" 
+      class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+    >
+      + Link New Checklist
+    </button>
+  </div>
+  
+  <!-- History tab (existing) -->
+  <div id="historyTab" class="tab-panel hidden">
+    <!-- Existing history content -->
+  </div>
+</div>
+```
+
+Part 3: Add JavaScript for Checklists Tab
+
+Add these functions (in app.js or inline):
+```javascript
+// ============================================
+// Phase 3b Feature 4: Checklists Tab
+// ============================================
+
+let currentEntityId = null;
+let currentEntityType = null;
+
+// Load checklists for current issue/action item
+async function loadLinkedChecklists(entityType, entityId) {
+  currentEntityType = entityType;
+  currentEntityId = entityId;
+  
+  const container = document.getElementById('linkedChecklistsContainer');
+  container.innerHTML = '<div class="text-gray-500">Loading checklists...</div>';
+  
+  try {
+    const endpoint = entityType === 'issue' 
+      ? `/api/issues/${entityId}/checklists`
+      : `/api/action-items/${entityId}/checklists`;
+    
+    const response = await fetch(endpoint);
+    const data = await response.json();
+    
+    if (data.checklists.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-8 text-gray-500">
+          <p class="mb-2">No checklists linked to this ${entityType}</p>
+          <p class="text-sm">Click "Link New Checklist" below to add one</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Render checklists
+    container.innerHTML = data.checklists.map(checklist => `
+      <div class="checklist-item p-4 border rounded mb-3 hover:bg-gray-50">
+        <div class="flex justify-between items-start mb-2">
+          <div class="flex-1">
+            <h4 class="font-semibold text-gray-900">${checklist.title}</h4>
+            ${checklist.template_name ? `<p class="text-sm text-gray-600">Template: ${checklist.template_name}</p>` : ''}
+          </div>
+          <span class="text-sm px-2 py-1 rounded ${
+            checklist.completion.percentage === 100 
+              ? 'bg-green-100 text-green-800' 
+              : checklist.completion.percentage > 0 
+                ? 'bg-blue-100 text-blue-800' 
+                : 'bg-gray-100 text-gray-600'
+          }">
+            ${checklist.completion.percentage}%
+          </span>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="mb-3">
+          <div class="flex justify-between text-xs text-gray-600 mb-1">
+            <span>${checklist.completion.completed} of ${checklist.completion.total} items</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              class="h-2 rounded-full transition-all ${
+                checklist.completion.percentage === 100 
+                  ? 'bg-green-500' 
+                  : 'bg-blue-500'
+              }" 
+              style="width: ${checklist.completion.percentage}%"
+            ></div>
+          </div>
+        </div>
+        
+        <!-- Actions -->
+        <div class="flex gap-2">
+          <button 
+            onclick="viewChecklist(${checklist.id})"
+            class="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            View Checklist
+          </button>
+          <button 
+            onclick="unlinkChecklist(${checklist.id})"
+            class="text-sm px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+          >
+            Unlink
+          </button>
+        </div>
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error loading checklists:', error);
+    container.innerHTML = '<div class="text-red-500">Failed to load checklists</div>';
+  }
+}
+
+// View checklist (navigate to checklist page)
+function viewChecklist(checklistId) {
+  window.location.href = `/checklist.html?id=${checklistId}`;
+}
+
+// Unlink checklist from current entity
+async function unlinkChecklist(checklistId) {
+  if (!confirm('Unlink this checklist? The checklist will not be deleted, just unlinked from this item.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/checklists/${checklistId}/link`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Failed to unlink');
+    
+    showNotification('Checklist unlinked successfully', 'success');
+    
+    // Reload checklists
+    loadLinkedChecklists(currentEntityType, currentEntityId);
+    
+  } catch (error) {
+    console.error('Error unlinking checklist:', error);
+    showNotification('Failed to unlink checklist', 'error');
+  }
+}
+
+// Tab switching logic
+function setupChecklistsTab() {
+  const tabButtons = document.querySelectorAll('.tab-button');
+  
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const tabName = button.dataset.tab;
+      
+      // Update active button
+      tabButtons.forEach(btn => {
+        btn.classList.remove('active', 'border-blue-500');
+        btn.classList.add('border-transparent');
+      });
+      button.classList.add('active', 'border-blue-500');
+      
+      // Show/hide panels
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.add('hidden');
+      });
+      
+      const activePanel = document.getElementById(`${tabName}Tab`);
+      activePanel?.classList.remove('hidden');
+      
+      // Load checklists when tab is clicked
+      if (tabName === 'checklists' && currentEntityId) {
+        loadLinkedChecklists(currentEntityType, currentEntityId);
+      }
+    });
+  });
+}
+
+// Call when opening issue/action item detail modal
+function openIssueDetailModal(issueId) {
+  currentEntityType = 'issue';
+  currentEntityId = issueId;
+  
+  // ... existing modal open code ...
+  
+  setupChecklistsTab();
+}
+```
+
+Part 4: Add CSS for Tooltips (if not already present)
+```css
+/* Tooltip styling - browsers handle title attribute automatically,
+   but we can enhance with custom CSS if needed */
+.action-icon {
+  position: relative;
+  cursor: pointer;
+}
+
+.action-icon:hover {
+  transform: scale(1.1);
+  transition: transform 0.2s;
+}
+```
+
+INTEGRATION NOTES:
+
+1. **Adapt to existing modal structure** - The tab HTML should match your current modal layout
+2. **Entity type detection** - When opening the modal, set currentEntityType correctly
+3. **Link new checklist button** - Can connect to existing checklist creation flow
+4. **Stop propagation** - Ensure button clicks don't trigger card clicks
+
+TESTING CHECKLIST:
+
+✅ Card action buttons are icon-only with tooltips
+✅ Buttons arranged horizontally (wraps to 2 rows if needed)
+✅ Clicking buttons doesn't open detail modal
+✅ "Checklists" tab appears in issue detail modal
+✅ Tab loads linked checklists with progress bars
+✅ Progress bars show correct percentage and color
+✅ "View Checklist" button navigates correctly
+✅ "Unlink" button removes link (with confirmation)
+✅ Empty state shows when no checklists
+✅ Tab refreshes after unlinking
+
+COMMIT MESSAGE:
+"feat(phase3b): add checklists tab and clean up card actions
+
+- Add Checklists tab to issue/action item detail modal
+- Display linked checklists with progress bars
+- Show completion percentage and item counts
+- Add View and Unlink actions per checklist
+- Clean up Kanban card action buttons (icon-only with tooltips)
+- Arrange card actions horizontally with hover effects
+- Stop event propagation on action buttons
+
+Completes Phase 3b Feature 4: Improved Linking UI"
