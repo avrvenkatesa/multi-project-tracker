@@ -509,8 +509,9 @@ async function applyTemplate(templateId, userId, projectId, checklistData = {}) 
     // Create checklist from template
     const checklistResult = await client.query(
       `INSERT INTO checklists (
-        template_id, project_id, title, description, status, assigned_to
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        template_id, project_id, title, description, status, assigned_to,
+        related_issue_id, related_action_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *`,
       [
         templateId,
@@ -518,7 +519,9 @@ async function applyTemplate(templateId, userId, projectId, checklistData = {}) 
         checklistData.title || template.name,
         checklistData.description || template.description,
         'not_started',
-        checklistData.assigned_to || userId
+        checklistData.assigned_to || userId,
+        checklistData.issue_id || null,
+        checklistData.action_item_id || null
       ]
     );
     
