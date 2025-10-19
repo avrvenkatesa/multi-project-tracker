@@ -1,0 +1,205 @@
+Create file upload backend for Phase 3b Feature 6: Document Upload + AI Checklist Generation
+
+CONTEXT:
+- Phase 3b Features 1-5 complete ✅
+- This is Feature 6 (final feature of Phase 3b)
+- Need to handle document uploads (PDF, DOCX, TXT)
+- Extract text content for AI processing
+- Temporarily store files during processing
+
+TASK:
+Create backend infrastructure for document upload and text extraction.
+
+IMPLEMENTATION:
+
+Part 1: Install Required Dependencies
+
+Add to package.json if not already present:
+```json
+{
+  "dependencies": {
+    "multer": "^1.4.5-lts.1",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.6.0"
+  }
+}
+```
+
+Run: `npm install` after adding dependencies
+
+Part 2: Create Document Processing Service
+
+File: services/document-service.js
+```javascript
+// services/document-service.js
+// Phase 3b Feature 6: Document Upload + AI Checklist Generation
+
+const pdfParse = require('pdf-parse');
+const mammoth = require('mammoth');
+
+/**
+ * Extract text from uploaded document
+ * @param {Buffer} fileBuffer - File content as buffer
+ * @param {string} mimeType - File MIME type
+ * @param {string} filename - Original filename
+ * @returns {object} { text, pageCount, metadata }
+ */
+async function extractTextFromDocument(fileBuffer, mimeType, filename) {
+  console.log(`📄 Extracting text from: ${filename} (${mimeType})`);
+  
+  try {
+    // Handle PDF
+    if (mimeType === 'application/pdf' || filename.endsWith('.pdf')) {
+      const data = await pdfParse(fileBuffer);
+      
+      return {
+        text: data.text,
+        pageCount: data.numpages,
+        metadata: {
+          info: data.info,
+          filename: filename
+        },
+        success: true
+      };
+    }
+    
+    // Handle Word Documents (.docx)
+    if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+        filename.endsWith('.docx')) {
+      const result = await mammoth.extractRawText({ buffer: fileBuffer });
+      
+      return {
+        text: result.value,
+        pageCount: null, // Word doesn't have page count in extracted text
+        metadata: {
+          filename: filename,
+          warnings: result.messages
+        },
+        success: true
+      };
+    }
+    
+    // Handle plain text
+    if (mimeType === 'text/plain' || filename.endsWith('.txt')) {
+      return {
+        text: fileBuffer.toString('utf-8'),
+        pageCount: null,
+        metadata: {
+          filename: filename
+        },
+        success: true
+      };
+    }
+    
+    // Unsupported file type
+    throw new Error(`Unsupported file type: ${mimeType}. Please upload PDF, DOCX, or TXT files.`);
+    
+  } catch (error) {
+    console.error('Error extracting text:', error);
+    throw error;
+  }
+}
+
+/**
+ * Validate uploaded file
+ * @param {object} file - Multer file object
+ */
+function validateDocumentFile(file) {
+  const allowedTypes = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain'
+  ];
+  
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  
+  if (!allowedTypes.includes(file.mimetype) && 
+      !file.originalname.match(/\.(pdf|docx|txt)$/i)) {
+    throw new Error('Invalid file type. Please upload PDF, DOCX, or TXT files only.');
+  }
+  
+  if (file.size > maxSize) {
+    throw new Error('File too large. Maximum size is 10MB.');
+  }
+  
+  return true;
+}
+
+module.exports = {
+  extractTextFromDocument,
+  validateDocumentFile
+};
+```
+
+Part 3: Add File Upload Endpoint
+
+Add to server.js:
+```javascript
+// ============================================
+// Phase 3b Feature 6: Document Upload + AI Generation
+// ============================================
+
+const multer = require('multer');
+const documentService = require('./services/document-service.js');
+
+// Configure multer for memory storage (temporary)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+/**
+ * Upload document and extract text
+ * POST /api/documents/extract
+ */
+app.post('/api/documents/extract', upload.single('document'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        error: 'No file uploaded',
+        message: 'Please select a document to upload'
+      });
+    }
+    
+    console.log(`📤 Document uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
+    
+    // Validate file
+    documentService.validateDocumentFile(req.file);
+    
+    // Extract text
+    const extracted = await documentService.extractTextFromDocument(
+      req.file.buffer,
+      req.file.mimetype,
+      req.file.originalname
+    );
+    
+    console.log(`✅ Text extracted: ${extracted.text.length} characters`);
+    
+    res.json({
+      success: true,
+      filename: req.file.originalname,
+      fileSize: req.file.size,
+      extractedText: extracted.text,
+      pageCount: extracted.pageCount,
+      characterCount: extracted.text.length,
+      metadata: extracted.metadata
+    });
+    
+  } catch (error) {
+    console.error('Error processing document:', error);
+    
+    if (error.message.includes('Unsupported') || error.message.includes('Invalid')) {
+      return res.status(400).json({
+        error: 'Invalid file',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Failed to process document',
+      message: error.message
+    });
+  }
+});

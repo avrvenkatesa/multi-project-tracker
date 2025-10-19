@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document Upload Test - Phase 3b Feature 6</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-8">
+  <div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h1 class="text-3xl font-bold text-blue-600 mb-6">📄 Document Upload Test</h1>
+      <p class="text-gray-600 mb-6">Phase 3b Feature 6: Document Upload + AI Checklist Generation</p>
+      
+      <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded">
+        <h3 class="font-semibold text-blue-800 mb-2">Test Instructions:</h3>
+        <ul class="list-disc list-inside text-blue-700 space-y-1">
+          <li>Upload a PDF, DOCX, or TXT file (max 10MB)</li>
+          <li>The API will extract text from the document</li>
+          <li>View the extracted text, page count, and metadata below</li>
+        </ul>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Select Document:</label>
+          <input 
+            type="file" 
+            id="documentInput" 
+            accept=".pdf,.docx,.txt"
+            class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          >
+        </div>
+
+        <button 
+          id="uploadBtn"
+          class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
+          Upload & Extract Text
+        </button>
+
+        <div id="loading" class="hidden text-center py-4">
+          <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p class="text-gray-600 mt-2">Extracting text...</p>
+        </div>
+
+        <div id="result" class="hidden mt-6 p-4 bg-green-50 border border-green-200 rounded">
+          <h3 class="font-semibold text-green-800 mb-3">✅ Extraction Successful!</h3>
+          <div id="resultContent"></div>
+        </div>
+
+        <div id="error" class="hidden mt-6 p-4 bg-red-50 border border-red-200 rounded">
+          <h3 class="font-semibold text-red-800 mb-2">❌ Error</h3>
+          <p id="errorMessage" class="text-red-700"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const uploadBtn = document.getElementById('uploadBtn');
+    const documentInput = document.getElementById('documentInput');
+    const loading = document.getElementById('loading');
+    const result = document.getElementById('result');
+    const resultContent = document.getElementById('resultContent');
+    const error = document.getElementById('error');
+    const errorMessage = document.getElementById('errorMessage');
+
+    uploadBtn.addEventListener('click', async () => {
+      const file = documentInput.files[0];
+      
+      if (!file) {
+        showError('Please select a file');
+        return;
+      }
+
+      hideAll();
+      loading.classList.remove('hidden');
+      uploadBtn.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append('document', file);
+
+        const response = await fetch('/api/documents/extract', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || data.error || 'Upload failed');
+        }
+
+        showResult(data);
+
+      } catch (err) {
+        console.error('Upload error:', err);
+        showError(err.message);
+      } finally {
+        loading.classList.add('hidden');
+        uploadBtn.disabled = false;
+      }
+    });
+
+    function showResult(data) {
+      const html = `
+        <div class="space-y-3">
+          <div>
+            <span class="font-semibold">Filename:</span> ${data.filename}
+          </div>
+          <div>
+            <span class="font-semibold">File Size:</span> ${formatFileSize(data.fileSize)}
+          </div>
+          ${data.pageCount ? `
+          <div>
+            <span class="font-semibold">Page Count:</span> ${data.pageCount}
+          </div>
+          ` : ''}
+          <div>
+            <span class="font-semibold">Character Count:</span> ${data.characterCount.toLocaleString()}
+          </div>
+          <div>
+            <span class="font-semibold">Extracted Text Preview:</span>
+            <pre class="mt-2 p-3 bg-white border rounded text-sm max-h-96 overflow-auto">${data.extractedText.substring(0, 1000)}${data.extractedText.length > 1000 ? '\n\n... (truncated for preview)' : ''}</pre>
+          </div>
+        </div>
+      `;
+      resultContent.innerHTML = html;
+      result.classList.remove('hidden');
+    }
+
+    function showError(message) {
+      errorMessage.textContent = message;
+      error.classList.remove('hidden');
+    }
+
+    function hideAll() {
+      result.classList.add('hidden');
+      error.classList.add('hidden');
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+  </script>
+</body>
+</html>

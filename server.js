@@ -41,6 +41,7 @@ const { initializeDailyJobs } = require('./jobs/dailyNotifications');
 const { generateChecklistPDF } = require('./services/pdf-service');
 const { validateChecklist, getValidationStatus } = require('./services/validation-service');
 const dependencyService = require('./services/dependency-service');
+const documentService = require('./services/document-service');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -130,6 +131,26 @@ const attachmentUpload = multer({
       cb(null, true);
     } else {
       cb(new Error(`File type ${file.mimetype} not allowed`));
+    }
+  }
+});
+
+// Configure multer for document extraction (Phase 3b Feature 6)
+const documentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_FILE_SIZE
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain'
+    ];
+    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF, DOCX, and TXT files are allowed'));
     }
   }
 });
@@ -9114,6 +9135,62 @@ app.get('/api/checklist-items/:itemId/dependent-items', authenticateToken, async
     console.error('Error getting dependent items:', error);
     res.status(500).json({ 
       error: 'Failed to get dependent items',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// Phase 3b Feature 6: Document Upload + AI Generation
+// ============================================
+
+/**
+ * Upload document and extract text
+ * POST /api/documents/extract
+ */
+app.post('/api/documents/extract', authenticateToken, documentUpload.single('document'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        error: 'No file uploaded',
+        message: 'Please select a document to upload'
+      });
+    }
+    
+    console.log(`📤 Document uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
+    
+    documentService.validateDocumentFile(req.file);
+    
+    const extracted = await documentService.extractTextFromDocument(
+      req.file.buffer,
+      req.file.mimetype,
+      req.file.originalname
+    );
+    
+    console.log(`✅ Text extracted: ${extracted.text.length} characters`);
+    
+    res.json({
+      success: true,
+      filename: req.file.originalname,
+      fileSize: req.file.size,
+      extractedText: extracted.text,
+      pageCount: extracted.pageCount,
+      characterCount: extracted.text.length,
+      metadata: extracted.metadata
+    });
+    
+  } catch (error) {
+    console.error('Error processing document:', error);
+    
+    if (error.message.includes('Unsupported') || error.message.includes('Invalid') || error.message.includes('too large')) {
+      return res.status(400).json({
+        error: 'Invalid file',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Failed to process document',
       message: error.message
     });
   }

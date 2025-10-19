@@ -20,6 +20,7 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 - **completion-service.js**: Manages checklist completion actions, including rule management (get, save, delete), completion percentage calculation, and automatic status updates for issues/action items when checklists reach completion thresholds. Supports project-specific and global rules with smart priority-based matching. Integrated into `POST /api/checklists/:id/responses` to automatically trigger status updates.
 - **template-service.js**: Handles checklist template operations, auto-create checklist mappings, template library features, and bulk template application. Includes `bulkApplyTemplate()` for applying templates to multiple issues or action items simultaneously (max 100 entities per request) with sequential processing, partial failure support, and detailed success/failure tracking.
 - **dependency-service.js**: Manages checklist item dependencies with 5 core functions: `addDependency()` with same-checklist validation and circular dependency error handling, `removeDependency()` for cleanup, `getItemDependencies()` to list dependencies, `checkIfItemBlocked()` with detailed blocking information, and `getItemsDependingOn()` for reverse lookup.
+- **document-service.js**: Handles document upload and text extraction from memory buffers for AI checklist generation. Supports PDF, DOCX, and TXT files up to 10MB with validation and metadata extraction.
 - **ai-service.js**: Provides AI-powered meeting analysis and checklist generation capabilities.
 
 **API Endpoints - Phase 3b Features:**
@@ -36,6 +37,11 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
   - Integrated into completion endpoint to prevent completing blocked items
   - Circular dependency prevention via database triggers
   - Same-checklist validation
+- **Feature 6**: Document Upload + AI Checklist Generation
+  - `POST /api/documents/extract` - Upload document (PDF, DOCX, TXT) and extract text for AI processing
+  - Memory-based upload (no permanent storage) with 10MB file size limit
+  - Returns extracted text, page count, character count, and metadata
+  - Integrated with existing AI checklist generation service
 
 ### Data Management
 A PostgreSQL database stores core entities such as Users, Projects, Issues, Action Items, Meeting Transcripts, and the Risk Register. It manages relationships, AI-specific data (Status Update Review Queue, AI analysis audit trail, checklist generation sources), collaboration data (comments, mention notifications), user preferences, and comprehensive risk management with automatic risk scoring and tracking. Tags are managed with a type system. A dedicated `status_history` table tracks all status transitions. A comprehensive checklist system stores templates, sections, items, responses, comments, and signoffs, with generated completion percentages, performance indexes, and validation history. Database schemas for checklist templates include `is_public`, `is_featured`, `tags`, `usage_count`, and `avg_rating`, with related `template_ratings`, `template_usage`, and `template_categories` tables. Auto-creation of checklists is supported via `issue_type_templates` and `action_item_category_templates` tables, linked to `action_item_categories` and the `action_items` table. `checklist_completion_actions` stores rules for auto-updating issue/action item status upon checklist completion. `checklist_item_dependencies` tracks dependencies between checklist items with database-level circular dependency prevention via triggers and functions, and a `checklist_item_dependency_status` view for tracking dependency completion status.
