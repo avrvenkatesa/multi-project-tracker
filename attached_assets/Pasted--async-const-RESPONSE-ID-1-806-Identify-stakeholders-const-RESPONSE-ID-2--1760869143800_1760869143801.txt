@@ -1,0 +1,115 @@
+(async () => {
+  const RESPONSE_ID_1 = 806;  // "Identify stakeholders..."
+  const RESPONSE_ID_2 = 807;  // "Gather existing documentation..."
+  
+  console.log('🧪 TESTING DEPENDENCY APIs (Corrected)\n');
+  console.log(`Response ${RESPONSE_ID_2} will depend on Response ${RESPONSE_ID_1}\n`);
+  
+  try {
+    // Test 1: Add dependency
+    console.log('━━━ Test 1: Add Dependency ━━━');
+    const addResult = await fetch(`/api/checklist-items/${RESPONSE_ID_2}/dependencies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ dependsOnItemId: RESPONSE_ID_1 })
+    }).then(r => r.json());
+    console.log('Result:', addResult);
+    console.log(addResult.success ? '✅ PASS' : '❌ FAIL');
+    console.log('');
+    
+    if (!addResult.success) {
+      console.error('❌ Cannot continue - add dependency failed');
+      return;
+    }
+    
+    // Test 2: Get dependencies
+    console.log('━━━ Test 2: Get Dependencies ━━━');
+    const deps = await fetch(`/api/checklist-items/${RESPONSE_ID_2}/dependencies`)
+      .then(r => r.json());
+    console.log('Count:', deps.count);
+    console.log('Dependencies:', deps.dependencies);
+    console.log(deps.count > 0 ? '✅ PASS' : '❌ FAIL');
+    console.log('');
+    
+    // Test 3: Check blocking status
+    console.log('━━━ Test 3: Blocking Status ━━━');
+    const blocking = await fetch(`/api/checklist-items/${RESPONSE_ID_2}/blocking-status`)
+      .then(r => r.json());
+    console.log('Is Blocked:', blocking.isBlocked);
+    console.log('Blocked By:', blocking.blockedBy);
+    console.log('Total Deps:', blocking.totalDependencies);
+    console.log('Completed:', blocking.completedDependencies);
+    console.log(blocking.isBlocked === true ? '✅ PASS' : '❌ FAIL');
+    console.log('');
+    
+    // Test 4: Get dependent items
+    console.log('━━━ Test 4: Dependent Items (Reverse Lookup) ━━━');
+    const dependents = await fetch(`/api/checklist-items/${RESPONSE_ID_1}/dependent-items`)
+      .then(r => r.json());
+    console.log('Count:', dependents.count);
+    console.log('Dependent Items:', dependents.dependentItems);
+    console.log(dependents.count > 0 ? '✅ PASS' : '❌ FAIL');
+    console.log('');
+    
+    // Test 5: Circular dependency prevention
+    console.log('━━━ Test 5: Circular Dependency (Should Fail) ━━━');
+    const circular = await fetch(`/api/checklist-items/${RESPONSE_ID_1}/dependencies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ dependsOnItemId: RESPONSE_ID_2 })
+    }).then(r => r.json());
+    console.log('Result:', circular);
+    const circularBlocked = circular.error && (
+      circular.error.includes('circular') || 
+      circular.error.includes('Circular')
+    );
+    console.log(circularBlocked ? '✅ PASS (correctly prevented)' : '❌ FAIL (should have been blocked)');
+    console.log('');
+    
+    // Test 6: Remove dependency
+    console.log('━━━ Test 6: Remove Dependency ━━━');
+    const depId = deps.dependencies[0]?.dependency_id;
+    if (depId) {
+      const removeResult = await fetch(`/api/dependencies/${depId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      }).then(r => r.json());
+      console.log('Result:', removeResult);
+      console.log(removeResult.success ? '✅ PASS' : '❌ FAIL');
+    } else {
+      console.log('⚠️ No dependency ID found to remove');
+    }
+    
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🎉 All API tests complete!');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+  } catch (error) {
+    console.error('❌ Test suite failed:', error);
+  }
+})();
+```
+
+---
+
+## **What to Watch:**
+
+**Server Console:** Should show enhanced logging like:
+```
+➕ Adding dependency: Item 807 depends on Item 806
+SQL query result: [...]
+✅ Dependency created: 1
+```
+
+---
+
+## **Expected Results:**
+```
+Test 1: ✅ PASS
+Test 2: ✅ PASS
+Test 3: ✅ PASS (isBlocked: true)
+Test 4: ✅ PASS
+Test 5: ✅ PASS (circular prevented)
+Test 6: ✅ PASS
