@@ -753,6 +753,87 @@
                             </div>
                         </div>
                         
+                        <!-- Relationships Tab -->
+                        <div id="relationships-tab" class="item-detail-tab-panel hidden">
+                            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                                <span>🔗</span>
+                                Relationships
+                                <span id="item-detail-relationship-count" class="text-sm text-gray-500">(0)</span>
+                            </h3>
+                            
+                            <div class="relationships-container space-y-6">
+                                <!-- Blocked By Section -->
+                                <div class="relationship-section">
+                                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                        <span>🚫</span>
+                                        <span>Blocked By</span>
+                                    </h4>
+                                    <div id="blocked-by-list" class="relationship-list pl-6">
+                                        <p class="text-sm text-gray-500 italic">No blocking issues</p>
+                                    </div>
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('blocked_by')">
+                                        + Add blocking issue
+                                    </button>
+                                </div>
+                                
+                                <!-- Blocks Section -->
+                                <div class="relationship-section border-t pt-6">
+                                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                        <span>⛔</span>
+                                        <span>Blocks</span>
+                                    </h4>
+                                    <div id="blocks-list" class="relationship-list pl-6">
+                                        <p class="text-sm text-gray-500 italic">Not blocking any issues</p>
+                                    </div>
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('blocks')">
+                                        + Add blocked issue
+                                    </button>
+                                </div>
+                                
+                                <!-- Related Issues Section -->
+                                <div class="relationship-section border-t pt-6">
+                                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                        <span>🔄</span>
+                                        <span>Related Issues</span>
+                                    </h4>
+                                    <div id="related-issues-list" class="relationship-list pl-6">
+                                        <p class="text-sm text-gray-500 italic">No related issues</p>
+                                    </div>
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('related')">
+                                        + Add related issue
+                                    </button>
+                                </div>
+                                
+                                <!-- Parent Issue Section -->
+                                <div class="relationship-section border-t pt-6">
+                                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                        <span>📊</span>
+                                        <span>Parent Issue</span>
+                                    </h4>
+                                    <div id="parent-issue" class="relationship-list pl-6">
+                                        <p class="text-sm text-gray-500 italic">No parent issue</p>
+                                    </div>
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('parent')">
+                                        + Link to parent
+                                    </button>
+                                </div>
+                                
+                                <!-- Child Issues Section -->
+                                <div class="relationship-section border-t pt-6">
+                                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                        <span>👶</span>
+                                        <span>Child Issues</span>
+                                    </h4>
+                                    <div id="child-issues-list" class="relationship-list pl-6">
+                                        <p class="text-sm text-gray-500 italic">No child issues</p>
+                                    </div>
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('child')">
+                                        + Add child issue
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Comments Tab -->
                         <div id="comments-tab" class="item-detail-tab-panel hidden">
                             <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
