@@ -635,8 +635,16 @@ async function openItemDetailModal(itemId, itemType) {
     // Show/hide edit and delete buttons based on permissions
     const editBtn = document.getElementById('item-detail-edit-btn');
     const deleteBtn = document.getElementById('item-detail-delete-btn');
-    if (editBtn) editBtn.style.display = canEdit ? 'flex' : 'none';
-    if (deleteBtn) deleteBtn.style.display = canDelete ? 'flex' : 'none';
+    if (editBtn) {
+      editBtn.style.display = canEdit ? 'flex' : 'none';
+      editBtn.dataset.itemId = itemId;
+      editBtn.dataset.itemType = itemType;
+    }
+    if (deleteBtn) {
+      deleteBtn.style.display = canDelete ? 'flex' : 'none';
+      deleteBtn.dataset.itemId = itemId;
+      deleteBtn.dataset.itemType = itemType;
+    }
     
     if (currentProject) {
       await loadProjectMembers(currentProject.id);
@@ -1105,31 +1113,45 @@ if (typeof window !== 'undefined') {
 
 // ==================== EDIT & DELETE FROM MODAL ====================
 
-function handleEditItemFromModal() {
-  if (!currentItemId || !currentItemType) return;
+function handleEditItemFromModal(e) {
+  const btn = e.currentTarget;
+  const itemId = parseInt(btn.dataset.itemId);
+  const itemType = btn.dataset.itemType;
+  
+  if (!itemId || !itemType) {
+    console.error('Missing item ID or type');
+    return;
+  }
   
   // Close the modal
   closeItemDetailModal();
   
   // Open the edit modal (this function should exist in app.js)
   if (typeof openEditModal === 'function') {
-    openEditModal(currentItemId, currentItemType);
+    openEditModal(itemId, itemType);
   } else {
     console.error('openEditModal function not found');
   }
 }
 
-async function handleDeleteItemFromModal() {
-  if (!currentItemId || !currentItemType) return;
+async function handleDeleteItemFromModal(e) {
+  const btn = e.currentTarget;
+  const itemId = parseInt(btn.dataset.itemId);
+  const itemType = btn.dataset.itemType;
+  
+  if (!itemId || !itemType) {
+    console.error('Missing item ID or type');
+    return;
+  }
   
   if (!confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
     return;
   }
   
   try {
-    const endpoint = currentItemType === 'issue' 
-      ? `/api/issues/${currentItemId}`
-      : `/api/action-items/${currentItemId}`;
+    const endpoint = itemType === 'issue' 
+      ? `/api/issues/${itemId}`
+      : `/api/action-items/${itemId}`;
     
     await axios.delete(endpoint, { withCredentials: true });
     
