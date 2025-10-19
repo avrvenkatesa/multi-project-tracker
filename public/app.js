@@ -3952,6 +3952,17 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     await loadProjectData(currentProject.id);
     
     showToast('Issue updated successfully!', 'success');
+    
+    // Check if we should return to detail modal
+    if (window.returnToDetailModal) {
+      const { itemId: detailItemId, itemType } = window.returnToDetailModal;
+      window.returnToDetailModal = null; // Clear the flag
+      
+      // Reopen the detail modal
+      if (typeof openItemDetailModal === 'function') {
+        openItemDetailModal(detailItemId, itemType);
+      }
+    }
   } catch (error) {
     console.error('Error updating issue:', error);
     alert(error.response?.data?.error || 'Failed to update issue');
@@ -3994,6 +4005,17 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     await loadProjectData(currentProject.id);
     
     showToast('Action item updated successfully!', 'success');
+    
+    // Check if we should return to detail modal
+    if (window.returnToDetailModal) {
+      const { itemId: detailItemId, itemType } = window.returnToDetailModal;
+      window.returnToDetailModal = null; // Clear the flag
+      
+      // Reopen the detail modal
+      if (typeof openItemDetailModal === 'function') {
+        openItemDetailModal(detailItemId, itemType);
+      }
+    }
   } catch (error) {
     console.error('Error updating action item:', error);
     alert(error.response?.data?.error || 'Failed to update action item');
@@ -4001,21 +4023,40 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
 });
 
 // Close edit modals
-document.getElementById('closeEditIssueModal').addEventListener('click', function() {
+function closeEditIssueModalHandler() {
   document.getElementById('editIssueModal').classList.add('hidden');
-});
+  
+  // Check if we should return to detail modal
+  if (window.returnToDetailModal) {
+    const { itemId, itemType } = window.returnToDetailModal;
+    window.returnToDetailModal = null; // Clear the flag
+    
+    // Reopen the detail modal
+    if (typeof openItemDetailModal === 'function') {
+      openItemDetailModal(itemId, itemType);
+    }
+  }
+}
 
-document.getElementById('cancelEditIssue').addEventListener('click', function() {
-  document.getElementById('editIssueModal').classList.add('hidden');
-});
-
-document.getElementById('closeEditActionItemModal').addEventListener('click', function() {
+function closeEditActionItemModalHandler() {
   document.getElementById('editActionItemModal').classList.add('hidden');
-});
+  
+  // Check if we should return to detail modal
+  if (window.returnToDetailModal) {
+    const { itemId, itemType } = window.returnToDetailModal;
+    window.returnToDetailModal = null; // Clear the flag
+    
+    // Reopen the detail modal
+    if (typeof openItemDetailModal === 'function') {
+      openItemDetailModal(itemId, itemType);
+    }
+  }
+}
 
-document.getElementById('cancelEditActionItem').addEventListener('click', function() {
-  document.getElementById('editActionItemModal').classList.add('hidden');
-});
+document.getElementById('closeEditIssueModal').addEventListener('click', closeEditIssueModalHandler);
+document.getElementById('cancelEditIssue').addEventListener('click', closeEditIssueModalHandler);
+document.getElementById('closeEditActionItemModal').addEventListener('click', closeEditActionItemModalHandler);
+document.getElementById('cancelEditActionItem').addEventListener('click', closeEditActionItemModalHandler);
 
 // Confirm and delete item
 async function confirmDeleteItem(itemId, itemType) {

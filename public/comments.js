@@ -1135,6 +1135,12 @@ function handleEditItemFromModal(e) {
     return;
   }
   
+  // Store the return state for when edit modal closes
+  window.returnToDetailModal = {
+    itemId: itemId,
+    itemType: itemType
+  };
+  
   // Close the modal
   closeItemDetailModal();
   
