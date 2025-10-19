@@ -654,6 +654,7 @@ async function openItemDetailModal(itemId, itemType) {
     
     await loadItemDetailComments();
     await loadItemDetailAttachments();
+    await loadChecklistCount();
     
   } catch (error) {
     console.error('Error opening item detail:', error);
@@ -944,6 +945,26 @@ function switchItemDetailTab(tabName) {
 }
 
 // ==================== CHECKLISTS TAB ====================
+
+async function loadChecklistCount() {
+  try {
+    const endpoint = currentItemType === 'issue' 
+      ? `/api/issues/${currentItemId}/checklists`
+      : `/api/action-items/${currentItemId}/checklists`;
+    
+    const response = await axios.get(endpoint, { withCredentials: true });
+    const data = response.data;
+    
+    // Update count badges
+    const countElement = document.getElementById('item-detail-checklist-count');
+    const countTabElement = document.getElementById('item-detail-checklist-count-tab');
+    if (countElement) countElement.textContent = `(${data.count})`;
+    if (countTabElement) countTabElement.textContent = `(${data.count})`;
+    
+  } catch (error) {
+    console.error('Error loading checklist count:', error);
+  }
+}
 
 async function loadLinkedChecklists() {
   const container = document.getElementById('linked-checklists-container');
