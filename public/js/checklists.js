@@ -320,6 +320,16 @@ function setupChecklistFillPageListeners() {
         const sectionId = sectionHeader.dataset.sectionId;
         toggleSection(sectionId);
       }
+      
+      // Handle dependency button clicks
+      const depsBtn = e.target.closest('.manage-deps-btn');
+      if (depsBtn) {
+        e.stopPropagation();
+        const responseId = depsBtn.dataset.responseId;
+        if (responseId) {
+          openDependencyModal(parseInt(responseId), e);
+        }
+      }
     });
     
     // Event delegation for field inputs
@@ -677,24 +687,25 @@ async function loadChecklistForFilling(checklistId) {
   currentChecklistId = checklistId;
   
   try {
-    const response = await fetch(`/api/checklists/${checklistId}`, { credentials: 'include' });
+    // Load checklist WITH dependency information
+    const checklist = await loadChecklistWithDependencies(checklistId);
+    displayChecklistForFilling(checklist);
     
-    if (response.status === 401) {
+  } catch (error) {
+    console.error('Error loading checklist:', error);
+    
+    // Handle auth errors
+    if (error.message?.includes('401')) {
       window.location.href = 'index.html';
       return;
     }
     
-    if (response.status === 403) {
+    if (error.message?.includes('403')) {
       showToast('Access denied to this checklist', 'error');
       setTimeout(() => window.location.href = 'checklists.html', 2000);
       return;
     }
     
-    const checklist = await response.json();
-    displayChecklistForFilling(checklist);
-    
-  } catch (error) {
-    console.error('Error loading checklist:', error);
     showToast('Failed to load checklist', 'error');
   }
 }
@@ -775,15 +786,64 @@ function renderSection(section, directSubsections, allSections, level = 0) {
 function renderItem(item) {
   const fieldHtml = renderField(item);
   const requiredMark = item.is_required ? '<span class="text-red-500">*</span>' : '';
+  const responseId = item.response_id || item.id;
+  
+  // Dependency status indicators
+  const isBlocked = item.isBlocked || false;
+  const totalDeps = item.totalDeps || 0;
+  const completedDeps = item.completedDeps || 0;
+  const blockedBy = item.blockedBy || [];
   
   return `
-    <div class="checklist-item" data-item-id="${item.item_id}" data-template-item-id="${item.template_item_id}">
-      <div class="item-label">
-        ${escapeHtml(item.item_text)} ${requiredMark}
-        ${item.help_text ? `<span class="item-help-text">${escapeHtml(item.help_text)}</span>` : ''}
-      </div>
-      <div class="item-field">
-        ${fieldHtml}
+    <div class="checklist-item ${isBlocked ? 'border-l-4 border-l-red-500 bg-red-50' : ''}" 
+         data-item-id="${item.item_id}" 
+         data-response-id="${responseId}"
+         data-template-item-id="${item.template_item_id}">
+      
+      <div class="flex justify-between items-start gap-3">
+        <div class="flex-1">
+          <div class="item-label">
+            ${escapeHtml(item.item_text)} ${requiredMark}
+            ${item.help_text ? `<span class="item-help-text">${escapeHtml(item.help_text)}</span>` : ''}
+          </div>
+          
+          <!-- Blocked Warning -->
+          ${isBlocked ? `
+            <div class="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm">
+              <p class="font-medium text-red-800 mb-1 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>Cannot complete - blocked by ${blockedBy.length} item(s)</span>
+              </p>
+              <ul class="text-red-700 ml-6 space-y-1 text-xs">
+                ${blockedBy.map(dep => `
+                  <li>• ${escapeHtml(dep.title || dep.item_text || 'Item ' + dep.id)}</li>
+                `).join('')}
+              </ul>
+            </div>
+          ` : ''}
+          
+          <!-- Dependency Badge -->
+          ${totalDeps > 0 && !isBlocked ? `
+            <div class="mt-2">
+              <span class="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                ✅ ${completedDeps}/${totalDeps} dependencies met
+              </span>
+            </div>
+          ` : ''}
+          
+          <div class="item-field mt-2">
+            ${fieldHtml}
+          </div>
+        </div>
+        
+        <!-- Manage Dependencies Button -->
+        <button 
+          data-response-id="${responseId}"
+          class="manage-deps-btn flex-shrink-0 px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap border border-blue-300 rounded hover:bg-blue-50"
+          title="Manage dependencies"
+        >
+          🔗 ${totalDeps > 0 ? `(${totalDeps})` : 'Deps'}
+        </button>
       </div>
     </div>
   `;
@@ -1237,4 +1297,317 @@ function logout() {
   }).then(() => {
     window.location.href = 'index.html';
   });
+}
+
+// =====================================================
+// Phase 3b Feature 5: DEPENDENCY MANAGEMENT
+// =====================================================
+
+let checklistItemsWithDeps = [];
+let dependencyModalItemId = null;
+
+/**
+ * Load checklist with dependency information
+ */
+async function loadChecklistWithDependencies(checklistId) {
+  try {
+    const response = await fetch(`/api/checklists/${checklistId}`, { credentials: 'include' });
+    
+    if (!response.ok) {
+      throw new Error('Failed to load checklist');
+    }
+    
+    const checklist = await response.json();
+    
+    // Extract all items from sections
+    const allItems = [];
+    if (checklist.sections) {
+      checklist.sections.forEach(section => {
+        if (section.items) {
+          section.items.forEach(item => {
+            // Use response_id which is the actual ID in checklist_responses table
+            allItems.push({
+              ...item,
+              id: item.response_id || item.id,
+              section_id: section.id
+            });
+          });
+        }
+      });
+    }
+    
+    // Fetch dependency status for all items in parallel
+    console.log(`📊 Loading dependencies for ${allItems.length} items...`);
+    const itemsWithDeps = await Promise.all(
+      allItems.map(async (item) => {
+        try {
+          const blocking = await fetch(`/api/checklist-items/${item.id}/blocking-status`, {
+            credentials: 'include'
+          }).then(r => r.json());
+          
+          return {
+            ...item,
+            isBlocked: blocking.isBlocked || false,
+            blockedBy: blocking.blockedBy || [],
+            totalDeps: blocking.totalDependencies || 0,
+            completedDeps: blocking.completedDependencies || 0
+          };
+        } catch (error) {
+          console.error(`Error getting blocking status for item ${item.id}:`, error);
+          return { ...item, isBlocked: false, blockedBy: [], totalDeps: 0, completedDeps: 0 };
+        }
+      })
+    );
+    
+    // Store globally for use in dependency modal
+    checklistItemsWithDeps = itemsWithDeps;
+    
+    // Update sections with enhanced items
+    if (checklist.sections) {
+      checklist.sections.forEach(section => {
+        if (section.items) {
+          section.items = section.items.map(item => {
+            const enhanced = itemsWithDeps.find(i => i.template_item_id === item.template_item_id);
+            return enhanced || item;
+          });
+        }
+      });
+    }
+    
+    console.log(`✅ Loaded ${itemsWithDeps.filter(i => i.totalDeps > 0).length} items with dependencies`);
+    
+    return checklist;
+    
+  } catch (error) {
+    console.error('Error loading checklist with dependencies:', error);
+    throw error;
+  }
+}
+
+/**
+ * Open dependency management modal
+ */
+async function openDependencyModal(responseId, event) {
+  if (event) event.stopPropagation();
+  
+  dependencyModalItemId = responseId;
+  const modal = document.getElementById('dependencyModal');
+  const content = document.getElementById('dependencyModalContent');
+  
+  if (!modal || !content) {
+    console.error('Dependency modal elements not found');
+    return;
+  }
+  
+  modal.classList.remove('hidden');
+  content.innerHTML = '<div class="text-center py-8"><p class="text-gray-500">Loading dependencies...</p></div>';
+  
+  try {
+    // Get current dependencies
+    const depsResponse = await fetch(`/api/checklist-items/${responseId}/dependencies`, {
+      credentials: 'include'
+    });
+    const depsData = await depsResponse.json();
+    
+    // Get current item info
+    const currentItem = checklistItemsWithDeps.find(i => i.id == responseId);
+    
+    // Filter available items
+    const availableItems = checklistItemsWithDeps.filter(item => 
+      item.id != responseId && // Can't depend on self
+      !depsData.dependencies.some(d => d.depends_on_item_id == item.id) // Not already a dependency
+    );
+    
+    // Render modal content
+    content.innerHTML = `
+      <div class="space-y-6">
+        
+        <!-- Current Item Info -->
+        <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p class="font-medium text-blue-900 mb-1">
+            Managing dependencies for:
+          </p>
+          <p class="text-sm text-blue-700">
+            ${escapeHtml(currentItem?.item_text || currentItem?.title || 'Item ' + responseId)}
+          </p>
+        </div>
+        
+        <!-- Current Dependencies -->
+        <div>
+          <h4 class="font-semibold text-lg mb-3">Dependencies (${depsData.count || 0})</h4>
+          <p class="text-sm text-gray-600 mb-3">
+            This item cannot be completed until these items are done:
+          </p>
+          
+          ${depsData.dependencies && depsData.dependencies.length > 0 ? `
+            <div class="space-y-2">
+              ${depsData.dependencies.map(dep => `
+                <div class="flex justify-between items-center p-3 bg-gray-50 border rounded-lg hover:bg-gray-100">
+                  <div class="flex-1">
+                    <p class="font-medium">${escapeHtml(dep.depends_on_title || 'Item ' + dep.depends_on_item_id)}</p>
+                    <p class="text-sm mt-1 ${dep.depends_on_completed ? 'text-green-600' : 'text-orange-600'}">
+                      ${dep.depends_on_completed ? '✅ Complete' : '⏳ Incomplete - blocking completion'}
+                    </p>
+                  </div>
+                  <button 
+                    data-dependency-id="${dep.dependency_id}"
+                    class="remove-dependency-btn ml-4 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <p class="text-gray-500 text-sm py-4 text-center border border-dashed rounded-lg">
+              No dependencies yet. This item can be completed anytime.
+            </p>
+          `}
+        </div>
+        
+        <!-- Add New Dependency -->
+        <div class="pt-6 border-t">
+          <h4 class="font-semibold text-lg mb-3">Add New Dependency</h4>
+          <p class="text-sm text-gray-600 mb-3">
+            Make this item depend on another item in the checklist:
+          </p>
+          
+          <select id="newDependencySelect" class="w-full p-2 border rounded-lg mb-3 focus:ring-2 focus:ring-blue-500">
+            <option value="">Select an item to depend on...</option>
+            ${availableItems.map(item => `
+              <option value="${item.id}">
+                ${escapeHtml(item.item_text || item.title || 'Item ' + item.id)}
+                ${item.is_completed ? ' (✅ Complete)' : ' (⏳ Incomplete)'}
+              </option>
+            `).join('')}
+          </select>
+          
+          <button 
+            id="addDependencyBtn"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full font-medium"
+          >
+            Add Dependency
+          </button>
+        </div>
+        
+      </div>
+    `;
+    
+    // Attach event listeners
+    document.getElementById('addDependencyBtn')?.addEventListener('click', addNewDependency);
+    
+    document.querySelectorAll('.remove-dependency-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const depId = e.target.dataset.dependencyId;
+        removeDependency(depId);
+      });
+    });
+    
+  } catch (error) {
+    console.error('Error loading dependencies:', error);
+    content.innerHTML = `
+      <div class="text-center py-8">
+        <p class="text-red-500 mb-4">Failed to load dependencies</p>
+        <button onclick="openDependencyModal(${responseId})" class="text-blue-600 hover:underline">
+          Try Again
+        </button>
+      </div>
+    `;
+  }
+}
+
+/**
+ * Close dependency modal
+ */
+function closeDependencyModal() {
+  const modal = document.getElementById('dependencyModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  dependencyModalItemId = null;
+}
+
+/**
+ * Add new dependency
+ */
+async function addNewDependency() {
+  const select = document.getElementById('newDependencySelect');
+  const dependsOnItemId = select?.value;
+  
+  if (!dependsOnItemId) {
+    showToast('Please select an item to depend on', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/checklist-items/${dependencyModalItemId}/dependencies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ dependsOnItemId: parseInt(dependsOnItemId) })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      if (data.error?.toLowerCase().includes('circular')) {
+        showToast('Cannot add dependency: This would create a circular dependency chain', 'error');
+      } else if (data.error?.toLowerCase().includes('same checklist')) {
+        showToast('Dependencies must be within the same checklist', 'error');
+      } else {
+        showToast(data.error || 'Failed to add dependency', 'error');
+      }
+      return;
+    }
+    
+    showToast('✅ Dependency added successfully', 'success');
+    
+    // Reload modal
+    openDependencyModal(dependencyModalItemId);
+    
+    // Reload checklist
+    if (currentChecklistId) {
+      loadChecklistForFilling(currentChecklistId);
+    }
+    
+  } catch (error) {
+    console.error('Error adding dependency:', error);
+    showToast('Failed to add dependency. Please try again.', 'error');
+  }
+}
+
+/**
+ * Remove dependency
+ */
+async function removeDependency(dependencyId) {
+  if (!confirm('Remove this dependency?\n\nThe item will be able to be completed without waiting for this prerequisite.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/dependencies/${dependencyId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to remove dependency');
+    }
+    
+    showToast('✅ Dependency removed', 'success');
+    
+    // Reload modal
+    if (dependencyModalItemId) {
+      openDependencyModal(dependencyModalItemId);
+    }
+    
+    // Reload checklist
+    if (currentChecklistId) {
+      loadChecklistForFilling(currentChecklistId);
+    }
+    
+  } catch (error) {
+    console.error('Error removing dependency:', error);
+    showToast('Failed to remove dependency', 'error');
+  }
 }

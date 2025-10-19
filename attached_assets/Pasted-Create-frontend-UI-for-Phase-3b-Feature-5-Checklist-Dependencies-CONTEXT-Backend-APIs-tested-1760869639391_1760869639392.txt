@@ -1,0 +1,505 @@
+Create frontend UI for Phase 3b Feature 5: Checklist Dependencies
+
+CONTEXT:
+- Backend APIs tested and working ✅
+- All 5 endpoints functional
+- Need UI to add/remove/view dependencies on checklist items
+- Users should see blocking status visually
+- Prevent completion of blocked items
+
+TASK:
+Add dependency management UI to the checklist response/completion page.
+
+IMPLEMENTATION:
+
+Part 1: Identify Checklist Page Location
+
+First, find where checklists are displayed. Likely locations:
+- public/checklist.html
+- public/response.html
+- Or a section in public/index.html with checklist item rendering
+
+Look for where checklist items are rendered with checkboxes.
+
+Part 2: Enhance Checklist Item Display with Dependency Status
+
+When loading a checklist, fetch dependency status for each item and enhance the UI.
+
+MODIFY the checklist loading/rendering to include dependency information:
+```javascript
+// In the checklist loading function, after getting checklist data
+async function loadChecklistWithDependencies(checklistId) {
+  // Your existing checklist loading code...
+  const checklist = await fetch(`/api/checklists/${checklistId}`).then(r => r.json());
+  
+  // NEW: Fetch dependency status for all items
+  const itemsWithDeps = await Promise.all(
+    getAllItems(checklist).map(async (item) => {
+      try {
+        const blocking = await fetch(`/api/checklist-items/${item.id}/blocking-status`)
+          .then(r => r.json());
+        
+        return {
+          ...item,
+          isBlocked: blocking.isBlocked,
+          blockedBy: blocking.blockedBy,
+          totalDeps: blocking.totalDependencies,
+          completedDeps: blocking.completedDependencies
+        };
+      } catch (error) {
+        console.error(`Error getting blocking status for item ${item.id}:`, error);
+        return item;
+      }
+    })
+  );
+  
+  // Store for later use
+  window.checklistItemsWithDeps = itemsWithDeps;
+  
+  // Render checklist with enhanced data
+  renderChecklistItems(itemsWithDeps);
+}
+
+function getAllItems(checklist) {
+  const items = [];
+  checklist.sections?.forEach(section => {
+    section.items?.forEach(item => items.push(item));
+  });
+  return items;
+}
+```
+
+Part 3: Update Item Rendering to Show Blocking Status
+
+MODIFY checklist item HTML rendering to include dependency indicators:
+```javascript
+function renderChecklistItem(item) {
+  return `
+    <div class="checklist-item mb-3 p-4 border rounded ${item.isBlocked ? 'border-red-300 bg-red-50' : 'border-gray-200'}" 
+         data-item-id="${item.id}">
+      
+      <div class="flex items-start gap-3">
+        <!-- Checkbox -->
+        <input 
+          type="checkbox" 
+          id="item-${item.id}"
+          class="mt-1 cursor-pointer"
+          ${item.is_completed ? 'checked' : ''}
+          ${item.isBlocked ? 'disabled' : ''}
+          onchange="handleItemCompletion(${item.id}, this.checked)"
+        />
+        
+        <!-- Content -->
+        <div class="flex-1">
+          <label for="item-${item.id}" class="font-medium ${item.isBlocked ? 'text-gray-500' : ''}">
+            ${item.item_text || item.title}
+          </label>
+          
+          <!-- Blocked indicator -->
+          ${item.isBlocked ? `
+            <div class="mt-2 p-2 bg-red-100 border border-red-300 rounded">
+              <p class="text-sm font-medium text-red-800 mb-1 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>Cannot complete - blocked by ${item.blockedBy?.length || 0} item(s):</span>
+              </p>
+              <ul class="text-sm text-red-700 ml-6 space-y-1">
+                ${item.blockedBy?.map(dep => `
+                  <li>• ${dep.title || dep.item_text || 'Item ' + dep.id}</li>
+                `).join('') || ''}
+              </ul>
+            </div>
+          ` : ''}
+          
+          <!-- Dependency info badge -->
+          ${item.totalDeps > 0 ? `
+            <div class="mt-2 text-sm text-gray-600">
+              <span class="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded">
+                🔗 ${item.completedDeps}/${item.totalDeps} dependencies met
+              </span>
+            </div>
+          ` : ''}
+        </div>
+        
+        <!-- Manage Dependencies Button -->
+        <button 
+          onclick="openDependencyModal(${item.id}, event)"
+          class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap"
+          title="Manage dependencies"
+        >
+          🔗 Dependencies
+        </button>
+      </div>
+    </div>
+  `;
+}
+```
+
+Part 4: Add Dependency Management Modal
+
+ADD this modal HTML (before closing </body> tag):
+```html
+<!-- Dependency Management Modal -->
+<div id="dependencyModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+  <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
+    
+    <!-- Modal Header -->
+    <div class="flex justify-between items-center p-6 border-b">
+      <h3 class="text-xl font-bold">Manage Dependencies</h3>
+      <button 
+        onclick="closeDependencyModal()" 
+        class="text-gray-500 hover:text-gray-700 text-3xl leading-none"
+      >
+        ×
+      </button>
+    </div>
+    
+    <!-- Modal Content (scrollable) -->
+    <div id="dependencyModalContent" class="flex-1 overflow-y-auto p-6">
+      <p class="text-gray-500">Loading...</p>
+    </div>
+    
+  </div>
+</div>
+```
+
+Part 5: Add JavaScript for Dependency Modal
+
+ADD these functions to your JavaScript:
+```javascript
+// ============================================
+// Phase 3b Feature 5: Dependencies UI
+// ============================================
+
+let currentItemId = null;
+let currentChecklistId = null;
+
+/**
+ * Open dependency management modal
+ */
+async function openDependencyModal(itemId, event) {
+  event?.stopPropagation();
+  
+  currentItemId = itemId;
+  const modal = document.getElementById('dependencyModal');
+  const content = document.getElementById('dependencyModalContent');
+  
+  modal.classList.remove('hidden');
+  content.innerHTML = '<div class="text-center py-8"><p class="text-gray-500">Loading dependencies...</p></div>';
+  
+  try {
+    // Get current dependencies
+    const depsResponse = await fetch(`/api/checklist-items/${itemId}/dependencies`, {
+      credentials: 'include'
+    });
+    const depsData = await depsResponse.json();
+    
+    // Get all items in checklist for dropdown
+    const allItems = window.checklistItemsWithDeps || [];
+    const currentItem = allItems.find(i => i.id == itemId);
+    
+    // Render modal content
+    content.innerHTML = `
+      <div class="space-y-6">
+        
+        <!-- Current Item Info -->
+        <div class="p-4 bg-blue-50 border border-blue-200 rounded">
+          <p class="font-medium text-blue-900">
+            Managing dependencies for:
+          </p>
+          <p class="text-sm text-blue-700 mt-1">
+            ${currentItem?.item_text || currentItem?.title || 'Item ' + itemId}
+          </p>
+        </div>
+        
+        <!-- Current Dependencies -->
+        <div>
+          <h4 class="font-semibold text-lg mb-3">Dependencies (${depsData.count})</h4>
+          <p class="text-sm text-gray-600 mb-3">
+            This item cannot be completed until these items are done:
+          </p>
+          
+          ${depsData.dependencies.length > 0 ? `
+            <div class="space-y-2">
+              ${depsData.dependencies.map(dep => `
+                <div class="flex justify-between items-center p-3 bg-gray-50 border rounded hover:bg-gray-100">
+                  <div class="flex-1">
+                    <p class="font-medium">${dep.depends_on_title || 'Item ' + dep.depends_on_item_id}</p>
+                    <p class="text-sm mt-1 ${dep.depends_on_completed ? 'text-green-600' : 'text-orange-600'}">
+                      ${dep.depends_on_completed ? '✅ Complete' : '⏳ Incomplete - blocking completion'}
+                    </p>
+                  </div>
+                  <button 
+                    onclick="removeDependency(${dep.dependency_id})"
+                    class="ml-4 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <p class="text-gray-500 text-sm py-4 text-center border border-dashed rounded">
+              No dependencies yet. This item can be completed anytime.
+            </p>
+          `}
+        </div>
+        
+        <!-- Add New Dependency -->
+        <div class="pt-6 border-t">
+          <h4 class="font-semibold text-lg mb-3">Add New Dependency</h4>
+          <p class="text-sm text-gray-600 mb-3">
+            Make this item depend on another item in the checklist:
+          </p>
+          
+          <select id="newDependencySelect" class="w-full p-2 border rounded mb-3 focus:ring-2 focus:ring-blue-500">
+            <option value="">Select an item to depend on...</option>
+            ${allItems
+              .filter(item => item.id != itemId) // Can't depend on self
+              .filter(item => !depsData.dependencies.some(d => d.depends_on_item_id == item.id)) // Not already a dependency
+              .map(item => `
+                <option value="${item.id}">
+                  ${item.item_text || item.title || 'Item ' + item.id}
+                  ${item.is_completed ? ' (✅ Complete)' : ' (⏳ Incomplete)'}
+                </option>
+              `).join('')}
+          </select>
+          
+          <button 
+            onclick="addNewDependency()"
+            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 w-full font-medium"
+          >
+            Add Dependency
+          </button>
+        </div>
+        
+      </div>
+    `;
+    
+  } catch (error) {
+    console.error('Error loading dependencies:', error);
+    content.innerHTML = `
+      <div class="text-center py-8">
+        <p class="text-red-500">Failed to load dependencies</p>
+        <button onclick="openDependencyModal(${itemId})" class="mt-4 text-blue-600 hover:underline">
+          Try Again
+        </button>
+      </div>
+    `;
+  }
+}
+
+/**
+ * Close dependency modal
+ */
+function closeDependencyModal() {
+  document.getElementById('dependencyModal').classList.add('hidden');
+  currentItemId = null;
+}
+
+/**
+ * Add new dependency
+ */
+async function addNewDependency() {
+  const select = document.getElementById('newDependencySelect');
+  const dependsOnItemId = select.value;
+  
+  if (!dependsOnItemId) {
+    alert('Please select an item to depend on');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/checklist-items/${currentItemId}/dependencies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ dependsOnItemId: parseInt(dependsOnItemId) })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      if (data.error?.includes('circular') || data.error?.includes('Circular')) {
+        alert('❌ Cannot add dependency:\n\nThis would create a circular dependency chain.\n\nExample: If A depends on B, then B cannot depend on A.');
+      } else if (data.error?.includes('same checklist')) {
+        alert('❌ Dependencies must be within the same checklist.');
+      } else {
+        alert('❌ ' + (data.error || 'Failed to add dependency'));
+      }
+      return;
+    }
+    
+    // Success notification
+    showNotification('✅ Dependency added successfully', 'success');
+    
+    // Reload modal
+    openDependencyModal(currentItemId);
+    
+    // Reload checklist to update UI
+    if (currentChecklistId) {
+      loadChecklistWithDependencies(currentChecklistId);
+    }
+    
+  } catch (error) {
+    console.error('Error adding dependency:', error);
+    alert('Failed to add dependency. Please try again.');
+  }
+}
+
+/**
+ * Remove dependency
+ */
+async function removeDependency(dependencyId) {
+  if (!confirm('Remove this dependency?\n\nThe item will be able to be completed without waiting for this prerequisite.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/dependencies/${dependencyId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to remove dependency');
+    }
+    
+    showNotification('✅ Dependency removed', 'success');
+    
+    // Reload modal
+    openDependencyModal(currentItemId);
+    
+    // Reload checklist
+    if (currentChecklistId) {
+      loadChecklistWithDependencies(currentChecklistId);
+    }
+    
+  } catch (error) {
+    console.error('Error removing dependency:', error);
+    alert('Failed to remove dependency. Please try again.');
+  }
+}
+
+/**
+ * Handle item completion with dependency checking
+ */
+async function handleItemCompletion(itemId, isCompleted) {
+  if (isCompleted) {
+    // Check if blocked before allowing completion
+    try {
+      const response = await fetch(`/api/checklist-items/${itemId}/blocking-status`, {
+        credentials: 'include'
+      });
+      const status = await response.json();
+      
+      if (status.isBlocked) {
+        // Uncheck the checkbox
+        const checkbox = document.getElementById(`item-${itemId}`);
+        if (checkbox) checkbox.checked = false;
+        
+        // Show alert with blocking items
+        alert(`❌ Cannot complete this item!\n\nIt is blocked by incomplete dependencies:\n\n${
+          status.blockedBy.map(b => `• ${b.title || b.item_text || 'Item ' + b.id}`).join('\n')
+        }\n\nPlease complete those items first, or remove the dependencies.`);
+        
+        return; // Prevent completion
+      }
+    } catch (error) {
+      console.error('Error checking blocking status:', error);
+    }
+  }
+  
+  // Proceed with normal completion logic
+  // Your existing completion code here...
+  await saveItemCompletion(itemId, isCompleted);
+}
+
+// Notification helper (if not already exists)
+function showNotification(message, type = 'info') {
+  const colors = {
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500'
+  };
+  
+  const notification = document.createElement('div');
+  notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-slide-in`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.classList.add('opacity-0');
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+```
+
+Part 6: Add CSS Styling
+```css
+/* Dependency UI Styling */
+.checklist-item.border-red-300 {
+  animation: subtle-pulse 2s infinite;
+}
+
+@keyframes subtle-pulse {
+  0%, 100% { border-color: rgb(252 165 165); }
+  50% { border-color: rgb(239 68 68); }
+}
+
+.checklist-item input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@keyframes animate-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: animate-slide-in 0.3s ease-out;
+}
+```
+
+INTEGRATION CHECKLIST:
+
+✅ Find checklist rendering page
+✅ Add loadChecklistWithDependencies() function
+✅ Modify item rendering to show blocking status
+✅ Add dependency modal HTML
+✅ Add JavaScript functions
+✅ Add CSS styling
+✅ Hook into existing item completion logic
+✅ Test with actual checklist items
+
+TESTING CHECKLIST:
+
+After implementation, test these scenarios:
+1. ✅ Load checklist - items show dependency status
+2. ✅ Blocked items have red border and badge
+3. ✅ Clicking "Dependencies" button opens modal
+4. ✅ Can add new dependency from dropdown
+5. ✅ Can remove dependency
+6. ✅ Trying to complete blocked item shows alert
+7. ✅ Circular dependency error message shown
+8. ✅ UI updates after adding/removing dependencies
+
+COMMIT MESSAGE:
+"feat(phase3b): add dependency management UI
+
+- Visual blocking indicators (red borders, badges)
+- Dependency management modal
+- Add/remove dependencies with dropdown
+- Prevent completion of blocked items with alert
+- Show blocking items list
+- Circular dependency user-friendly error
+- Real-time status updates
+- Animated notifications
+
+Completes Phase 3b Feature 5: Checklist Dependencies"

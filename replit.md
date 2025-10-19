@@ -11,6 +11,8 @@ Preferred communication style: Simple, everyday language.
 ### Frontend
 The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles, real-time AI analysis capabilities, a comprehensive comment system, and a Project Dashboard with analytics and Chart.js visualizations. UI elements such as Kanban boards, tag displays, risk cards, and a comprehensive checklist system prioritize clarity and interactivity. The UI implements consistent navigation, blue header design with white text, and user information display with responsive design. All inline JavaScript is moved to external files for CSP compliance.
 
+**Checklist Dependency UI** (Phase 3b Feature 5): The checklist-fill.html page includes visual dependency management with blocking indicators (red-bordered items with warning messages), dependency badges showing completion status, "Manage Dependencies" buttons on each item, and a comprehensive dependency modal for adding/removing dependencies with circular dependency prevention, same-checklist validation, and real-time dependency status display.
+
 ### Backend
 The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations, atomic transactions for tag management, project-level authorization, comprehensive checklist management, and logging of status changes to a `status_history` table.
 
