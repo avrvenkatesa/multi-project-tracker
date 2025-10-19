@@ -1,0 +1,298 @@
+Create API endpoints for Phase 3b Feature 5: Checklist Dependencies
+
+CONTEXT:
+- Database schema complete ✅
+- Service layer complete: services/dependency-service.js ✅
+- Need REST API endpoints to manage dependencies
+- Frontend will use these to add/remove/check dependencies
+
+TASK:
+Add API endpoints to server.js for dependency management.
+
+IMPLEMENTATION:
+
+Add these endpoints to server.js (in the dependencies section):
+```javascript
+// ============================================
+// Phase 3b Feature 5: Checklist Dependencies API
+// ============================================
+
+const dependencyService = require('./services/dependency-service.js');
+
+/**
+ * Add a dependency between checklist items
+ * POST /api/checklist-items/:itemId/dependencies
+ * Body: { dependsOnItemId: number }
+ */
+app.post('/api/checklist-items/:itemId/dependencies', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { dependsOnItemId } = req.body;
+    const userId = req.user?.id || 1;
+    
+    if (!dependsOnItemId) {
+      return res.status(400).json({ 
+        error: 'dependsOnItemId is required' 
+      });
+    }
+    
+    const dependency = await dependencyService.addDependency(
+      parseInt(itemId),
+      parseInt(dependsOnItemId),
+      userId
+    );
+    
+    if (!dependency) {
+      return res.status(200).json({
+        message: 'Dependency already exists',
+        existed: true
+      });
+    }
+    
+    res.status(201).json({
+      success: true,
+      message: 'Dependency created',
+      dependency
+    });
+    
+  } catch (error) {
+    console.error('Error adding dependency:', error);
+    
+    if (error.message.includes('circular dependency')) {
+      return res.status(400).json({ 
+        error: 'Circular dependency detected',
+        message: error.message
+      });
+    }
+    
+    if (error.message.includes('same checklist')) {
+      return res.status(400).json({ 
+        error: 'Items must be in the same checklist',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to add dependency',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Remove a dependency
+ * DELETE /api/dependencies/:dependencyId
+ */
+app.delete('/api/dependencies/:dependencyId', async (req, res) => {
+  try {
+    const { dependencyId } = req.params;
+    
+    const dependency = await dependencyService.removeDependency(
+      parseInt(dependencyId)
+    );
+    
+    res.json({
+      success: true,
+      message: 'Dependency removed',
+      dependency
+    });
+    
+  } catch (error) {
+    console.error('Error removing dependency:', error);
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ 
+        error: 'Dependency not found'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to remove dependency',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get all dependencies for a checklist item
+ * GET /api/checklist-items/:itemId/dependencies
+ */
+app.get('/api/checklist-items/:itemId/dependencies', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    
+    const dependencies = await dependencyService.getItemDependencies(
+      parseInt(itemId)
+    );
+    
+    res.json({
+      itemId: parseInt(itemId),
+      count: dependencies.length,
+      dependencies
+    });
+    
+  } catch (error) {
+    console.error('Error getting dependencies:', error);
+    res.status(500).json({ 
+      error: 'Failed to get dependencies',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Check if an item is blocked by dependencies
+ * GET /api/checklist-items/:itemId/blocking-status
+ */
+app.get('/api/checklist-items/:itemId/blocking-status', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    
+    const status = await dependencyService.checkIfItemBlocked(
+      parseInt(itemId)
+    );
+    
+    res.json({
+      itemId: parseInt(itemId),
+      ...status
+    });
+    
+  } catch (error) {
+    console.error('Error checking blocking status:', error);
+    res.status(500).json({ 
+      error: 'Failed to check blocking status',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get items that depend on a specific item
+ * GET /api/checklist-items/:itemId/dependent-items
+ */
+app.get('/api/checklist-items/:itemId/dependent-items', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    
+    const dependentItems = await dependencyService.getItemsDependingOn(
+      parseInt(itemId)
+    );
+    
+    res.json({
+      itemId: parseInt(itemId),
+      count: dependentItems.length,
+      dependentItems
+    });
+    
+  } catch (error) {
+    console.error('Error getting dependent items:', error);
+    res.status(500).json({ 
+      error: 'Failed to get dependent items',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Prevent completion of blocked items
+ * Modify the existing checklist response endpoint to check for blocking
+ */
+// Find the existing POST /api/checklists/:id/responses endpoint
+// Add this check BEFORE allowing completion:
+
+// ... in the existing endpoint, add this:
+if (response.is_completed) {
+  // Check if item is blocked before allowing completion
+  const blockStatus = await dependencyService.checkIfItemBlocked(response.item_id);
+  
+  if (blockStatus.isBlocked) {
+    console.log(`⚠️ Item ${response.item_id} is blocked by dependencies`);
+    return res.status(400).json({
+      error: 'Cannot complete item',
+      message: 'This item has incomplete dependencies',
+      blockedBy: blockStatus.blockedBy
+    });
+  }
+}
+```
+
+INTEGRATION NOTES:
+
+The last part about preventing completion needs to be integrated into your EXISTING checklist response endpoint. Look for where items are marked as complete and add the blocking check there.
+
+RESPONSE FORMATS:
+
+1. **POST /api/checklist-items/:itemId/dependencies**
+```json
+{
+  "success": true,
+  "message": "Dependency created",
+  "dependency": {
+    "id": 1,
+    "item_id": 5,
+    "depends_on_item_id": 3,
+    "created_at": "2025-10-19T09:00:00Z",
+    "created_by": 1
+  }
+}
+```
+
+2. **GET /api/checklist-items/:itemId/blocking-status**
+```json
+{
+  "itemId": 5,
+  "isBlocked": true,
+  "blockedBy": [
+    {
+      "id": 3,
+      "title": "Install prerequisites",
+      "is_completed": false
+    }
+  ],
+  "totalDependencies": 2,
+  "completedDependencies": 1
+}
+```
+
+TESTING ENDPOINTS:
+
+After implementation, test with these curl commands:
+```bash
+# 1. Add dependency
+curl -X POST http://localhost:3000/api/checklist-items/5/dependencies \
+  -H "Content-Type: application/json" \
+  -d '{"dependsOnItemId": 3}'
+
+# 2. Get dependencies
+curl http://localhost:3000/api/checklist-items/5/dependencies
+
+# 3. Check blocking status
+curl http://localhost:3000/api/checklist-items/5/blocking-status
+
+# 4. Get dependent items
+curl http://localhost:3000/api/checklist-items/3/dependent-items
+
+# 5. Remove dependency
+curl -X DELETE http://localhost:3000/api/dependencies/1
+```
+
+VALIDATION:
+✅ 5 API endpoints created
+✅ Proper HTTP status codes (201, 400, 404, 500)
+✅ User-friendly error messages
+✅ Validates input parameters
+✅ Returns structured JSON responses
+✅ Blocking check integrated into completion logic
+
+COMMIT MESSAGE:
+"feat(phase3b): add dependency management API endpoints
+
+- POST /api/checklist-items/:id/dependencies - Add dependency
+- DELETE /api/dependencies/:id - Remove dependency
+- GET /api/checklist-items/:id/dependencies - List dependencies
+- GET /api/checklist-items/:id/blocking-status - Check if blocked
+- GET /api/checklist-items/:id/dependent-items - Get dependents
+- Integrate blocking check into completion endpoint
+- Handle circular dependency errors with 400 status
+
+Part of Phase 3b Feature 5: Checklist Dependencies"

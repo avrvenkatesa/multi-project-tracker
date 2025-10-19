@@ -40,6 +40,7 @@ const { extractTextFromFile } = require('./services/file-processor');
 const { initializeDailyJobs } = require('./jobs/dailyNotifications');
 const { generateChecklistPDF } = require('./services/pdf-service');
 const { validateChecklist, getValidationStatus } = require('./services/validation-service');
+const dependencyService = require('./services/dependency-service');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -7630,6 +7631,33 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
           throw new Error('Missing required field: template_item_id, item_id, or id');
         }
         
+        // Phase 3b Feature 5: Check if item is blocked by dependencies before allowing completion
+        if (is_completed) {
+          // Get the response ID for this item
+          const itemResult = await client.query(
+            `SELECT id FROM checklist_responses 
+             WHERE checklist_id = $1 AND template_item_id = $2`,
+            [checklistId, templateItemId]
+          );
+          
+          if (itemResult.rows.length > 0) {
+            const itemId = itemResult.rows[0].id;
+            const blockStatus = await dependencyService.checkIfItemBlocked(itemId);
+            
+            if (blockStatus.isBlocked) {
+              console.log(`⚠️ Item ${itemId} is blocked by ${blockStatus.blockedBy.length} incomplete dependencies`);
+              await client.query('ROLLBACK');
+              return res.status(400).json({
+                error: 'Cannot complete item',
+                message: 'This item has incomplete dependencies',
+                blockedBy: blockStatus.blockedBy,
+                totalDependencies: blockStatus.totalDependencies,
+                completedDependencies: blockStatus.completedDependencies
+              });
+            }
+          }
+        }
+        
         // Determine which field to use based on type
         let responseValue = null;
         let responseDate = null;
@@ -8908,6 +8936,184 @@ app.delete('/api/checklists/:id/link', async (req, res) => {
   } catch (error) {
     console.error('Error unlinking checklist:', error);
     res.status(500).json({ error: 'Failed to unlink checklist' });
+  }
+});
+
+// ============================================
+// Phase 3b Feature 5: Checklist Dependencies API
+// ============================================
+
+/**
+ * Add a dependency between checklist items
+ * POST /api/checklist-items/:itemId/dependencies
+ * Body: { dependsOnItemId: number }
+ */
+app.post('/api/checklist-items/:itemId/dependencies', authenticateToken, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { dependsOnItemId } = req.body;
+    const userId = req.user?.id || 1;
+    
+    if (!dependsOnItemId) {
+      return res.status(400).json({ 
+        error: 'dependsOnItemId is required' 
+      });
+    }
+    
+    const dependency = await dependencyService.addDependency(
+      parseInt(itemId),
+      parseInt(dependsOnItemId),
+      userId
+    );
+    
+    if (!dependency) {
+      return res.status(200).json({
+        message: 'Dependency already exists',
+        existed: true
+      });
+    }
+    
+    res.status(201).json({
+      success: true,
+      message: 'Dependency created',
+      dependency
+    });
+    
+  } catch (error) {
+    console.error('Error adding dependency:', error);
+    
+    if (error.message.includes('circular dependency')) {
+      return res.status(400).json({ 
+        error: 'Circular dependency detected',
+        message: error.message
+      });
+    }
+    
+    if (error.message.includes('same checklist')) {
+      return res.status(400).json({ 
+        error: 'Items must be in the same checklist',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to add dependency',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Remove a dependency
+ * DELETE /api/dependencies/:dependencyId
+ */
+app.delete('/api/dependencies/:dependencyId', authenticateToken, async (req, res) => {
+  try {
+    const { dependencyId } = req.params;
+    
+    const dependency = await dependencyService.removeDependency(
+      parseInt(dependencyId)
+    );
+    
+    res.json({
+      success: true,
+      message: 'Dependency removed',
+      dependency
+    });
+    
+  } catch (error) {
+    console.error('Error removing dependency:', error);
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ 
+        error: 'Dependency not found'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to remove dependency',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get all dependencies for a checklist item
+ * GET /api/checklist-items/:itemId/dependencies
+ */
+app.get('/api/checklist-items/:itemId/dependencies', authenticateToken, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    
+    const dependencies = await dependencyService.getItemDependencies(
+      parseInt(itemId)
+    );
+    
+    res.json({
+      itemId: parseInt(itemId),
+      count: dependencies.length,
+      dependencies
+    });
+    
+  } catch (error) {
+    console.error('Error getting dependencies:', error);
+    res.status(500).json({ 
+      error: 'Failed to get dependencies',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Check if an item is blocked by dependencies
+ * GET /api/checklist-items/:itemId/blocking-status
+ */
+app.get('/api/checklist-items/:itemId/blocking-status', authenticateToken, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    
+    const status = await dependencyService.checkIfItemBlocked(
+      parseInt(itemId)
+    );
+    
+    res.json({
+      itemId: parseInt(itemId),
+      ...status
+    });
+    
+  } catch (error) {
+    console.error('Error checking blocking status:', error);
+    res.status(500).json({ 
+      error: 'Failed to check blocking status',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get items that depend on a specific item
+ * GET /api/checklist-items/:itemId/dependent-items
+ */
+app.get('/api/checklist-items/:itemId/dependent-items', authenticateToken, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    
+    const dependentItems = await dependencyService.getItemsDependingOn(
+      parseInt(itemId)
+    );
+    
+    res.json({
+      itemId: parseInt(itemId),
+      count: dependentItems.length,
+      dependentItems
+    });
+    
+  } catch (error) {
+    console.error('Error getting dependent items:', error);
+    res.status(500).json({ 
+      error: 'Failed to get dependent items',
+      message: error.message
+    });
   }
 });
 
