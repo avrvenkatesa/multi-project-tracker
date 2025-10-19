@@ -1083,64 +1083,6 @@ async function renderKanbanBoard() {
                                 `).join('')}
                             </div>
                         ` : ''}
-                        <div class="mt-2 pt-2 border-t border-gray-100 flex flex-wrap gap-1">
-                            <button class="manage-relationships-btn p-1.5 rounded hover:bg-gray-100 transition-colors ${relCount > 0 ? 'text-blue-600' : 'text-gray-600'} hover:text-blue-700 relative group" 
-                                    data-item-id="${item.id}" 
-                                    data-item-type="${item.type || 'issue'}" 
-                                    data-item-title="${item.title.replace(/"/g, '&quot;')}"
-                                    title="Relationships${relCount > 0 ? ` (${relCount})` : ''}">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                                </svg>
-                                ${relCount > 0 ? `<span class="absolute -top-1 -right-1 px-1 min-w-[16px] h-4 bg-blue-500 text-white rounded-full text-xs flex items-center justify-center">${relCount}</span>` : ''}
-                            </button>
-                            <button class="view-comments-btn p-1.5 rounded hover:bg-gray-100 transition-colors ${commentCount > 0 ? 'text-indigo-600' : 'text-gray-600'} hover:text-indigo-700 relative group" 
-                                    data-item-id="${item.id}" 
-                                    data-item-type="${item.type || 'issue'}"
-                                    title="Comments${commentCount > 0 ? ` (${commentCount})` : ''}">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                                </svg>
-                                ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 px-1 min-w-[16px] h-4 bg-indigo-500 text-white rounded-full text-xs flex items-center justify-center">${commentCount}</span>` : ''}
-                            </button>
-                            <button class="copy-link-btn p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-600 hover:text-purple-600 group" 
-                                    data-item-id="${item.id}" 
-                                    data-item-type="${item.type || 'issue'}"
-                                    title="Copy Link">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                                </svg>
-                            </button>
-                            <button class="generate-checklist-btn p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-600 hover:text-blue-600 group" 
-                                    data-item-id="${item.id}" 
-                                    data-item-type="${item.type || 'issue'}"
-                                    data-item-title="${item.title.replace(/"/g, '&quot;')}"
-                                    title="AI Generate Checklist">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                </svg>
-                            </button>
-                            ${canEdit ? `
-                                <button class="edit-item-btn p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-600 hover:text-green-600 group" 
-                                        data-item-id="${item.id}" 
-                                        data-item-type="${item.type || 'issue'}"
-                                        title="Edit">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
-                                </button>
-                            ` : ''}
-                            ${canDelete ? `
-                                <button class="delete-item-btn p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-600 hover:text-red-600 group" 
-                                        data-item-id="${item.id}" 
-                                        data-item-type="${item.type || 'issue'}"
-                                        title="Delete">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                    </svg>
-                                </button>
-                            ` : ''}
-                        </div>
                             </div>
                         </div>
                     </div>
@@ -1160,74 +1102,12 @@ async function renderKanbanBoard() {
                     // Don't open modal if we just finished dragging
                     if (isDragging) return;
                     
-                    // Only open modal if clicking on the card itself, not buttons or checkboxes
-                    if (!e.target.closest('button') && !e.target.classList.contains('item-checkbox')) {
+                    // Only open modal if not clicking on the checkbox
+                    if (!e.target.classList.contains('item-checkbox')) {
                         const itemId = parseInt(this.getAttribute('data-item-id'));
                         const itemType = this.getAttribute('data-item-type');
                         openItemDetailModal(itemId, itemType);
                     }
-                });
-            });
-            
-            // Add relationship button listeners
-            container.querySelectorAll('.manage-relationships-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // Prevent drag start
-                    const itemId = parseInt(this.getAttribute('data-item-id'));
-                    const itemType = this.getAttribute('data-item-type');
-                    const itemTitle = this.getAttribute('data-item-title');
-                    showRelationshipModal(itemId, itemType, itemTitle);
-                });
-            });
-            
-            // Add comment button listeners
-            container.querySelectorAll('.view-comments-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // Prevent drag start
-                    const itemId = parseInt(this.getAttribute('data-item-id'));
-                    const itemType = this.getAttribute('data-item-type');
-                    openItemDetailModal(itemId, itemType);
-                });
-            });
-            
-            // Add copy link button listeners
-            container.querySelectorAll('.copy-link-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // Prevent drag start and card click
-                    const itemId = parseInt(this.getAttribute('data-item-id'));
-                    const itemType = this.getAttribute('data-item-type');
-                    copyItemLink(itemId, itemType);
-                });
-            });
-            
-            // Add generate checklist button listeners
-            container.querySelectorAll('.generate-checklist-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // Prevent drag start and card click
-                    const itemId = parseInt(this.getAttribute('data-item-id'));
-                    const itemType = this.getAttribute('data-item-type');
-                    const itemTitle = this.getAttribute('data-item-title');
-                    openAIChecklistModal(itemId, itemType, itemTitle);
-                });
-            });
-            
-            // Add edit button listeners
-            container.querySelectorAll('.edit-item-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // Prevent drag start and card click
-                    const itemId = parseInt(this.getAttribute('data-item-id'));
-                    const itemType = this.getAttribute('data-item-type');
-                    openEditModal(itemId, itemType);
-                });
-            });
-            
-            // Add delete button listeners
-            container.querySelectorAll('.delete-item-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // Prevent drag start and card click
-                    const itemId = parseInt(this.getAttribute('data-item-id'));
-                    const itemType = this.getAttribute('data-item-type');
-                    confirmDeleteItem(itemId, itemType);
                 });
             });
             

@@ -613,6 +613,31 @@ async function openItemDetailModal(itemId, itemType) {
     // Setup tabs
     setupItemDetailTabs();
     
+    // Check permissions for edit/delete buttons
+    const currentUser = AuthManager.currentUser;
+    const isOwner = currentUser && parseInt(item.created_by, 10) === parseInt(currentUser.id, 10);
+    const isAssignee = currentUser && item.assignee === currentUser.username;
+    
+    const roleHierarchy = {
+      'System Administrator': 5,
+      'Project Manager': 4,
+      'Team Lead': 3,
+      'Team Member': 2,
+      'Stakeholder': 1,
+      'External Viewer': 0
+    };
+    const userRoleLevel = currentUser ? (roleHierarchy[currentUser.role] || 0) : 0;
+    const isTeamLeadOrAbove = userRoleLevel >= roleHierarchy['Team Lead'];
+    
+    const canEdit = isOwner || isAssignee || isTeamLeadOrAbove;
+    const canDelete = isTeamLeadOrAbove;
+    
+    // Show/hide edit and delete buttons based on permissions
+    const editBtn = document.getElementById('item-detail-edit-btn');
+    const deleteBtn = document.getElementById('item-detail-delete-btn');
+    if (editBtn) editBtn.style.display = canEdit ? 'flex' : 'none';
+    if (deleteBtn) deleteBtn.style.display = canDelete ? 'flex' : 'none';
+    
     if (currentProject) {
       await loadProjectMembers(currentProject.id);
     }
@@ -1061,9 +1086,67 @@ if (typeof window !== 'undefined') {
       attachmentUploadInput.addEventListener('change', uploadItemDetailAttachment);
     }
     
+    const editBtn = document.getElementById('item-detail-edit-btn');
+    if (editBtn) {
+      editBtn.addEventListener('click', handleEditItemFromModal);
+    }
+    
+    const deleteBtn = document.getElementById('item-detail-delete-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', handleDeleteItemFromModal);
+    }
+    
     if (AuthManager.isAuthenticated) {
       loadUnreadMentionCount();
       setInterval(loadUnreadMentionCount, 30000);
     }
   });
+}
+
+// ==================== EDIT & DELETE FROM MODAL ====================
+
+function handleEditItemFromModal() {
+  if (!currentItemId || !currentItemType) return;
+  
+  // Close the modal
+  closeItemDetailModal();
+  
+  // Open the edit modal (this function should exist in app.js)
+  if (typeof openEditModal === 'function') {
+    openEditModal(currentItemId, currentItemType);
+  } else {
+    console.error('openEditModal function not found');
+  }
+}
+
+async function handleDeleteItemFromModal() {
+  if (!currentItemId || !currentItemType) return;
+  
+  if (!confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const endpoint = currentItemType === 'issue' 
+      ? `/api/issues/${currentItemId}`
+      : `/api/action-items/${currentItemId}`;
+    
+    await axios.delete(endpoint, { withCredentials: true });
+    
+    AuthManager.showNotification('Item deleted successfully', 'success');
+    
+    // Close modal
+    closeItemDetailModal();
+    
+    // Reload the board (this function should exist in app.js)
+    if (typeof loadKanbanBoard === 'function') {
+      loadKanbanBoard();
+    } else if (typeof loadActionItems === 'function') {
+      loadActionItems();
+    }
+    
+  } catch (error) {
+    console.error('Error deleting item:', error);
+    AuthManager.showNotification(error.response?.data?.error || 'Failed to delete item', 'error');
+  }
 }

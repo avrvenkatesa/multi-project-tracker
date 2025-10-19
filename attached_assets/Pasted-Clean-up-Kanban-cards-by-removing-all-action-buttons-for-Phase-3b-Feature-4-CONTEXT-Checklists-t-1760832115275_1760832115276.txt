@@ -1,0 +1,233 @@
+Clean up Kanban cards by removing all action buttons for Phase 3b Feature 4
+
+CONTEXT:
+- Checklists tab is already working in the detail modal
+- All tabs (Details, Comments, Checklists, Attachments) are accessible in the modal
+- Current Kanban cards have action icons that clutter the design
+- User wants cleaner, more focused cards
+
+TASK:
+Remove all action buttons/icons from Kanban cards. Keep only essential information visible on cards.
+
+IMPLEMENTATION:
+
+Part 1: Remove Action Buttons from Kanban Cards
+
+FIND the card rendering code in app.js (likely in renderKanbanBoard() or similar function)
+
+REMOVE this section entirely:
+```html
+<div class="card-actions flex flex-wrap gap-2 mt-2">
+  <button class="action-icon" title="Relationships">🔗</button>
+  <button class="action-icon" title="Comments">💬</button>
+  <button class="action-icon" title="Copy Link">📋</button>
+  <button class="action-icon" title="Generate Checklist">✓</button>
+  <button class="action-icon" title="Edit">✏️</button>
+  <button class="action-icon" title="Delete">🗑️</button>
+</div>
+```
+
+Or if the icons are rendered differently (with text labels), remove those too:
+```html
+<!-- Remove all variations of action buttons like: -->
+🔗 Relationships
+💬 Comments
+📋 Copy Link
+🤖📋 Generate Checklist
+✏️ Edit
+🗑️ Delete
+```
+
+Part 2: Keep Only Essential Card Information
+
+The Kanban card should ONLY contain:
+```html
+<div class="kanban-card" onclick="openIssueDetail(${item.id})">
+  <!-- Checkbox for bulk select (keep this) -->
+  <input 
+    type="checkbox" 
+    class="issue-checkbox" 
+    data-issue-id="${item.id}"
+    onclick="event.stopPropagation()"
+  />
+  
+  <!-- Card header -->
+  <div class="card-header">
+    <span class="item-type">${item.type || 'issue'}</span>
+    <span class="priority-badge">${item.priority}</span>
+  </div>
+  
+  <!-- Title (keep clickable to open detail) -->
+  <h3 class="card-title">${item.title}</h3>
+  
+  <!-- Description preview (if exists) -->
+  ${item.description ? `
+    <p class="card-description text-sm text-gray-600">
+      ${item.description.substring(0, 100)}...
+    </p>
+  ` : ''}
+  
+  <!-- Assignee (keep) -->
+  <div class="card-assignee">
+    <span class="assignee-icon">👤</span>
+    <span>${item.assignee || 'Unassigned'}</span>
+  </div>
+  
+  <!-- Due date (keep) -->
+  ${item.due_date ? `
+    <div class="card-due-date ${isOverdue(item.due_date) ? 'overdue' : ''}">
+      ${formatDueDate(item.due_date)}
+    </div>
+  ` : ''}
+  
+  <!-- Tags (keep) -->
+  ${item.tags && item.tags.length > 0 ? `
+    <div class="card-tags">
+      ${item.tags.map(tag => `
+        <span class="tag">${tag}</span>
+      `).join('')}
+    </div>
+  ` : ''}
+</div>
+```
+
+Part 3: Add Edit and Delete Buttons to Modal Header (if not already present)
+
+FIND the issue detail modal header (where the title is displayed)
+
+ADD Edit and Delete buttons to the header:
+```html
+<div class="modal-header flex justify-between items-center p-4 border-b">
+  <h2 class="text-xl font-bold">${issue.title}</h2>
+  
+  <div class="modal-actions flex gap-2">
+    <button 
+      onclick="openEditIssueModal(${issue.id})"
+      class="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1"
+    >
+      <span>✏️</span>
+      <span>Edit</span>
+    </button>
+    
+    <button 
+      onclick="deleteIssue(${issue.id})"
+      class="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-1"
+    >
+      <span>🗑️</span>
+      <span>Delete</span>
+    </button>
+    
+    <button 
+      onclick="closeIssueDetail()"
+      class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+    >
+      ✕
+    </button>
+  </div>
+</div>
+```
+
+Part 4: Ensure Copy Link and Generate Checklist Are Accessible
+
+These actions should be available somewhere. Options:
+
+Option A: Add a "More Actions" dropdown in modal header:
+```html
+<div class="dropdown">
+  <button class="more-actions-btn">
+    ⋮ More
+  </button>
+  <div class="dropdown-menu hidden">
+    <button onclick="copyIssueLink(${issue.id})">📋 Copy Link</button>
+    <button onclick="generateChecklist(${issue.id})">✓ Generate Checklist</button>
+    <button onclick="showRelationships(${issue.id})">🔗 Relationships</button>
+  </div>
+</div>
+```
+
+Option B: Add these as buttons within respective tabs (e.g., "Generate Checklist" button in Checklists tab)
+
+Part 5: Visual Cleanup
+
+Ensure cards are clean and scannable:
+```css
+/* Remove any leftover action button styles */
+.card-actions,
+.action-icon,
+.action-buttons {
+  display: none !important;
+}
+
+/* Make cards cleaner */
+.kanban-card {
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.kanban-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-color: #3b82f6;
+}
+
+/* Checkbox positioning */
+.issue-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  cursor: pointer;
+}
+
+.kanban-card {
+  position: relative;
+  padding-left: 32px; /* Make room for checkbox */
+}
+```
+
+TESTING CHECKLIST:
+
+✅ No action buttons visible on Kanban cards
+✅ Cards show only: checkbox, title, description, assignee, due date, tags, priority
+✅ Clicking card opens detail modal
+✅ Checkbox works for bulk select without opening modal
+✅ Edit button in modal header opens edit form
+✅ Delete button in modal header shows confirmation and deletes
+✅ Checklists tab still works and shows linked checklists
+✅ Cards are visually cleaner and less cluttered
+✅ All previous functionality still accessible via modal
+
+EXPECTED RESULT:
+
+Kanban cards should look like this:
+```
+┌─────────────────────────────────────┐
+│ [✓]  issue · medium      👤 Manual  │
+│                                      │
+│ Webhook Issue 2                      │
+│                                      │
+│ Initiate comprehensive 7-day         │
+│ performance data collection for...   │
+│                                      │
+│ AVR Venkatesa                        │
+│                                      │
+│ ┃ 6 days overdue                     │
+│ test 3                               │
+└─────────────────────────────────────┘
+```
+
+NO action buttons on the card - everything is in the detail modal!
+
+COMMIT MESSAGE:
+"refactor(phase3b): clean up Kanban cards UI
+
+- Remove all action buttons from Kanban cards
+- Keep only essential info: title, description, assignee, due date, tags
+- Move Edit and Delete to modal header
+- All actions now accessible via detail modal tabs
+- Cleaner, more focused card design
+- Better visual hierarchy and scannability
+
+Completes Phase 3b Feature 4: Improved Linking UI"
