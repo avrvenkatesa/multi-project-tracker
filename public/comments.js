@@ -635,6 +635,8 @@ async function openItemDetailModal(itemId, itemType) {
     // Show/hide edit and delete buttons based on permissions
     const editBtn = document.getElementById('item-detail-edit-btn');
     const deleteBtn = document.getElementById('item-detail-delete-btn');
+    const generateBtn = document.getElementById('item-detail-generate-btn');
+    
     if (editBtn) {
       editBtn.style.display = canEdit ? 'flex' : 'none';
       editBtn.dataset.itemId = itemId;
@@ -644,6 +646,11 @@ async function openItemDetailModal(itemId, itemType) {
       deleteBtn.style.display = canDelete ? 'flex' : 'none';
       deleteBtn.dataset.itemId = itemId;
       deleteBtn.dataset.itemType = itemType;
+    }
+    if (generateBtn) {
+      generateBtn.dataset.itemId = itemId;
+      generateBtn.dataset.itemType = itemType;
+      generateBtn.dataset.itemTitle = item.title || '';
     }
     
     if (currentProject) {
@@ -1145,6 +1152,11 @@ if (typeof window !== 'undefined') {
       deleteBtn.addEventListener('click', handleDeleteItemFromModal);
     }
     
+    const generateBtn = document.getElementById('item-detail-generate-btn');
+    if (generateBtn) {
+      generateBtn.addEventListener('click', handleGenerateFromDocument);
+    }
+    
     if (AuthManager.isAuthenticated) {
       loadUnreadMentionCount();
       setInterval(loadUnreadMentionCount, 30000);
@@ -1217,5 +1229,27 @@ async function handleDeleteItemFromModal(e) {
   } catch (error) {
     console.error('Error deleting item:', error);
     AuthManager.showNotification(error.response?.data?.error || 'Failed to delete item', 'error');
+  }
+}
+
+function handleGenerateFromDocument(e) {
+  const btn = e.currentTarget;
+  const itemId = parseInt(btn.dataset.itemId);
+  const itemType = btn.dataset.itemType;
+  const itemTitle = btn.dataset.itemTitle || '';
+  
+  if (!itemId || !itemType) {
+    console.error('Missing item ID or type');
+    return;
+  }
+  
+  // Close the detail modal
+  closeItemDetailModal();
+  
+  // Open the AI checklist modal (this function should exist in app.js)
+  if (typeof openAIChecklistModal === 'function') {
+    openAIChecklistModal(itemId, itemType, itemTitle);
+  } else {
+    console.error('openAIChecklistModal function not found');
   }
 }
