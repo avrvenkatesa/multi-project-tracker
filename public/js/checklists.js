@@ -1339,7 +1339,7 @@ async function loadChecklistWithDependencies(checklistId) {
     
     const checklist = await response.json();
     
-    // Extract all items from sections
+    // Extract all items from sections, storing checklist_id with each
     const allItems = [];
     if (checklist.sections) {
       checklist.sections.forEach(section => {
@@ -1349,6 +1349,8 @@ async function loadChecklistWithDependencies(checklistId) {
             allItems.push({
               ...item,
               id: item.response_id || item.id,
+              response_id: item.response_id || item.id,
+              checklist_id: checklistId,
               section_id: section.id
             });
           });
@@ -1356,8 +1358,9 @@ async function loadChecklistWithDependencies(checklistId) {
       });
     }
     
+    console.log(`📊 Loading dependencies for ${allItems.length} items from checklist ${checklistId}...`);
+    
     // Fetch dependency status for all items in parallel
-    console.log(`📊 Loading dependencies for ${allItems.length} items...`);
     const itemsWithDeps = await Promise.all(
       allItems.map(async (item) => {
         try {
@@ -1379,8 +1382,11 @@ async function loadChecklistWithDependencies(checklistId) {
       })
     );
     
-    // Store globally for use in dependency modal
+    // Store globally for use in dependency modal (clear previous checklist's items)
     checklistItemsWithDeps = itemsWithDeps;
+    
+    console.log(`✅ Stored ${itemsWithDeps.length} items from checklist ${checklistId}`);
+    console.log(`✅ ${itemsWithDeps.filter(i => i.totalDeps > 0).length} items have dependencies`);
     
     // Update sections with enhanced items
     if (checklist.sections) {
@@ -1393,8 +1399,6 @@ async function loadChecklistWithDependencies(checklistId) {
         }
       });
     }
-    
-    console.log(`✅ Loaded ${itemsWithDeps.filter(i => i.totalDeps > 0).length} items with dependencies`);
     
     return checklist;
     
@@ -1432,11 +1436,21 @@ async function openDependencyModal(responseId, event) {
     // Get current item info
     const currentItem = checklistItemsWithDeps.find(i => i.id == responseId);
     
-    // Filter available items
+    if (!currentItem) {
+      throw new Error(`Current item ${responseId} not found in loaded items`);
+    }
+    
+    console.log(`📝 Managing dependencies for item ${responseId} from checklist ${currentItem.checklist_id}`);
+    console.log(`📦 Available items pool: ${checklistItemsWithDeps.length} total items`);
+    
+    // Filter available items - MUST be from same checklist
     const availableItems = checklistItemsWithDeps.filter(item => 
       item.id != responseId && // Can't depend on self
+      item.checklist_id == currentItem.checklist_id && // MUST be same checklist
       !depsData.dependencies.some(d => d.depends_on_item_id == item.id) // Not already a dependency
     );
+    
+    console.log(`✅ Filtered to ${availableItems.length} available items from checklist ${currentItem.checklist_id}`);
     
     // Render modal content
     content.innerHTML = `
@@ -1495,7 +1509,7 @@ async function openDependencyModal(responseId, event) {
           <select id="newDependencySelect" class="w-full p-2 border rounded-lg mb-3 focus:ring-2 focus:ring-blue-500">
             <option value="">Select an item to depend on...</option>
             ${availableItems.map(item => `
-              <option value="${item.id}">
+              <option value="${item.response_id}" data-item-text="${escapeHtml(item.item_text || item.title || '')}">
                 ${escapeHtml(item.item_text || item.title || 'Item ' + item.id)}
                 ${item.is_completed ? ' (✅ Complete)' : ' (⏳ Incomplete)'}
               </option>
@@ -1558,6 +1572,12 @@ async function addNewDependency() {
     showToast('Please select an item to depend on', 'error');
     return;
   }
+  
+  // Get selected option text for logging
+  const selectedOption = select.options[select.selectedIndex];
+  const selectedText = selectedOption?.dataset?.itemText || selectedOption?.text || 'unknown';
+  
+  console.log(`➕ Adding dependency: Item ${dependencyModalItemId} depends on Item ${dependsOnItemId} (${selectedText})`);
   
   try {
     const response = await fetch(`/api/checklist-items/${dependencyModalItemId}/dependencies`, {
