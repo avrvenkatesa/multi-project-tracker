@@ -1,0 +1,82 @@
+// In browser console or check your codebase
+// Look for files that might have OpenAI:
+
+// Check if OpenAI is available globally
+console.log(typeof openai); // or typeof OpenAI
+
+// Search for API key
+console.log(process.env.OPENAI_API_KEY ? 'Found' : 'Not in env');
+```
+
+Or ask Replit Agent:
+```
+Search the codebase for OpenAI integration.
+
+Look for:
+1. Where OpenAI is imported (require('openai') or import OpenAI)
+2. Where the API key is configured
+3. Any existing functions that call GPT-3.5
+4. The model name being used (gpt-3.5-turbo, etc.)
+
+Show me:
+- File paths where OpenAI is used
+- Example of how it's currently called
+- Environment variable name for API key
+
+I need to use the same pattern for the new checklist generation feature.
+```
+
+---
+
+## **Meanwhile: Simplified Prompt for Replit Agent**
+```
+Integrate existing GPT-3.5 setup into the AI checklist service
+
+CONTEXT:
+- GPT-3.5 is already configured in this project
+- Need to use it for checklist generation
+- File: services/ai-checklist-service.js exists with placeholder callAIService()
+
+TASK:
+1. Find where OpenAI/GPT-3.5 is currently used in the codebase
+2. Copy that pattern into services/ai-checklist-service.js
+3. Implement the callAIService() function using your existing GPT-3.5 setup
+
+IMPLEMENTATION:
+
+Replace the callAIService() placeholder with actual GPT-3.5 call:
+```javascript
+async function callAIService(prompt) {
+  // TODO: Find your existing OpenAI setup and use it here
+  
+  // Standard GPT-3.5 call pattern:
+  const response = await openai.chat.completions.create({
+    model: 'gpt-3.5-turbo',  // or 'gpt-3.5-turbo-16k' for longer documents
+    messages: [
+      {
+        role: 'system',
+        content: 'You are an expert project management assistant that generates structured, actionable checklists.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+    temperature: 0.7,
+    max_tokens: 2000,
+    response_format: { type: 'json_object' }  // Ensures JSON output
+  });
+  
+  return {
+    text: response.choices[0].message.content,
+    tokensUsed: response.usage.total_tokens
+  };
+}
+```
+
+IMPORTANT:
+- Use the SAME openai instance/configuration that already exists
+- Use the SAME API key setup that's already working
+- Match the existing pattern in your codebase
+
+After implementing, the service should work with the existing OpenAI setup.
