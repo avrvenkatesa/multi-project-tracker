@@ -1047,7 +1047,7 @@ async function loadLinkedChecklists() {
           </a>
           <button 
             onclick="unlinkChecklist(${checklist.id})"
-            class="text-sm px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+            class="text-sm px-3 py-1.5 bg-white text-gray-800 border border-gray-300 rounded hover:bg-gray-50 hover:border-gray-400 transition-colors cursor-pointer"
           >
             Unlink
           </button>

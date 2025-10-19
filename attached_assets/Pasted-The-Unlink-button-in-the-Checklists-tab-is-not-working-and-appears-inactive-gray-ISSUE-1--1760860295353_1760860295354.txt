@@ -1,0 +1,116 @@
+The "Unlink" button in the Checklists tab is not working and appears inactive (gray).
+
+ISSUE:
+1. Clicking "Unlink" button does nothing
+2. Button appears gray/disabled (should be clickable)
+3. No confirmation dialog appears
+4. No error in console
+
+EXPECTED BEHAVIOR:
+1. Button should be clearly clickable (not gray/disabled appearance)
+2. Clicking should show confirmation dialog
+3. After confirmation, should call DELETE /api/checklists/:id/link
+4. Should show success notification
+5. Should refresh the checklists list
+6. Tab count should update
+
+FIX REQUIRED:
+
+Part 1: Fix Button Styling
+The Unlink button currently appears disabled. Update the styling:
+
+CURRENT (likely):
+```html
+<button class="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+  Unlink
+</button>
+```
+
+CHANGE TO:
+```html
+<button 
+  onclick="unlinkChecklist(${checklist.id})"
+  class="px-3 py-1 bg-gray-100 text-gray-800 border border-gray-300 rounded hover:bg-gray-200 hover:border-gray-400 cursor-pointer"
+>
+  Unlink
+</button>
+```
+
+Part 2: Verify unlinkChecklist() Function Exists
+
+The function should be in app.js and look like this:
+```javascript
+async function unlinkChecklist(checklistId) {
+  // Show confirmation dialog
+  if (!confirm('Unlink this checklist? The checklist will not be deleted, just unlinked from this item.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/checklists/${checklistId}/link`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to unlink checklist');
+    }
+    
+    const data = await response.json();
+    
+    // Show success notification
+    showNotification('Checklist unlinked successfully', 'success');
+    
+    // Reload checklists for current entity
+    if (currentEntityType && currentEntityId) {
+      loadLinkedChecklists(currentEntityType, currentEntityId);
+    }
+    
+  } catch (error) {
+    console.error('Error unlinking checklist:', error);
+    showNotification('Failed to unlink checklist', 'error');
+  }
+}
+```
+
+Part 3: Ensure Function is Called
+
+Check that the onclick handler is properly set in the Checklists tab rendering.
+The button should have: `onclick="unlinkChecklist(${checklist.id})"`
+
+Part 4: Verify API Endpoint Works
+
+The backend endpoint DELETE /api/checklists/:id/link should exist (it was added in earlier prompts).
+
+Test it manually:
+```bash
+curl -X DELETE http://localhost:3000/api/checklists/36/link
+```
+
+Should return:
+```json
+{
+  "success": true,
+  "message": "Checklist unlinked",
+  "checklist": {...}
+}
+```
+
+DEBUGGING STEPS:
+1. Open browser console
+2. Click Unlink button
+3. Check for any JavaScript errors
+4. Check if unlinkChecklist function is defined: `typeof unlinkChecklist`
+5. Manually call: `unlinkChecklist(36)` and see what happens
+
+TESTING:
+After fix:
+✅ Unlink button looks clickable (not grayed out)
+✅ Clicking shows confirmation dialog
+✅ Confirming calls API successfully
+✅ Success notification appears
+✅ Checklist removed from list
+✅ Tab count updates (2 → 1)
+✅ Checklist still exists (just unlinked)
+
+Please fix the Unlink button so it works as expected.
