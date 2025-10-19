@@ -7434,6 +7434,8 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
         cti.is_required,
         cti.help_text,
         cti.display_order,
+        cr.id as response_id,
+        cr.checklist_id,
         cr.response_value,
         cr.response_date,
         cr.response_boolean,

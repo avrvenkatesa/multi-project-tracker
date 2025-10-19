@@ -1345,14 +1345,17 @@ async function loadChecklistWithDependencies(checklistId) {
       checklist.sections.forEach(section => {
         if (section.items) {
           section.items.forEach(item => {
-            // Use response_id which is the actual ID in checklist_responses table
-            allItems.push({
-              ...item,
-              id: item.response_id || item.id,
-              response_id: item.response_id || item.id,
-              checklist_id: checklistId,
-              section_id: section.id
-            });
+            // ONLY include items that have been instantiated (have a response_id)
+            // This prevents showing template items from other checklists
+            if (item.response_id) {
+              allItems.push({
+                ...item,
+                id: item.response_id,
+                response_id: item.response_id,
+                checklist_id: item.checklist_id || checklistId,
+                section_id: section.id
+              });
+            }
           });
         }
       });
