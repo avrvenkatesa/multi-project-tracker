@@ -1018,7 +1018,7 @@ async function loadLinkedChecklists() {
         <!-- Actions -->
         <div class="flex gap-2">
           <a 
-            href="/checklist.html?id=${checklist.id}"
+            href="checklist-fill.html?id=${checklist.id}"
             target="_blank"
             class="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
