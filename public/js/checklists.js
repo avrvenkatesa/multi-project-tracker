@@ -311,6 +311,12 @@ function setupChecklistFillPageListeners() {
     addCommentBtn.addEventListener('click', addComment);
   }
   
+  // Close dependency modal button
+  const closeDepsBtn = document.getElementById('closeDependencyModalBtn');
+  if (closeDepsBtn) {
+    closeDepsBtn.addEventListener('click', closeDependencyModal);
+  }
+  
   // Event delegation for section toggles
   const sectionsContainer = document.getElementById('checklistSections');
   if (sectionsContainer) {
@@ -852,7 +858,7 @@ function renderItem(item) {
 function renderField(item) {
   const value = item.response_value || '';
   const boolValue = item.response_boolean;
-  const dateValue = item.response_date || '';
+  const dateValue = item.response_date ? formatDateForInput(item.response_date) : '';
   
   switch(item.field_type) {
     case 'checkbox':
@@ -1287,6 +1293,20 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function formatDateForInput(dateString) {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch (e) {
+    console.error('Error formatting date:', e);
+    return '';
+  }
 }
 
 // Auth helper
