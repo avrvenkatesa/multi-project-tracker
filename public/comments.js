@@ -1064,6 +1064,18 @@ async function unlinkChecklist(checklistId) {
 // Make unlinkChecklist available globally
 window.unlinkChecklist = unlinkChecklist;
 
+// ==================== RELATIONSHIPS PLACEHOLDER ====================
+
+function addRelationship(type) {
+  AuthManager.showNotification(
+    `Relationship management is coming soon! This will allow you to add ${type} relationships.`,
+    'info'
+  );
+}
+
+// Make addRelationship available globally
+window.addRelationship = addRelationship;
+
 // ==================== DOM READY ====================
 
 if (typeof window !== 'undefined') {
