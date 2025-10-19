@@ -1,0 +1,245 @@
+Create database schema updates for Phase 4 Mode 3: Standalone Document Processing
+
+CONTEXT:
+- Building project-level document upload feature
+- Checklists can exist without linking to issues/actions
+- Need to track standalone status and source documents
+- Must support linking standalone checklists to issues later
+
+TASK:
+Update database schema to support standalone checklists and document library.
+
+IMPLEMENTATION:
+
+Part 1: Check Existing Schema
+
+First, verify what already exists in the checklists table:
+```sql
+-- Check current checklists table structure
+SELECT column_name, data_type, is_nullable, column_default
+FROM information_schema.columns
+WHERE table_name = 'checklists'
+ORDER BY ordinal_position;
+```
+
+Part 2: Add Missing Columns (if needed)
+
+Based on what exists, add any missing columns:
+```sql
+-- Add columns for standalone checklist support
+-- Only run if columns don't already exist
+
+-- Track source document filename
+ALTER TABLE checklists 
+ADD COLUMN IF NOT EXISTS source_document VARCHAR(255);
+
+-- Flag for standalone vs linked checklists
+ALTER TABLE checklists 
+ADD COLUMN IF NOT EXISTS is_standalone BOOLEAN DEFAULT FALSE;
+
+-- Track when checklist was linked (if converted from standalone)
+ALTER TABLE checklists 
+ADD COLUMN IF NOT EXISTS linked_at TIMESTAMP;
+
+-- Track who linked it
+ALTER TABLE checklists 
+ADD COLUMN IF NOT EXISTS linked_by INTEGER REFERENCES users(id);
+
+-- Optional: Store original document metadata
+ALTER TABLE checklists 
+ADD COLUMN IF NOT EXISTS document_metadata JSONB;
+
+-- Add indexes for performance
+CREATE INDEX IF NOT EXISTS idx_checklists_standalone 
+ON checklists(project_id, is_standalone) 
+WHERE is_standalone = TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_checklists_source_document 
+ON checklists(source_document) 
+WHERE source_document IS NOT NULL;
+```
+
+Part 3: Create Document Upload Tracking Table
+
+Track uploaded documents and their generated checklists:
+```sql
+-- Create table for document upload history
+CREATE TABLE IF NOT EXISTS document_uploads (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  filename VARCHAR(255) NOT NULL,
+  file_size INTEGER,
+  mime_type VARCHAR(100),
+  uploaded_by INTEGER REFERENCES users(id),
+  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  -- AI generation results
+  checklists_generated INTEGER DEFAULT 0,
+  total_items_generated INTEGER DEFAULT 0,
+  generation_status VARCHAR(50) DEFAULT 'pending', -- pending, processing, completed, failed
+  
+  -- Store extracted text length for reference
+  extracted_text_length INTEGER,
+  
+  -- Error tracking
+  error_message TEXT,
+  
+  -- Metadata
+  metadata JSONB
+);
+
+-- Index for querying project documents
+CREATE INDEX idx_document_uploads_project ON document_uploads(project_id);
+CREATE INDEX idx_document_uploads_date ON document_uploads(uploaded_at DESC);
+
+-- Comments
+COMMENT ON TABLE document_uploads IS 'Tracks document uploads and their AI-generated checklists';
+COMMENT ON COLUMN document_uploads.generation_status IS 'Status: pending, processing, completed, failed';
+```
+
+Part 4: Create View for Standalone Checklists
+
+Create a convenient view for querying standalone checklists:
+```sql
+-- View for standalone checklists with metadata
+CREATE OR REPLACE VIEW view_standalone_checklists AS
+SELECT 
+  c.id,
+  c.title,
+  c.description,
+  c.project_id,
+  c.source_document,
+  c.created_at,
+  c.created_by,
+  c.document_metadata,
+  
+  -- Creator info
+  u.name as creator_name,
+  u.email as creator_email,
+  
+  -- Project info
+  p.name as project_name,
+  
+  -- Checklist statistics
+  (SELECT COUNT(*) FROM checklist_sections WHERE checklist_id = c.id) as section_count,
+  (SELECT COUNT(*) FROM checklist_responses cr 
+   JOIN checklist_sections cs ON cr.section_id = cs.id 
+   WHERE cs.checklist_id = c.id) as item_count,
+  (SELECT COUNT(*) FROM checklist_responses cr 
+   JOIN checklist_sections cs ON cr.section_id = cs.id 
+   WHERE cs.checklist_id = c.id AND cr.is_completed = TRUE) as completed_count,
+  
+  -- Document upload info
+  du.uploaded_at as document_uploaded_at,
+  du.file_size as document_size,
+  du.checklists_generated as sibling_checklists_count
+  
+FROM checklists c
+LEFT JOIN users u ON c.created_by = u.id
+LEFT JOIN projects p ON c.project_id = p.id
+LEFT JOIN document_uploads du ON c.source_document = du.filename AND c.project_id = du.project_id
+WHERE c.is_standalone = TRUE
+  AND c.related_issue_id IS NULL
+  AND c.related_action_id IS NULL
+ORDER BY c.created_at DESC;
+
+COMMENT ON VIEW view_standalone_checklists IS 'Standalone checklists with full metadata for document library';
+```
+
+Part 5: Create Helper Function for Linking
+
+Function to link standalone checklist to issue:
+```sql
+-- Function to link a standalone checklist to an issue
+CREATE OR REPLACE FUNCTION link_checklist_to_issue(
+  p_checklist_id INTEGER,
+  p_issue_id INTEGER,
+  p_user_id INTEGER,
+  p_keep_standalone BOOLEAN DEFAULT FALSE
+) RETURNS TABLE(
+  success BOOLEAN,
+  message TEXT,
+  checklist_id INTEGER
+) AS $$
+DECLARE
+  v_project_id INTEGER;
+  v_issue_project_id INTEGER;
+  v_new_checklist_id INTEGER;
+BEGIN
+  -- Get checklist project
+  SELECT project_id INTO v_project_id
+  FROM checklists
+  WHERE id = p_checklist_id AND is_standalone = TRUE;
+  
+  IF v_project_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, 'Checklist not found or not standalone', NULL::INTEGER;
+    RETURN;
+  END IF;
+  
+  -- Get issue project
+  SELECT project_id INTO v_issue_project_id
+  FROM issues
+  WHERE id = p_issue_id;
+  
+  IF v_issue_project_id IS NULL THEN
+    RETURN QUERY SELECT FALSE, 'Issue not found', NULL::INTEGER;
+    RETURN;
+  END IF;
+  
+  -- Verify same project
+  IF v_project_id != v_issue_project_id THEN
+    RETURN QUERY SELECT FALSE, 'Checklist and issue must be in same project', NULL::INTEGER;
+    RETURN;
+  END IF;
+  
+  -- If keeping standalone, create a copy
+  IF p_keep_standalone THEN
+    -- Create copy of checklist
+    INSERT INTO checklists (
+      title, description, project_id, related_issue_id, 
+      created_by, source_document, is_standalone
+    )
+    SELECT 
+      title, description, project_id, p_issue_id,
+      p_user_id, source_document, FALSE
+    FROM checklists
+    WHERE id = p_checklist_id
+    RETURNING id INTO v_new_checklist_id;
+    
+    -- Copy sections and items
+    INSERT INTO checklist_sections (checklist_id, title, display_order)
+    SELECT v_new_checklist_id, title, display_order
+    FROM checklist_sections
+    WHERE checklist_id = p_checklist_id;
+    
+    -- Copy items (using section mapping)
+    INSERT INTO checklist_responses (section_id, item_text, notes, display_order)
+    SELECT 
+      new_sections.id,
+      cr.item_text,
+      cr.notes,
+      cr.display_order
+    FROM checklist_responses cr
+    JOIN checklist_sections old_sections ON cr.section_id = old_sections.id
+    JOIN checklist_sections new_sections ON 
+      new_sections.checklist_id = v_new_checklist_id 
+      AND new_sections.display_order = old_sections.display_order
+    WHERE old_sections.checklist_id = p_checklist_id;
+    
+    RETURN QUERY SELECT TRUE, 'Checklist copied and linked to issue', v_new_checklist_id;
+  ELSE
+    -- Move the checklist (link it)
+    UPDATE checklists
+    SET 
+      related_issue_id = p_issue_id,
+      is_standalone = FALSE,
+      linked_at = CURRENT_TIMESTAMP,
+      linked_by = p_user_id
+    WHERE id = p_checklist_id;
+    
+    RETURN QUERY SELECT TRUE, 'Checklist linked to issue', p_checklist_id;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION link_checklist_to_issue IS 'Links a standalone checklist to an issue, optionally keeping a standalone copy';
