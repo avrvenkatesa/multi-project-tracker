@@ -25,23 +25,28 @@ async function addDependency(itemId, dependsOnItemId, userId) {
     
     // Verify both items exist and are in the same checklist
     const itemsCheck = await pool.query(
-      `SELECT cr1.id as item1_id, cr1.checklist_id as checklist1_id,
-              cr2.id as item2_id, cr2.checklist_id as checklist2_id
+      `SELECT cr1.id as item1_id, cr1.checklist_id as checklist1_id, cr1.template_item_id as template1_id,
+              cr2.id as item2_id, cr2.checklist_id as checklist2_id, cr2.template_item_id as template2_id
        FROM checklist_responses cr1
        LEFT JOIN checklist_responses cr2 ON cr2.id = $2
        WHERE cr1.id = $1`,
       [itemId, dependsOnItemId]
     );
     
+    console.log(`🔍 Query result:`, JSON.stringify(itemsCheck.rows, null, 2));
+    
     if (itemsCheck.rows.length === 0) {
-      throw new Error(`Item ${itemId} not found`);
+      throw new Error(`Item with ID ${itemId} not found in checklist_responses table. Note: Use the response ID, not template_item_id.`);
     }
     
     const row = itemsCheck.rows[0];
     
     if (!row.item2_id) {
-      throw new Error(`Item ${dependsOnItemId} not found`);
+      throw new Error(`Item with ID ${dependsOnItemId} not found in checklist_responses table. Note: Use the response ID, not template_item_id.`);
     }
+    
+    console.log(`✓ Item 1: Response ID ${row.item1_id} (Template ${row.template1_id}) in Checklist ${row.checklist1_id}`);
+    console.log(`✓ Item 2: Response ID ${row.item2_id} (Template ${row.template2_id}) in Checklist ${row.checklist2_id}`);
     
     if (row.checklist1_id !== row.checklist2_id) {
       throw new Error('Dependencies can only be created between items in the same checklist');
