@@ -1,0 +1,190 @@
+Create database schema for Phase 3b Feature 5: Checklist Dependencies
+
+CONTEXT:
+- Phase 3b Features 1-4 are complete
+- Working on branch: feature/checklist-system-phase3
+- Final core feature before adding AI document upload (Feature 6)
+- Need to track dependencies between checklist items
+- An item can depend on multiple other items
+- Dependencies prevent completion until prerequisite items are done
+
+TASK:
+Create database migration for checklist item dependencies with circular dependency prevention.
+
+IMPLEMENTATION:
+
+File: server/migrations/010_checklist_item_dependencies.sql
+```sql
+-- Migration: Checklist Item Dependencies
+-- Phase 3b Feature 5: Enable dependencies between checklist items
+
+-- 1. Create checklist_item_dependencies table
+CREATE TABLE IF NOT EXISTS checklist_item_dependencies (
+  id SERIAL PRIMARY KEY,
+  item_id INTEGER NOT NULL REFERENCES checklist_responses(id) ON DELETE CASCADE,
+  depends_on_item_id INTEGER NOT NULL REFERENCES checklist_responses(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  created_by INTEGER REFERENCES users(id),
+  
+  -- Prevent duplicate dependencies
+  UNIQUE(item_id, depends_on_item_id),
+  
+  -- Prevent self-dependency
+  CHECK (item_id != depends_on_item_id)
+);
+
+-- 2. Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_dependencies_item 
+  ON checklist_item_dependencies(item_id);
+
+CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on 
+  ON checklist_item_dependencies(depends_on_item_id);
+
+-- 3. Create function to check for circular dependencies
+CREATE OR REPLACE FUNCTION check_circular_dependency(
+  new_item_id INTEGER,
+  new_depends_on_id INTEGER
+) RETURNS BOOLEAN AS $$
+DECLARE
+  visited INTEGER[];
+  current_id INTEGER;
+  dependency_id INTEGER;
+BEGIN
+  -- Start from the item we want to depend on
+  current_id := new_depends_on_id;
+  visited := ARRAY[new_item_id];
+  
+  -- Follow the dependency chain
+  LOOP
+    -- Check if current item depends on anything
+    SELECT depends_on_item_id INTO dependency_id
+    FROM checklist_item_dependencies
+    WHERE item_id = current_id
+    LIMIT 1;
+    
+    -- If no dependency, we're at the end of the chain - no circular dependency
+    IF dependency_id IS NULL THEN
+      RETURN TRUE;
+    END IF;
+    
+    -- Check if we've seen this item before (circular dependency detected)
+    IF dependency_id = ANY(visited) THEN
+      RETURN FALSE;
+    END IF;
+    
+    -- Add to visited and continue
+    visited := array_append(visited, dependency_id);
+    current_id := dependency_id;
+    
+    -- Safety limit to prevent infinite loops
+    IF array_length(visited, 1) > 100 THEN
+      RETURN FALSE;
+    END IF;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 4. Create trigger to prevent circular dependencies
+CREATE OR REPLACE FUNCTION prevent_circular_dependency()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT check_circular_dependency(NEW.item_id, NEW.depends_on_item_id) THEN
+    RAISE EXCEPTION 'Circular dependency detected: Adding this dependency would create a cycle';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_prevent_circular_dependency 
+  ON checklist_item_dependencies;
+
+CREATE TRIGGER trigger_prevent_circular_dependency
+  BEFORE INSERT ON checklist_item_dependencies
+  FOR EACH ROW
+  EXECUTE FUNCTION prevent_circular_dependency();
+
+-- 5. Create view for item dependency status
+CREATE OR REPLACE VIEW checklist_item_dependency_status AS
+SELECT 
+  cr.id AS item_id,
+  cr.section_id,
+  cr.is_completed,
+  
+  -- Count total dependencies
+  COUNT(cid.depends_on_item_id) AS total_dependencies,
+  
+  -- Count completed dependencies
+  COUNT(cid.depends_on_item_id) FILTER (
+    WHERE dep.is_completed = TRUE
+  ) AS completed_dependencies,
+  
+  -- Is blocked? (has dependencies that aren't complete)
+  CASE 
+    WHEN COUNT(cid.depends_on_item_id) = 0 THEN FALSE
+    WHEN COUNT(cid.depends_on_item_id) FILTER (WHERE dep.is_completed = FALSE) > 0 THEN TRUE
+    ELSE FALSE
+  END AS is_blocked
+  
+FROM checklist_responses cr
+LEFT JOIN checklist_item_dependencies cid ON cr.id = cid.item_id
+LEFT JOIN checklist_responses dep ON cid.depends_on_item_id = dep.id
+GROUP BY cr.id, cr.section_id, cr.is_completed;
+
+-- Migration complete
+COMMENT ON TABLE checklist_item_dependencies IS 
+  'Defines dependencies between checklist items - an item cannot be completed until its dependencies are met';
+
+COMMENT ON COLUMN checklist_item_dependencies.item_id IS 
+  'The checklist item that has the dependency';
+
+COMMENT ON COLUMN checklist_item_dependencies.depends_on_item_id IS 
+  'The checklist item that must be completed first';
+```
+
+VERIFICATION QUERIES:
+
+After migration, run these to verify:
+```sql
+-- 1. Check table structure
+SELECT 
+    column_name,
+    data_type,
+    is_nullable
+FROM information_schema.columns
+WHERE table_name = 'checklist_item_dependencies'
+ORDER BY ordinal_position;
+
+-- 2. Check indexes
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE tablename = 'checklist_item_dependencies';
+
+-- 3. Check functions exist
+SELECT routine_name, routine_type
+FROM information_schema.routines
+WHERE routine_name IN ('check_circular_dependency', 'prevent_circular_dependency');
+
+-- 4. Check view exists
+SELECT viewname
+FROM pg_views
+WHERE viewname = 'checklist_item_dependency_status';
+```
+
+EXPECTED RESULTS:
+
+1. ✅ Table with 5 columns: id, item_id, depends_on_item_id, created_at, created_by
+2. ✅ Two indexes created
+3. ✅ Two functions created
+4. ✅ One trigger attached
+5. ✅ One view created
+
+COMMIT MESSAGE:
+"feat(phase3b): add database schema for checklist dependencies
+
+- Create checklist_item_dependencies table
+- Add circular dependency prevention function and trigger
+- Create dependency status view with is_blocked column
+- Add indexes for performance
+- Prevent self-dependencies and duplicates
+
+Part of Phase 3b Feature 5: Checklist Dependencies"

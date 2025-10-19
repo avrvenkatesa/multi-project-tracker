@@ -366,3 +366,13 @@ export const checklistCompletionActions = pgTable('checklist_completion_actions'
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+// Checklist Item Dependencies (Phase 3b Feature 5)
+// Tracks dependencies between checklist items - an item cannot be completed until dependencies are met
+export const checklistItemDependencies = pgTable('checklist_item_dependencies', {
+  id: serial('id').primaryKey(),
+  itemId: integer('item_id').notNull().references(() => checklistResponses.id, { onDelete: 'cascade' }),
+  dependsOnItemId: integer('depends_on_item_id').notNull().references(() => checklistResponses.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow(),
+  createdBy: integer('created_by').references(() => users.id),
+});
