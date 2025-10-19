@@ -1046,14 +1046,22 @@ async function loadLinkedChecklists() {
             View Checklist →
           </a>
           <button 
-            onclick="unlinkChecklist(${checklist.id})"
-            class="text-sm px-3 py-1.5 bg-white text-gray-800 border border-gray-300 rounded hover:bg-gray-50 hover:border-gray-400 transition-colors cursor-pointer"
+            class="unlink-checklist-btn text-sm px-3 py-1.5 bg-white text-gray-800 border border-gray-300 rounded hover:bg-gray-50 hover:border-gray-400 transition-colors cursor-pointer"
+            data-checklist-id="${checklist.id}"
           >
             Unlink
           </button>
         </div>
       </div>
     `).join('');
+    
+    // Add event listeners for unlink buttons (CSP-compliant)
+    container.querySelectorAll('.unlink-checklist-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const checklistId = parseInt(btn.dataset.checklistId);
+        unlinkChecklist(checklistId);
+      });
+    });
     
   } catch (error) {
     console.error('Error loading checklists:', error);
