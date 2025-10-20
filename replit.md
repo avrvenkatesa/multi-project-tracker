@@ -1,7 +1,7 @@
 # Multi-Project Tracker
 
 ## Overview
-The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include: AI Meeting Analysis, AI Checklist Generation, Checklist Validation, comprehensive PDF and CSV reporting, and an enhanced comment system with markdown support and @mention autocomplete. The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
+The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include: AI Meeting Analysis, AI Checklist Generation, Checklist Validation, comprehensive PDF and CSV reporting, and an enhanced comment system with markdown support and @mention autocomplete. The project recently underwent UX improvements with a unified Checklists interface that consolidates linked, standalone, and template checklists into a single tabbed view. The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -13,7 +13,12 @@ The frontend is a single-page application (SPA) built with vanilla JavaScript an
 
 **Checklist Dependency UI** (Phase 3b Feature 5): The checklist-fill.html page includes visual dependency management with blocking indicators (red-bordered items with warning messages), dependency badges showing completion status, "Manage Dependencies" buttons on each item, and a comprehensive dependency modal for adding/removing dependencies with circular dependency prevention, same-checklist validation, and real-time dependency status display.
 
-**Standalone Checklist Library** (Phase 4 Mode 3): The standalone-checklists.html page provides project-level document upload and checklist management with: stats dashboard showing total checklists/items/documents, upload modal with AI generation preview and selective saving, linking modal for attaching standalone checklists to issues or action items (with copy/move modes), search and sort functionality, empty state guidance, and full CRUD operations on standalone checklists. Accessible via "📚 Checklist Library" in the View dropdown menu.
+**Unified Checklists Page** (Latest): The checklists.html page now provides a unified tabbed interface consolidating all checklist functionality in one place:
+- **Linked Tab**: Shows all checklists linked to issues or action items with completion percentages and related entities
+- **Standalone Tab**: Displays standalone checklists generated from documents with stats dashboard (total checklists, items, documents), search and sort functionality, and quick linking to issues/actions
+- **Templates Tab**: Lists all available checklist templates for quick access and usage
+
+The unified interface replaced the separate standalone-checklists.html page, improving UX by centralizing all checklist operations. Users can seamlessly switch between linked checklists, standalone checklists awaiting assignment, and templates. The "Checklist Library" option has been removed from View dropdowns across the application in favor of the Standalone tab.
 
 ### Backend
 The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations, atomic transactions for tag management, project-level authorization, comprehensive checklist management, and logging of status changes to a `status_history` table.
