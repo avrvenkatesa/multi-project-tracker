@@ -120,6 +120,29 @@ function setupEventListeners() {
   // Search and sort for standalone
   document.getElementById('standaloneSearch')?.addEventListener('input', filterStandaloneChecklists);
   document.getElementById('standaloneSort')?.addEventListener('change', sortStandaloneChecklists);
+  
+  // Event delegation for standalone checklist actions
+  document.getElementById('standaloneChecklistsList')?.addEventListener('click', handleStandaloneAction);
+}
+
+function handleStandaloneAction(event) {
+  const button = event.target.closest('[data-action]');
+  if (!button) return;
+  
+  const action = button.dataset.action;
+  const checklistId = parseInt(button.dataset.checklistId);
+  
+  switch(action) {
+    case 'view-standalone':
+      viewChecklist(checklistId);
+      break;
+    case 'link-standalone':
+      quickLinkStandalone(checklistId);
+      break;
+    case 'delete-standalone':
+      deleteStandaloneChecklist(checklistId);
+      break;
+  }
 }
 
 // ============================================
@@ -401,21 +424,24 @@ function renderStandaloneChecklists() {
         </div>
         <div class="flex gap-2">
           <button 
-            onclick="viewChecklist(${checklist.id})"
+            data-action="view-standalone"
+            data-checklist-id="${checklist.id}"
             class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             title="View checklist"
           >
             👁️ View
           </button>
           <button 
-            onclick="quickLinkStandalone(${checklist.id})"
+            data-action="link-standalone"
+            data-checklist-id="${checklist.id}"
             class="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
             title="Link to issue or action"
           >
             🔗 Link
           </button>
           <button 
-            onclick="deleteStandaloneChecklist(${checklist.id})"
+            data-action="delete-standalone"
+            data-checklist-id="${checklist.id}"
             class="px-3 py-1 text-sm text-red-600 hover:text-red-800"
             title="Delete"
           >
