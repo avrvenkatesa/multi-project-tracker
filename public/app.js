@@ -479,13 +479,6 @@ function setupEventListeners() {
     document.getElementById('view-templates-btn')?.addEventListener('click', () => {
         window.location.href = 'templates.html';
     });
-    document.getElementById('view-checklist-library-btn')?.addEventListener('click', () => {
-        if (currentProject) {
-            window.location.href = `standalone-checklists.html?project_id=${currentProject.id}`;
-        } else {
-            window.location.href = 'standalone-checklists.html';
-        }
-    });
     
     // Dropdown menu functionality
     const viewDropdownBtn = document.getElementById('view-dropdown-btn');

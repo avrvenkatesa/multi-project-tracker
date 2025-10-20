@@ -1,0 +1,662 @@
+Merge Checklist Library into unified Checklists page for better UX
+
+CONTEXT:
+- Currently have 3 separate places for checklists:
+  1. Checklists page (linked checklists + templates)
+  2. Checklist Library page (standalone)
+  3. Issue modal (document upload)
+- Need to consolidate into single unified interface
+- Users should see ALL checklists in one place with clear categorization
+
+GOAL:
+Create a unified Checklists page with three tabs: Linked, Standalone, and Templates.
+
+IMPLEMENTATION:
+
+Part 1: Update Checklists Page Structure
+
+Find the main Checklists page (likely public/checklists.html or similar).
+
+UPDATE the page to include a tabbed interface:
+```html
+<!-- Enhanced Checklists Page Header -->
+<div class="bg-white border-b">
+  <div class="max-w-7xl mx-auto px-4 py-4">
+    <div class="flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">📋 Checklists</h1>
+        <p class="text-sm text-gray-600 mt-1">
+          Manage all your project checklists
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <button 
+          onclick="openUploadDocumentModal()"
+          class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+        >
+          <span>📤</span>
+          <span>Upload Document</span>
+        </button>
+        <button 
+          onclick="openCreateChecklistModal()"
+          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+        >
+          <span>+</span>
+          <span>Create Checklist</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="bg-white border-b">
+  <div class="max-w-7xl mx-auto px-4">
+    <div class="flex gap-4">
+      <button 
+        id="linkedTab" 
+        class="tab-button px-4 py-3 border-b-2 border-blue-600 font-medium text-blue-600"
+        onclick="switchTab('linked')"
+      >
+        🔗 Linked (<span id="linkedCount">0</span>)
+      </button>
+      <button 
+        id="standaloneTab" 
+        class="tab-button px-4 py-3 border-b-2 border-transparent font-medium text-gray-600 hover:text-gray-900"
+        onclick="switchTab('standalone')"
+      >
+        📚 Standalone (<span id="standaloneCount">0</span>)
+      </button>
+      <button 
+        id="templatesTab" 
+        class="tab-button px-4 py-3 border-b-2 border-transparent font-medium text-gray-600 hover:text-gray-900"
+        onclick="switchTab('templates')"
+      >
+        📑 Templates (<span id="templatesCount">0</span>)
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Tab Content Areas -->
+<div class="max-w-7xl mx-auto px-4 py-6">
+  
+  <!-- Linked Checklists Tab -->
+  <div id="linkedContent" class="tab-content">
+    <div class="mb-4">
+      <input 
+        type="text" 
+        id="linkedSearch"
+        placeholder="Search linked checklists..."
+        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+        oninput="filterLinkedChecklists()"
+      />
+    </div>
+    <div id="linkedChecklistsList">
+      <!-- Dynamically populated -->
+    </div>
+  </div>
+  
+  <!-- Standalone Checklists Tab -->
+  <div id="standaloneContent" class="tab-content hidden">
+    <div class="mb-4 flex gap-4">
+      <input 
+        type="text" 
+        id="standaloneSearch"
+        placeholder="Search standalone checklists..."
+        class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+        oninput="filterStandaloneChecklists()"
+      />
+      <select 
+        id="standaloneSort"
+        class="px-4 py-2 border rounded-lg"
+        onchange="sortStandaloneChecklists()"
+      >
+        <option value="date-desc">Newest First</option>
+        <option value="date-asc">Oldest First</option>
+        <option value="title">Title A-Z</option>
+        <option value="items">Most Items</option>
+      </select>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-600">Standalone Checklists</div>
+        <div class="text-2xl font-bold text-gray-900"><span id="standaloneStatsCount">0</span></div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-600">Total Items</div>
+        <div class="text-2xl font-bold text-gray-900"><span id="standaloneStatsItems">0</span></div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-600">Documents Processed</div>
+        <div class="text-2xl font-bold text-gray-900"><span id="standaloneStatsDocs">0</span></div>
+      </div>
+    </div>
+    
+    <div id="standaloneChecklistsList">
+      <!-- Dynamically populated -->
+    </div>
+    
+    <!-- Empty State -->
+    <div id="standaloneEmptyState" class="hidden bg-white rounded-lg shadow p-12 text-center">
+      <div class="text-6xl mb-4">📚</div>
+      <h3 class="text-xl font-bold text-gray-900 mb-2">No Standalone Checklists</h3>
+      <p class="text-gray-600 mb-6">
+        Upload a document to generate checklists that can be linked to issues later
+      </p>
+      <button 
+        onclick="openUploadDocumentModal()"
+        class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+      >
+        Upload Document
+      </button>
+    </div>
+  </div>
+  
+  <!-- Templates Tab -->
+  <div id="templatesContent" class="tab-content hidden">
+    <div class="mb-4">
+      <input 
+        type="text" 
+        id="templatesSearch"
+        placeholder="Search templates..."
+        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+        oninput="filterTemplates()"
+      />
+    </div>
+    <div id="templatesList">
+      <!-- Dynamically populated -->
+    </div>
+  </div>
+  
+</div>
+```
+
+Part 2: Add JavaScript for Tab Management
+
+Add to the Checklists page JavaScript (or create new file):
+```javascript
+// ============================================
+// Unified Checklists Page - Tab Management
+// ============================================
+
+let currentTab = 'linked';
+let currentProjectId = 1; // TODO: Get from session/URL
+let linkedChecklists = [];
+let standaloneChecklists = [];
+let templates = [];
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+  // Check if URL has tab parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const tab = urlParams.get('tab');
+  
+  if (tab && ['linked', 'standalone', 'templates'].includes(tab)) {
+    switchTab(tab);
+  } else {
+    switchTab('linked');
+  }
+});
+
+/**
+ * Switch between tabs
+ */
+function switchTab(tabName) {
+  currentTab = tabName;
+  
+  // Update tab buttons
+  document.querySelectorAll('.tab-button').forEach(btn => {
+    btn.className = 'tab-button px-4 py-3 border-b-2 border-transparent font-medium text-gray-600 hover:text-gray-900';
+  });
+  
+  const activeBtn = document.getElementById(`${tabName}Tab`);
+  if (activeBtn) {
+    activeBtn.className = 'tab-button px-4 py-3 border-b-2 border-blue-600 font-medium text-blue-600';
+  }
+  
+  // Update content visibility
+  document.querySelectorAll('.tab-content').forEach(content => {
+    content.classList.add('hidden');
+  });
+  
+  const activeContent = document.getElementById(`${tabName}Content`);
+  if (activeContent) {
+    activeContent.classList.remove('hidden');
+  }
+  
+  // Load data for active tab
+  loadTabData(tabName);
+  
+  // Update URL without reload
+  const url = new URL(window.location);
+  url.searchParams.set('tab', tabName);
+  window.history.pushState({}, '', url);
+}
+
+/**
+ * Load data for specific tab
+ */
+async function loadTabData(tabName) {
+  switch(tabName) {
+    case 'linked':
+      await loadLinkedChecklists();
+      break;
+    case 'standalone':
+      await loadStandaloneChecklists();
+      break;
+    case 'templates':
+      await loadTemplates();
+      break;
+  }
+}
+
+// ============================================
+// Linked Checklists Tab
+// ============================================
+
+async function loadLinkedChecklists() {
+  try {
+    // Use your existing API for linked checklists
+    const response = await fetch(`/api/checklists?project_id=${currentProjectId}`, {
+      credentials: 'include'
+    });
+    
+    linkedChecklists = await response.json();
+    
+    document.getElementById('linkedCount').textContent = linkedChecklists.length;
+    renderLinkedChecklists();
+    
+  } catch (error) {
+    console.error('Error loading linked checklists:', error);
+  }
+}
+
+function renderLinkedChecklists() {
+  const container = document.getElementById('linkedChecklistsList');
+  
+  if (linkedChecklists.length === 0) {
+    container.innerHTML = `
+      <div class="bg-white rounded-lg shadow p-12 text-center">
+        <div class="text-6xl mb-4">📋</div>
+        <h3 class="text-xl font-bold text-gray-900 mb-2">No Linked Checklists</h3>
+        <p class="text-gray-600">Create a checklist or link a standalone checklist to an issue</p>
+      </div>
+    `;
+    return;
+  }
+  
+  // Render your existing linked checklists display
+  // Keep your current rendering logic
+  container.innerHTML = linkedChecklists.map(checklist => `
+    <!-- Your existing checklist card HTML -->
+  `).join('');
+}
+
+// ============================================
+// Standalone Checklists Tab
+// ============================================
+
+async function loadStandaloneChecklists() {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/standalone-checklists`, {
+      credentials: 'include'
+    });
+    
+    const data = await response.json();
+    standaloneChecklists = data.checklists || [];
+    
+    document.getElementById('standaloneCount').textContent = standaloneChecklists.length;
+    updateStandaloneStats();
+    renderStandaloneChecklists();
+    
+  } catch (error) {
+    console.error('Error loading standalone checklists:', error);
+  }
+}
+
+function updateStandaloneStats() {
+  const totalItems = standaloneChecklists.reduce((sum, c) => sum + (c.item_count || 0), 0);
+  const uniqueDocs = new Set(standaloneChecklists.map(c => c.source_document)).size;
+  
+  document.getElementById('standaloneStatsCount').textContent = standaloneChecklists.length;
+  document.getElementById('standaloneStatsItems').textContent = totalItems;
+  document.getElementById('standaloneStatsDocs').textContent = uniqueDocs;
+}
+
+function renderStandaloneChecklists() {
+  const container = document.getElementById('standaloneChecklistsList');
+  const emptyState = document.getElementById('standaloneEmptyState');
+  
+  if (standaloneChecklists.length === 0) {
+    container.innerHTML = '';
+    emptyState.classList.remove('hidden');
+    return;
+  }
+  
+  emptyState.classList.add('hidden');
+  
+  container.innerHTML = standaloneChecklists.map(checklist => `
+    <div class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6 mb-4">
+      <div class="flex justify-between items-start mb-4">
+        <div class="flex-1">
+          <h3 class="text-lg font-bold text-gray-900 mb-1">${checklist.title}</h3>
+          ${checklist.description ? `<p class="text-sm text-gray-600">${checklist.description}</p>` : ''}
+        </div>
+        <div class="flex gap-2">
+          <button 
+            onclick="viewChecklist(${checklist.id})"
+            class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            title="View checklist"
+          >
+            👁️ View
+          </button>
+          <button 
+            onclick="quickLinkStandalone(${checklist.id})"
+            class="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+            title="Link to issue"
+          >
+            🔗 Link
+          </button>
+          <button 
+            onclick="deleteStandaloneChecklist(${checklist.id})"
+            class="px-3 py-1 text-sm text-red-600 hover:text-red-800"
+            title="Delete"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+      
+      <div class="flex flex-wrap gap-4 text-sm text-gray-600">
+        <div class="flex items-center gap-1">
+          <span>📋</span>
+          <span>${checklist.section_count || 0} sections</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span>✓</span>
+          <span>${checklist.item_count || 0} items</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span>📄</span>
+          <span>${checklist.source_document || 'Unknown'}</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span>📅</span>
+          <span>${formatDate(checklist.created_at)}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function quickLinkStandalone(checklistId) {
+  // Open simplified linking modal
+  // Reuse the linking modal from standalone-checklists.js
+  // Or create inline quick-link dropdown
+  const checklist = standaloneChecklists.find(c => c.id === checklistId);
+  if (!checklist) return;
+  
+  // For now, redirect to issue selection
+  // TODO: Implement inline quick-link UI
+  if (typeof openLinkingModal === 'function') {
+    openLinkingModal(checklistId);
+  } else {
+    alert('Link functionality: Select issue to link this checklist to');
+  }
+}
+
+async function deleteStandaloneChecklist(checklistId) {
+  if (!confirm('Delete this standalone checklist?\n\nThis cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/checklists/${checklistId}/standalone`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Delete failed');
+    
+    showNotification('✅ Checklist deleted', 'success');
+    loadStandaloneChecklists();
+    
+  } catch (error) {
+    console.error('Delete error:', error);
+    showNotification('Failed to delete checklist', 'error');
+  }
+}
+
+// ============================================
+// Templates Tab
+// ============================================
+
+async function loadTemplates() {
+  try {
+    const response = await fetch(`/api/templates?project_id=${currentProjectId}`, {
+      credentials: 'include'
+    });
+    
+    templates = await response.json();
+    
+    document.getElementById('templatesCount').textContent = templates.length;
+    renderTemplates();
+    
+  } catch (error) {
+    console.error('Error loading templates:', error);
+  }
+}
+
+function renderTemplates() {
+  const container = document.getElementById('templatesList');
+  
+  // Use your existing template rendering logic
+  // Keep current template display
+}
+
+// ============================================
+// Upload Document Modal
+// ============================================
+
+function openUploadDocumentModal() {
+  // Reuse upload modal from standalone-checklists.js
+  // Or redirect to standalone tab and open modal
+  switchTab('standalone');
+  
+  // Open upload modal (import from standalone-checklists.js)
+  if (typeof openUploadModal === 'function') {
+    openUploadModal();
+  }
+}
+
+// ============================================
+// Utilities
+// ============================================
+
+function formatDate(dateString) {
+  if (!dateString) return 'Unknown';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  
+  return date.toLocaleDateString();
+}
+
+function showNotification(message, type = 'info') {
+  const colors = {
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500'
+  };
+  
+  const notification = document.createElement('div');
+  notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.classList.add('opacity-0');
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+
+function viewChecklist(checklistId) {
+  window.location.href = `/checklist.html?id=${checklistId}`;
+}
+```
+
+Part 3: Update Navigation
+
+Remove or update the "Checklist Library" menu item:
+
+OPTION 1 - Remove it:
+```javascript
+// In navigation, remove:
+// <a href="/standalone-checklists.html">📚 Checklist Library</a>
+
+// "Checklists" menu now shows everything
+```
+
+OPTION 2 - Redirect it:
+```javascript
+// Update the link to point to checklists page with standalone tab:
+<a href="/checklists.html?tab=standalone">📚 Checklist Library</a>
+```
+
+Part 4: Update Issue Modal
+
+Enhance issue modal's Checklists tab to show available standalone checklists.
+
+In the issue modal Checklists tab, add a section after linked checklists:
+```html
+<!-- After showing linked checklists -->
+<div class="mt-6 pt-6 border-t">
+  <h4 class="font-semibold text-gray-900 mb-3">Available Standalone Checklists</h4>
+  <div id="availableStandalone" class="space-y-2">
+    <!-- Dynamically populated -->
+  </div>
+</div>
+```
+
+Add JavaScript to load and display:
+```javascript
+async function loadAvailableStandaloneForIssue(issueId) {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/standalone-checklists`, {
+      credentials: 'include'
+    });
+    
+    const data = await response.json();
+    const standalone = data.checklists || [];
+    
+    const container = document.getElementById('availableStandalone');
+    
+    if (standalone.length === 0) {
+      container.innerHTML = '<p class="text-sm text-gray-500">No standalone checklists available</p>';
+      return;
+    }
+    
+    container.innerHTML = standalone.slice(0, 5).map(checklist => `
+      <div class="flex justify-between items-center p-3 bg-gray-50 rounded hover:bg-gray-100">
+        <div class="flex-1">
+          <p class="font-medium text-sm">${checklist.title}</p>
+          <p class="text-xs text-gray-600">${checklist.item_count} items from ${checklist.source_document}</p>
+        </div>
+        <button 
+          onclick="linkStandaloneToThisIssue(${checklist.id}, ${issueId})"
+          class="ml-4 px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-sm"
+        >
+          Link
+        </button>
+      </div>
+    `).join('');
+    
+    if (standalone.length > 5) {
+      container.innerHTML += `<a href="/checklists.html?tab=standalone" class="text-sm text-blue-600 hover:underline">View all ${standalone.length} standalone checklists →</a>`;
+    }
+    
+  } catch (error) {
+    console.error('Error loading standalone checklists:', error);
+  }
+}
+
+async function linkStandaloneToThisIssue(checklistId, issueId) {
+  try {
+    const response = await fetch(`/api/checklists/${checklistId}/link-to-issue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ issueId: issueId, keepStandalone: false })
+    });
+    
+    if (!response.ok) throw new Error('Link failed');
+    
+    showNotification('✅ Checklist linked!', 'success');
+    
+    // Reload issue checklists
+    loadIssueChecklists(issueId);
+    
+  } catch (error) {
+    console.error('Link error:', error);
+    showNotification('Failed to link checklist', 'error');
+  }
+}
+```
+
+Part 5: Add CSS for Tab Styling
+```css
+.tab-content {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tab-button {
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+```
+
+TESTING CHECKLIST:
+
+After implementation, verify:
+- [ ] Can switch between all three tabs
+- [ ] Linked tab shows existing linked checklists
+- [ ] Standalone tab shows standalone checklists from Library
+- [ ] Templates tab shows templates
+- [ ] Upload Document button works from Standalone tab
+- [ ] Can link standalone checklist from Standalone tab
+- [ ] Can delete standalone checklist
+- [ ] Issue modal shows available standalone checklists
+- [ ] Can link from issue modal
+- [ ] Tab counts update correctly
+- [ ] URL parameter ?tab=standalone works
+- [ ] Navigation updated (Library removed or redirects)
+
+COMMIT MESSAGE:
+"feat(phase4-mode3): merge Checklist Library into unified Checklists page
+
+- Add three-tab interface: Linked, Standalone, Templates
+- Merge standalone checklists into main Checklists page
+- Add Upload Document to Standalone tab
+- Show available standalone in issue modal
+- Quick-link functionality from Standalone tab
+- Update navigation (remove/redirect Library link)
+- Unified search and management
+- Tab state in URL parameters
+- Comprehensive stats in Standalone tab
+
+Completes Phase 4 Mode 3: Standalone Document Processing (4/4)
+Improves UX by consolidating all checklist management"
