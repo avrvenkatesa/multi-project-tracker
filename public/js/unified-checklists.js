@@ -11,6 +11,7 @@ let originalStandaloneChecklists = [];
 let templates = [];
 let currentChecklistForLinking = null;
 let linkType = 'issue';
+let generatedChecklistsData = null;
 
 // ============================================
 // Page Initialization
@@ -106,6 +107,12 @@ function setupEventListeners() {
   document.getElementById('uploadDocumentBtn')?.addEventListener('click', openUploadDocumentModal);
   document.getElementById('standaloneUploadBtn')?.addEventListener('click', openUploadDocumentModal);
   document.getElementById('createChecklistBtn')?.addEventListener('click', openCreateChecklistModal);
+  
+  // Upload modal controls
+  document.getElementById('close-upload-modal-btn')?.addEventListener('click', closeUploadModal);
+  document.getElementById('save-all-checklists-btn')?.addEventListener('click', saveStandaloneChecklists);
+  document.getElementById('cancel-preview-btn')?.addEventListener('click', closeUploadModal);
+  document.getElementById('documentFileInput')?.addEventListener('change', handleDocumentUpload);
   
   // Search and sort for standalone
   document.getElementById('standaloneSearch')?.addEventListener('input', filterStandaloneChecklists);
@@ -562,15 +569,120 @@ function quickLinkStandalone(checklistId) {
 }
 
 // ============================================
-// Modals (Placeholders)
+// Upload Document Modal
 // ============================================
 
 function openUploadDocumentModal() {
-  alert('Document upload modal - to be implemented');
+  document.getElementById('uploadModal').classList.remove('hidden');
+  document.getElementById('uploadView').classList.remove('hidden');
+  document.getElementById('processingView').classList.add('hidden');
+  document.getElementById('previewView').classList.add('hidden');
+  document.getElementById('documentFileInput').value = '';
+  generatedChecklistsData = null;
 }
 
+function closeUploadModal() {
+  document.getElementById('uploadModal').classList.add('hidden');
+}
+
+async function handleDocumentUpload() {
+  const fileInput = document.getElementById('documentFileInput');
+  const file = fileInput.files[0];
+  
+  if (!file) return;
+  
+  // Show processing
+  document.getElementById('uploadView').classList.add('hidden');
+  document.getElementById('processingView').classList.remove('hidden');
+  document.getElementById('processingStatus').textContent = 'Extracting text from document...';
+  
+  try {
+    const formData = new FormData();
+    formData.append('document', file);
+    
+    setTimeout(() => {
+      document.getElementById('processingStatus').textContent = 'Analyzing with AI...';
+    }, 1000);
+    
+    const response = await fetch(`/api/projects/${currentProjectId}/upload-and-generate-standalone`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to generate checklists');
+    }
+    
+    const data = await response.json();
+    generatedChecklistsData = data.preview;
+    
+    displayChecklistsPreview(data.preview);
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    showNotification(`Failed to process document: ${error.message}`, 'error');
+    closeUploadModal();
+  }
+}
+
+function displayChecklistsPreview(checklists) {
+  document.getElementById('processingView').classList.add('hidden');
+  document.getElementById('previewView').classList.remove('hidden');
+  
+  const metadata = `${checklists.length} checklist${checklists.length !== 1 ? 's' : ''} generated`;
+  document.getElementById('previewMetadata').textContent = metadata;
+  
+  const container = document.getElementById('checklistsPreview');
+  container.innerHTML = checklists.map((checklist, index) => `
+    <div class="border rounded-lg p-4">
+      <h4 class="font-bold text-gray-900 mb-2">${escapeHtml(checklist.title)}</h4>
+      ${checklist.description ? `<p class="text-sm text-gray-600 mb-3">${escapeHtml(checklist.description)}</p>` : ''}
+      <div class="text-sm text-gray-600">
+        ${checklist.sections?.length || 0} sections, 
+        ${checklist.sections?.reduce((sum, s) => sum + (s.items?.length || 0), 0) || 0} items
+      </div>
+    </div>
+  `).join('');
+}
+
+async function saveStandaloneChecklists() {
+  if (!generatedChecklistsData) return;
+  
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/save-standalone-checklists`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        checklists: generatedChecklistsData
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to save checklists');
+    }
+    
+    showNotification('✅ Checklists saved successfully!', 'success');
+    closeUploadModal();
+    
+    // Switch to standalone tab and reload
+    switchTab('standalone');
+    
+  } catch (error) {
+    console.error('Save error:', error);
+    showNotification(`Failed to save checklists: ${error.message}`, 'error');
+  }
+}
+
+// ============================================
+// Create Checklist Modal (Placeholder)
+// ============================================
+
 function openCreateChecklistModal() {
-  alert('Create checklist modal - to be implemented');
+  showNotification('Create checklist feature - Coming soon! Use templates instead.', 'info');
 }
 
 // ============================================

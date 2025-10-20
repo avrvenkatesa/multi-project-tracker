@@ -236,7 +236,77 @@
     </div>
   </main>
 
-  <!-- Modals will be loaded from standalone-checklists.html JavaScript -->
+  <!-- Upload Document Modal -->
+  <div id="uploadModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
+      
+      <!-- Header -->
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-bold">Upload Document & Generate Checklists</h3>
+          <button id="close-upload-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
+        </div>
+        <p class="text-sm text-gray-600 mt-2">
+          Upload a document to generate standalone checklists that can be linked to issues later
+        </p>
+      </div>
+      
+      <!-- Content -->
+      <div id="uploadModalContent" class="flex-1 overflow-y-auto p-6">
+        <!-- Upload view -->
+        <div id="uploadView">
+          <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+            <input 
+              type="file" 
+              id="documentFileInput" 
+              accept=".pdf,.docx,.txt"
+              class="hidden"
+            />
+            <label for="documentFileInput" class="cursor-pointer">
+              <div class="text-6xl mb-4">📄</div>
+              <p class="text-lg font-medium mb-2">Click to upload document</p>
+              <p class="text-sm text-gray-500">PDF, Word (.docx), or Text files (max 10MB)</p>
+            </label>
+          </div>
+        </div>
+        
+        <!-- Processing view -->
+        <div id="processingView" class="hidden text-center py-8">
+          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
+          <p class="text-lg font-medium">Processing document...</p>
+          <p class="text-sm text-gray-600 mt-2" id="processingStatus">Extracting text...</p>
+        </div>
+        
+        <!-- Preview view -->
+        <div id="previewView" class="hidden">
+          <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+            <p class="font-medium text-purple-900">✨ AI Generated Checklists</p>
+            <p class="text-sm text-purple-700 mt-1" id="previewMetadata"></p>
+          </div>
+          
+          <div id="checklistsPreview" class="space-y-4 max-h-96 overflow-y-auto">
+            <!-- Dynamically populated -->
+          </div>
+          
+          <div class="flex gap-3 mt-6">
+            <button 
+              id="save-all-checklists-btn"
+              class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+            >
+              ✅ Save All Checklists
+            </button>
+            <button 
+              id="cancel-preview-btn"
+              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+  </div>
   
   <script src="js/unified-checklists.js"></script>
 </body>
