@@ -9284,9 +9284,14 @@ app.post('/api/projects/:projectId/upload-and-generate-standalone',
       
       if (Array.isArray(generatedChecklists)) {
         sectionCount = generatedChecklists.length;
-        itemCount = generatedChecklists.reduce(
-          (sum, checklist) => sum + (checklist.items?.length || 0), 0
-        );
+        // Count items across all sections in all checklists
+        for (const checklist of generatedChecklists) {
+          if (checklist.sections && Array.isArray(checklist.sections)) {
+            for (const section of checklist.sections) {
+              itemCount += section.items?.length || 0;
+            }
+          }
+        }
       } else if (generatedChecklists.sections) {
         sectionCount = generatedChecklists.sections.length;
         itemCount = generatedChecklists.sections.reduce(

@@ -234,7 +234,19 @@ function displayChecklistsPreview(preview) {
   // Handle both array of checklists and sections format
   const checklists = Array.isArray(preview.checklists) ? preview.checklists : (preview.checklists.sections || []);
   
-  container.innerHTML = checklists.map((checklist, index) => `
+  container.innerHTML = checklists.map((checklist, index) => {
+    // Count items across all sections
+    const allItems = [];
+    if (checklist.sections && Array.isArray(checklist.sections)) {
+      for (const section of checklist.sections) {
+        if (section.items && Array.isArray(section.items)) {
+          allItems.push(...section.items);
+        }
+      }
+    }
+    const itemCount = allItems.length;
+    
+    return `
     <div class="border rounded-lg p-4 bg-gray-50">
       <div class="flex items-start gap-3">
         <input 
@@ -247,25 +259,27 @@ function displayChecklistsPreview(preview) {
           <label for="checklist-${index}" class="font-semibold text-gray-900 cursor-pointer">
             ${escapeHtml(checklist.title)}
           </label>
-          <p class="text-sm text-gray-600 mt-1">${checklist.items?.length || 0} items</p>
+          <p class="text-sm text-gray-600 mt-1">${itemCount} items</p>
+          ${checklist.description ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(checklist.description)}</p>` : ''}
           <details class="mt-2">
             <summary class="text-sm text-purple-600 cursor-pointer hover:text-purple-800">
               Preview items
             </summary>
             <ul class="mt-2 space-y-1 text-sm text-gray-700">
-              ${(checklist.items || []).slice(0, 5).map(item => `
+              ${allItems.slice(0, 5).map(item => `
                 <li class="flex items-start gap-2">
                   <span class="text-purple-600">•</span>
-                  <span>${escapeHtml(item.text || item.item_text || '')}</span>
+                  <span>${escapeHtml(item.text || item.item_text || item.description || '')}</span>
                 </li>
               `).join('')}
-              ${checklist.items?.length > 5 ? `<li class="text-gray-500">... and ${checklist.items.length - 5} more</li>` : ''}
+              ${itemCount > 5 ? `<li class="text-gray-500">... and ${itemCount - 5} more</li>` : ''}
             </ul>
           </details>
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 async function saveStandaloneChecklists() {
