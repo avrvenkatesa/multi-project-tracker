@@ -721,44 +721,48 @@ async function generateChecklistFromDocument(documentText, context = {}) {
   }
   
   // Truncate if too long (leave room for prompt)
-  const maxTextLength = 100000; // ~25k tokens
+  const maxTextLength = 50000; // ~12k tokens for document, rest for response
   const truncatedText = documentText.length > maxTextLength 
     ? documentText.substring(0, maxTextLength) + '\n\n[Document truncated...]'
     : documentText;
   
-  const prompt = `You are an expert project manager analyzing a document to generate comprehensive, actionable checklists.
+  const prompt = `You are an expert project manager. Analyze this document and extract ALL actionable tasks into comprehensive checklists.
 
 DOCUMENT CONTENT:
 ${truncatedText}
 
 TASK:
-Generate 1-5 comprehensive checklists from this document. Each checklist should focus on a specific aspect, workstream, or phase mentioned in the document.
+Extract ALL actionable items from this document and organize them into 2-5 focused checklists based on work areas or project phases.
 
-REQUIREMENTS:
-1. Create separate checklists for different major topics/phases/workstreams
-2. Each checklist should have:
-   - A clear, descriptive title (40 chars max)
-   - Optional description (100 chars max)
-   - Sections organized logically (e.g., "Planning", "Execution", "Review")
-   - Specific, actionable checklist items
-3. Items should be:
-   - Concrete and measurable
-   - Based directly on the document content
-   - Organized from prerequisite → execution → completion
-4. Aim for 5-15 items per checklist
+CRITICAL REQUIREMENTS:
+1. Extract EVERY actionable task mentioned in the document
+2. Each checklist MUST contain 5-20 specific action items
+3. Group related tasks into logical checklists (e.g., by phase, workstream, or area)
+4. Each item must be a concrete, actionable task that starts with an action verb
+5. Include context from the document in the item text
 
-RESPONSE FORMAT (JSON):
+ITEM FORMAT - Each item must have:
+- "text": Clear action (e.g., "Complete system discovery audit")
+- "field_type": Always "checkbox"
+- "is_required": true for critical tasks, false for optional
+
+RESPONSE FORMAT (strict JSON):
 {
   "checklists": [
     {
-      "title": "Checklist Title",
-      "description": "Brief description",
+      "title": "Phase or Work Area Name (max 50 chars)",
+      "description": "Brief description of this checklist (max 120 chars)",
       "sections": [
         {
           "title": "Section Name",
           "items": [
             {
-              "text": "Specific action item",
+              "text": "Specific actionable task from document",
+              "field_type": "checkbox",
+              "is_required": true
+            },
+            {
+              "text": "Another specific task",
               "field_type": "checkbox",
               "is_required": true
             }
@@ -769,18 +773,69 @@ RESPONSE FORMAT (JSON):
   ]
 }
 
-Generate the checklists now:`;
+VALIDATION RULES:
+- Minimum 2 checklists, maximum 5
+- Each checklist must have at least 1 section
+- Each section must have at least 3 items
+- Total items across all checklists: minimum 15
+
+IMPORTANT: Generate actual actionable items from the document content. Do NOT return empty items arrays.
+
+Generate the checklists now with ALL items populated:`;
 
   try {
     const result = await callAIForDocument(prompt);
+    
+    console.log('=== AI RESPONSE DEBUG ===');
+    console.log('Result keys:', Object.keys(result));
+    console.log('Checklists count:', result.checklists?.length);
     
     // Validate structure
     if (!result.checklists || !Array.isArray(result.checklists)) {
       throw new Error('AI response missing checklists array');
     }
     
-    console.log(`✅ Generated ${result.checklists.length} standalone checklist(s)`);
-    return result.checklists;
+    // Validate each checklist has items
+    const validChecklists = [];
+    let totalItems = 0;
+    
+    for (const checklist of result.checklists) {
+      console.log(`Checklist: "${checklist.title}"`);
+      
+      if (!checklist.sections || !Array.isArray(checklist.sections)) {
+        console.warn(`  ⚠️  No sections array`);
+        continue;
+      }
+      
+      let checklistItemCount = 0;
+      const validSections = [];
+      
+      for (const section of checklist.sections) {
+        const itemCount = section.items?.length || 0;
+        console.log(`  Section: "${section.title}" - ${itemCount} items`);
+        
+        if (itemCount > 0) {
+          validSections.push(section);
+          checklistItemCount += itemCount;
+        }
+      }
+      
+      if (checklistItemCount > 0) {
+        checklist.sections = validSections;
+        validChecklists.push(checklist);
+        totalItems += checklistItemCount;
+        console.log(`  ✅ Valid: ${checklistItemCount} total items`);
+      } else {
+        console.warn(`  ❌ Rejected: 0 items`);
+      }
+    }
+    
+    if (validChecklists.length === 0) {
+      throw new Error('AI generated checklists but all had zero items. This is a critical failure.');
+    }
+    
+    console.log(`✅ Generated ${validChecklists.length} valid checklists with ${totalItems} total items`);
+    return validChecklists;
     
   } catch (error) {
     console.error('Error generating checklists from document:', error);

@@ -1,0 +1,146 @@
+Fix AI generation for standalone checklists - generating empty item lists
+
+ISSUE:
+When uploading documents for standalone checklist generation, the AI returns checklist titles but with 0 items in each checklist.
+
+Example output:
+- "Week 1 Project Initiation" - 0 items
+- "System Discovery Completion" - 0 items
+- "Baseline Metrics Collection" - 0 items
+
+CAUSE:
+The AI prompt in services/ai-service.js needs different handling for standalone mode vs issue-specific mode.
+
+DIAGNOSIS:
+Check the generateChecklistFromDocument() function in services/ai-service.js:
+
+1. Look at how it builds the prompt when context.mode === 'standalone'
+2. Check if the AI response structure is being parsed correctly
+3. Verify the expected JSON format matches what AI returns
+
+FIX NEEDED:
+
+In services/ai-service.js, modify the generateChecklistFromDocument() function:
+```javascript
+async function generateChecklistFromDocument(documentText, context) {
+  // Build different prompts based on mode
+  let prompt;
+  
+  if (context.mode === 'standalone') {
+    // STANDALONE MODE: No issue context, comprehensive extraction
+    prompt = `You are a project management expert. Analyze this document and extract ALL actionable tasks.
+
+DOCUMENT:
+${documentText.substring(0, 15000)}
+
+TASK:
+Generate comprehensive checklists by identifying distinct work areas or phases in the document.
+Create 3-7 focused checklists, each with 5-15 actionable items.
+
+REQUIREMENTS:
+1. Group related tasks into logical checklists
+2. Each checklist should cover a distinct work area or project phase
+3. Items must be specific, actionable tasks (start with action verbs)
+4. Include reference to document sections when relevant
+5. Cover ALL major actionable items from the document
+
+OUTPUT FORMAT (JSON):
+{
+  "sections": [
+    {
+      "title": "Work Area or Phase Name",
+      "items": [
+        {
+          "text": "Specific actionable task",
+          "notes": "Context or document reference",
+          "priority": "high" | "medium" | "low"
+        }
+      ]
+    }
+  ]
+}
+
+CRITICAL: Return ONLY valid JSON. Each checklist MUST have items array with actual tasks.
+Generate the checklists now.`;
+    
+  } else {
+    // ISSUE-SPECIFIC MODE (existing Mode 1 prompt)
+    prompt = `You are a project management expert. Generate a checklist for this specific issue.
+
+ISSUE: ${context.issueTitle}
+Description: ${context.issueDescription || ''}
+
+DOCUMENT:
+${documentText.substring(0, 15000)}
+
+Generate 8-15 actionable items relevant to completing this issue based on the document.
+...`;
+  }
+  
+  // Call AI with the appropriate prompt
+  const aiResponse = await callAI(prompt);
+  
+  // Parse and validate response
+  const parsed = parseAIResponse(aiResponse);
+  
+  // VALIDATION: Ensure items exist
+  if (!parsed.sections || parsed.sections.length === 0) {
+    throw new Error('AI generated no checklists');
+  }
+  
+  // Check each section has items
+  parsed.sections = parsed.sections.filter(section => {
+    if (!section.items || section.items.length === 0) {
+      console.warn(`Removing empty checklist: ${section.title}`);
+      return false;
+    }
+    return true;
+  });
+  
+  if (parsed.sections.length === 0) {
+    throw new Error('AI generated checklists but all had zero items');
+  }
+  
+  console.log(`✅ Generated ${parsed.sections.length} checklists with items`);
+  
+  return parsed;
+}
+```
+
+DEBUGGING:
+
+Add logging to see what AI actually returns:
+```javascript
+// In parseAIResponse() function, add:
+console.log('=== RAW AI RESPONSE ===');
+console.log(aiResponse.substring(0, 500));
+console.log('=== PARSED JSON ===');
+console.log(JSON.stringify(parsed, null, 2));
+```
+
+VALIDATION:
+
+After fixing, the AI should return checklists like:
+```json
+{
+  "sections": [
+    {
+      "title": "Week 1 Project Initiation",
+      "items": [
+        {
+          "text": "Conduct project kickoff meeting",
+          "notes": "Reference: Week 1 schedule",
+          "priority": "high"
+        },
+        {
+          "text": "Set up project tracking system",
+          "notes": "Required by day 2",
+          "priority": "high"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Please fix the AI service to properly generate items for standalone mode.
