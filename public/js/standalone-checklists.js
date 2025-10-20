@@ -450,15 +450,24 @@ async function loadActionsForLinking() {
     // Use the checklist's project_id, not the current page's project
     const checklistProjectId = currentChecklistForLinking?.project_id || currentProjectId;
     
+    console.log('🔍 Loading actions for linking:');
+    console.log('  Current checklist:', currentChecklistForLinking);
+    console.log('  Checklist project_id:', currentChecklistForLinking?.project_id);
+    console.log('  Current page project_id:', currentProjectId);
+    console.log('  Using project_id:', checklistProjectId);
+    
     const response = await fetch(`/api/action-items?project_id=${checklistProjectId}`, {
       credentials: 'include'
     });
     
     const actions = await response.json();
     
+    console.log('  Loaded actions:', actions.length, 'items');
+    console.log('  Action project_ids:', actions.map(a => a.project_id));
+    
     const select = document.getElementById('linkTargetSelect');
     select.innerHTML = '<option value="">Select an action item...</option>' +
-      actions.map(action => `<option value="${action.id}">${escapeHtml(action.title)}</option>`).join('');
+      actions.map(action => `<option value="${action.id}">${escapeHtml(action.title)} (Project: ${action.project_id})</option>`).join('');
     
   } catch (error) {
     console.error('Error loading actions:', error);
@@ -475,6 +484,13 @@ async function confirmLinking() {
   }
   
   try {
+    console.log('🔗 Linking checklist:');
+    console.log('  Checklist ID:', currentChecklistForLinking.id);
+    console.log('  Checklist project_id:', currentChecklistForLinking.project_id);
+    console.log('  Target ID:', targetId);
+    console.log('  Link type:', linkType);
+    console.log('  Keep standalone:', keepStandalone);
+    
     const endpoint = linkType === 'issue' 
       ? `/api/checklists/${currentChecklistForLinking.id}/link-to-issue`
       : `/api/checklists/${currentChecklistForLinking.id}/link-to-action`;
@@ -482,6 +498,8 @@ async function confirmLinking() {
     const body = linkType === 'issue'
       ? { issueId: parseInt(targetId), keepStandalone }
       : { actionId: parseInt(targetId), keepStandalone };
+    
+    console.log('  Request body:', body);
     
     const response = await fetch(endpoint, {
       method: 'POST',
