@@ -62,15 +62,23 @@ async function createStandaloneChecklist(checklistData, projectId, userId, sourc
     
     // Create items directly (no sections in this schema)
     if (checklistData.items && Array.isArray(checklistData.items)) {
+      console.log(`Creating ${checklistData.items.length} items for checklist ${checklist.id}`);
       for (let i = 0; i < checklistData.items.length; i++) {
         const item = checklistData.items[i];
-        await client.query(
-          `INSERT INTO checklist_responses 
-             (checklist_id, item_text, notes, is_completed)
-           VALUES ($1, $2, $3, FALSE)`,
-          [checklist.id, item.text || item.item_text, item.notes || null]
-        );
+        const itemText = item.text || item.item_text || item.description || '';
+        
+        if (itemText) {
+          await client.query(
+            `INSERT INTO checklist_responses 
+               (checklist_id, response_value, notes, is_completed)
+             VALUES ($1, $2, $3, FALSE)`,
+            [checklist.id, itemText, item.notes || null]
+          );
+        }
       }
+      console.log(`✅ Created items for checklist ${checklist.id}`);
+    } else {
+      console.log(`⚠️ No items found in checklistData for ${checklist.id}`);
     }
     
     await client.query('COMMIT');
