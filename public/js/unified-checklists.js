@@ -704,16 +704,40 @@ function displayChecklistsPreview(checklists) {
   document.getElementById('previewMetadata').textContent = metadata;
   
   const container = document.getElementById('checklistsPreview');
-  container.innerHTML = checklistsArray.map((checklist, index) => `
-    <div class="border rounded-lg p-4">
-      <h4 class="font-bold text-gray-900 mb-2">${escapeHtml(checklist.title)}</h4>
-      ${checklist.description ? `<p class="text-sm text-gray-600 mb-3">${escapeHtml(checklist.description)}</p>` : ''}
-      <div class="text-sm text-gray-600">
-        ${checklist.sections?.length || 0} sections, 
-        ${checklist.sections?.reduce((sum, s) => sum + (s.items?.length || 0), 0) || 0} items
+  container.innerHTML = checklistsArray.map((checklist, index) => {
+    const sectionCount = checklist.sections?.length || 0;
+    const itemCount = checklist.sections?.reduce((sum, s) => sum + (s.items?.length || 0), 0) || 0;
+    
+    return `
+      <div class="border rounded-lg p-4 mb-4 bg-white">
+        <h4 class="font-bold text-gray-900 mb-2">${escapeHtml(checklist.title)}</h4>
+        ${checklist.description ? `<p class="text-sm text-gray-600 mb-3">${escapeHtml(checklist.description)}</p>` : ''}
+        <div class="text-sm text-gray-600 mb-3">
+          ${sectionCount} section${sectionCount !== 1 ? 's' : ''}, ${itemCount} item${itemCount !== 1 ? 's' : ''}
+        </div>
+        
+        ${checklist.sections && checklist.sections.length > 0 ? `
+          <div class="space-y-3 mt-3">
+            ${checklist.sections.map((section, sIndex) => `
+              <div class="bg-gray-50 rounded p-3">
+                <h5 class="font-semibold text-gray-800 mb-2">${escapeHtml(section.title)}</h5>
+                ${section.items && section.items.length > 0 ? `
+                  <ul class="space-y-1 ml-4">
+                    ${section.items.map(item => `
+                      <li class="text-sm text-gray-700 flex items-start">
+                        <span class="mr-2 text-gray-400">•</span>
+                        <span>${escapeHtml(item.text || item)}</span>
+                      </li>
+                    `).join('')}
+                  </ul>
+                ` : '<p class="text-sm text-gray-500 italic">No items</p>'}
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p class="text-sm text-gray-500 italic">No sections</p>'}
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 async function saveStandaloneChecklists() {
