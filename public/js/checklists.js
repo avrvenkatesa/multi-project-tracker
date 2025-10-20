@@ -1396,7 +1396,12 @@ async function loadChecklistWithDependencies(checklistId) {
       checklist.sections.forEach(section => {
         if (section.items) {
           section.items = section.items.map(item => {
-            const enhanced = itemsWithDeps.find(i => i.template_item_id === item.template_item_id);
+            // For standalone checklists, match by response_id instead of template_item_id
+            const enhanced = itemsWithDeps.find(i => 
+              item.template_item_id ? 
+                (i.template_item_id === item.template_item_id) :
+                (i.response_id === item.response_id || i.id === item.id)
+            );
             return enhanced || item;
           });
         }
