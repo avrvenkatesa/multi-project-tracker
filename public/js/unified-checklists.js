@@ -41,6 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load project info
   loadProjectInfo();
   
+  // Load counts for all tabs immediately
+  loadAllTabCounts();
+  
   // Switch to requested tab or default to linked
   if (tab && ['linked', 'standalone', 'templates'].includes(tab)) {
     switchTab(tab);
@@ -117,6 +120,64 @@ function setupEventListeners() {
   // Search and sort for standalone
   document.getElementById('standaloneSearch')?.addEventListener('input', filterStandaloneChecklists);
   document.getElementById('standaloneSort')?.addEventListener('change', sortStandaloneChecklists);
+}
+
+// ============================================
+// Load All Tab Counts (for initial display)
+// ============================================
+
+async function loadAllTabCounts() {
+  // Load counts in parallel for all tabs
+  await Promise.all([
+    loadLinkedCount(),
+    loadStandaloneCount(),
+    loadTemplatesCount()
+  ]);
+}
+
+async function loadLinkedCount() {
+  try {
+    const response = await fetch(`/api/checklists?project_id=${currentProjectId}`, {
+      credentials: 'include'
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const count = (Array.isArray(data) ? data : []).filter(c => !c.is_standalone).length;
+      document.getElementById('linkedCount').textContent = count;
+    }
+  } catch (error) {
+    console.error('Error loading linked count:', error);
+  }
+}
+
+async function loadStandaloneCount() {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/standalone-checklists`, {
+      credentials: 'include'
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const count = (data.checklists || []).length;
+      document.getElementById('standaloneCount').textContent = count;
+    }
+  } catch (error) {
+    console.error('Error loading standalone count:', error);
+  }
+}
+
+async function loadTemplatesCount() {
+  try {
+    const response = await fetch('/api/templates', {
+      credentials: 'include'
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const templates = Array.isArray(data) ? data : (data.templates || []);
+      document.getElementById('templatesCount').textContent = templates.length;
+    }
+  } catch (error) {
+    console.error('Error loading templates count:', error);
+  }
 }
 
 // ============================================
@@ -681,11 +742,12 @@ async function saveStandaloneChecklists() {
 }
 
 // ============================================
-// Create Checklist Modal (Placeholder)
+// Create Checklist - Redirect to Templates
 // ============================================
 
 function openCreateChecklistModal() {
-  showNotification('Create checklist feature - Coming soon! Use templates instead.', 'info');
+  // Redirect to templates page to create checklist from template
+  window.location.href = '/templates.html';
 }
 
 // ============================================
