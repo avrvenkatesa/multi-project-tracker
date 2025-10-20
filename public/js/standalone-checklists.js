@@ -87,7 +87,11 @@ async function loadStandaloneChecklists() {
 }
 
 function updateStats() {
-  const totalItems = allChecklists.reduce((sum, c) => sum + (c.item_count || 0), 0);
+  // Convert item_count to number explicitly to avoid string concatenation
+  const totalItems = allChecklists.reduce((sum, c) => {
+    const count = parseInt(c.item_count, 10) || 0;
+    return sum + count;
+  }, 0);
   const uniqueDocs = new Set(allChecklists.map(c => c.source_document)).size;
   
   document.getElementById('totalCount').textContent = allChecklists.length;
