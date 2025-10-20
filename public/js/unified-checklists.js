@@ -123,6 +123,9 @@ function setupEventListeners() {
   
   // Event delegation for standalone checklist actions
   document.getElementById('standaloneChecklistsList')?.addEventListener('click', handleStandaloneAction);
+  
+  // Event delegation for linked checklist actions
+  document.getElementById('linkedChecklistsList')?.addEventListener('click', handleLinkedAction);
 }
 
 function handleStandaloneAction(event) {
@@ -141,6 +144,23 @@ function handleStandaloneAction(event) {
       break;
     case 'delete-standalone':
       deleteStandaloneChecklist(checklistId);
+      break;
+  }
+}
+
+function handleLinkedAction(event) {
+  const button = event.target.closest('[data-action]');
+  if (!button) return;
+  
+  const action = button.dataset.action;
+  const checklistId = parseInt(button.dataset.checklistId);
+  
+  switch(action) {
+    case 'view-linked':
+      viewChecklist(checklistId);
+      break;
+    case 'delete-linked':
+      deleteChecklist(checklistId);
       break;
   }
 }
@@ -323,14 +343,16 @@ function renderLinkedChecklists() {
         </div>
         <div class="flex gap-2">
           <button 
-            onclick="viewChecklist(${checklist.id})"
+            data-action="view-linked"
+            data-checklist-id="${checklist.id}"
             class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             title="View checklist"
           >
             👁️ View
           </button>
           <button 
-            onclick="deleteChecklist(${checklist.id})"
+            data-action="delete-linked"
+            data-checklist-id="${checklist.id}"
             class="px-3 py-1 text-sm text-red-600 hover:text-red-800"
             title="Delete"
           >
