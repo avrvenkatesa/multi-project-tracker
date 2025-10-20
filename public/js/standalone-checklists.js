@@ -3,6 +3,7 @@
 // ============================================
 
 let currentProjectId = 1;
+let currentProjectName = '';
 let allChecklists = [];
 let originalChecklists = [];
 let generatedChecklistsData = null;
@@ -31,6 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Setup event listeners
   setupEventListeners();
   
+  // Load project info and checklists
+  loadProjectInfo();
   loadStandaloneChecklists();
 });
 
@@ -39,8 +42,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================
 
 function setupEventListeners() {
+  // Back to Projects button
+  document.getElementById('backToProjectsBtn')?.addEventListener('click', () => {
+    window.location.href = '/index.html';
+  });
+  
   // Upload buttons
-  document.getElementById('header-upload-btn')?.addEventListener('click', openUploadModal);
+  document.getElementById('content-upload-btn')?.addEventListener('click', openUploadModal);
   document.getElementById('empty-state-upload-btn')?.addEventListener('click', openUploadModal);
   
   // Upload modal controls
@@ -62,6 +70,31 @@ function setupEventListeners() {
   document.getElementById('confirm-linking-btn')?.addEventListener('click', confirmLinking);
   document.getElementById('cancel-linking-btn')?.addEventListener('click', closeLinkingModal);
 }
+
+// ============================================
+// Load Project Info
+// ============================================
+
+async function loadProjectInfo() {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}`, {
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      const project = await response.json();
+      currentProjectName = project.name;
+      document.getElementById('projectNameHeader').textContent = project.name;
+    }
+  } catch (error) {
+    console.error('Error loading project info:', error);
+    document.getElementById('projectNameHeader').textContent = 'Unknown Project';
+  }
+}
+
+// ============================================
+// Load Standalone Checklists
+// ============================================
 
 async function loadStandaloneChecklists() {
   try {
