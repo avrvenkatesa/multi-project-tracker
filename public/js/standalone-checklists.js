@@ -390,7 +390,10 @@ function selectLinkType(type) {
 
 async function loadIssuesForLinking() {
   try {
-    const response = await fetch(`/api/issues?project_id=${currentProjectId}`, {
+    // Use the checklist's project_id, not the current page's project
+    const checklistProjectId = currentChecklistForLinking?.project_id || currentProjectId;
+    
+    const response = await fetch(`/api/issues?project_id=${checklistProjectId}`, {
       credentials: 'include'
     });
     
@@ -407,7 +410,10 @@ async function loadIssuesForLinking() {
 
 async function loadActionsForLinking() {
   try {
-    const response = await fetch(`/api/action-items?project_id=${currentProjectId}`, {
+    // Use the checklist's project_id, not the current page's project
+    const checklistProjectId = currentChecklistForLinking?.project_id || currentProjectId;
+    
+    const response = await fetch(`/api/action-items?project_id=${checklistProjectId}`, {
       credentials: 'include'
     });
     
