@@ -4,7 +4,8 @@
  * Handles document upload and text extraction from memory buffers
  */
 
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
+const pdfParse = PDFParse;
 const mammoth = require('mammoth');
 
 /**
