@@ -196,10 +196,10 @@ async function linkChecklistToAction(checklistId, actionId, userId, keepStandalo
       // Copy responses
       await client.query(
         `INSERT INTO checklist_responses (
-          checklist_id, template_item_id, response_value, notes, is_completed, item_text
+          checklist_id, template_item_id, response_value, notes, is_completed
         )
         SELECT 
-          $1, template_item_id, response_value, notes, is_completed, item_text
+          $1, template_item_id, response_value, notes, is_completed
         FROM checklist_responses
         WHERE checklist_id = $2`,
         [linkedChecklistId, checklistId]
