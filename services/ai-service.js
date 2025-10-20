@@ -648,9 +648,88 @@ function checkRateLimit(userId, requestCount = 1) {
   return { allowed: true, remaining: 10 - recentRequests.length };
 }
 
+/**
+ * Generate checklists from standalone document text
+ * For Phase 4 Mode 3: Standalone Document Processing
+ */
+async function generateChecklistFromDocument(documentText, context = {}) {
+  console.log(`🤖 Generating standalone checklists from document (${documentText.length} chars)`);
+  
+  if (!documentText || documentText.trim().length === 0) {
+    throw new Error('No document text provided for checklist generation');
+  }
+  
+  // Truncate if too long (leave room for prompt)
+  const maxTextLength = 100000; // ~25k tokens
+  const truncatedText = documentText.length > maxTextLength 
+    ? documentText.substring(0, maxTextLength) + '\n\n[Document truncated...]'
+    : documentText;
+  
+  const prompt = `You are an expert project manager analyzing a document to generate comprehensive, actionable checklists.
+
+DOCUMENT CONTENT:
+${truncatedText}
+
+TASK:
+Generate 1-5 comprehensive checklists from this document. Each checklist should focus on a specific aspect, workstream, or phase mentioned in the document.
+
+REQUIREMENTS:
+1. Create separate checklists for different major topics/phases/workstreams
+2. Each checklist should have:
+   - A clear, descriptive title (40 chars max)
+   - Optional description (100 chars max)
+   - Sections organized logically (e.g., "Planning", "Execution", "Review")
+   - Specific, actionable checklist items
+3. Items should be:
+   - Concrete and measurable
+   - Based directly on the document content
+   - Organized from prerequisite → execution → completion
+4. Aim for 5-15 items per checklist
+
+RESPONSE FORMAT (JSON):
+{
+  "checklists": [
+    {
+      "title": "Checklist Title",
+      "description": "Brief description",
+      "sections": [
+        {
+          "title": "Section Name",
+          "items": [
+            {
+              "description": "Specific action item",
+              "is_required": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+Generate the checklists now:`;
+
+  try {
+    const result = await callAI(prompt, 'document');
+    
+    // Validate structure
+    if (!result.checklists || !Array.isArray(result.checklists)) {
+      throw new Error('AI response missing checklists array');
+    }
+    
+    console.log(`✅ Generated ${result.checklists.length} standalone checklist(s)`);
+    return result.checklists;
+    
+  } catch (error) {
+    console.error('Error generating checklists from document:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   generateChecklistFromIssue,
   generateChecklistFromActionItem,
   generateMultipleChecklists,
+  generateChecklistFromDocument,
   checkRateLimit
 };
