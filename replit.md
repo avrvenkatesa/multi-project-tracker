@@ -13,6 +13,8 @@ The frontend is a single-page application (SPA) built with vanilla JavaScript an
 
 **Checklist Dependency UI** (Phase 3b Feature 5): The checklist-fill.html page includes visual dependency management with blocking indicators (red-bordered items with warning messages), dependency badges showing completion status, "Manage Dependencies" buttons on each item, and a comprehensive dependency modal for adding/removing dependencies with circular dependency prevention, same-checklist validation, and real-time dependency status display.
 
+**Standalone Checklist Library** (Phase 4 Mode 3): The standalone-checklists.html page provides project-level document upload and checklist management with: stats dashboard showing total checklists/items/documents, upload modal with AI generation preview and selective saving, linking modal for attaching standalone checklists to issues or action items (with copy/move modes), search and sort functionality, empty state guidance, and full CRUD operations on standalone checklists. Accessible via "📚 Checklist Library" in the View dropdown menu.
+
 ### Backend
 The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system for granular permissions. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations, atomic transactions for tag management, project-level authorization, comprehensive checklist management, and logging of status changes to a `status_history` table.
 

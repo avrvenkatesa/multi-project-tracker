@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checklist Library - Standalone Checklists</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+  
+  <!-- Header -->
+  <div class="bg-blue-700 text-white shadow-md">
+    <div class="max-w-7xl mx-auto px-4 py-4">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-4">
+          <a href="/index.html" class="text-white hover:text-blue-200">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+          </a>
+          <div>
+            <h1 class="text-2xl font-bold">📚 Checklist Library</h1>
+            <p class="text-sm text-blue-200 mt-1">
+              Standalone checklists generated from documents
+            </p>
+          </div>
+        </div>
+        <button 
+          onclick="openUploadModal()"
+          class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+        >
+          <span>📤</span>
+          <span>Upload Document</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-600">Total Checklists</div>
+        <div class="text-2xl font-bold text-gray-900" id="totalCount">-</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-600">Total Items</div>
+        <div class="text-2xl font-bold text-gray-900" id="totalItems">-</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-600">Documents Processed</div>
+        <div class="text-2xl font-bold text-gray-900" id="documentCount">-</div>
+      </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+      <div class="flex gap-4 items-center">
+        <input 
+          type="text" 
+          id="searchInput"
+          placeholder="Search checklists..."
+          class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+          oninput="filterChecklists()"
+        />
+        <select 
+          id="sortSelect"
+          class="px-4 py-2 border rounded-lg"
+          onchange="sortChecklists()"
+        >
+          <option value="date-desc">Newest First</option>
+          <option value="date-asc">Oldest First</option>
+          <option value="title">Title A-Z</option>
+          <option value="items">Most Items</option>
+        </select>
+      </div>
+    </div>
+    
+    <!-- Checklists List -->
+    <div id="checklistsList" class="space-y-4">
+      <!-- Loading state -->
+      <div class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <p class="text-gray-600 mt-4">Loading checklists...</p>
+      </div>
+    </div>
+    
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden bg-white rounded-lg shadow p-12 text-center">
+      <div class="text-6xl mb-4">📚</div>
+      <h3 class="text-xl font-bold text-gray-900 mb-2">No Standalone Checklists Yet</h3>
+      <p class="text-gray-600 mb-6">
+        Upload a document to generate checklists that can be linked to issues later
+      </p>
+      <button 
+        onclick="openUploadModal()"
+        class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+      >
+        Upload Your First Document
+      </button>
+    </div>
+    
+  </div>
+  
+  <!-- Upload Modal -->
+  <div id="uploadModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
+      
+      <!-- Header -->
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-bold">Upload Document & Generate Checklists</h3>
+          <button onclick="closeUploadModal()" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
+        </div>
+        <p class="text-sm text-gray-600 mt-2">
+          Upload a document to generate standalone checklists that can be linked to issues later
+        </p>
+      </div>
+      
+      <!-- Content -->
+      <div id="uploadModalContent" class="flex-1 overflow-y-auto p-6">
+        <!-- Upload view -->
+        <div id="uploadView">
+          <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+            <input 
+              type="file" 
+              id="documentFileInput" 
+              accept=".pdf,.docx,.txt"
+              class="hidden"
+              onchange="handleDocumentUpload()"
+            />
+            <label for="documentFileInput" class="cursor-pointer">
+              <div class="text-6xl mb-4">📄</div>
+              <p class="text-lg font-medium mb-2">Click to upload document</p>
+              <p class="text-sm text-gray-500">PDF, Word (.docx), or Text files (max 10MB)</p>
+            </label>
+          </div>
+        </div>
+        
+        <!-- Processing view -->
+        <div id="processingView" class="hidden text-center py-8">
+          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
+          <p class="text-lg font-medium">Processing document...</p>
+          <p class="text-sm text-gray-600 mt-2" id="processingStatus">Extracting text...</p>
+        </div>
+        
+        <!-- Preview view -->
+        <div id="previewView" class="hidden">
+          <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+            <p class="font-medium text-purple-900">✨ AI Generated Checklists</p>
+            <p class="text-sm text-purple-700 mt-1" id="previewMetadata"></p>
+          </div>
+          
+          <div id="checklistsPreview" class="space-y-4 max-h-96 overflow-y-auto">
+            <!-- Dynamically populated -->
+          </div>
+          
+          <div class="flex gap-3 mt-6">
+            <button 
+              onclick="saveStandaloneChecklists()"
+              class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+            >
+              ✅ Save All Checklists
+            </button>
+            <button 
+              onclick="closeUploadModal()"
+              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+  
+  <!-- Linking Modal -->
+  <div id="linkingModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-lg font-bold">Link Checklist</h3>
+          <button onclick="closeLinkingModal()" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
+        </div>
+      </div>
+      
+      <div class="p-6">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Checklist
+          </label>
+          <div class="p-3 bg-gray-50 rounded border">
+            <p class="font-medium" id="linkChecklistTitle">-</p>
+            <p class="text-sm text-gray-600" id="linkChecklistInfo">-</p>
+          </div>
+        </div>
+        
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Link to
+          </label>
+          <div class="flex gap-2 mb-2">
+            <button 
+              id="linkToIssueBtn"
+              class="flex-1 px-3 py-2 border-2 border-blue-500 bg-blue-50 text-blue-700 rounded font-medium"
+              onclick="selectLinkType('issue')"
+            >
+              Issue
+            </button>
+            <button 
+              id="linkToActionBtn"
+              class="flex-1 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded font-medium hover:bg-gray-50"
+              onclick="selectLinkType('action')"
+            >
+              Action Item
+            </button>
+          </div>
+          
+          <select 
+            id="linkTargetSelect"
+            class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="">Select an issue...</option>
+          </select>
+        </div>
+        
+        <div class="mb-6">
+          <label class="flex items-center gap-2">
+            <input 
+              type="checkbox" 
+              id="keepStandaloneCheckbox"
+              class="rounded"
+            />
+            <span class="text-sm text-gray-700">
+              Keep original as standalone (create a copy)
+            </span>
+          </label>
+        </div>
+        
+        <div class="flex gap-3">
+          <button 
+            onclick="confirmLinking()"
+            class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+          >
+            Link Checklist
+          </button>
+          <button 
+            onclick="closeLinkingModal()"
+            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="/js/standalone-checklists.js"></script>
+</body>
+</html>

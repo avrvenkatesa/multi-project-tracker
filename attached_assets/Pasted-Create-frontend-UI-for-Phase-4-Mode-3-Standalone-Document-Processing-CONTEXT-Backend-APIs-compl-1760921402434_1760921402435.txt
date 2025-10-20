@@ -1,0 +1,821 @@
+Create frontend UI for Phase 4 Mode 3: Standalone Document Processing
+
+CONTEXT:
+- Backend APIs complete ✅
+- Database schema ready ✅
+- Need project-level document upload interface
+- Users can view, manage, and link standalone checklists
+
+TASK:
+Create frontend UI for standalone checklist management at project level.
+
+IMPLEMENTATION:
+
+Part 1: Add Navigation to Standalone Checklists
+
+Find the project navigation menu and add a new menu item:
+```html
+<!-- Add to project navigation menu -->
+<a href="/standalone-checklists.html" class="nav-link">
+  📚 Checklist Library
+</a>
+```
+
+OR if using tabs in existing checklist page, add:
+```html
+<!-- Add tab to checklists page -->
+<div class="tabs">
+  <button class="tab active" data-tab="templates">Templates</button>
+  <button class="tab" data-tab="linked">Linked Checklists</button>
+  <button class="tab" data-tab="standalone">📚 Unlinked Library</button>
+</div>
+```
+
+Part 2: Create Standalone Checklists Page
+
+File: public/standalone-checklists.html
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checklist Library - Standalone Checklists</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+  
+  <!-- Header -->
+  <div class="bg-white border-b">
+    <div class="max-w-7xl mx-auto px-4 py-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">📚 Checklist Library</h1>
+          <p class="text-sm text-gray-600 mt-1">
+            Standalone checklists generated from documents
+          </p>
+        </div>
+        <button 
+          onclick="openUploadModal()"
+          class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+        >
+          <span>📤</span>
+          <span>Upload Document</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-600">Total Checklists</div>
+        <div class="text-2xl font-bold text-gray-900" id="totalCount">-</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-600">Total Items</div>
+        <div class="text-2xl font-bold text-gray-900" id="totalItems">-</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-600">Documents Processed</div>
+        <div class="text-2xl font-bold text-gray-900" id="documentCount">-</div>
+      </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+      <div class="flex gap-4 items-center">
+        <input 
+          type="text" 
+          id="searchInput"
+          placeholder="Search checklists..."
+          class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+          oninput="filterChecklists()"
+        />
+        <select 
+          id="sortSelect"
+          class="px-4 py-2 border rounded-lg"
+          onchange="sortChecklists()"
+        >
+          <option value="date-desc">Newest First</option>
+          <option value="date-asc">Oldest First</option>
+          <option value="title">Title A-Z</option>
+          <option value="items">Most Items</option>
+        </select>
+      </div>
+    </div>
+    
+    <!-- Checklists List -->
+    <div id="checklistsList" class="space-y-4">
+      <!-- Loading state -->
+      <div class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <p class="text-gray-600 mt-4">Loading checklists...</p>
+      </div>
+    </div>
+    
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden bg-white rounded-lg shadow p-12 text-center">
+      <div class="text-6xl mb-4">📚</div>
+      <h3 class="text-xl font-bold text-gray-900 mb-2">No Standalone Checklists Yet</h3>
+      <p class="text-gray-600 mb-6">
+        Upload a document to generate checklists that can be linked to issues later
+      </p>
+      <button 
+        onclick="openUploadModal()"
+        class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+      >
+        Upload Your First Document
+      </button>
+    </div>
+    
+  </div>
+  
+  <!-- Upload Modal -->
+  <div id="uploadModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
+      
+      <!-- Header -->
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-bold">Upload Document & Generate Checklists</h3>
+          <button onclick="closeUploadModal()" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
+        </div>
+        <p class="text-sm text-gray-600 mt-2">
+          Upload a document to generate standalone checklists that can be linked to issues later
+        </p>
+      </div>
+      
+      <!-- Content -->
+      <div id="uploadModalContent" class="flex-1 overflow-y-auto p-6">
+        <!-- Upload view -->
+        <div id="uploadView">
+          <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+            <input 
+              type="file" 
+              id="documentFileInput" 
+              accept=".pdf,.docx,.txt"
+              class="hidden"
+              onchange="handleDocumentUpload()"
+            />
+            <label for="documentFileInput" class="cursor-pointer">
+              <div class="text-6xl mb-4">📄</div>
+              <p class="text-lg font-medium mb-2">Click to upload document</p>
+              <p class="text-sm text-gray-500">PDF, Word (.docx), or Text files (max 10MB)</p>
+            </label>
+          </div>
+        </div>
+        
+        <!-- Processing view -->
+        <div id="processingView" class="hidden text-center py-8">
+          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
+          <p class="text-lg font-medium">Processing document...</p>
+          <p class="text-sm text-gray-600 mt-2" id="processingStatus">Extracting text...</p>
+        </div>
+        
+        <!-- Preview view -->
+        <div id="previewView" class="hidden">
+          <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+            <p class="font-medium text-purple-900">✨ AI Generated Checklists</p>
+            <p class="text-sm text-purple-700 mt-1" id="previewMetadata"></p>
+          </div>
+          
+          <div id="checklistsPreview" class="space-y-4 max-h-96 overflow-y-auto">
+            <!-- Dynamically populated -->
+          </div>
+          
+          <div class="flex gap-3 mt-6">
+            <button 
+              onclick="saveStandaloneChecklists()"
+              class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+            >
+              ✅ Save All Checklists
+            </button>
+            <button 
+              onclick="closeUploadModal()"
+              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+  
+  <!-- Linking Modal -->
+  <div id="linkingModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+          <h3 class="text-lg font-bold">Link Checklist</h3>
+          <button onclick="closeLinkingModal()" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
+        </div>
+      </div>
+      
+      <div class="p-6">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Checklist
+          </label>
+          <div class="p-3 bg-gray-50 rounded border">
+            <p class="font-medium" id="linkChecklistTitle">-</p>
+            <p class="text-sm text-gray-600" id="linkChecklistInfo">-</p>
+          </div>
+        </div>
+        
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Link to
+          </label>
+          <div class="flex gap-2 mb-2">
+            <button 
+              id="linkToIssueBtn"
+              class="flex-1 px-3 py-2 border-2 border-blue-500 bg-blue-50 text-blue-700 rounded font-medium"
+              onclick="selectLinkType('issue')"
+            >
+              Issue
+            </button>
+            <button 
+              id="linkToActionBtn"
+              class="flex-1 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded font-medium hover:bg-gray-50"
+              onclick="selectLinkType('action')"
+            >
+              Action Item
+            </button>
+          </div>
+          
+          <select 
+            id="linkTargetSelect"
+            class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="">Select an issue...</option>
+          </select>
+        </div>
+        
+        <div class="mb-6">
+          <label class="flex items-center gap-2">
+            <input 
+              type="checkbox" 
+              id="keepStandaloneCheckbox"
+              class="rounded"
+            />
+            <span class="text-sm text-gray-700">
+              Keep original as standalone (create a copy)
+            </span>
+          </label>
+        </div>
+        
+        <div class="flex gap-3">
+          <button 
+            onclick="confirmLinking()"
+            class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+          >
+            Link Checklist
+          </button>
+          <button 
+            onclick="closeLinkingModal()"
+            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="/js/standalone-checklists.js"></script>
+</body>
+</html>
+```
+
+Part 3: Create JavaScript for Standalone Checklists
+
+File: public/js/standalone-checklists.js
+```javascript
+// ============================================
+// Phase 4 Mode 3: Standalone Checklists UI
+// ============================================
+
+let currentProjectId = 1; // TODO: Get from session/URL
+let allChecklists = [];
+let generatedChecklistsData = null;
+let currentChecklistForLinking = null;
+let linkType = 'issue'; // 'issue' or 'action'
+
+// ============================================
+// Page Initialization
+// ============================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadStandaloneChecklists();
+});
+
+async function loadStandaloneChecklists() {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/standalone-checklists`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to load checklists');
+    }
+    
+    const data = await response.json();
+    allChecklists = data.checklists || [];
+    
+    updateStats();
+    renderChecklists();
+    
+  } catch (error) {
+    console.error('Error loading checklists:', error);
+    showNotification('Failed to load checklists', 'error');
+  }
+}
+
+function updateStats() {
+  const totalItems = allChecklists.reduce((sum, c) => sum + (c.item_count || 0), 0);
+  const uniqueDocs = new Set(allChecklists.map(c => c.source_document)).size;
+  
+  document.getElementById('totalCount').textContent = allChecklists.length;
+  document.getElementById('totalItems').textContent = totalItems;
+  document.getElementById('documentCount').textContent = uniqueDocs;
+}
+
+function renderChecklists() {
+  const container = document.getElementById('checklistsList');
+  const emptyState = document.getElementById('emptyState');
+  
+  if (allChecklists.length === 0) {
+    container.innerHTML = '';
+    emptyState.classList.remove('hidden');
+    return;
+  }
+  
+  emptyState.classList.add('hidden');
+  
+  const html = allChecklists.map(checklist => `
+    <div class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6">
+      <div class="flex justify-between items-start mb-4">
+        <div class="flex-1">
+          <h3 class="text-lg font-bold text-gray-900 mb-1">${checklist.title}</h3>
+          ${checklist.description ? `<p class="text-sm text-gray-600">${checklist.description}</p>` : ''}
+        </div>
+        <div class="flex gap-2">
+          <button 
+            onclick="viewChecklist(${checklist.id})"
+            class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            title="View checklist"
+          >
+            👁️ View
+          </button>
+          <button 
+            onclick="openLinkingModal(${checklist.id})"
+            class="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+            title="Link to issue"
+          >
+            🔗 Link
+          </button>
+          <button 
+            onclick="deleteChecklist(${checklist.id})"
+            class="px-3 py-1 text-sm text-red-600 hover:text-red-800"
+            title="Delete checklist"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+      
+      <div class="flex flex-wrap gap-4 text-sm text-gray-600">
+        <div class="flex items-center gap-1">
+          <span>📋</span>
+          <span>${checklist.section_count || 0} sections</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span>✓</span>
+          <span>${checklist.item_count || 0} items</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span>📄</span>
+          <span>${checklist.source_document || 'Unknown'}</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span>👤</span>
+          <span>${checklist.creator_name || 'Unknown'}</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span>📅</span>
+          <span>${formatDate(checklist.created_at)}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  
+  container.innerHTML = html;
+}
+
+// ============================================
+// Document Upload Modal
+// ============================================
+
+function openUploadModal() {
+  document.getElementById('uploadModal').classList.remove('hidden');
+  document.getElementById('uploadView').classList.remove('hidden');
+  document.getElementById('processingView').classList.add('hidden');
+  document.getElementById('previewView').classList.add('hidden');
+  document.getElementById('documentFileInput').value = '';
+  generatedChecklistsData = null;
+}
+
+function closeUploadModal() {
+  document.getElementById('uploadModal').classList.add('hidden');
+}
+
+async function handleDocumentUpload() {
+  const fileInput = document.getElementById('documentFileInput');
+  const file = fileInput.files[0];
+  
+  if (!file) return;
+  
+  // Show processing
+  document.getElementById('uploadView').classList.add('hidden');
+  document.getElementById('processingView').classList.remove('hidden');
+  document.getElementById('processingStatus').textContent = 'Extracting text from document...';
+  
+  try {
+    const formData = new FormData();
+    formData.append('document', file);
+    
+    setTimeout(() => {
+      document.getElementById('processingStatus').textContent = 'Analyzing with AI...';
+    }, 1000);
+    
+    const response = await fetch(`/api/projects/${currentProjectId}/upload-and-generate-standalone`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to generate checklists');
+    }
+    
+    const data = await response.json();
+    generatedChecklistsData = data.preview;
+    
+    displayChecklistsPreview(data.preview);
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    showNotification(`Failed to generate checklists: ${error.message}`, 'error');
+    closeUploadModal();
+  }
+}
+
+function displayChecklistsPreview(preview) {
+  document.getElementById('processingView').classList.add('hidden');
+  document.getElementById('previewView').classList.remove('hidden');
+  
+  document.getElementById('previewMetadata').textContent = 
+    `${preview.metadata.sectionCount} checklists, ${preview.metadata.itemCount} total items | Source: ${preview.sourceDocument}`;
+  
+  const container = document.getElementById('checklistsPreview');
+  container.innerHTML = preview.checklists.sections.map((checklist, index) => `
+    <div class="border rounded-lg p-4 bg-gray-50">
+      <div class="flex items-start gap-3">
+        <input 
+          type="checkbox" 
+          id="checklist-${index}"
+          checked
+          class="mt-1"
+        />
+        <div class="flex-1">
+          <label for="checklist-${index}" class="font-semibold text-gray-900 cursor-pointer">
+            ${checklist.title}
+          </label>
+          <p class="text-sm text-gray-600 mt-1">${checklist.items.length} items</p>
+          <details class="mt-2">
+            <summary class="text-sm text-purple-600 cursor-pointer hover:text-purple-800">
+              Preview items
+            </summary>
+            <ul class="mt-2 space-y-1 text-sm text-gray-700">
+              ${checklist.items.slice(0, 5).map(item => `
+                <li class="flex items-start gap-2">
+                  <span class="text-purple-600">•</span>
+                  <span>${item.text}</span>
+                </li>
+              `).join('')}
+              ${checklist.items.length > 5 ? `<li class="text-gray-500">... and ${checklist.items.length - 5} more</li>` : ''}
+            </ul>
+          </details>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function saveStandaloneChecklists() {
+  if (!generatedChecklistsData) return;
+  
+  try {
+    // Get selected checklists
+    const selected = generatedChecklistsData.checklists.sections.filter((_, index) => {
+      return document.getElementById(`checklist-${index}`)?.checked;
+    });
+    
+    if (selected.length === 0) {
+      showNotification('Please select at least one checklist', 'error');
+      return;
+    }
+    
+    const response = await fetch(`/api/projects/${currentProjectId}/save-standalone-checklists`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        checklists: selected,
+        sourceDocument: generatedChecklistsData.sourceDocument
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to save checklists');
+    }
+    
+    showNotification(`✅ ${selected.length} checklist(s) saved successfully!`, 'success');
+    closeUploadModal();
+    loadStandaloneChecklists();
+    
+  } catch (error) {
+    console.error('Save error:', error);
+    showNotification('Failed to save checklists', 'error');
+  }
+}
+
+// ============================================
+// Linking Modal
+// ============================================
+
+async function openLinkingModal(checklistId) {
+  currentChecklistForLinking = allChecklists.find(c => c.id === checklistId);
+  
+  if (!currentChecklistForLinking) return;
+  
+  document.getElementById('linkChecklistTitle').textContent = currentChecklistForLinking.title;
+  document.getElementById('linkChecklistInfo').textContent = 
+    `${currentChecklistForLinking.item_count} items from ${currentChecklistForLinking.source_document}`;
+  
+  // Load issues
+  await loadIssuesForLinking();
+  
+  document.getElementById('linkingModal').classList.remove('hidden');
+}
+
+function closeLinkingModal() {
+  document.getElementById('linkingModal').classList.add('hidden');
+  currentChecklistForLinking = null;
+}
+
+function selectLinkType(type) {
+  linkType = type;
+  
+  const issueBtn = document.getElementById('linkToIssueBtn');
+  const actionBtn = document.getElementById('linkToActionBtn');
+  
+  if (type === 'issue') {
+    issueBtn.className = 'flex-1 px-3 py-2 border-2 border-blue-500 bg-blue-50 text-blue-700 rounded font-medium';
+    actionBtn.className = 'flex-1 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded font-medium hover:bg-gray-50';
+    loadIssuesForLinking();
+  } else {
+    issueBtn.className = 'flex-1 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded font-medium hover:bg-gray-50';
+    actionBtn.className = 'flex-1 px-3 py-2 border-2 border-blue-500 bg-blue-50 text-blue-700 rounded font-medium';
+    loadActionsForLinking();
+  }
+}
+
+async function loadIssuesForLinking() {
+  try {
+    const response = await fetch(`/api/issues?project_id=${currentProjectId}`, {
+      credentials: 'include'
+    });
+    
+    const issues = await response.json();
+    
+    const select = document.getElementById('linkTargetSelect');
+    select.innerHTML = '<option value="">Select an issue...</option>' +
+      issues.map(issue => `<option value="${issue.id}">${issue.title}</option>`).join('');
+    
+  } catch (error) {
+    console.error('Error loading issues:', error);
+  }
+}
+
+async function loadActionsForLinking() {
+  try {
+    const response = await fetch(`/api/action-items?project_id=${currentProjectId}`, {
+      credentials: 'include'
+    });
+    
+    const actions = await response.json();
+    
+    const select = document.getElementById('linkTargetSelect');
+    select.innerHTML = '<option value="">Select an action item...</option>' +
+      actions.map(action => `<option value="${action.id}">${action.title}</option>`).join('');
+    
+  } catch (error) {
+    console.error('Error loading actions:', error);
+  }
+}
+
+async function confirmLinking() {
+  const targetId = document.getElementById('linkTargetSelect').value;
+  const keepStandalone = document.getElementById('keepStandaloneCheckbox').checked;
+  
+  if (!targetId) {
+    showNotification(`Please select ${linkType === 'issue' ? 'an issue' : 'an action item'}`, 'error');
+    return;
+  }
+  
+  try {
+    const endpoint = linkType === 'issue' 
+      ? `/api/checklists/${currentChecklistForLinking.id}/link-to-issue`
+      : `/api/checklists/${currentChecklistForLinking.id}/link-to-action`;
+    
+    const body = linkType === 'issue'
+      ? { issueId: parseInt(targetId), keepStandalone }
+      : { actionId: parseInt(targetId), keepStandalone };
+    
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to link checklist');
+    }
+    
+    showNotification('✅ Checklist linked successfully!', 'success');
+    closeLinkingModal();
+    loadStandaloneChecklists();
+    
+  } catch (error) {
+    console.error('Linking error:', error);
+    showNotification('Failed to link checklist', 'error');
+  }
+}
+
+// ============================================
+// Actions
+// ============================================
+
+function viewChecklist(checklistId) {
+  // TODO: Open checklist detail view
+  // For now, redirect to checklist page
+  window.location.href = `/checklist.html?id=${checklistId}`;
+}
+
+async function deleteChecklist(checklistId) {
+  if (!confirm('Delete this standalone checklist?\n\nThis action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/checklists/${checklistId}/standalone`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete checklist');
+    }
+    
+    showNotification('✅ Checklist deleted', 'success');
+    loadStandaloneChecklists();
+    
+  } catch (error) {
+    console.error('Delete error:', error);
+    showNotification('Failed to delete checklist', 'error');
+  }
+}
+
+// ============================================
+// Filtering & Sorting
+// ============================================
+
+function filterChecklists() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  
+  const filtered = allChecklists.filter(checklist => {
+    return checklist.title.toLowerCase().includes(search) ||
+           checklist.description?.toLowerCase().includes(search) ||
+           checklist.source_document?.toLowerCase().includes(search);
+  });
+  
+  allChecklists = filtered;
+  renderChecklists();
+}
+
+function sortChecklists() {
+  const sortBy = document.getElementById('sortSelect').value;
+  
+  switch(sortBy) {
+    case 'date-desc':
+      allChecklists.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      break;
+    case 'date-asc':
+      allChecklists.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      break;
+    case 'title':
+      allChecklists.sort((a, b) => a.title.localeCompare(b.title));
+      break;
+    case 'items':
+      allChecklists.sort((a, b) => (b.item_count || 0) - (a.item_count || 0));
+      break;
+  }
+  
+  renderChecklists();
+}
+
+// ============================================
+// Utilities
+// ============================================
+
+function formatDate(dateString) {
+  if (!dateString) return 'Unknown';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  
+  return date.toLocaleDateString();
+}
+
+function showNotification(message, type = 'info') {
+  const colors = {
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500'
+  };
+  
+  const notification = document.createElement('div');
+  notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-slide-in`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.classList.add('opacity-0');
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+```
+
+INTEGRATION:
+
+Add link to navigation in main layout (public/index.html or navigation file):
+```html
+<!-- Add to project navigation -->
+<a href="/standalone-checklists.html" class="nav-link">
+  <span>📚</span>
+  <span>Checklist Library</span>
+</a>
+```
+
+TESTING:
+
+After implementation, test the complete flow:
+
+1. Navigate to Checklist Library page
+2. Click "Upload Document"
+3. Select a test file
+4. Wait for AI generation
+5. Review preview
+6. Save checklists
+7. View in library
+8. Link a checklist to an issue
+9. Verify it disappears from standalone list
+
+COMMIT MESSAGE:
+"feat(phase4-mode3): add frontend UI for standalone checklists
+
+- Create standalone-checklists.html page
+- Create standalone-checklists.js with full functionality
+- Upload modal with AI generation preview
+- Linking modal with issue/action selection
+- Stats dashboard (total checklists, items, documents)
+- Search and sort functionality
+- Delete standalone checklists
+- Copy mode support (keep standalone when linking)
+- Empty state and loading states
+- Responsive design with Tailwind CSS
+
+Part of Phase 4 Mode 3: Standalone Document Processing (3/4)"
