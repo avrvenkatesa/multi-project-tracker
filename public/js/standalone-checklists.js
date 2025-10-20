@@ -28,8 +28,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  // Setup event listeners
+  setupEventListeners();
+  
   loadStandaloneChecklists();
 });
+
+// ============================================
+// Event Listeners Setup
+// ============================================
+
+function setupEventListeners() {
+  // Upload buttons
+  document.getElementById('header-upload-btn')?.addEventListener('click', openUploadModal);
+  document.getElementById('empty-state-upload-btn')?.addEventListener('click', openUploadModal);
+  
+  // Upload modal controls
+  document.getElementById('close-upload-modal-btn')?.addEventListener('click', closeUploadModal);
+  document.getElementById('save-all-checklists-btn')?.addEventListener('click', saveStandaloneChecklists);
+  document.getElementById('cancel-preview-btn')?.addEventListener('click', closeUploadModal);
+  
+  // File input
+  document.getElementById('documentFileInput')?.addEventListener('change', handleDocumentUpload);
+  
+  // Search and sort
+  document.getElementById('searchInput')?.addEventListener('input', filterChecklists);
+  document.getElementById('sortSelect')?.addEventListener('change', sortChecklists);
+  
+  // Linking modal controls
+  document.getElementById('close-linking-modal-btn')?.addEventListener('click', closeLinkingModal);
+  document.getElementById('linkToIssueBtn')?.addEventListener('click', () => selectLinkType('issue'));
+  document.getElementById('linkToActionBtn')?.addEventListener('click', () => selectLinkType('action'));
+  document.getElementById('confirm-linking-btn')?.addEventListener('click', confirmLinking);
+  document.getElementById('cancel-linking-btn')?.addEventListener('click', closeLinkingModal);
+}
 
 async function loadStandaloneChecklists() {
   try {

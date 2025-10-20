@@ -26,7 +26,7 @@
           </div>
         </div>
         <button 
-          onclick="openUploadModal()"
+          id="header-upload-btn"
           class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
         >
           <span>📤</span>
@@ -63,12 +63,10 @@
           id="searchInput"
           placeholder="Search checklists..."
           class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
-          oninput="filterChecklists()"
         />
         <select 
           id="sortSelect"
           class="px-4 py-2 border rounded-lg"
-          onchange="sortChecklists()"
         >
           <option value="date-desc">Newest First</option>
           <option value="date-asc">Oldest First</option>
@@ -95,7 +93,7 @@
         Upload a document to generate checklists that can be linked to issues later
       </p>
       <button 
-        onclick="openUploadModal()"
+        id="empty-state-upload-btn"
         class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
       >
         Upload Your First Document
@@ -112,7 +110,7 @@
       <div class="p-6 border-b">
         <div class="flex justify-between items-center">
           <h3 class="text-xl font-bold">Upload Document & Generate Checklists</h3>
-          <button onclick="closeUploadModal()" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
+          <button id="close-upload-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
         </div>
         <p class="text-sm text-gray-600 mt-2">
           Upload a document to generate standalone checklists that can be linked to issues later
@@ -129,7 +127,6 @@
               id="documentFileInput" 
               accept=".pdf,.docx,.txt"
               class="hidden"
-              onchange="handleDocumentUpload()"
             />
             <label for="documentFileInput" class="cursor-pointer">
               <div class="text-6xl mb-4">📄</div>
@@ -159,13 +156,13 @@
           
           <div class="flex gap-3 mt-6">
             <button 
-              onclick="saveStandaloneChecklists()"
+              id="save-all-checklists-btn"
               class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
             >
               ✅ Save All Checklists
             </button>
             <button 
-              onclick="closeUploadModal()"
+              id="cancel-preview-btn"
               class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
             >
               Cancel
@@ -183,7 +180,7 @@
       <div class="p-6 border-b">
         <div class="flex justify-between items-center">
           <h3 class="text-lg font-bold">Link Checklist</h3>
-          <button onclick="closeLinkingModal()" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
+          <button id="close-linking-modal-btn" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
         </div>
       </div>
       
@@ -206,14 +203,12 @@
             <button 
               id="linkToIssueBtn"
               class="flex-1 px-3 py-2 border-2 border-blue-500 bg-blue-50 text-blue-700 rounded font-medium"
-              onclick="selectLinkType('issue')"
             >
               Issue
             </button>
             <button 
               id="linkToActionBtn"
               class="flex-1 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded font-medium hover:bg-gray-50"
-              onclick="selectLinkType('action')"
             >
               Action Item
             </button>
@@ -242,13 +237,13 @@
         
         <div class="flex gap-3">
           <button 
-            onclick="confirmLinking()"
+            id="confirm-linking-btn"
             class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
           >
             Link Checklist
           </button>
           <button 
-            onclick="closeLinkingModal()"
+            id="cancel-linking-btn"
             class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
           >
             Cancel
