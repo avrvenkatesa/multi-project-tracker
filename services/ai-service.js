@@ -649,6 +649,67 @@ function checkRateLimit(userId, requestCount = 1) {
 }
 
 /**
+ * Call AI for document analysis (returns multiple checklists)
+ */
+async function callAIForDocument(prompt) {
+  try {
+    console.log(`[AI] Starting document analysis (provider: ${AI_PROVIDER})`);
+    let response;
+    
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('AI request timeout after 90 seconds')), 90000);
+    });
+    
+    if (AI_PROVIDER === 'openai') {
+      const completionPromise = aiClient.chat.completions.create({
+        model: process.env.AI_MODEL || 'gpt-4o',
+        messages: [
+          { 
+            role: 'system', 
+            content: 'You are an expert project manager who generates comprehensive, actionable checklists from documents. Create detailed, well-organized checklists with clear sections and specific action items. Respond with valid JSON only, no markdown formatting, no code blocks.' 
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 16384
+      });
+      
+      const completion = await Promise.race([completionPromise, timeout]);
+      response = completion.choices[0].message.content;
+      
+    } else if (AI_PROVIDER === 'anthropic') {
+      const messagePromise = aiClient.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 8000,
+        messages: [
+          { 
+            role: 'user', 
+            content: `${prompt}\n\nIMPORTANT: Respond with ONLY valid JSON. No markdown code blocks, no explanations before or after.` 
+          }
+        ]
+      });
+      
+      const message = await Promise.race([messagePromise, timeout]);
+      response = message.content[0].text;
+    }
+    
+    console.log(`[AI] Document analysis complete, parsing response...`);
+    
+    // Clean response
+    response = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    // Parse JSON
+    const data = JSON.parse(response);
+    
+    return data;
+    
+  } catch (error) {
+    console.error('[AI] Document analysis error:', error);
+    throw new Error(`Failed to generate checklists from document: ${error.message}`);
+  }
+}
+
+/**
  * Generate checklists from standalone document text
  * For Phase 4 Mode 3: Standalone Document Processing
  */
@@ -697,7 +758,8 @@ RESPONSE FORMAT (JSON):
           "title": "Section Name",
           "items": [
             {
-              "description": "Specific action item",
+              "text": "Specific action item",
+              "field_type": "checkbox",
               "is_required": true
             }
           ]
@@ -710,7 +772,7 @@ RESPONSE FORMAT (JSON):
 Generate the checklists now:`;
 
   try {
-    const result = await callAI(prompt, 'document');
+    const result = await callAIForDocument(prompt);
     
     // Validate structure
     if (!result.checklists || !Array.isArray(result.checklists)) {
