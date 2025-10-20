@@ -680,9 +680,11 @@ async function handleDocumentUpload() {
     }
     
     const data = await response.json();
-    generatedChecklistsData = data.preview;
+    // API returns: { success: true, preview: { checklists: [], sourceDocument: '', uploadId: '', metadata: {} } }
+    const checklists = data.preview?.checklists || data.preview || [];
+    generatedChecklistsData = checklists;
     
-    displayChecklistsPreview(data.preview);
+    displayChecklistsPreview(checklists);
     
   } catch (error) {
     console.error('Upload error:', error);
@@ -695,11 +697,14 @@ function displayChecklistsPreview(checklists) {
   document.getElementById('processingView').classList.add('hidden');
   document.getElementById('previewView').classList.remove('hidden');
   
-  const metadata = `${checklists.length} checklist${checklists.length !== 1 ? 's' : ''} generated`;
+  // Ensure checklists is an array
+  const checklistsArray = Array.isArray(checklists) ? checklists : [];
+  
+  const metadata = `${checklistsArray.length} checklist${checklistsArray.length !== 1 ? 's' : ''} generated`;
   document.getElementById('previewMetadata').textContent = metadata;
   
   const container = document.getElementById('checklistsPreview');
-  container.innerHTML = checklists.map((checklist, index) => `
+  container.innerHTML = checklistsArray.map((checklist, index) => `
     <div class="border rounded-lg p-4">
       <h4 class="font-bold text-gray-900 mb-2">${escapeHtml(checklist.title)}</h4>
       ${checklist.description ? `<p class="text-sm text-gray-600 mb-3">${escapeHtml(checklist.description)}</p>` : ''}
