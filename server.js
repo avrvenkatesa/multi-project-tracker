@@ -7402,7 +7402,7 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
     
-    // Get checklist details
+    // Get checklist details (LEFT JOIN for template to support standalone checklists)
     const checklistResult = await pool.query(
       `SELECT 
         c.*,
@@ -7413,7 +7413,7 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
         u.username as assigned_to_name,
         creator.username as created_by_name
       FROM checklists c
-      INNER JOIN checklist_templates ct ON c.template_id = ct.id
+      LEFT JOIN checklist_templates ct ON c.template_id = ct.id
       INNER JOIN projects p ON c.project_id = p.id
       LEFT JOIN users u ON c.assigned_to = u.id
       LEFT JOIN users creator ON c.created_by = creator.id
@@ -7426,6 +7426,42 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
     }
     
     const checklist = checklistResult.rows[0];
+    
+    // Handle standalone checklists (no template)
+    if (checklist.is_standalone || !checklist.template_id) {
+      // Get items directly from checklist_responses for standalone checklists
+      const itemsResult = await pool.query(
+        `SELECT 
+          id as response_id,
+          checklist_id,
+          response_value as item_text,
+          notes,
+          is_completed,
+          completed_by,
+          completed_at,
+          response_date,
+          response_boolean
+        FROM checklist_responses
+        WHERE checklist_id = $1
+        ORDER BY id`,
+        [checklistId]
+      );
+      
+      // Return standalone checklist format
+      return res.json({
+        ...checklist,
+        is_standalone: true,
+        sections: [{
+          id: 1,
+          title: 'Items',
+          items: itemsResult.rows.map(item => ({
+            ...item,
+            id: item.response_id,
+            field_type: 'text'
+          }))
+        }]
+      });
+    }
     
     // Get template structure with responses
     const sectionsResult = await pool.query(
