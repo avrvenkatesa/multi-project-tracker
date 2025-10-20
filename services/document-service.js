@@ -5,7 +5,6 @@
  */
 
 const { PDFParse } = require('pdf-parse');
-const pdfParse = PDFParse;
 const mammoth = require('mammoth');
 
 /**
@@ -20,17 +19,29 @@ async function extractTextFromDocument(fileBuffer, mimeType, filename) {
   
   try {
     if (mimeType === 'application/pdf' || filename.endsWith('.pdf')) {
-      const data = await pdfParse(fileBuffer);
+      // pdf-parse v2.x API: use PDFParse class
+      const parser = new PDFParse({ data: fileBuffer });
       
-      return {
-        text: data.text,
-        pageCount: data.numpages,
-        metadata: {
-          info: data.info,
-          filename: filename
-        },
-        success: true
-      };
+      try {
+        // Get text content
+        const textResult = await parser.getText();
+        
+        // Get info/metadata
+        const infoResult = await parser.getInfo({ parsePageInfo: true });
+        
+        return {
+          text: textResult.text,
+          pageCount: infoResult.total || null,
+          metadata: {
+            info: infoResult.info || {},
+            filename: filename
+          },
+          success: true
+        };
+      } finally {
+        // Always destroy parser to free resources
+        await parser.destroy();
+      }
     }
     
     if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
