@@ -9197,6 +9197,270 @@ app.post('/api/documents/extract', authenticateToken, documentUpload.single('doc
 });
 
 // ============================================
+// Phase 4 Mode 3: Standalone Document Processing
+// ============================================
+
+const standaloneChecklistService = require('./services/standalone-checklist-service.js');
+
+/**
+ * Get standalone checklists for a project
+ * GET /api/projects/:projectId/standalone-checklists
+ */
+app.get('/api/projects/:projectId/standalone-checklists', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    const result = await standaloneChecklistService.getStandaloneChecklists(
+      parseInt(projectId)
+    );
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Error fetching standalone checklists:', error);
+    res.status(500).json({
+      error: 'Failed to fetch standalone checklists',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Upload document and generate standalone checklists
+ * POST /api/projects/:projectId/upload-and-generate-standalone
+ */
+app.post('/api/projects/:projectId/upload-and-generate-standalone', 
+  authenticateToken,
+  documentUpload.single('document'), 
+  async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const userId = req.user?.id || 1;
+      
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      
+      console.log(`📤 Standalone upload for project ${projectId}: ${req.file.originalname}`);
+      
+      // Extract text
+      documentService.validateDocumentFile(req.file);
+      
+      const extracted = await documentService.extractTextFromDocument(
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname
+      );
+      
+      console.log(`✅ Text extracted: ${extracted.text.length} characters`);
+      
+      // Record upload
+      const uploadRecord = await standaloneChecklistService.recordDocumentUpload({
+        projectId: parseInt(projectId),
+        filename: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        uploadedBy: userId,
+        extractedTextLength: extracted.text.length
+      });
+      
+      // Generate checklists with AI (project context, not issue-specific)
+      const aiService = require('./services/ai-service.js');
+      
+      const context = {
+        projectId: parseInt(projectId),
+        documentFilename: req.file.originalname,
+        mode: 'standalone'
+      };
+      
+      const generatedChecklists = await aiService.generateChecklistFromDocument(
+        extracted.text,
+        context
+      );
+      
+      // Count sections and items
+      let sectionCount = 0;
+      let itemCount = 0;
+      
+      if (Array.isArray(generatedChecklists)) {
+        sectionCount = generatedChecklists.length;
+        itemCount = generatedChecklists.reduce(
+          (sum, checklist) => sum + (checklist.items?.length || 0), 0
+        );
+      } else if (generatedChecklists.sections) {
+        sectionCount = generatedChecklists.sections.length;
+        itemCount = generatedChecklists.sections.reduce(
+          (sum, s) => sum + (s.items?.length || 0), 0
+        );
+      }
+      
+      // Update upload record
+      await standaloneChecklistService.updateDocumentUploadStatus(
+        uploadRecord.upload.id,
+        {
+          status: 'completed',
+          checklistsGenerated: sectionCount,
+          itemsGenerated: itemCount
+        }
+      );
+      
+      console.log(`✅ Generated ${sectionCount} checklists with ${itemCount} items`);
+      
+      res.json({
+        success: true,
+        preview: {
+          checklists: generatedChecklists,
+          sourceDocument: req.file.originalname,
+          uploadId: uploadRecord.upload.id,
+          metadata: {
+            sectionCount,
+            itemCount
+          }
+        }
+      });
+      
+    } catch (error) {
+      console.error('Upload-and-generate standalone error:', error);
+      res.status(500).json({
+        error: 'Failed to generate standalone checklists',
+        message: error.message
+      });
+    }
+  }
+);
+
+/**
+ * Save standalone checklists from AI generation
+ * POST /api/projects/:projectId/save-standalone-checklists
+ */
+app.post('/api/projects/:projectId/save-standalone-checklists', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { checklists, sourceDocument } = req.body;
+    const userId = req.user?.id || 1;
+    
+    if (!checklists || !Array.isArray(checklists)) {
+      return res.status(400).json({ error: 'Invalid checklists data' });
+    }
+    
+    const createdChecklists = [];
+    
+    // Create each checklist
+    for (const checklistData of checklists) {
+      const result = await standaloneChecklistService.createStandaloneChecklist(
+        checklistData,
+        parseInt(projectId),
+        userId,
+        sourceDocument
+      );
+      createdChecklists.push(result.checklist);
+    }
+    
+    console.log(`✅ Saved ${createdChecklists.length} standalone checklists`);
+    
+    res.json({
+      success: true,
+      message: `${createdChecklists.length} standalone checklist(s) created`,
+      checklists: createdChecklists
+    });
+    
+  } catch (error) {
+    console.error('Save standalone checklists error:', error);
+    res.status(500).json({
+      error: 'Failed to save standalone checklists',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Link standalone checklist to issue
+ * POST /api/checklists/:checklistId/link-to-issue
+ */
+app.post('/api/checklists/:checklistId/link-to-issue', authenticateToken, async (req, res) => {
+  try {
+    const { checklistId } = req.params;
+    const { issueId, keepStandalone } = req.body;
+    const userId = req.user?.id || 1;
+    
+    if (!issueId) {
+      return res.status(400).json({ error: 'Issue ID required' });
+    }
+    
+    const result = await standaloneChecklistService.linkChecklistToIssue(
+      parseInt(checklistId),
+      parseInt(issueId),
+      userId,
+      keepStandalone || false
+    );
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Link to issue error:', error);
+    res.status(500).json({
+      error: 'Failed to link checklist',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Link standalone checklist to action item
+ * POST /api/checklists/:checklistId/link-to-action
+ */
+app.post('/api/checklists/:checklistId/link-to-action', authenticateToken, async (req, res) => {
+  try {
+    const { checklistId } = req.params;
+    const { actionId, keepStandalone } = req.body;
+    const userId = req.user?.id || 1;
+    
+    if (!actionId) {
+      return res.status(400).json({ error: 'Action ID required' });
+    }
+    
+    const result = await standaloneChecklistService.linkChecklistToAction(
+      parseInt(checklistId),
+      parseInt(actionId),
+      userId,
+      keepStandalone || false
+    );
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Link to action error:', error);
+    res.status(500).json({
+      error: 'Failed to link checklist',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Delete standalone checklist
+ * DELETE /api/checklists/:checklistId/standalone
+ */
+app.delete('/api/checklists/:checklistId/standalone', authenticateToken, async (req, res) => {
+  try {
+    const { checklistId } = req.params;
+    
+    const result = await standaloneChecklistService.deleteStandaloneChecklist(
+      parseInt(checklistId)
+    );
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Delete standalone checklist error:', error);
+    res.status(500).json({
+      error: 'Failed to delete checklist',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
 // Phase 3b Feature 1: Auto-Create Checklist APIs
 // ============================================
 

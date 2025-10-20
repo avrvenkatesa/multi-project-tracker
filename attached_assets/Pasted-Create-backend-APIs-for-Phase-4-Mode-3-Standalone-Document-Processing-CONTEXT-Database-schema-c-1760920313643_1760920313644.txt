@@ -1,0 +1,701 @@
+Create backend APIs for Phase 4 Mode 3: Standalone Document Processing
+
+CONTEXT:
+- Database schema complete ✅
+- Need project-level document upload and checklist generation
+- Standalone checklists don't link to issues initially
+- Support manual linking later
+
+TASK:
+Create backend service and API endpoints for standalone checklist management.
+
+IMPLEMENTATION:
+
+Part 1: Create Standalone Checklist Service
+
+File: services/standalone-checklist-service.js
+```javascript
+// services/standalone-checklist-service.js
+// Phase 4 Mode 3: Standalone Document Processing
+
+const pool = require('../db');
+
+/**
+ * Get all standalone checklists for a project
+ * @param {number} projectId - Project ID
+ * @returns {array} List of standalone checklists with metadata
+ */
+async function getStandaloneChecklists(projectId) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM view_standalone_checklists
+       WHERE project_id = $1
+       ORDER BY created_at DESC`,
+      [projectId]
+    );
+    
+    return {
+      success: true,
+      checklists: result.rows,
+      count: result.rows.length
+    };
+  } catch (error) {
+    console.error('Error fetching standalone checklists:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create standalone checklist from document
+ * @param {object} checklistData - Checklist data from AI generation
+ * @param {number} projectId - Project ID
+ * @param {number} userId - User creating the checklist
+ * @param {string} sourceDocument - Source filename
+ * @returns {object} Created checklist
+ */
+async function createStandaloneChecklist(checklistData, projectId, userId, sourceDocument) {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Create checklist
+    const checklistResult = await client.query(
+      `INSERT INTO checklists 
+         (title, description, project_id, created_by, source_document, is_standalone)
+       VALUES ($1, $2, $3, $4, $5, TRUE)
+       RETURNING *`,
+      [
+        checklistData.title,
+        checklistData.description || `Generated from ${sourceDocument}`,
+        projectId,
+        userId,
+        sourceDocument
+      ]
+    );
+    
+    const checklist = checklistResult.rows[0];
+    
+    // Create sections and items
+    for (let i = 0; i < checklistData.sections.length; i++) {
+      const section = checklistData.sections[i];
+      
+      const sectionResult = await client.query(
+        `INSERT INTO checklist_sections (checklist_id, title, display_order)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [checklist.id, section.title, i]
+      );
+      
+      const sectionId = sectionResult.rows[0].id;
+      
+      // Create items
+      for (let j = 0; j < section.items.length; j++) {
+        const item = section.items[j];
+        await client.query(
+          `INSERT INTO checklist_responses 
+             (section_id, item_text, notes, is_completed, display_order)
+           VALUES ($1, $2, $3, FALSE, $4)`,
+          [sectionId, item.text, item.notes || null, j]
+        );
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    return {
+      success: true,
+      checklist: checklist
+    };
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating standalone checklist:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Link standalone checklist to issue
+ * @param {number} checklistId - Checklist ID
+ * @param {number} issueId - Issue ID
+ * @param {number} userId - User performing the link
+ * @param {boolean} keepStandalone - Keep original as standalone
+ * @returns {object} Result of linking operation
+ */
+async function linkChecklistToIssue(checklistId, issueId, userId, keepStandalone = false) {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM link_checklist_to_issue($1, $2, $3, $4)`,
+      [checklistId, issueId, userId, keepStandalone]
+    );
+    
+    const linkResult = result.rows[0];
+    
+    if (!linkResult.success) {
+      throw new Error(linkResult.message);
+    }
+    
+    return {
+      success: true,
+      message: linkResult.message,
+      checklistId: linkResult.checklist_id
+    };
+    
+  } catch (error) {
+    console.error('Error linking checklist:', error);
+    throw error;
+  }
+}
+
+/**
+ * Link standalone checklist to action item
+ * @param {number} checklistId - Checklist ID
+ * @param {number} actionId - Action item ID
+ * @param {number} userId - User performing the link
+ * @param {boolean} keepStandalone - Keep original as standalone
+ * @returns {object} Result of linking operation
+ */
+async function linkChecklistToAction(checklistId, actionId, userId, keepStandalone = false) {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Verify checklist is standalone
+    const checklistResult = await client.query(
+      `SELECT project_id, is_standalone FROM checklists WHERE id = $1`,
+      [checklistId]
+    );
+    
+    if (checklistResult.rows.length === 0) {
+      throw new Error('Checklist not found');
+    }
+    
+    if (!checklistResult.rows[0].is_standalone) {
+      throw new Error('Checklist is not standalone');
+    }
+    
+    const projectId = checklistResult.rows[0].project_id;
+    
+    // Verify action is in same project
+    const actionResult = await client.query(
+      `SELECT project_id FROM action_items WHERE id = $1`,
+      [actionId]
+    );
+    
+    if (actionResult.rows.length === 0) {
+      throw new Error('Action item not found');
+    }
+    
+    if (actionResult.rows[0].project_id !== projectId) {
+      throw new Error('Checklist and action must be in same project');
+    }
+    
+    let linkedChecklistId = checklistId;
+    
+    if (keepStandalone) {
+      // Create copy - similar logic to issue linking
+      const copyResult = await client.query(
+        `INSERT INTO checklists (
+          title, description, project_id, related_action_id, 
+          created_by, source_document, is_standalone
+        )
+        SELECT 
+          title, description, project_id, $1,
+          $2, source_document, FALSE
+        FROM checklists WHERE id = $3
+        RETURNING id`,
+        [actionId, userId, checklistId]
+      );
+      
+      linkedChecklistId = copyResult.rows[0].id;
+      
+      // Copy sections and items (similar to issue linking)
+      await client.query(
+        `INSERT INTO checklist_sections (checklist_id, title, display_order)
+         SELECT $1, title, display_order
+         FROM checklist_sections
+         WHERE checklist_id = $2`,
+        [linkedChecklistId, checklistId]
+      );
+      
+      await client.query(
+        `INSERT INTO checklist_responses (section_id, item_text, notes, display_order)
+         SELECT 
+           new_sections.id, cr.item_text, cr.notes, cr.display_order
+         FROM checklist_responses cr
+         JOIN checklist_sections old_sections ON cr.section_id = old_sections.id
+         JOIN checklist_sections new_sections ON 
+           new_sections.checklist_id = $1 
+           AND new_sections.display_order = old_sections.display_order
+         WHERE old_sections.checklist_id = $2`,
+        [linkedChecklistId, checklistId]
+      );
+      
+    } else {
+      // Move the checklist
+      await client.query(
+        `UPDATE checklists
+         SET 
+           related_action_id = $1,
+           is_standalone = FALSE,
+           linked_at = CURRENT_TIMESTAMP,
+           linked_by = $2
+         WHERE id = $3`,
+        [actionId, userId, checklistId]
+      );
+    }
+    
+    await client.query('COMMIT');
+    
+    return {
+      success: true,
+      message: keepStandalone ? 'Checklist copied and linked to action' : 'Checklist linked to action',
+      checklistId: linkedChecklistId
+    };
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error linking checklist to action:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Delete standalone checklist
+ * @param {number} checklistId - Checklist ID
+ * @returns {object} Result of deletion
+ */
+async function deleteStandaloneChecklist(checklistId) {
+  try {
+    // Verify it's standalone
+    const checkResult = await pool.query(
+      `SELECT is_standalone FROM checklists WHERE id = $1`,
+      [checklistId]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      throw new Error('Checklist not found');
+    }
+    
+    if (!checkResult.rows[0].is_standalone) {
+      throw new Error('Cannot delete linked checklist from standalone API');
+    }
+    
+    // Delete checklist (cascade will handle sections and items)
+    await pool.query(`DELETE FROM checklists WHERE id = $1`, [checklistId]);
+    
+    return {
+      success: true,
+      message: 'Standalone checklist deleted'
+    };
+    
+  } catch (error) {
+    console.error('Error deleting standalone checklist:', error);
+    throw error;
+  }
+}
+
+/**
+ * Record document upload
+ * @param {object} uploadData - Upload metadata
+ * @returns {object} Created upload record
+ */
+async function recordDocumentUpload(uploadData) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO document_uploads 
+         (project_id, filename, file_size, mime_type, uploaded_by, 
+          extracted_text_length, generation_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        uploadData.projectId,
+        uploadData.filename,
+        uploadData.fileSize,
+        uploadData.mimeType,
+        uploadData.uploadedBy,
+        uploadData.extractedTextLength,
+        'processing'
+      ]
+    );
+    
+    return {
+      success: true,
+      upload: result.rows[0]
+    };
+    
+  } catch (error) {
+    console.error('Error recording document upload:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update document upload status
+ * @param {number} uploadId - Upload ID
+ * @param {object} updateData - Status and metadata
+ * @returns {object} Updated upload record
+ */
+async function updateDocumentUploadStatus(uploadId, updateData) {
+  try {
+    const result = await pool.query(
+      `UPDATE document_uploads
+       SET 
+         generation_status = $1,
+         checklists_generated = $2,
+         total_items_generated = $3,
+         error_message = $4
+       WHERE id = $5
+       RETURNING *`,
+      [
+        updateData.status,
+        updateData.checklistsGenerated || 0,
+        updateData.itemsGenerated || 0,
+        updateData.errorMessage || null,
+        uploadId
+      ]
+    );
+    
+    return {
+      success: true,
+      upload: result.rows[0]
+    };
+    
+  } catch (error) {
+    console.error('Error updating upload status:', error);
+    throw error;
+  }
+}
+
+module.exports = {
+  getStandaloneChecklists,
+  createStandaloneChecklist,
+  linkChecklistToIssue,
+  linkChecklistToAction,
+  deleteStandaloneChecklist,
+  recordDocumentUpload,
+  updateDocumentUploadStatus
+};
+```
+
+Part 2: Add API Endpoints
+
+Add to server.js:
+```javascript
+// ============================================
+// Phase 4 Mode 3: Standalone Document Processing
+// ============================================
+
+const standaloneChecklistService = require('./services/standalone-checklist-service.js');
+
+/**
+ * Get standalone checklists for a project
+ * GET /api/projects/:projectId/standalone-checklists
+ */
+app.get('/api/projects/:projectId/standalone-checklists', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    const result = await standaloneChecklistService.getStandaloneChecklists(projectId);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Error fetching standalone checklists:', error);
+    res.status(500).json({
+      error: 'Failed to fetch standalone checklists',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Upload document and generate standalone checklists
+ * POST /api/projects/:projectId/upload-and-generate-standalone
+ */
+app.post('/api/projects/:projectId/upload-and-generate-standalone', 
+  documentUpload.single('document'), 
+  async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const userId = req.user?.id || 1;
+      
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      
+      console.log(`📤 Standalone upload for project ${projectId}: ${req.file.originalname}`);
+      
+      // Extract text
+      const documentService = require('./services/document-service.js');
+      const extracted = await documentService.extractTextFromDocument(
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname
+      );
+      
+      console.log(`✅ Text extracted: ${extracted.text.length} characters`);
+      
+      // Record upload
+      const uploadRecord = await standaloneChecklistService.recordDocumentUpload({
+        projectId: parseInt(projectId),
+        filename: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        uploadedBy: userId,
+        extractedTextLength: extracted.text.length
+      });
+      
+      // Generate checklists with AI (project context, not issue-specific)
+      const aiService = require('./services/ai-service.js');
+      
+      const context = {
+        projectId: parseInt(projectId),
+        documentFilename: req.file.originalname,
+        mode: 'standalone' // Tell AI this is project-level, not issue-specific
+      };
+      
+      const generatedChecklists = await aiService.generateChecklistFromDocument(
+        extracted.text,
+        context
+      );
+      
+      // Update upload record
+      await standaloneChecklistService.updateDocumentUploadStatus(
+        uploadRecord.upload.id,
+        {
+          status: 'completed',
+          checklistsGenerated: generatedChecklists.sections?.length || 0,
+          itemsGenerated: generatedChecklists.sections?.reduce(
+            (sum, s) => sum + (s.items?.length || 0), 0
+          ) || 0
+        }
+      );
+      
+      console.log(`✅ Generated ${generatedChecklists.sections?.length || 0} checklists`);
+      
+      res.json({
+        success: true,
+        preview: {
+          checklists: generatedChecklists,
+          sourceDocument: req.file.originalname,
+          uploadId: uploadRecord.upload.id,
+          metadata: {
+            sectionCount: generatedChecklists.sections?.length || 0,
+            itemCount: generatedChecklists.sections?.reduce(
+              (sum, s) => sum + (s.items?.length || 0), 0
+            ) || 0
+          }
+        }
+      });
+      
+    } catch (error) {
+      console.error('Upload-and-generate standalone error:', error);
+      res.status(500).json({
+        error: 'Failed to generate standalone checklists',
+        message: error.message
+      });
+    }
+  }
+);
+
+/**
+ * Save standalone checklists from AI generation
+ * POST /api/projects/:projectId/save-standalone-checklists
+ */
+app.post('/api/projects/:projectId/save-standalone-checklists', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { checklists, sourceDocument } = req.body;
+    const userId = req.user?.id || 1;
+    
+    if (!checklists || !Array.isArray(checklists)) {
+      return res.status(400).json({ error: 'Invalid checklists data' });
+    }
+    
+    const createdChecklists = [];
+    
+    // Create each checklist
+    for (const checklistData of checklists) {
+      const result = await standaloneChecklistService.createStandaloneChecklist(
+        checklistData,
+        parseInt(projectId),
+        userId,
+        sourceDocument
+      );
+      createdChecklists.push(result.checklist);
+    }
+    
+    console.log(`✅ Saved ${createdChecklists.length} standalone checklists`);
+    
+    res.json({
+      success: true,
+      message: `${createdChecklists.length} standalone checklist(s) created`,
+      checklists: createdChecklists
+    });
+    
+  } catch (error) {
+    console.error('Save standalone checklists error:', error);
+    res.status(500).json({
+      error: 'Failed to save standalone checklists',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Link standalone checklist to issue
+ * POST /api/checklists/:checklistId/link-to-issue
+ */
+app.post('/api/checklists/:checklistId/link-to-issue', async (req, res) => {
+  try {
+    const { checklistId } = req.params;
+    const { issueId, keepStandalone } = req.body;
+    const userId = req.user?.id || 1;
+    
+    if (!issueId) {
+      return res.status(400).json({ error: 'Issue ID required' });
+    }
+    
+    const result = await standaloneChecklistService.linkChecklistToIssue(
+      parseInt(checklistId),
+      parseInt(issueId),
+      userId,
+      keepStandalone || false
+    );
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Link to issue error:', error);
+    res.status(500).json({
+      error: 'Failed to link checklist',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Link standalone checklist to action item
+ * POST /api/checklists/:checklistId/link-to-action
+ */
+app.post('/api/checklists/:checklistId/link-to-action', async (req, res) => {
+  try {
+    const { checklistId } = req.params;
+    const { actionId, keepStandalone } = req.body;
+    const userId = req.user?.id || 1;
+    
+    if (!actionId) {
+      return res.status(400).json({ error: 'Action ID required' });
+    }
+    
+    const result = await standaloneChecklistService.linkChecklistToAction(
+      parseInt(checklistId),
+      parseInt(actionId),
+      userId,
+      keepStandalone || false
+    );
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Link to action error:', error);
+    res.status(500).json({
+      error: 'Failed to link checklist',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Delete standalone checklist
+ * DELETE /api/checklists/:checklistId/standalone
+ */
+app.delete('/api/checklists/:checklistId/standalone', async (req, res) => {
+  try {
+    const { checklistId } = req.params;
+    
+    const result = await standaloneChecklistService.deleteStandaloneChecklist(
+      parseInt(checklistId)
+    );
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Delete standalone checklist error:', error);
+    res.status(500).json({
+      error: 'Failed to delete checklist',
+      message: error.message
+    });
+  }
+});
+```
+
+TESTING:
+
+After implementation, test the APIs:
+```javascript
+// Test 1: Get standalone checklists
+fetch('/api/projects/1/standalone-checklists')
+  .then(r => r.json())
+  .then(data => console.log('Standalone checklists:', data));
+
+// Test 2: Upload and generate (use real file)
+const formData = new FormData();
+formData.append('document', fileInput.files[0]);
+
+fetch('/api/projects/1/upload-and-generate-standalone', {
+  method: 'POST',
+  credentials: 'include',
+  body: formData
+})
+  .then(r => r.json())
+  .then(data => console.log('Generated:', data));
+
+// Test 3: Save standalone checklists
+fetch('/api/projects/1/save-standalone-checklists', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  credentials: 'include',
+  body: JSON.stringify({
+    checklists: [/* checklist data */],
+    sourceDocument: 'test.pdf'
+  })
+})
+  .then(r => r.json())
+  .then(data => console.log('Saved:', data));
+
+// Test 4: Link to issue
+fetch('/api/checklists/1/link-to-issue', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  credentials: 'include',
+  body: JSON.stringify({
+    issueId: 75,
+    keepStandalone: false
+  })
+})
+  .then(r => r.json())
+  .then(data => console.log('Linked:', data));
+```
+
+COMMIT MESSAGE:
+"feat(phase4-mode3): add backend APIs for standalone checklists
+
+- Create standalone-checklist-service.js with full CRUD
+- GET /api/projects/:id/standalone-checklists - List all
+- POST /api/projects/:id/upload-and-generate-standalone - Upload + AI
+- POST /api/projects/:id/save-standalone-checklists - Batch save
+- POST /api/checklists/:id/link-to-issue - Manual linking
+- POST /api/checklists/:id/link-to-action - Link to action
+- DELETE /api/checklists/:id/standalone - Delete unlinked
+- Support copy mode (keep original standalone)
+- Document upload tracking integration
+
+Part of Phase 4 Mode 3: Standalone Document Processing (2/4)"

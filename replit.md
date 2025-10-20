@@ -22,6 +22,7 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 - **dependency-service.js**: Manages checklist item dependencies with 5 core functions: `addDependency()` with same-checklist validation and circular dependency error handling, `removeDependency()` for cleanup, `getItemDependencies()` to list dependencies, `checkIfItemBlocked()` with detailed blocking information, and `getItemsDependingOn()` for reverse lookup.
 - **document-service.js**: Handles document upload and text extraction from memory buffers for AI checklist generation. Supports PDF, DOCX, and TXT files up to 10MB with validation and metadata extraction.
 - **ai-service.js**: Provides AI-powered meeting analysis and checklist generation capabilities.
+- **standalone-checklist-service.js** (Phase 4 Mode 3): Manages standalone checklist operations including creation from documents, retrieval, linking to issues/actions (with copy mode support), deletion, and document upload tracking. Provides 7 core functions for complete standalone checklist lifecycle management.
 
 **API Endpoints - Phase 3b Features:**
 - **Feature 1**: Auto-create checklists via issue type and action item category mappings
@@ -42,6 +43,15 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
   - Memory-based upload (no permanent storage) with 10MB file size limit
   - Returns extracted text, page count, character count, and metadata
   - Integrated with existing AI checklist generation service
+
+**API Endpoints - Phase 4 Mode 3 (Standalone Document Processing):**
+- `GET /api/projects/:id/standalone-checklists` - List all standalone checklists for a project with full metadata
+- `POST /api/projects/:id/upload-and-generate-standalone` - Upload document and generate standalone checklists with AI
+- `POST /api/projects/:id/save-standalone-checklists` - Batch save AI-generated standalone checklists
+- `POST /api/checklists/:id/link-to-issue` - Link standalone checklist to issue (move or copy mode)
+- `POST /api/checklists/:id/link-to-action` - Link standalone checklist to action item (move or copy mode)
+- `DELETE /api/checklists/:id/standalone` - Delete unlinked standalone checklist
+- Document upload tracking with generation status, metadata, and error handling
 
 ### Data Management
 A PostgreSQL database stores core entities such as Users, Projects, Issues, Action Items, Meeting Transcripts, and the Risk Register. It manages relationships, AI-specific data (Status Update Review Queue, AI analysis audit trail, checklist generation sources), collaboration data (comments, mention notifications), user preferences, and comprehensive risk management with automatic risk scoring and tracking. Tags are managed with a type system. A dedicated `status_history` table tracks all status transitions. A comprehensive checklist system stores templates, sections, items, responses, comments, and signoffs, with generated completion percentages, performance indexes, and validation history. Database schemas for checklist templates include `is_public`, `is_featured`, `tags`, `usage_count`, and `avg_rating`, with related `template_ratings`, `template_usage`, and `template_categories` tables. Auto-creation of checklists is supported via `issue_type_templates` and `action_item_category_templates` tables, linked to `action_item_categories` and the `action_items` table. `checklist_completion_actions` stores rules for auto-updating issue/action item status upon checklist completion. `checklist_item_dependencies` tracks dependencies between checklist items with database-level circular dependency prevention via triggers and functions, and a `checklist_item_dependency_status` view for tracking dependency completion status.
