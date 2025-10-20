@@ -430,7 +430,7 @@ async function loadIssuesForLinking() {
     // Use the checklist's project_id, not the current page's project
     const checklistProjectId = currentChecklistForLinking?.project_id || currentProjectId;
     
-    const response = await fetch(`/api/issues?project_id=${checklistProjectId}`, {
+    const response = await fetch(`/api/issues?projectId=${checklistProjectId}`, {
       credentials: 'include'
     });
     
@@ -456,7 +456,7 @@ async function loadActionsForLinking() {
     console.log('  Current page project_id:', currentProjectId);
     console.log('  Using project_id:', checklistProjectId);
     
-    const response = await fetch(`/api/action-items?project_id=${checklistProjectId}`, {
+    const response = await fetch(`/api/action-items?projectId=${checklistProjectId}`, {
       credentials: 'include'
     });
     
