@@ -126,6 +126,9 @@ function setupEventListeners() {
   
   // Event delegation for linked checklist actions
   document.getElementById('linkedChecklistsList')?.addEventListener('click', handleLinkedAction);
+  
+  // Event delegation for template actions
+  document.getElementById('templatesList')?.addEventListener('click', handleTemplateAction);
 }
 
 function handleStandaloneAction(event) {
@@ -161,6 +164,23 @@ function handleLinkedAction(event) {
       break;
     case 'delete-linked':
       deleteChecklist(checklistId);
+      break;
+  }
+}
+
+function handleTemplateAction(event) {
+  const button = event.target.closest('[data-action]');
+  if (!button) return;
+  
+  const action = button.dataset.action;
+  const templateId = parseInt(button.dataset.templateId);
+  
+  switch(action) {
+    case 'view-template':
+      viewTemplate(templateId);
+      break;
+    case 'use-template':
+      useTemplate(templateId);
       break;
   }
 }
@@ -576,14 +596,16 @@ function renderTemplates() {
         </div>
         <div class="flex gap-2">
           <button 
-            onclick="viewTemplate(${template.id})"
+            data-action="view-template"
+            data-template-id="${template.id}"
             class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             title="View template"
           >
             👁️ View
           </button>
           <button 
-            onclick="useTemplate(${template.id})"
+            data-action="use-template"
+            data-template-id="${template.id}"
             class="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200"
             title="Use template"
           >
