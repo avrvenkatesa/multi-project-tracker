@@ -9352,8 +9352,23 @@ app.post('/api/projects/:projectId/save-standalone-checklists', authenticateToke
     
     // Create each checklist
     for (const checklistData of checklists) {
+      // Flatten sections into items array
+      let items = [];
+      if (checklistData.sections && Array.isArray(checklistData.sections)) {
+        for (const section of checklistData.sections) {
+          if (section.items && Array.isArray(section.items)) {
+            items.push(...section.items);
+          }
+        }
+      } else if (checklistData.items) {
+        items = checklistData.items;
+      }
+      
       const result = await standaloneChecklistService.createStandaloneChecklist(
-        checklistData,
+        {
+          ...checklistData,
+          items: items
+        },
         parseInt(projectId),
         userId,
         sourceDocument

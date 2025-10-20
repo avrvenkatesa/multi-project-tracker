@@ -108,7 +108,7 @@ function renderChecklists() {
   emptyState.classList.add('hidden');
   
   const html = allChecklists.map(checklist => `
-    <div class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6">
+    <div class="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6" data-checklist-id="${checklist.id}">
       <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
           <h3 class="text-lg font-bold text-gray-900 mb-1">${escapeHtml(checklist.title)}</h3>
@@ -116,22 +116,25 @@ function renderChecklists() {
         </div>
         <div class="flex gap-2">
           <button 
-            onclick="viewChecklist(${checklist.id})"
-            class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            data-action="view"
+            data-checklist-id="${checklist.id}"
+            class="checklist-action-btn px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             title="View checklist"
           >
             👁️ View
           </button>
           <button 
-            onclick="openLinkingModal(${checklist.id})"
-            class="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
-            title="Link to issue"
+            data-action="link"
+            data-checklist-id="${checklist.id}"
+            class="checklist-action-btn px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+            title="Link to issue or action"
           >
             🔗 Link
           </button>
           <button 
-            onclick="deleteChecklist(${checklist.id})"
-            class="px-3 py-1 text-sm text-red-600 hover:text-red-800"
+            data-action="delete"
+            data-checklist-id="${checklist.id}"
+            class="checklist-action-btn px-3 py-1 text-sm text-red-600 hover:text-red-800"
             title="Delete checklist"
           >
             🗑️
@@ -161,6 +164,22 @@ function renderChecklists() {
   `).join('');
   
   container.innerHTML = html;
+  
+  // Add event listeners for all action buttons
+  document.querySelectorAll('.checklist-action-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const action = e.currentTarget.dataset.action;
+      const checklistId = parseInt(e.currentTarget.dataset.checklistId);
+      
+      if (action === 'view') {
+        viewChecklist(checklistId);
+      } else if (action === 'link') {
+        openLinkingModal(checklistId);
+      } else if (action === 'delete') {
+        deleteChecklist(checklistId);
+      }
+    });
+  });
 }
 
 // ============================================
@@ -259,7 +278,11 @@ function displayChecklistsPreview(preview) {
           <label for="checklist-${index}" class="font-semibold text-gray-900 cursor-pointer">
             ${escapeHtml(checklist.title)}
           </label>
-          <p class="text-sm text-gray-600 mt-1">${itemCount} items</p>
+          <div class="flex items-center gap-2 mt-1">
+            <p class="text-sm text-gray-600">${itemCount} items</p>
+            <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">Can link to Issues</span>
+            <span class="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">Can link to Actions</span>
+          </div>
           ${checklist.description ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(checklist.description)}</p>` : ''}
           <details class="mt-2">
             <summary class="text-sm text-purple-600 cursor-pointer hover:text-purple-800">
