@@ -197,7 +197,7 @@ async function loadTabData(tabName) {
 
 async function loadLinkedChecklists() {
   try {
-    const response = await fetch(`/api/projects/${currentProjectId}/checklists`, {
+    const response = await fetch(`/api/checklists?project_id=${currentProjectId}`, {
       credentials: 'include'
     });
     
@@ -206,7 +206,8 @@ async function loadLinkedChecklists() {
     }
     
     const data = await response.json();
-    linkedChecklists = data.checklists || [];
+    // Filter out standalone checklists (is_standalone = true)
+    linkedChecklists = (Array.isArray(data) ? data : []).filter(c => !c.is_standalone);
     
     document.getElementById('linkedCount').textContent = linkedChecklists.length;
     renderLinkedChecklists();
@@ -432,7 +433,9 @@ async function loadTemplates() {
       throw new Error('Failed to load templates');
     }
     
-    templates = await response.json();
+    const data = await response.json();
+    // Handle both array and object with templates property
+    templates = Array.isArray(data) ? data : (data.templates || []);
     
     document.getElementById('templatesCount').textContent = templates.length;
     renderTemplates();
