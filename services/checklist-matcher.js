@@ -35,8 +35,7 @@ async function matchChecklistsToIssues(checklists, projectId, pool) {
         description, 
         type, 
         priority, 
-        status,
-        tags
+        status
       FROM issues 
       WHERE project_id = $1 
       ORDER BY created_at DESC`,
