@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentProjectId = parseInt(projectIdFromUrl);
     localStorage.setItem('selectedProjectId', currentProjectId);
   } else {
-    const savedProjectId = localStorage.setItem('selectedProjectId');
+    const savedProjectId = localStorage.getItem('selectedProjectId');
     if (savedProjectId) {
       currentProjectId = parseInt(savedProjectId);
     }
