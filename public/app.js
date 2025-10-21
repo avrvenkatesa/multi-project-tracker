@@ -589,6 +589,10 @@ function setupEventListeners() {
         }
     });
     
+    // AI Analysis and Transcripts buttons (CSP-compliant event delegation)
+    document.getElementById('ai-analysis-btn')?.addEventListener('click', showAIAnalysisModal);
+    document.getElementById('transcripts-btn')?.addEventListener('click', openTranscriptsModal);
+    
     // Close dropdowns when a menu item is clicked
     viewDropdownMenu?.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {

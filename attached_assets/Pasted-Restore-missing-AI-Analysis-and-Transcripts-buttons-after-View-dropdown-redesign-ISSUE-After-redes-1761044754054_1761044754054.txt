@@ -1,0 +1,114 @@
+Restore missing AI Analysis and Transcripts buttons after View dropdown redesign
+
+ISSUE:
+After redesigning the Projects page with View and Create dropdowns, the AI Analysis and Transcripts buttons disappeared from the navigation.
+
+LOCATION:
+Projects page header/navigation area
+
+REQUIRED BUTTONS:
+1. **AI Analysis** button - Opens AI Analysis page/modal
+2. **Transcripts** button - Opens meeting transcripts page/modal
+
+IMPLEMENTATION:
+
+Find the projects page header where View and Create dropdowns are located.
+
+ADD these buttons near the dropdowns:
+```html
+<!-- Projects Page Header -->
+<div class="flex items-center gap-2">
+  
+  <!-- Existing View Dropdown -->
+  <div class="dropdown">
+    <button class="view-dropdown-btn">
+      👁️ View
+    </button>
+    <!-- dropdown menu -->
+  </div>
+  
+  <!-- Existing Create Dropdown -->
+  <div class="dropdown">
+    <button class="create-dropdown-btn">
+      + Create
+    </button>
+    <!-- dropdown menu -->
+  </div>
+  
+  <!-- NEW: AI Analysis Button -->
+  <button 
+    onclick="openAIAnalysis()"
+    class="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 flex items-center gap-2 shadow-md"
+    title="AI Analysis"
+  >
+    <span>⚡</span>
+    <span>AI Analysis</span>
+  </button>
+  
+  <!-- NEW: Transcripts Button -->
+  <button 
+    onclick="openTranscripts()"
+    class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+    title="Meeting Transcripts"
+  >
+    <span>🎙️</span>
+    <span>Transcripts</span>
+  </button>
+  
+</div>
+```
+
+JAVASCRIPT:
+
+Ensure these functions exist or create them:
+```javascript
+function openAIAnalysis() {
+  // Navigate to AI Analysis page or open modal
+  window.location.href = '/ai-analysis.html';
+  // OR if it's a modal: document.getElementById('aiAnalysisModal').classList.remove('hidden');
+}
+
+function openTranscripts() {
+  // Navigate to Transcripts page or open modal
+  window.location.href = '/transcripts.html';
+  // OR if it's a modal: document.getElementById('transcriptsModal').classList.remove('hidden');
+}
+```
+
+RESPONSIVE DESIGN:
+
+On mobile, consider making these buttons icons only or moving to a menu:
+```html
+<!-- Mobile view (optional) -->
+<div class="flex md:hidden">
+  <button onclick="openMobileMenu()" class="p-2">
+    ☰
+  </button>
+  <!-- Menu includes AI Analysis and Transcripts -->
+</div>
+
+<!-- Desktop view -->
+<div class="hidden md:flex gap-2">
+  <!-- Full buttons as shown above -->
+</div>
+```
+
+VERIFICATION:
+
+After implementation:
+1. AI Analysis button visible on projects page
+2. Transcripts button visible on projects page
+3. Both buttons functional (navigate or open modal)
+4. Buttons styled consistently with View/Create dropdowns
+5. Responsive on mobile devices
+
+COMMIT MESSAGE:
+"fix: restore AI Analysis and Transcripts buttons to projects page
+
+- Add AI Analysis button with gradient purple-blue styling
+- Add Transcripts button with indigo styling
+- Position near View/Create dropdowns
+- Ensure onclick handlers work correctly
+- Responsive design for mobile
+
+Fixes missing functionality after View dropdown redesign"
