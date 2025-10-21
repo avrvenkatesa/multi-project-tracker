@@ -1,0 +1,959 @@
+Create review dashboard UI for Phase 4 Mode 2
+
+CONTEXT:
+- Backend complete: workstream detection, checklist generation, issue matching ✅
+- Need comprehensive UI for reviewing and approving AI-generated matches
+- Multi-step workflow: Upload → Analyze → Generate → Match → Review → Approve
+- Working on branch: feature/phase4-mode2-smart-matching
+
+TASK:
+Build complete frontend for Mode 2 smart matching workflow.
+
+IMPLEMENTATION:
+
+Part 1: Create Review Dashboard Page
+
+File: public/mode2-review.html
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mode 2: Smart Matching - S4Carlisle PM</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="bg-gray-50">
+
+  <!-- Navigation (reuse your existing nav) -->
+  <div id="nav-placeholder"></div>
+
+  <!-- Main Container -->
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    
+    <!-- Header -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900">📊 Mode 2: Smart Matching</h1>
+          <p class="text-gray-600 mt-1">AI-powered multi-checklist generation with intelligent issue matching</p>
+        </div>
+        <button onclick="window.location.href='/checklists.html'" class="px-4 py-2 text-gray-600 hover:text-gray-900">
+          ← Back to Checklists
+        </button>
+      </div>
+    </div>
+
+    <!-- Workflow Steps Indicator -->
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+      <div class="flex items-center justify-between">
+        <div id="step1" class="step-indicator flex-1 text-center active">
+          <div class="step-circle mx-auto">1</div>
+          <div class="step-label">Upload</div>
+        </div>
+        <div class="step-line"></div>
+        <div id="step2" class="step-indicator flex-1 text-center">
+          <div class="step-circle mx-auto">2</div>
+          <div class="step-label">Detect</div>
+        </div>
+        <div class="step-line"></div>
+        <div id="step3" class="step-indicator flex-1 text-center">
+          <div class="step-circle mx-auto">3</div>
+          <div class="step-label">Generate</div>
+        </div>
+        <div class="step-line"></div>
+        <div id="step4" class="step-indicator flex-1 text-center">
+          <div class="step-circle mx-auto">4</div>
+          <div class="step-label">Match</div>
+        </div>
+        <div class="step-line"></div>
+        <div id="step5" class="step-indicator flex-1 text-center">
+          <div class="step-circle mx-auto">5</div>
+          <div class="step-label">Review</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 1: Upload Document -->
+    <div id="uploadSection" class="bg-white rounded-lg shadow-sm p-8">
+      <h2 class="text-2xl font-bold mb-4">📤 Step 1: Upload Document</h2>
+      <p class="text-gray-600 mb-6">Upload a large document (SOW, requirements, specification) and AI will identify distinct work areas.</p>
+      
+      <div class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors cursor-pointer" id="dropZone">
+        <input type="file" id="fileInput" class="hidden" accept=".pdf,.txt,.docx" onchange="handleFileSelect(event)">
+        <div class="text-6xl mb-4">📄</div>
+        <p class="text-lg font-medium text-gray-700 mb-2">Drop document here or click to browse</p>
+        <p class="text-sm text-gray-500">Supports PDF, TXT, DOCX (max 10MB)</p>
+      </div>
+      
+      <div id="filePreview" class="hidden mt-4 p-4 bg-blue-50 rounded-lg">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">📄</span>
+            <div>
+              <p class="font-medium text-gray-900" id="fileName"></p>
+              <p class="text-sm text-gray-600" id="fileSize"></p>
+            </div>
+          </div>
+          <button onclick="clearFile()" class="text-red-600 hover:text-red-800">✕ Remove</button>
+        </div>
+      </div>
+      
+      <div class="mt-6 flex justify-end">
+        <button 
+          id="analyzeBtn"
+          onclick="startAnalysis()" 
+          disabled
+          class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+        >
+          Analyze Document →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2-4: Processing (shown during analysis) -->
+    <div id="processingSection" class="hidden bg-white rounded-lg shadow-sm p-8">
+      <div class="text-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <h3 class="text-xl font-bold mb-2" id="processingTitle">Processing...</h3>
+        <p class="text-gray-600" id="processingMessage">This may take 1-2 minutes...</p>
+        
+        <div class="mt-6 max-w-md mx-auto">
+          <div class="space-y-2 text-left">
+            <div id="progress1" class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                <span class="text-xs">⏳</span>
+              </div>
+              <span class="text-sm text-gray-600">Extracting document text...</span>
+            </div>
+            <div id="progress2" class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                <span class="text-xs">⏳</span>
+              </div>
+              <span class="text-sm text-gray-600">Detecting workstreams...</span>
+            </div>
+            <div id="progress3" class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                <span class="text-xs">⏳</span>
+              </div>
+              <span class="text-sm text-gray-600">Generating checklists...</span>
+            </div>
+            <div id="progress4" class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                <span class="text-xs">⏳</span>
+              </div>
+              <span class="text-sm text-gray-600">Matching to issues...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: Review Matches -->
+    <div id="reviewSection" class="hidden">
+      
+      <!-- Summary Stats -->
+      <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h2 class="text-2xl font-bold mb-4">📊 Analysis Summary</h2>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div class="text-center p-4 bg-blue-50 rounded-lg">
+            <div class="text-3xl font-bold text-blue-600" id="statWorkstreams">0</div>
+            <div class="text-sm text-gray-600 mt-1">Workstreams</div>
+          </div>
+          <div class="text-center p-4 bg-green-50 rounded-lg">
+            <div class="text-3xl font-bold text-green-600" id="statMatched">0</div>
+            <div class="text-sm text-gray-600 mt-1">Matched</div>
+          </div>
+          <div class="text-center p-4 bg-yellow-50 rounded-lg">
+            <div class="text-3xl font-bold text-yellow-600" id="statUnmatched">0</div>
+            <div class="text-sm text-gray-600 mt-1">New Issues</div>
+          </div>
+          <div class="text-center p-4 bg-purple-50 rounded-lg">
+            <div class="text-3xl font-bold text-purple-600" id="statItems">0</div>
+            <div class="text-sm text-gray-600 mt-1">Total Items</div>
+          </div>
+          <div class="text-center p-4 bg-indigo-50 rounded-lg">
+            <div class="text-3xl font-bold text-indigo-600" id="statConfidence">0%</div>
+            <div class="text-sm text-gray-600 mt-1">Avg Confidence</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bulk Actions -->
+      <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-lg">Bulk Actions</h3>
+            <p class="text-sm text-gray-600">Apply actions to multiple checklists at once</p>
+          </div>
+          <div class="flex gap-2">
+            <button 
+              onclick="selectAll()"
+              class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+            >
+              Select All
+            </button>
+            <button 
+              onclick="acceptHighConfidence()"
+              class="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+            >
+              ✓ Accept High Confidence
+            </button>
+            <button 
+              onclick="approveSelected()"
+              class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              Create Selected →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Match Cards -->
+      <div id="matchesList" class="space-y-4">
+        <!-- Dynamically populated -->
+      </div>
+
+    </div>
+
+    <!-- Success Message -->
+    <div id="successSection" class="hidden bg-white rounded-lg shadow-sm p-12 text-center">
+      <div class="text-6xl mb-4">🎉</div>
+      <h2 class="text-3xl font-bold text-gray-900 mb-2">Checklists Created!</h2>
+      <p class="text-gray-600 mb-2" id="successMessage">Successfully created checklists</p>
+      <p class="text-sm text-gray-500 mb-8" id="successDetails"></p>
+      <div class="flex gap-4 justify-center">
+        <button 
+          onclick="window.location.href='/checklists.html'"
+          class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          View Checklists
+        </button>
+        <button 
+          onclick="resetWorkflow()"
+          class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+        >
+          Process Another Document
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/js/mode2-review.js"></script>
+</body>
+</html>
+```
+
+Part 2: Create JavaScript for Mode 2 Workflow
+
+File: public/js/mode2-review.js
+```javascript
+// ==============================================
+// Phase 4 Mode 2: Review Dashboard
+// ==============================================
+
+let currentProjectId = 1; // TODO: Get from session/URL
+let uploadedFile = null;
+let documentText = null;
+let workstreamsData = null;
+let checklistsData = null;
+let matchesData = null;
+let selectedMatches = new Set();
+
+// ==============================================
+// File Upload & Handling
+// ==============================================
+
+// Setup drop zone
+document.addEventListener('DOMContentLoaded', () => {
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  
+  dropZone.addEventListener('click', () => fileInput.click());
+  
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('border-blue-500', 'bg-blue-50');
+  });
+  
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+  });
+  
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFile(files[0]);
+    }
+  });
+});
+
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  if (file) {
+    handleFile(file);
+  }
+}
+
+function handleFile(file) {
+  // Validate file
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  if (file.size > maxSize) {
+    showNotification('File too large. Maximum size is 10MB.', 'error');
+    return;
+  }
+  
+  const allowedTypes = [
+    'application/pdf',
+    'text/plain',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
+  
+  if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|txt|docx)$/i)) {
+    showNotification('Invalid file type. Please upload PDF, TXT, or DOCX.', 'error');
+    return;
+  }
+  
+  uploadedFile = file;
+  
+  // Show preview
+  document.getElementById('filePreview').classList.remove('hidden');
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = formatFileSize(file.size);
+  document.getElementById('analyzeBtn').disabled = false;
+}
+
+function clearFile() {
+  uploadedFile = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('filePreview').classList.add('hidden');
+  document.getElementById('analyzeBtn').disabled = true;
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// ==============================================
+// Workflow Steps
+// ==============================================
+
+async function startAnalysis() {
+  if (!uploadedFile) {
+    showNotification('Please select a file first', 'error');
+    return;
+  }
+  
+  try {
+    // Show processing section
+    showSection('processingSection');
+    updateStepIndicator(2);
+    
+    // Step 1: Extract text from document
+    updateProgress(1, 'processing', 'Extracting document text...');
+    documentText = await extractDocumentText(uploadedFile);
+    updateProgress(1, 'complete', 'Document text extracted ✓');
+    
+    // Step 2: Detect workstreams
+    updateProgress(2, 'processing', 'Detecting workstreams with AI...');
+    workstreamsData = await detectWorkstreams(documentText);
+    updateProgress(2, 'complete', `${workstreamsData.workstreams.length} workstreams detected ✓`);
+    updateStepIndicator(3);
+    
+    // Step 3: Generate checklists
+    updateProgress(3, 'processing', 'Generating checklists...');
+    checklistsData = await generateChecklists(workstreamsData.workstreams, documentText);
+    updateProgress(3, 'complete', `${checklistsData.count} checklists generated ✓`);
+    updateStepIndicator(4);
+    
+    // Step 4: Match to issues
+    updateProgress(4, 'processing', 'Matching checklists to issues...');
+    matchesData = await matchToIssues(checklistsData.checklists);
+    updateProgress(4, 'complete', `Matching complete ✓`);
+    updateStepIndicator(5);
+    
+    // Show review section
+    setTimeout(() => {
+      showReviewSection();
+    }, 500);
+    
+  } catch (error) {
+    console.error('Analysis error:', error);
+    showNotification('Analysis failed: ' + error.message, 'error');
+    showSection('uploadSection');
+    updateStepIndicator(1);
+  }
+}
+
+async function extractDocumentText(file) {
+  // For TXT files, read directly
+  if (file.type === 'text/plain') {
+    return await file.text();
+  }
+  
+  // For PDF/DOCX, send to server for extraction
+  const formData = new FormData();
+  formData.append('document', file);
+  
+  const response = await fetch('/api/extract-document-text', {
+    method: 'POST',
+    credentials: 'include',
+    body: formData
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to extract document text');
+  }
+  
+  const data = await response.json();
+  return data.text;
+}
+
+async function detectWorkstreams(text) {
+  const response = await fetch(`/api/projects/${currentProjectId}/analyze-workstreams`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      documentText: text,
+      filename: uploadedFile.name
+    })
+  });
+  
+  if (!response.ok) {
+    throw new Error('Workstream detection failed');
+  }
+  
+  return await response.json();
+}
+
+async function generateChecklists(workstreams, text) {
+  const response = await fetch(`/api/projects/${currentProjectId}/generate-workstream-checklists`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      workstreams: workstreams,
+      documentText: text
+    })
+  });
+  
+  if (!response.ok) {
+    throw new Error('Checklist generation failed');
+  }
+  
+  return await response.json();
+}
+
+async function matchToIssues(checklists) {
+  const response = await fetch(`/api/projects/${currentProjectId}/match-checklists-to-issues`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      checklists: checklists
+    })
+  });
+  
+  if (!response.ok) {
+    throw new Error('Issue matching failed');
+  }
+  
+  return await response.json();
+}
+
+// ==============================================
+// Review Section
+// ==============================================
+
+function showReviewSection() {
+  showSection('reviewSection');
+  
+  // Update stats
+  document.getElementById('statWorkstreams').textContent = matchesData.summary.totalChecklists;
+  document.getElementById('statMatched').textContent = matchesData.summary.matched;
+  document.getElementById('statUnmatched').textContent = matchesData.summary.unmatched;
+  document.getElementById('statItems').textContent = checklistsData.totalItems;
+  document.getElementById('statConfidence').textContent = matchesData.summary.averageConfidence + '%';
+  
+  // Render match cards
+  renderMatchCards();
+}
+
+function renderMatchCards() {
+  const container = document.getElementById('matchesList');
+  
+  container.innerHTML = matchesData.matches.map((match, index) => {
+    const itemCount = match.checklist.checklist.sections.reduce(
+      (sum, s) => sum + (s.items?.length || 0), 0
+    );
+    
+    const confidenceBadge = match.matchedIssue ? 
+      (match.confidence >= 80 ? '🟢 High' : 
+       match.confidence >= 50 ? '🟡 Medium' : '🟠 Low') : 
+      '⚪ No Match';
+    
+    const confidenceColor = match.matchedIssue ?
+      (match.confidence >= 80 ? 'bg-green-100 text-green-800' :
+       match.confidence >= 50 ? 'bg-yellow-100 text-yellow-800' : 'bg-orange-100 text-orange-800') :
+      'bg-gray-100 text-gray-800';
+    
+    return `
+      <div class="bg-white rounded-lg shadow-sm p-6 border-2 border-gray-200 hover:border-blue-300 transition-colors" data-match-index="${index}">
+        
+        <!-- Header -->
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex items-start gap-3 flex-1">
+            <input 
+              type="checkbox" 
+              id="match-${index}"
+              onchange="toggleMatch(${index})"
+              class="mt-1 w-5 h-5 text-blue-600"
+            />
+            <div class="flex-1">
+              <h3 class="text-lg font-bold text-gray-900">${match.checklist.workstreamName}</h3>
+              <p class="text-sm text-gray-600 mt-1">${match.checklist.workstreamDescription}</p>
+              <div class="flex gap-3 mt-2 text-sm">
+                <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded">📋 ${itemCount} items</span>
+                <span class="px-2 py-1 bg-purple-100 text-purple-700 rounded">${match.checklist.estimatedComplexity} complexity</span>
+                <span class="px-2 py-1 bg-indigo-100 text-indigo-700 rounded">${match.checklist.suggestedPhase}</span>
+              </div>
+            </div>
+          </div>
+          <span class="px-3 py-1 ${confidenceColor} rounded-full text-sm font-medium whitespace-nowrap">
+            ${confidenceBadge}${match.matchedIssue ? ` ${match.confidence}%` : ''}
+          </span>
+        </div>
+
+        <!-- Matched Issue or Suggestion -->
+        ${match.matchedIssue ? `
+          <div class="bg-blue-50 rounded-lg p-4 mb-4">
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <div class="text-sm text-gray-600 mb-1">Matched to:</div>
+                <div class="font-medium text-gray-900">Issue #${match.matchedIssue.id}: ${match.matchedIssue.title}</div>
+                <div class="text-sm text-gray-600 mt-1">
+                  Type: ${match.matchedIssue.type} | Priority: ${match.matchedIssue.priority} | Status: ${match.matchedIssue.status}
+                </div>
+              </div>
+              <button 
+                onclick="changeIssue(${index})"
+                class="ml-4 px-3 py-1 text-sm bg-white text-blue-600 rounded hover:bg-blue-100"
+              >
+                Change
+              </button>
+            </div>
+            <div class="mt-3 text-sm text-gray-700">
+              <strong>Reasoning:</strong> ${match.reasoning}
+            </div>
+          </div>
+        ` : `
+          <div class="bg-yellow-50 rounded-lg p-4 mb-4">
+            <div class="text-sm text-gray-600 mb-2">💡 Suggested: Create New Issue</div>
+            <div class="font-medium text-gray-900 mb-1">${match.suggestedNewIssue.title}</div>
+            <div class="text-sm text-gray-600 mb-2">
+              Type: ${match.suggestedNewIssue.type} | Priority: ${match.suggestedNewIssue.priority}
+            </div>
+            <div class="text-sm text-gray-700 mb-3">
+              <strong>Reasoning:</strong> ${match.reasoning}
+            </div>
+            <button 
+              onclick="linkToExisting(${index})"
+              class="px-3 py-1 text-sm bg-white text-blue-600 rounded hover:bg-blue-100 border border-blue-200"
+            >
+              Link to Existing Issue Instead
+            </button>
+          </div>
+        `}
+
+        <!-- Actions -->
+        <div class="flex gap-2 pt-4 border-t">
+          <button 
+            onclick="previewChecklist(${index})"
+            class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+          >
+            👁️ Preview Items
+          </button>
+          <button 
+            onclick="removeMatch(${index})"
+            class="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded"
+          >
+            🗑️ Remove
+          </button>
+        </div>
+
+      </div>
+    `;
+  }).join('');
+}
+
+// ==============================================
+// Match Actions
+// ==============================================
+
+function toggleMatch(index) {
+  const checkbox = document.getElementById(`match-${index}`);
+  if (checkbox.checked) {
+    selectedMatches.add(index);
+  } else {
+    selectedMatches.delete(index);
+  }
+}
+
+function selectAll() {
+  matchesData.matches.forEach((_, index) => {
+    const checkbox = document.getElementById(`match-${index}`);
+    if (checkbox) {
+      checkbox.checked = true;
+      selectedMatches.add(index);
+    }
+  });
+}
+
+function acceptHighConfidence() {
+  matchesData.matches.forEach((match, index) => {
+    if (match.confidence >= 80) {
+      const checkbox = document.getElementById(`match-${index}`);
+      if (checkbox) {
+        checkbox.checked = true;
+        selectedMatches.add(index);
+      }
+    }
+  });
+  showNotification(`Selected ${selectedMatches.size} high-confidence matches`, 'success');
+}
+
+function changeIssue(index) {
+  // TODO: Open modal to select different issue
+  showNotification('Change issue functionality - coming soon', 'info');
+}
+
+function linkToExisting(index) {
+  // TODO: Open modal to select existing issue
+  showNotification('Link to existing issue - coming soon', 'info');
+}
+
+function previewChecklist(index) {
+  const match = matchesData.matches[index];
+  const checklist = match.checklist.checklist;
+  
+  let itemsHtml = '';
+  checklist.sections.forEach(section => {
+    itemsHtml += `<div class="mb-4">
+      <div class="font-medium text-gray-900 mb-2">${section.title}</div>
+      <ul class="space-y-1">
+        ${section.items.map(item => `
+          <li class="text-sm text-gray-700 flex items-start gap-2">
+            <span class="text-blue-600">•</span>
+            <span>${item.text}</span>
+          </li>
+        `).join('')}
+      </ul>
+    </div>`;
+  });
+  
+  showModal('Checklist Preview', `
+    <h3 class="font-bold text-lg mb-4">${checklist.title}</h3>
+    <p class="text-gray-600 mb-4">${checklist.description}</p>
+    <div class="max-h-96 overflow-y-auto">
+      ${itemsHtml}
+    </div>
+  `);
+}
+
+function removeMatch(index) {
+  if (confirm('Remove this checklist from the batch?')) {
+    matchesData.matches.splice(index, 1);
+    matchesData.summary.totalChecklists--;
+    selectedMatches.delete(index);
+    renderMatchCards();
+    showNotification('Checklist removed', 'info');
+  }
+}
+
+// ==============================================
+// Approve and Create
+// ==============================================
+
+async function approveSelected() {
+  if (selectedMatches.size === 0) {
+    showNotification('Please select at least one checklist', 'error');
+    return;
+  }
+  
+  if (!confirm(`Create ${selectedMatches.size} checklists?`)) {
+    return;
+  }
+  
+  try {
+    showNotification('Creating checklists...', 'info');
+    
+    // Build approved matches array
+    const approvedMatches = Array.from(selectedMatches).map(index => {
+      const match = matchesData.matches[index];
+      return {
+        checklist: match.checklist,
+        issueId: match.matchedIssue?.id || null,
+        createNewIssue: match.matchedIssue === null,
+        suggestedNewIssue: match.suggestedNewIssue
+      };
+    });
+    
+    // Create checklists
+    const response = await fetch(`/api/projects/${currentProjectId}/create-matched-checklists`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        approvedMatches: approvedMatches
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to create checklists');
+    }
+    
+    const result = await response.json();
+    
+    // Show success
+    showSuccessSection(result);
+    
+  } catch (error) {
+    console.error('Creation error:', error);
+    showNotification('Failed to create checklists: ' + error.message, 'error');
+  }
+}
+
+function showSuccessSection(result) {
+  showSection('successSection');
+  
+  document.getElementById('successMessage').textContent = 
+    `Successfully created ${result.created} checklist${result.created !== 1 ? 's' : ''}!`;
+  
+  let details = [];
+  if (result.issuesCreated > 0) {
+    details.push(`${result.issuesCreated} new issue${result.issuesCreated !== 1 ? 's' : ''} created`);
+  }
+  if (result.failed > 0) {
+    details.push(`${result.failed} failed`);
+  }
+  
+  document.getElementById('successDetails').textContent = details.join(' • ');
+}
+
+// ==============================================
+// UI Helpers
+// ==============================================
+
+function showSection(sectionId) {
+  const sections = ['uploadSection', 'processingSection', 'reviewSection', 'successSection'];
+  sections.forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+  document.getElementById(sectionId).classList.remove('hidden');
+}
+
+function updateStepIndicator(step) {
+  for (let i = 1; i <= 5; i++) {
+    const stepEl = document.getElementById(`step${i}`);
+    if (i < step) {
+      stepEl.classList.add('completed');
+      stepEl.classList.remove('active');
+    } else if (i === step) {
+      stepEl.classList.add('active');
+      stepEl.classList.remove('completed');
+    } else {
+      stepEl.classList.remove('active', 'completed');
+    }
+  }
+}
+
+function updateProgress(progressNum, status, message) {
+  const progressEl = document.getElementById(`progress${progressNum}`);
+  const icon = progressEl.querySelector('.w-6');
+  const text = progressEl.querySelector('span:last-child');
+  
+  if (status === 'processing') {
+    icon.innerHTML = '<span class="text-xs animate-spin">⏳</span>';
+    icon.className = 'w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center';
+  } else if (status === 'complete') {
+    icon.innerHTML = '<span class="text-xs">✓</span>';
+    icon.className = 'w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white';
+  }
+  
+  text.textContent = message;
+}
+
+function resetWorkflow() {
+  uploadedFile = null;
+  documentText = null;
+  workstreamsData = null;
+  checklistsData = null;
+  matchesData = null;
+  selectedMatches.clear();
+  
+  clearFile();
+  showSection('uploadSection');
+  updateStepIndicator(1);
+}
+
+function showModal(title, content) {
+  // TODO: Implement modal
+  alert(`${title}\n\n${content.replace(/<[^>]*>/g, '')}`);
+}
+
+function showNotification(message, type = 'info') {
+  const colors = {
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500'
+  };
+  
+  const notif = document.createElement('div');
+  notif.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50 max-w-md`;
+  notif.textContent = message;
+  
+  document.body.appendChild(notif);
+  
+  setTimeout(() => {
+    notif.classList.add('opacity-0', 'transition-opacity');
+    setTimeout(() => notif.remove(), 300);
+  }, 3000);
+}
+```
+
+Part 3: Add CSS Styles
+
+Add to public/styles.css or create inline styles:
+```css
+/* Mode 2 Review Dashboard Styles */
+
+.step-indicator {
+  position: relative;
+}
+
+.step-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #e5e7eb;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+
+.step-indicator.active .step-circle {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.step-indicator.completed .step-circle {
+  background-color: #10b981;
+  color: white;
+}
+
+.step-label {
+  margin-top: 8px;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.step-indicator.active .step-label {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.step-indicator.completed .step-label {
+  color: #10b981;
+}
+
+.step-line {
+  height: 2px;
+  background-color: #e5e7eb;
+  flex: 1;
+  margin: 0 10px;
+  align-self: center;
+  margin-top: -20px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bg-white {
+  animation: fadeIn 0.3s ease-in;
+}
+```
+
+Part 4: Add Navigation Link
+
+Update your main navigation to include Mode 2:
+```html
+<!-- In navigation -->
+<a href="/mode2-review.html" class="nav-link">
+  📊 Mode 2: Smart Matching
+</a>
+```
+
+TESTING CHECKLIST:
+
+After implementation:
+- [ ] Page loads without errors
+- [ ] File upload works (drag & drop and click)
+- [ ] File validation works (size, type)
+- [ ] Analysis workflow runs through all steps
+- [ ] Progress indicators update correctly
+- [ ] Review section shows all matches
+- [ ] Stats display correctly
+- [ ] Confidence badges show correct colors
+- [ ] Preview checklist works
+- [ ] Select/deselect matches works
+- [ ] Bulk actions work
+- [ ] Create checklists succeeds
+- [ ] Success message shows
+- [ ] Reset workflow works
+
+COMMIT MESSAGE:
+"feat(phase4-mode2): add complete review dashboard UI
+
+Frontend Implementation:
+- Multi-step workflow with progress indicators
+- File upload with drag & drop support
+- Real-time processing status updates
+- Comprehensive review dashboard
+- Match cards with confidence visualization
+- Bulk selection and approval
+- New issue suggestions
+- Checklist preview
+- Success confirmation
+
+UI Features:
+- Step indicator (5 steps)
+- Summary statistics dashboard
+- Confidence color coding (green/yellow/orange)
+- Match reasoning display
+- Bulk actions (select all, accept high confidence)
+- Individual match actions (change, link, preview, remove)
+- Success screen with navigation
+
+Part 3/3 of Phase 4 Mode 2: Multi-Checklist Smart Matching
+COMPLETE - Ready for testing"

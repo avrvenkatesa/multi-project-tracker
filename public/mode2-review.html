@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mode 2: Smart Matching - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="bg-gray-50">
+
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    
+    <div class="mb-8">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900">📊 Mode 2: Smart Matching</h1>
+          <p class="text-gray-600 mt-1">AI-powered multi-checklist generation with intelligent issue matching</p>
+        </div>
+        <button data-action="back-to-checklists" class="px-4 py-2 text-gray-600 hover:text-gray-900">
+          ← Back to Checklists
+        </button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+      <div class="flex items-center justify-between">
+        <div id="step1" class="step-indicator flex-1 text-center active">
+          <div class="step-circle mx-auto">1</div>
+          <div class="step-label">Upload</div>
+        </div>
+        <div class="step-line"></div>
+        <div id="step2" class="step-indicator flex-1 text-center">
+          <div class="step-circle mx-auto">2</div>
+          <div class="step-label">Detect</div>
+        </div>
+        <div class="step-line"></div>
+        <div id="step3" class="step-indicator flex-1 text-center">
+          <div class="step-circle mx-auto">3</div>
+          <div class="step-label">Generate</div>
+        </div>
+        <div class="step-line"></div>
+        <div id="step4" class="step-indicator flex-1 text-center">
+          <div class="step-circle mx-auto">4</div>
+          <div class="step-label">Match</div>
+        </div>
+        <div class="step-line"></div>
+        <div id="step5" class="step-indicator flex-1 text-center">
+          <div class="step-circle mx-auto">5</div>
+          <div class="step-label">Review</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="uploadSection" class="bg-white rounded-lg shadow-sm p-8">
+      <h2 class="text-2xl font-bold mb-4">📤 Step 1: Upload Document</h2>
+      <p class="text-gray-600 mb-6">Upload a large document (SOW, requirements, specification) and AI will identify distinct work areas.</p>
+      
+      <div class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors cursor-pointer" id="dropZone">
+        <input type="file" id="fileInput" class="hidden" accept=".pdf,.txt,.docx">
+        <div class="text-6xl mb-4">📄</div>
+        <p class="text-lg font-medium text-gray-700 mb-2">Drop document here or click to browse</p>
+        <p class="text-sm text-gray-500">Supports PDF, TXT, DOCX (max 10MB)</p>
+      </div>
+      
+      <div id="filePreview" class="hidden mt-4 p-4 bg-blue-50 rounded-lg">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">📄</span>
+            <div>
+              <p class="font-medium text-gray-900" id="fileName"></p>
+              <p class="text-sm text-gray-600" id="fileSize"></p>
+            </div>
+          </div>
+          <button data-action="clear-file" class="text-red-600 hover:text-red-800">✕ Remove</button>
+        </div>
+      </div>
+      
+      <div class="mt-6 flex justify-end">
+        <button 
+          id="analyzeBtn"
+          data-action="start-analysis"
+          disabled
+          class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+        >
+          Analyze Document →
+        </button>
+      </div>
+    </div>
+
+    <div id="processingSection" class="hidden bg-white rounded-lg shadow-sm p-8">
+      <div class="text-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <h3 class="text-xl font-bold mb-2" id="processingTitle">Processing...</h3>
+        <p class="text-gray-600" id="processingMessage">This may take 1-2 minutes...</p>
+        
+        <div class="mt-6 max-w-md mx-auto">
+          <div class="space-y-2 text-left">
+            <div id="progress1" class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                <span class="text-xs">⏳</span>
+              </div>
+              <span class="text-sm text-gray-600">Extracting document text...</span>
+            </div>
+            <div id="progress2" class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                <span class="text-xs">⏳</span>
+              </div>
+              <span class="text-sm text-gray-600">Detecting workstreams...</span>
+            </div>
+            <div id="progress3" class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                <span class="text-xs">⏳</span>
+              </div>
+              <span class="text-sm text-gray-600">Generating checklists...</span>
+            </div>
+            <div id="progress4" class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                <span class="text-xs">⏳</span>
+              </div>
+              <span class="text-sm text-gray-600">Matching to issues...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="reviewSection" class="hidden">
+      
+      <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h2 class="text-2xl font-bold mb-4">📊 Analysis Summary</h2>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div class="text-center p-4 bg-blue-50 rounded-lg">
+            <div class="text-3xl font-bold text-blue-600" id="statWorkstreams">0</div>
+            <div class="text-sm text-gray-600 mt-1">Workstreams</div>
+          </div>
+          <div class="text-center p-4 bg-green-50 rounded-lg">
+            <div class="text-3xl font-bold text-green-600" id="statMatched">0</div>
+            <div class="text-sm text-gray-600 mt-1">Matched</div>
+          </div>
+          <div class="text-center p-4 bg-yellow-50 rounded-lg">
+            <div class="text-3xl font-bold text-yellow-600" id="statUnmatched">0</div>
+            <div class="text-sm text-gray-600 mt-1">New Issues</div>
+          </div>
+          <div class="text-center p-4 bg-purple-50 rounded-lg">
+            <div class="text-3xl font-bold text-purple-600" id="statItems">0</div>
+            <div class="text-sm text-gray-600 mt-1">Total Items</div>
+          </div>
+          <div class="text-center p-4 bg-indigo-50 rounded-lg">
+            <div class="text-3xl font-bold text-indigo-600" id="statConfidence">0%</div>
+            <div class="text-sm text-gray-600 mt-1">Avg Confidence</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-lg">Bulk Actions</h3>
+            <p class="text-sm text-gray-600">Apply actions to multiple checklists at once</p>
+          </div>
+          <div class="flex gap-2">
+            <button 
+              data-action="select-all"
+              class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+            >
+              Select All
+            </button>
+            <button 
+              data-action="accept-high-confidence"
+              class="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+            >
+              ✓ Accept High Confidence
+            </button>
+            <button 
+              data-action="approve-selected"
+              class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              Create Selected →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="matchesList" class="space-y-4">
+      </div>
+
+    </div>
+
+    <div id="successSection" class="hidden bg-white rounded-lg shadow-sm p-12 text-center">
+      <div class="text-6xl mb-4">🎉</div>
+      <h2 class="text-3xl font-bold text-gray-900 mb-2">Checklists Created!</h2>
+      <p class="text-gray-600 mb-2" id="successMessage">Successfully created checklists</p>
+      <p class="text-sm text-gray-500 mb-8" id="successDetails"></p>
+      <div class="flex gap-4 justify-center">
+        <button 
+          data-action="view-checklists"
+          class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          View Checklists
+        </button>
+        <button 
+          data-action="reset-workflow"
+          class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+        >
+          Process Another Document
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/js/mode2-review.js"></script>
+</body>
+</html>
