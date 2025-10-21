@@ -1,0 +1,137 @@
+Fix dropdown alignment in In Progress column to match other columns
+
+ISSUE:
+The due date dropdown in the "In Progress" column is misaligned compared to dropdowns in other columns (To Do, Blocked, Done).
+
+LOCATION:
+Kanban board columns - specifically the column header dropdowns
+
+VISUAL ISSUE:
+- To Do, Blocked, Done columns: Dropdowns aligned properly
+- In Progress column: Dropdown positioned differently
+
+IMPLEMENTATION:
+
+Find the column header rendering code for all kanban columns.
+
+ENSURE consistent HTML structure across ALL columns:
+```html
+<!-- Standard Column Header (applies to ALL columns) -->
+<div class="kanban-column">
+  <div class="column-header flex items-center justify-between p-4">
+    
+    <!-- Left side: Title and count -->
+    <div class="flex items-center gap-2">
+      <h3 class="column-title text-lg font-bold">
+        Column Name (<span class="item-count">0</span>)
+      </h3>
+    </div>
+    
+    <!-- Right side: Dropdown -->
+    <div class="column-dropdown">
+      <select 
+        class="sort-dropdown px-3 py-1 border rounded text-sm bg-white hover:bg-gray-50"
+        onchange="sortColumn(this, 'column-id')"
+      >
+        <option value="default">Default</option>
+        <option value="overdue">Overdue First</option>
+        <option value="priority">Priority</option>
+        <option value="date">Due Date</option>
+      </select>
+    </div>
+    
+  </div>
+  
+  <!-- Column content -->
+  <div class="column-content">
+    <!-- Cards -->
+  </div>
+</div>
+```
+
+CSS FOR CONSISTENT ALIGNMENT:
+```css
+/* Column header layout */
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  background-color: white;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+/* Dropdown styling - SAME for all columns */
+.column-dropdown {
+  display: flex;
+  align-items: center;
+}
+
+.sort-dropdown {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  background-color: white;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sort-dropdown:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.sort-dropdown:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Specific column colors (optional) */
+.column-header.to-do { border-bottom-color: #e5e7eb; }
+.column-header.in-progress { border-bottom-color: #3b82f6; }
+.column-header.blocked { border-bottom-color: #f59e0b; }
+.column-header.done { border-bottom-color: #10b981; }
+```
+
+VERIFICATION CHECKLIST:
+
+Check each column's dropdown:
+- [ ] To Do column dropdown aligned
+- [ ] In Progress column dropdown aligned
+- [ ] Blocked column dropdown aligned  
+- [ ] Done column dropdown aligned
+- [ ] All dropdowns at same vertical position
+- [ ] All dropdowns same size
+- [ ] All dropdowns same spacing from title
+- [ ] Responsive on different screen sizes
+
+INSPECT IN BROWSER:
+
+Use browser DevTools to verify:
+1. All column headers have same flex layout
+2. All dropdowns have same CSS classes
+3. No inline styles causing misalignment
+4. No extra margin/padding on In Progress only
+
+FIX COMMON ISSUES:
+
+If still misaligned, check for:
+- Extra divs or wrappers in In Progress column only
+- Different padding/margin values
+- Position: absolute on dropdown
+- Different flex properties
+- Z-index conflicts
+
+COMMIT MESSAGE:
+"fix: align In Progress dropdown with other column dropdowns
+
+- Standardize column header HTML structure
+- Apply consistent CSS to all column dropdowns
+- Ensure same flex layout across all columns
+- Remove any column-specific positioning
+- Verify responsive alignment
+
+Fixes visual inconsistency in kanban column headers"
