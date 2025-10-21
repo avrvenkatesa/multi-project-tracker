@@ -107,6 +107,9 @@ function setupEventListeners() {
   });
   
   // Action buttons
+  document.getElementById('mode2SmartMatchingBtn')?.addEventListener('click', () => {
+    window.location.href = `mode2-review.html?projectId=${currentProjectId}`;
+  });
   document.getElementById('uploadDocumentBtn')?.addEventListener('click', openUploadDocumentModal);
   document.getElementById('standaloneUploadBtn')?.addEventListener('click', openUploadDocumentModal);
   document.getElementById('createChecklistBtn')?.addEventListener('click', openCreateChecklistModal);
