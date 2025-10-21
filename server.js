@@ -9517,6 +9517,120 @@ app.delete('/api/checklists/:checklistId/standalone', authenticateToken, async (
 });
 
 // ============================================
+// Phase 4 Mode 2: Workstream Detection & Multi-Checklist Generation
+// ============================================
+
+const workstreamDetector = require('./services/workstream-detector.js');
+
+/**
+ * Analyze document and detect workstreams
+ * POST /api/projects/:projectId/analyze-workstreams
+ * Body: { documentText: string, filename: string }
+ */
+app.post('/api/projects/:projectId/analyze-workstreams', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { documentText, filename } = req.body;
+    
+    if (!documentText) {
+      return res.status(400).json({ 
+        error: 'Document text required',
+        message: 'Please provide documentText in request body'
+      });
+    }
+    
+    const projectResult = await pool.query(
+      'SELECT id, name, description FROM projects WHERE id = $1',
+      [projectId]
+    );
+    
+    if (projectResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const project = projectResult.rows[0];
+    
+    console.log(`🔍 Analyzing workstreams for project: ${project.name}`);
+    
+    const result = await workstreamDetector.detectWorkstreams(documentText, {
+      projectId: parseInt(projectId),
+      projectName: project.name,
+      projectDescription: project.description,
+      documentFilename: filename
+    });
+    
+    res.json({
+      success: true,
+      workstreams: result.workstreams,
+      summary: result.summary,
+      metadata: {
+        documentLength: result.documentLength,
+        tokensUsed: result.tokensUsed,
+        workstreamCount: result.workstreams.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('Workstream detection error:', error);
+    res.status(500).json({
+      error: 'Failed to detect workstreams',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Generate checklists for detected workstreams
+ * POST /api/projects/:projectId/generate-workstream-checklists
+ * Body: { workstreams: array, documentText: string }
+ */
+app.post('/api/projects/:projectId/generate-workstream-checklists', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { workstreams, documentText } = req.body;
+    
+    if (!workstreams || !Array.isArray(workstreams)) {
+      return res.status(400).json({ 
+        error: 'Workstreams array required',
+        message: 'Please provide workstreams array in request body'
+      });
+    }
+    
+    if (!documentText) {
+      return res.status(400).json({
+        error: 'Document text required',
+        message: 'Please provide documentText for context'
+      });
+    }
+    
+    console.log(`📋 Generating checklists for ${workstreams.length} workstreams`);
+    
+    const checklists = await workstreamDetector.generateChecklistsForWorkstreams(
+      workstreams,
+      documentText
+    );
+    
+    res.json({
+      success: true,
+      checklists: checklists,
+      count: checklists.length,
+      totalItems: checklists.reduce((sum, c) => {
+        return sum + (c.checklist.sections?.reduce(
+          (s, sec) => s + (sec.items?.length || 0), 0
+        ) || 0);
+      }, 0)
+    });
+    
+  } catch (error) {
+    console.error('Checklist generation error:', error);
+    res.status(500).json({
+      error: 'Failed to generate checklists',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
 // Phase 3b Feature 1: Auto-Create Checklist APIs
 // ============================================
 
