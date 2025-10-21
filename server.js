@@ -3028,8 +3028,8 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
     }
     
     if (tag) {
-      conditions.push(`t.name = $${params.length + 1}`);
-      params.push(tag);
+      conditions.push(`t.id = $${params.length + 1}`);
+      params.push(parseInt(tag));
     }
     
     if (search) {
@@ -3549,8 +3549,8 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
     }
     
     if (tag) {
-      conditions.push(`t.name = $${params.length + 1}`);
-      params.push(tag);
+      conditions.push(`t.id = $${params.length + 1}`);
+      params.push(parseInt(tag));
     }
     
     if (search) {

@@ -1,0 +1,211 @@
+Restore missing Filter by Tag functionality on projects page
+
+ISSUE:
+The "Filter by Tag" functionality that existed previously is missing from the current projects page.
+
+LOCATION:
+Projects page filters section (likely near Type, Status, Priority, Assignee filters)
+
+IMPLEMENTATION:
+
+Find the filters section on the projects page and ADD Tag filter:
+```html
+<!-- Filters Section -->
+<div class="filters-container flex gap-4 items-center mb-4">
+  
+  <!-- Search -->
+  <input 
+    type="text" 
+    placeholder="Search titles and descriptions..."
+    class="flex-1 px-4 py-2 border rounded-lg"
+  />
+  
+  <!-- Type Filter -->
+  <select class="filter-select">
+    <option>All Types</option>
+    <!-- options -->
+  </select>
+  
+  <!-- Status Filter -->
+  <select class="filter-select">
+    <option>All Statuses</option>
+    <!-- options -->
+  </select>
+  
+  <!-- Priority Filter -->
+  <select class="filter-select">
+    <option>All Priorities</option>
+    <!-- options -->
+  </select>
+  
+  <!-- Assignee Filter -->
+  <select class="filter-select">
+    <option>All Assignees</option>
+    <!-- options -->
+  </select>
+  
+  <!-- NEW: Tag Filter -->
+  <select 
+    id="tagFilter"
+    class="filter-select px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+    onchange="filterByTag()"
+  >
+    <option value="">All Tags</option>
+    <!-- Dynamically populated -->
+  </select>
+  
+</div>
+```
+
+JAVASCRIPT:
+
+Add functionality to load tags and filter:
+```javascript
+// Load available tags
+async function loadTagsForFilter() {
+  try {
+    const response = await fetch('/api/tags', {
+      credentials: 'include'
+    });
+    
+    const tags = await response.json();
+    
+    const tagFilter = document.getElementById('tagFilter');
+    tagFilter.innerHTML = '<option value="">All Tags</option>' +
+      tags.map(tag => `<option value="${tag.id}">🏷️ ${tag.name}</option>`).join('');
+    
+  } catch (error) {
+    console.error('Error loading tags:', error);
+  }
+}
+
+// Filter items by tag
+function filterByTag() {
+  const tagId = document.getElementById('tagFilter').value;
+  
+  if (!tagId) {
+    // Show all items
+    applyFilters();
+    return;
+  }
+  
+  // Filter kanban cards by tag
+  const allCards = document.querySelectorAll('.kanban-card');
+  
+  allCards.forEach(card => {
+    const itemId = card.dataset.itemId;
+    const itemType = card.dataset.itemType; // 'issue' or 'action'
+    
+    // Check if item has this tag
+    checkItemHasTag(itemId, itemType, tagId).then(hasTag => {
+      if (hasTag) {
+        card.style.display = '';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  });
+  
+  updateColumnCounts();
+}
+
+// Check if item has specific tag
+async function checkItemHasTag(itemId, itemType, tagId) {
+  try {
+    const endpoint = itemType === 'issue' 
+      ? `/api/issues/${itemId}` 
+      : `/api/action-items/${itemId}`;
+    
+    const response = await fetch(endpoint, { credentials: 'include' });
+    const item = await response.json();
+    
+    // Check if item has tag
+    return item.tags?.some(tag => tag.id == tagId) || false;
+    
+  } catch (error) {
+    console.error('Error checking tag:', error);
+    return false;
+  }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+  loadTagsForFilter();
+});
+```
+
+ALTERNATIVE IMPLEMENTATION (Multi-select):
+
+If you want to filter by multiple tags:
+```html
+<!-- Multi-select tag filter -->
+<div class="relative">
+  <button 
+    id="tagFilterBtn"
+    onclick="toggleTagFilter()"
+    class="px-4 py-2 border rounded-lg flex items-center gap-2 bg-white hover:bg-gray-50"
+  >
+    <span>🏷️ Tags</span>
+    <span id="tagFilterCount" class="hidden px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">0</span>
+    <span>▼</span>
+  </button>
+  
+  <div id="tagFilterDropdown" class="hidden absolute top-full mt-1 bg-white border rounded-lg shadow-lg p-4 z-10 min-w-[200px]">
+    <div class="mb-2 font-medium text-sm text-gray-700">Filter by Tags:</div>
+    <div id="tagCheckboxes" class="space-y-2 max-h-64 overflow-y-auto">
+      <!-- Dynamically populated checkboxes -->
+    </div>
+    <div class="mt-3 pt-3 border-t flex gap-2">
+      <button onclick="clearTagFilter()" class="text-sm text-gray-600 hover:text-gray-900">Clear</button>
+      <button onclick="applyTagFilter()" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Apply</button>
+    </div>
+  </div>
+</div>
+```
+
+STYLING:
+
+Ensure consistent styling with other filters:
+```css
+.filter-select {
+  min-width: 150px;
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background-color: white;
+  cursor: pointer;
+}
+
+.filter-select:hover {
+  border-color: #9ca3af;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  ring: 2px;
+  ring-color: rgba(59, 130, 246, 0.5);
+}
+```
+
+VERIFICATION:
+
+After implementation:
+1. Tag filter dropdown visible in filters section
+2. Dropdown populated with available tags
+3. Selecting tag filters kanban cards correctly
+4. "All Tags" option shows all items
+5. Filter works with other filters (Type, Status, etc.)
+6. Column counts update after filtering
+
+COMMIT MESSAGE:
+"fix: restore filter by tag functionality on projects page
+
+- Add tag filter dropdown to filters section
+- Load available tags from API
+- Filter kanban cards by selected tag
+- Update column counts after filtering
+- Integrate with existing filter system
+- Style consistent with other filters
+
+Restores previously existing functionality"
