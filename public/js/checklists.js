@@ -56,6 +56,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // =====================================================
 
 function setupChecklistsPageListeners() {
+  // Mode 2 Smart Matching button
+  const mode2Btn = document.getElementById('mode2SmartMatchingBtn');
+  if (mode2Btn) {
+    mode2Btn.addEventListener('click', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const projectId = urlParams.get('projectId');
+      window.location.href = `mode2-review.html${projectId ? '?projectId=' + projectId : ''}`;
+    });
+  }
+  
   // Create checklist button
   const createBtn = document.getElementById('createChecklistBtn');
   if (createBtn) {
