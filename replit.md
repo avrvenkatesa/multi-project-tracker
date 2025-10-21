@@ -22,6 +22,7 @@ Key service layers include:
 -   **AI Service**: Provides AI-powered meeting analysis and checklist generation.
 -   **Standalone Checklist Service**: Manages standalone checklist lifecycle, including creation from documents, linking, and deletion.
 -   **Workstream Detector Service**: AI-powered analysis to identify 3-10 distinct workstreams from project documents, with automatic checklist generation for each workstream (Phase 4 Mode 2).
+-   **Checklist Matcher Service**: Intelligent AI-powered matching of generated checklists to existing project issues with confidence scoring (0-100%), semantic analysis, and automatic new issue suggestions for unmatched checklists (Phase 4 Mode 2).
 
 API endpoints support advanced features such as auto-creating checklists, auto-updating issue/action item status based on checklist completion, bulk applying templates, comprehensive checklist dependency management, document upload for AI processing, and full lifecycle management for standalone checklists.
 
@@ -32,6 +33,7 @@ The database schema includes core entities like Users, Projects, Issues, Action 
 -   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection, with a persistent review queue.
 -   **AI Checklist Generation**: Generates comprehensive checklists from issue/action descriptions and uploaded documents (PDF, DOCX, TXT) using OpenAI and Anthropic models. Supports multi-checklist generation, selective creation, batch preview, and robust error handling.
 -   **Workstream Detection (Phase 4 Mode 2)**: AI-powered document analysis to identify distinct work areas, phases, or workstreams. Analyzes project documents to detect 3-10 non-overlapping workstreams with automatic extraction of key requirements, dependencies, complexity estimates, and suggested phases. Each workstream receives a focused, actionable checklist (5-15 items) organized into logical sections. Supports both OpenAI GPT-4o and Anthropic Claude 3.5 Sonnet models. Includes comprehensive validation, error handling, and detailed metadata tracking (token usage, document length, workstream count).
+-   **Intelligent Issue Matching (Phase 4 Mode 2)**: AI-powered semantic matching of generated checklists to existing project issues. Analyzes checklist content, scope, and complexity against issue titles and descriptions to calculate confidence scores (0-100%). Uses configurable thresholds (≥40% for matches) to prevent low-quality pairings. Provides detailed reasoning for each match decision. Automatically generates new issue suggestions for unmatched checklists with appropriate titles, descriptions, types, and priorities. Supports batch operations for creating issues and linking checklists with full transaction support.
 -   **Checklist Validation**: Provides quality scoring, required field validation, and consistency checks.
 
 ### Reporting & Export

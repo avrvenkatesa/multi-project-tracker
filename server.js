@@ -9648,6 +9648,96 @@ app.post('/api/projects/:projectId/generate-workstream-checklists', authenticate
 });
 
 // ============================================
+// Phase 4 Mode 2: Issue Matching
+// ============================================
+
+const checklistMatcher = require('./services/checklist-matcher.js');
+
+/**
+ * Match generated checklists to existing issues
+ * POST /api/projects/:projectId/match-checklists-to-issues
+ * Body: { checklists: array }
+ */
+app.post('/api/projects/:projectId/match-checklists-to-issues', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { checklists } = req.body;
+    
+    if (!checklists || !Array.isArray(checklists)) {
+      return res.status(400).json({
+        error: 'Checklists array required',
+        message: 'Please provide checklists array in request body'
+      });
+    }
+    
+    console.log(`🔗 Matching ${checklists.length} checklists to issues in project ${projectId}`);
+    
+    const results = await checklistMatcher.matchChecklistsToIssues(
+      checklists,
+      parseInt(projectId),
+      pool
+    );
+    
+    res.json({
+      success: true,
+      matches: results.matches,
+      summary: results.summary
+    });
+    
+  } catch (error) {
+    console.error('Matching error:', error);
+    res.status(500).json({
+      error: 'Failed to match checklists',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Create matched checklists (batch operation)
+ * POST /api/projects/:projectId/create-matched-checklists
+ * Body: { approvedMatches: array }
+ */
+app.post('/api/projects/:projectId/create-matched-checklists', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { approvedMatches } = req.body;
+    const userId = req.user?.id || 1;
+    
+    if (!approvedMatches || !Array.isArray(approvedMatches)) {
+      return res.status(400).json({
+        error: 'Approved matches array required',
+        message: 'Please provide approvedMatches array in request body'
+      });
+    }
+    
+    console.log(`📦 Creating ${approvedMatches.length} matched checklists`);
+    
+    const results = await checklistMatcher.createMatchedChecklists(
+      approvedMatches,
+      parseInt(projectId),
+      userId,
+      pool
+    );
+    
+    res.json({
+      success: true,
+      created: results.created.length,
+      failed: results.failed.length,
+      issuesCreated: results.issuesCreated,
+      details: results
+    });
+    
+  } catch (error) {
+    console.error('Batch creation error:', error);
+    res.status(500).json({
+      error: 'Failed to create checklists',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
 // Phase 3b Feature 1: Auto-Create Checklist APIs
 // ============================================
 
