@@ -209,11 +209,11 @@ function parseWorkstreamResponse(rawResponse) {
     }
     
     if (workstreams.length < 3) {
-      console.warn(`Only ${workstreams.length} workstreams generated, expected at least 3`);
+      throw new Error(`Insufficient workstreams detected: AI generated only ${workstreams.length} workstream(s), but Phase 4 Mode 2 requires at least 3 distinct workstreams. Please provide a more detailed document or try again.`);
     }
     
     if (workstreams.length > 10) {
-      console.warn(`Too many workstreams (${workstreams.length}), limiting to 10`);
+      console.warn(`AI generated ${workstreams.length} workstreams, limiting to maximum of 10 as per Phase 4 Mode 2 specification`);
       workstreams.splice(10);
     }
     
@@ -231,6 +231,14 @@ function parseWorkstreamResponse(rawResponse) {
   } catch (error) {
     console.error('Error parsing workstream response:', error);
     console.error('Raw response preview:', rawResponse.substring(0, 500));
+    
+    if (error.message && error.message.includes('Insufficient workstreams detected')) {
+      throw error;
+    }
+    
+    if (error.message && error.message.includes('No valid workstreams generated')) {
+      throw error;
+    }
     
     if (error instanceof SyntaxError) {
       throw new Error(`AI returned invalid JSON: ${error.message}`);

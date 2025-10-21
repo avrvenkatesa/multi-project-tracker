@@ -9572,6 +9572,23 @@ app.post('/api/projects/:projectId/analyze-workstreams', authenticateToken, asyn
     
   } catch (error) {
     console.error('Workstream detection error:', error);
+    
+    if (error.message.includes('Insufficient workstreams detected')) {
+      return res.status(400).json({
+        error: 'Insufficient workstreams',
+        message: error.message,
+        suggestion: 'Try providing a more comprehensive document with multiple distinct sections, phases, or work areas.'
+      });
+    }
+    
+    if (error.message.includes('invalid JSON') || error.message.includes('Failed to parse')) {
+      return res.status(502).json({
+        error: 'AI response parsing failed',
+        message: 'The AI returned an invalid response format. Please try again.',
+        details: error.message
+      });
+    }
+    
     res.status(500).json({
       error: 'Failed to detect workstreams',
       message: error.message

@@ -21,6 +21,7 @@ Key service layers include:
 -   **Document Service**: Handles document upload and text extraction for AI processing.
 -   **AI Service**: Provides AI-powered meeting analysis and checklist generation.
 -   **Standalone Checklist Service**: Manages standalone checklist lifecycle, including creation from documents, linking, and deletion.
+-   **Workstream Detector Service**: AI-powered analysis to identify 3-10 distinct workstreams from project documents, with automatic checklist generation for each workstream (Phase 4 Mode 2).
 
 API endpoints support advanced features such as auto-creating checklists, auto-updating issue/action item status based on checklist completion, bulk applying templates, comprehensive checklist dependency management, document upload for AI processing, and full lifecycle management for standalone checklists.
 
@@ -30,6 +31,7 @@ The database schema includes core entities like Users, Projects, Issues, Action 
 ### AI Features
 -   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection, with a persistent review queue.
 -   **AI Checklist Generation**: Generates comprehensive checklists from issue/action descriptions and uploaded documents (PDF, DOCX, TXT) using OpenAI and Anthropic models. Supports multi-checklist generation, selective creation, batch preview, and robust error handling.
+-   **Workstream Detection (Phase 4 Mode 2)**: AI-powered document analysis to identify distinct work areas, phases, or workstreams. Analyzes project documents to detect 3-10 non-overlapping workstreams with automatic extraction of key requirements, dependencies, complexity estimates, and suggested phases. Each workstream receives a focused, actionable checklist (5-15 items) organized into logical sections. Supports both OpenAI GPT-4o and Anthropic Claude 3.5 Sonnet models. Includes comprehensive validation, error handling, and detailed metadata tracking (token usage, document length, workstream count).
 -   **Checklist Validation**: Provides quality scoring, required field validation, and consistency checks.
 
 ### Reporting & Export
