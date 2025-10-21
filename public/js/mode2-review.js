@@ -380,12 +380,18 @@ function renderMatchCards() {
   }).join('');
   
   document.querySelectorAll('[data-action="toggle-match"]').forEach(checkbox => {
+    const index = parseInt(checkbox.dataset.matchIndex);
+    
+    if (selectedMatches.has(index)) {
+      checkbox.checked = true;
+    }
+    
     checkbox.addEventListener('change', (e) => {
-      const index = parseInt(e.target.dataset.matchIndex);
+      const idx = parseInt(e.target.dataset.matchIndex);
       if (e.target.checked) {
-        selectedMatches.add(index);
+        selectedMatches.add(idx);
       } else {
-        selectedMatches.delete(index);
+        selectedMatches.delete(idx);
       }
     });
   });
@@ -447,12 +453,106 @@ function acceptHighConfidence() {
   showNotification(`Selected ${selectedMatches.size} high-confidence matches`, 'success');
 }
 
-function changeIssue(index) {
-  showNotification('Change issue functionality - coming soon', 'info');
+async function changeIssue(index) {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/issues`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to load issues');
+    }
+    
+    const issues = await response.json();
+    
+    if (issues.length === 0) {
+      showNotification('No issues available in this project', 'info');
+      return;
+    }
+    
+    showIssuePickerModal(issues, index, 'change');
+  } catch (error) {
+    console.error('Error loading issues:', error);
+    showNotification('Failed to load issues', 'error');
+  }
 }
 
-function linkToExisting(index) {
-  showNotification('Link to existing issue - coming soon', 'info');
+async function linkToExisting(index) {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/issues`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to load issues');
+    }
+    
+    const issues = await response.json();
+    
+    if (issues.length === 0) {
+      showNotification('No issues available in this project', 'info');
+      return;
+    }
+    
+    showIssuePickerModal(issues, index, 'link');
+  } catch (error) {
+    console.error('Error loading issues:', error);
+    showNotification('Failed to load issues', 'error');
+  }
+}
+
+function showIssuePickerModal(issues, matchIndex, action) {
+  const issuesList = issues.map(issue => `
+    <div class="p-3 border rounded hover:bg-blue-50 cursor-pointer" data-action="select-issue" data-issue-id="${issue.id}" data-match-index="${matchIndex}">
+      <div class="font-medium text-gray-900">#${issue.id}: ${escapeHtml(issue.title)}</div>
+      <div class="text-sm text-gray-600 mt-1">
+        Type: ${issue.type} | Priority: ${issue.priority} | Status: ${issue.status}
+      </div>
+    </div>
+  `).join('');
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+  overlay.innerHTML = `
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
+      <div class="flex items-center justify-between p-6 border-b">
+        <h2 class="text-xl font-bold">Select Issue</h2>
+        <button data-action="close-modal" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+      </div>
+      <div class="p-6 overflow-y-auto max-h-[70vh] space-y-2">
+        ${issuesList}
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.closest('[data-action="close-modal"]')) {
+      overlay.remove();
+      return;
+    }
+    
+    const selectBtn = e.target.closest('[data-action="select-issue"]');
+    if (selectBtn) {
+      const issueId = parseInt(selectBtn.dataset.issueId);
+      const index = parseInt(selectBtn.dataset.matchIndex);
+      const selectedIssue = issues.find(i => i.id === issueId);
+      
+      if (selectedIssue) {
+        matchesData.matches[index].matchedIssue = selectedIssue;
+        matchesData.matches[index].confidence = 75;
+        matchesData.matches[index].reasoning = 'Manually selected by user';
+        matchesData.matches[index].suggestedNewIssue = null;
+        
+        recalculateSummary();
+        renderMatchCards();
+        showNotification(`Linked to Issue #${issueId}`, 'success');
+      }
+      
+      overlay.remove();
+    }
+  });
 }
 
 function previewChecklist(index) {
@@ -491,11 +591,61 @@ function previewChecklist(index) {
 function removeMatch(index) {
   if (confirm('Remove this checklist from the batch?')) {
     matchesData.matches.splice(index, 1);
-    matchesData.summary.totalChecklists--;
-    selectedMatches.delete(index);
+    
+    rebuildSelectionState(index);
+    recalculateSummary();
     renderMatchCards();
     showNotification('Checklist removed', 'info');
   }
+}
+
+function rebuildSelectionState(removedIndex) {
+  const previouslySelected = Array.from(selectedMatches);
+  selectedMatches.clear();
+  
+  previouslySelected.forEach(oldIndex => {
+    if (oldIndex === removedIndex) {
+      return;
+    }
+    
+    if (oldIndex > removedIndex) {
+      selectedMatches.add(oldIndex - 1);
+    } else {
+      selectedMatches.add(oldIndex);
+    }
+  });
+}
+
+function recalculateSummary() {
+  let matched = 0;
+  let unmatched = 0;
+  let totalConfidence = 0;
+  let confidenceCount = 0;
+  
+  matchesData.matches.forEach(match => {
+    if (match.matchedIssue) {
+      matched++;
+      totalConfidence += match.confidence;
+      confidenceCount++;
+    } else {
+      unmatched++;
+    }
+  });
+  
+  matchesData.summary = {
+    totalChecklists: matchesData.matches.length,
+    matched: matched,
+    unmatched: unmatched,
+    averageConfidence: confidenceCount > 0 ? Math.round(totalConfidence / confidenceCount) : 0,
+    highConfidence: matchesData.matches.filter(m => m.confidence >= 80).length,
+    mediumConfidence: matchesData.matches.filter(m => m.confidence >= 50 && m.confidence < 80).length,
+    lowConfidence: matchesData.matches.filter(m => m.confidence >= 40 && m.confidence < 50).length
+  };
+  
+  document.getElementById('statWorkstreams').textContent = matchesData.summary.totalChecklists;
+  document.getElementById('statMatched').textContent = matchesData.summary.matched;
+  document.getElementById('statUnmatched').textContent = matchesData.summary.unmatched;
+  document.getElementById('statConfidence').textContent = matchesData.summary.averageConfidence + '%';
 }
 
 // ==============================================
