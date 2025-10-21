@@ -269,6 +269,7 @@ function showReviewSection() {
   document.getElementById('statConfidence').textContent = Math.round(matchesData.summary.averageConfidence) + '%';
   
   renderMatchCards();
+  updateSelectAllButton();
 }
 
 function renderMatchCards() {
@@ -393,6 +394,7 @@ function renderMatchCards() {
       } else {
         selectedMatches.delete(idx);
       }
+      updateSelectAllButton();
     });
   });
   
@@ -430,14 +432,39 @@ function renderMatchCards() {
 // ==============================================
 
 function selectAll() {
-  matchesData.matches.forEach((_, index) => {
-    const checkbox = document.getElementById(`match-${index}`);
-    if (checkbox) {
-      checkbox.checked = true;
-      selectedMatches.add(index);
-    }
-  });
-  showNotification(`Selected all ${selectedMatches.size} checklists`, 'success');
+  const allSelected = selectedMatches.size === matchesData.matches.length;
+  
+  if (allSelected) {
+    // Deselect all
+    matchesData.matches.forEach((_, index) => {
+      const checkbox = document.getElementById(`match-${index}`);
+      if (checkbox) {
+        checkbox.checked = false;
+      }
+    });
+    selectedMatches.clear();
+    showNotification('Deselected all checklists', 'success');
+  } else {
+    // Select all
+    matchesData.matches.forEach((_, index) => {
+      const checkbox = document.getElementById(`match-${index}`);
+      if (checkbox) {
+        checkbox.checked = true;
+        selectedMatches.add(index);
+      }
+    });
+    showNotification(`Selected all ${selectedMatches.size} checklists`, 'success');
+  }
+  
+  updateSelectAllButton();
+}
+
+function updateSelectAllButton() {
+  const selectAllBtn = document.querySelector('[data-action="select-all"]');
+  if (!selectAllBtn || !matchesData) return;
+  
+  const allSelected = selectedMatches.size === matchesData.matches.length;
+  selectAllBtn.textContent = allSelected ? 'Deselect All' : 'Select All';
 }
 
 function acceptHighConfidence() {
@@ -450,6 +477,7 @@ function acceptHighConfidence() {
       }
     }
   });
+  updateSelectAllButton();
   showNotification(`Selected ${selectedMatches.size} high-confidence matches`, 'success');
 }
 
@@ -595,6 +623,7 @@ function removeMatch(index) {
     rebuildSelectionState(index);
     recalculateSummary();
     renderMatchCards();
+    updateSelectAllButton();
     showNotification('Checklist removed', 'info');
   }
 }
