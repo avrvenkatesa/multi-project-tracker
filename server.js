@@ -8007,7 +8007,7 @@ app.post('/api/checklists/generate-from-action', authenticateToken, async (req, 
         u.username as assigned_to_name
       FROM action_items ai
       INNER JOIN projects p ON ai.project_id = p.id
-      LEFT JOIN users u ON ai.assigned_to::integer = u.id
+      LEFT JOIN users u ON ai.assignee::integer = u.id
       WHERE ai.id = $1`,
       [action_id]
     );
