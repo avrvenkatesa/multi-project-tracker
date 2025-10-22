@@ -1181,6 +1181,18 @@ async function handleDrop(e) {
     
     if (!newStatus) return;
     
+    // Validate status change (check for incomplete checklists when moving to Done)
+    const canProceed = await validateStatusChange(draggedItem.id, draggedItem.type, newStatus);
+    
+    if (!canProceed) {
+        // User cancelled - reset dragged item and card opacity
+        draggedItem = null;
+        document.querySelectorAll('.kanban-card').forEach(card => {
+            card.style.opacity = '1';
+        });
+        return;
+    }
+    
     try {
         const endpoint = draggedItem.type === 'action-item' 
             ? `/api/action-items/${draggedItem.id}`
