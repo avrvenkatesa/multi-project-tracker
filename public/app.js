@@ -638,16 +638,11 @@ function setupEventListeners() {
         // Handle add relationship buttons
         const relationshipBtn = e.target.closest('[data-action="add-relationship"]');
         if (relationshipBtn) {
-            console.log('Relationship button clicked!', relationshipBtn);
             const relationshipType = relationshipBtn.getAttribute('data-type');
-            console.log('Relationship type:', relationshipType);
-            console.log('Current detail item:', currentDetailItem);
             if (relationshipType && currentDetailItem) {
                 // Pre-fill the relationship type in the modal
                 document.getElementById('relationship-type').value = relationshipType;
                 showRelationshipModal(currentDetailItem.id, currentDetailItem.type, currentDetailItem.title);
-            } else {
-                console.warn('Missing relationshipType or currentDetailItem', {relationshipType, currentDetailItem});
             }
         }
     });
@@ -2358,19 +2353,16 @@ let currentRelationshipItem = null;
 
 // Show relationship modal
 async function showRelationshipModal(itemId, itemType, itemTitle) {
-  console.log('showRelationshipModal called with:', {itemId, itemType, itemTitle});
   try {
     currentRelationshipItem = { id: itemId, type: itemType, title: itemTitle };
     
     // Show modal
     const modal = document.getElementById('relationship-modal');
-    console.log('Modal element:', modal);
     if (!modal) {
       console.error('Relationship modal not found!');
       return;
     }
     modal.classList.remove('hidden');
-    console.log('Modal should now be visible');
     
     // Display item info
     document.getElementById('relationship-item-info').innerHTML = `
