@@ -185,7 +185,7 @@ async function extractDocumentText(file) {
   const formData = new FormData();
   formData.append('document', file);
   
-  const response = await fetch('/api/extract-document-text', {
+  const response = await fetch('/api/documents/extract', {
     method: 'POST',
     credentials: 'include',
     body: formData
@@ -196,7 +196,7 @@ async function extractDocumentText(file) {
   }
   
   const data = await response.json();
-  return data.text;
+  return data.extractedText;
 }
 
 async function detectWorkstreams(text) {
