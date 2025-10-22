@@ -320,23 +320,28 @@ async function onProjectChange() {
   if (!projectId) {
     currentProjectId = null;
     document.getElementById('risksList').innerHTML = '';
-    document.getElementById('emptyState').style.display = 'none';
-    document.getElementById('btnNewRisk').style.display = 'none';
-    document.getElementById('backToProjectBtn').style.display = 'none';
-    document.getElementById('backToProjectsBtn').style.display = 'inline-block';
+    document.getElementById('emptyState')?.classList.add('hidden');
+    document.getElementById('btnNewRisk')?.classList.add('hidden');
+    document.getElementById('backToProjectBtn')?.classList.add('hidden');
+    document.getElementById('backToProjectsBtn')?.classList.remove('hidden');
     return;
   }
   
   currentProjectId = projectId;
   
   // Toggle navigation buttons - show Back to Project, hide Back to Projects
-  document.getElementById('backToProjectBtn').style.display = 'flex';
-  document.getElementById('backToProjectsBtn').style.display = 'none';
+  document.getElementById('backToProjectBtn')?.classList.remove('hidden');
+  document.getElementById('backToProjectsBtn')?.classList.add('hidden');
   
   // Check permissions
   const canCreate = canCreateRisk(currentUser);
-  document.getElementById('btnNewRisk').style.display = canCreate ? 'flex' : 'none';
-  document.getElementById('btnNewRiskEmpty').style.display = canCreate ? 'inline-flex' : 'none';
+  if (canCreate) {
+    document.getElementById('btnNewRisk')?.classList.remove('hidden');
+    document.getElementById('btnNewRiskEmpty')?.classList.remove('hidden');
+  } else {
+    document.getElementById('btnNewRisk')?.classList.add('hidden');
+    document.getElementById('btnNewRiskEmpty')?.classList.add('hidden');
+  }
   
   // Load data
   await Promise.all([

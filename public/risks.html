@@ -14,9 +14,14 @@
       <p class="text-sm text-blue-100 mb-1">Multi-Project Tracker</p>
       <div class="flex justify-between items-center mb-2">
         <h1 class="text-3xl font-bold">Risks</h1>
-        <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
-          ← Back to Projects
-        </button>
+        <div class="flex gap-2">
+          <button id="backToProjectBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all hidden" onclick="goBackToProject()">
+            ← Back to Project
+          </button>
+          <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all" onclick="window.location.href='index.html'">
+            ← Back to Projects
+          </button>
+        </div>
       </div>
       <p class="text-sm text-blue-100">Identify, assess, and monitor project risks</p>
     </div>
