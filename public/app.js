@@ -961,9 +961,10 @@ async function renderKanbanBoard() {
     
     const allItems = itemsToDisplay;
     
-    // Load relationship counts and comment counts for ALL items first (BEFORE rendering)
+    // Load relationship counts, comment counts, and checklist statuses for ALL items first (BEFORE rendering)
     const relationshipCounts = {};
     const commentCounts = {};
+    const checklistStatuses = {};
     
     await Promise.all(allItems.map(async (item) => {
         try {
@@ -991,6 +992,15 @@ async function renderKanbanBoard() {
         } catch (error) {
             console.error(`Error loading comments for ${item.type} ${item.id}:`, error);
             commentCounts[`${item.type}-${item.id}`] = 0;
+        }
+        
+        try {
+            const itemType = item.type === 'issue' ? 'issue' : 'action-item';
+            const checklistStatus = await getChecklistStatus(item.id, itemType);
+            checklistStatuses[`${item.type}-${item.id}`] = checklistStatus;
+        } catch (error) {
+            console.error(`Error loading checklist status for ${item.type} ${item.id}:`, error);
+            checklistStatuses[`${item.type}-${item.id}`] = { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
         }
     }));
     
@@ -1028,6 +1038,7 @@ async function renderKanbanBoard() {
                     .map((item) => {
                         const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
                         const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
+                        const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
                         
                         // Check permissions for edit/delete
                         const currentUser = AuthManager.currentUser;
@@ -1090,6 +1101,7 @@ async function renderKanbanBoard() {
                                 `).join('')}
                             </div>
                         ` : ''}
+                        ${generateChecklistBadge(checklistStatus)}
                             </div>
                         </div>
                     </div>
