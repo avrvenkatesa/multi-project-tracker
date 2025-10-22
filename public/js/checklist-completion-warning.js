@@ -7,7 +7,7 @@
  * Get checklist status for an item
  * @param {string} itemId - The item ID
  * @param {string} itemType - Either 'issue' or 'action-item'
- * @returns {Promise<Object>} - { hasChecklist, total, completed, percentage }
+ * @returns {Promise<Object>} - { hasChecklist, total, completed, percentage, error }
  */
 async function getChecklistStatus(itemId, itemType) {
   try {
@@ -20,13 +20,14 @@ async function getChecklistStatus(itemId, itemType) {
     });
     
     if (!response.ok) {
-      return { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+      console.error('Failed to get checklist status:', response.status);
+      return { hasChecklist: false, total: 0, completed: 0, percentage: 0, error: true };
     }
     
     return await response.json();
   } catch (error) {
     console.error('Error getting checklist status:', error);
-    return { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+    return { hasChecklist: false, total: 0, completed: 0, percentage: 0, error: true };
   }
 }
 
@@ -192,6 +193,16 @@ async function validateStatusChange(itemId, itemType, newStatus) {
   // Get checklist status
   const checklistInfo = await getChecklistStatus(itemId, itemType);
   
+  // If API error, block the move and show error
+  if (checklistInfo.error) {
+    if (typeof showErrorMessage === 'function') {
+      showErrorMessage('Unable to verify checklist status. Please try again.');
+    } else {
+      alert('Unable to verify checklist status. Please refresh and try again.');
+    }
+    return false;
+  }
+  
   // If no checklist or checklist is complete, allow change
   if (!checklistInfo.hasChecklist || checklistInfo.completed >= checklistInfo.total) {
     return true;
@@ -208,6 +219,16 @@ async function validateStatusChange(itemId, itemType, newStatus) {
  * @returns {string} - HTML string for badge
  */
 function generateChecklistBadge(checklistInfo) {
+  // Show error badge if API failed
+  if (checklistInfo && checklistInfo.error) {
+    return `
+      <div class="text-xs bg-gray-100 text-gray-600 border border-gray-300 px-2 py-1 rounded flex items-center gap-1 mt-2">
+        <span>⚠️</span>
+        <span>Checklist status unavailable</span>
+      </div>
+    `;
+  }
+  
   if (!checklistInfo || !checklistInfo.hasChecklist || checklistInfo.total === 0) {
     return '';
   }

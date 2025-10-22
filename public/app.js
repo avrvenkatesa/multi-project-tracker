@@ -1000,7 +1000,7 @@ async function renderKanbanBoard() {
             checklistStatuses[`${item.type}-${item.id}`] = checklistStatus;
         } catch (error) {
             console.error(`Error loading checklist status for ${item.type} ${item.id}:`, error);
-            checklistStatuses[`${item.type}-${item.id}`] = { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+            checklistStatuses[`${item.type}-${item.id}`] = { hasChecklist: false, total: 0, completed: 0, percentage: 0, error: true };
         }
     }));
     
