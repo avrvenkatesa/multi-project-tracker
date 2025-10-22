@@ -7335,7 +7335,7 @@ app.get('/api/checklists', authenticateToken, async (req, res) => {
       return res.json([]);
     }
     
-    // Build query with filters
+    // Build query with filters (LEFT JOIN for template to support standalone checklists)
     let query = `
       SELECT 
         c.*,
@@ -7345,7 +7345,7 @@ app.get('/api/checklists', authenticateToken, async (req, res) => {
         u.username as assigned_to_name,
         creator.username as created_by_name
       FROM checklists c
-      INNER JOIN checklist_templates ct ON c.template_id = ct.id
+      LEFT JOIN checklist_templates ct ON c.template_id = ct.id
       INNER JOIN projects p ON c.project_id = p.id
       LEFT JOIN users u ON c.assigned_to = u.id
       LEFT JOIN users creator ON c.created_by = creator.id
