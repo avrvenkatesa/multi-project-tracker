@@ -223,9 +223,10 @@ app.use(cors({
 app.set('trust proxy', true);
 
 // Rate limiting (configured for proxied environment)
+// High limit for production since all users come through Replit proxy
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000,
+  max: 10000, // Increased for production proxy environment
   message: "Too many requests from this IP, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
