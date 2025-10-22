@@ -7429,37 +7429,56 @@ app.get('/api/checklists/:id', authenticateToken, async (req, res) => {
     
     // Handle standalone checklists (no template)
     if (checklist.is_standalone || !checklist.template_id) {
-      // Get items directly from checklist_responses for standalone checklists
+      // Get sections
+      const sectionsResult = await pool.query(
+        `SELECT 
+          id,
+          title,
+          description,
+          display_order
+        FROM checklist_sections
+        WHERE checklist_id = $1
+        ORDER BY display_order`,
+        [checklistId]
+      );
+      
+      // Get items directly from checklist_responses
       const itemsResult = await pool.query(
         `SELECT 
           id as response_id,
           checklist_id,
-          response_value as item_text,
+          section_id,
+          item_text,
           notes,
           is_completed,
           completed_by,
           completed_at,
           response_date,
-          response_boolean
+          response_boolean,
+          display_order
         FROM checklist_responses
         WHERE checklist_id = $1
-        ORDER BY id`,
+        ORDER BY section_id, display_order`,
         [checklistId]
       );
+      
+      // Organize items by section
+      const sections = sectionsResult.rows.map(section => ({
+        ...section,
+        items: itemsResult.rows
+          .filter(item => item.section_id === section.id)
+          .map(item => ({
+            ...item,
+            id: item.response_id,
+            field_type: 'checkbox'
+          }))
+      }));
       
       // Return standalone checklist format
       return res.json({
         ...checklist,
         is_standalone: true,
-        sections: [{
-          id: 1,
-          title: 'Items',
-          items: itemsResult.rows.map(item => ({
-            ...item,
-            id: item.response_id,
-            field_type: 'text'
-          }))
-        }]
+        sections
       });
     }
     
