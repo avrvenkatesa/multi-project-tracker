@@ -814,7 +814,7 @@
                                     <div id="blocked-by-list" class="relationship-list pl-6">
                                         <p class="text-sm text-gray-500 italic">No blocking issues</p>
                                     </div>
-                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('blocked_by')">
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" data-action="add-relationship" data-type="blocked_by">
                                         + Add blocking issue
                                     </button>
                                 </div>
@@ -828,7 +828,7 @@
                                     <div id="blocks-list" class="relationship-list pl-6">
                                         <p class="text-sm text-gray-500 italic">Not blocking any issues</p>
                                     </div>
-                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('blocks')">
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" data-action="add-relationship" data-type="blocks">
                                         + Add blocked issue
                                     </button>
                                 </div>
@@ -842,7 +842,7 @@
                                     <div id="related-issues-list" class="relationship-list pl-6">
                                         <p class="text-sm text-gray-500 italic">No related issues</p>
                                     </div>
-                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('related')">
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" data-action="add-relationship" data-type="related">
                                         + Add related issue
                                     </button>
                                 </div>
@@ -856,7 +856,7 @@
                                     <div id="parent-issue" class="relationship-list pl-6">
                                         <p class="text-sm text-gray-500 italic">No parent issue</p>
                                     </div>
-                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('parent')">
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" data-action="add-relationship" data-type="parent">
                                         + Link to parent
                                     </button>
                                 </div>
@@ -870,7 +870,7 @@
                                     <div id="child-issues-list" class="relationship-list pl-6">
                                         <p class="text-sm text-gray-500 italic">No child issues</p>
                                     </div>
-                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" onclick="addRelationship('child')">
+                                    <button class="text-sm text-blue-600 hover:underline mt-2 ml-6" data-action="add-relationship" data-type="child">
                                         + Add child issue
                                     </button>
                                 </div>
