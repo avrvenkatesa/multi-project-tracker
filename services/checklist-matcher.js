@@ -421,9 +421,9 @@ async function createMatchedChecklists(approvedMatches, projectId, userId, pool)
             const item = section.items[j];
             await client.query(
               `INSERT INTO checklist_responses 
-                 (section_id, item_text, notes, is_completed, display_order)
-               VALUES ($1, $2, $3, FALSE, $4)`,
-              [sectionId, item.text, item.notes || null, j]
+                 (checklist_id, section_id, item_text, notes, is_completed, display_order)
+               VALUES ($1, $2, $3, $4, FALSE, $5)`,
+              [checklistId, sectionId, item.text, item.notes || null, j]
             );
           }
         }
