@@ -267,8 +267,8 @@ export const checklistTemplateItems = pgTable('checklist_template_items', {
 
 export const checklists = pgTable('checklists', {
   id: serial('id').primaryKey(),
-  checklistId: varchar('checklist_id', { length: 30 }).notNull().unique(),
-  templateId: integer('template_id').notNull().references(() => checklistTemplates.id),
+  checklistId: varchar('checklist_id', { length: 30 }),
+  templateId: integer('template_id').references(() => checklistTemplates.id),
   projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   title: varchar('title', { length: 255 }).notNull(),
   description: text('description'),
@@ -286,15 +286,30 @@ export const checklists = pgTable('checklists', {
   completionPercentage: integer('completion_percentage').generatedAlwaysAs(
     sql`CASE WHEN total_items > 0 THEN (completed_items * 100 / total_items) ELSE 0 END`
   ),
+  sourceDocument: text('source_document'),
+  isStandalone: boolean('is_standalone').default(false),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-export const checklistResponses = pgTable('checklist_responses', {
+// Checklist Sections (for custom/standalone checklists)
+export const checklistSections = pgTable('checklist_sections', {
   id: serial('id').primaryKey(),
   checklistId: integer('checklist_id').notNull().references(() => checklists.id, { onDelete: 'cascade' }),
-  templateItemId: integer('template_item_id').notNull().references(() => checklistTemplateItems.id),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description'),
+  displayOrder: integer('display_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const checklistResponses = pgTable('checklist_responses', {
+  id: serial('id').primaryKey(),
+  checklistId: integer('checklist_id').references(() => checklists.id, { onDelete: 'cascade' }),
+  templateItemId: integer('template_item_id').references(() => checklistTemplateItems.id),
+  sectionId: integer('section_id').references(() => checklistSections.id, { onDelete: 'cascade' }),
+  itemText: text('item_text'),
+  displayOrder: integer('display_order').default(0),
   responseValue: text('response_value'),
   responseDate: date('response_date'),
   responseBoolean: boolean('response_boolean'),

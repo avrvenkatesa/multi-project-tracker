@@ -1,0 +1,71 @@
+✗ Failed to create checklist for Migration Planning and Risk Management: error: relation "checklist_sections" does not exist
+    at xn.parseErrorMessage (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:954:41)
+    at xn.handlePacket (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:922:75)
+    at xn.parse (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:910:36)
+    at S.<anonymous> (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:961:16)
+    at S.emit (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:316:79)
+    at WebSocket.<anonymous> (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:402:19)
+    at callListener (/home/runner/workspace/node_modules/ws/lib/event-target.js:290:14)
+    at WebSocket.onMessage (/home/runner/workspace/node_modules/ws/lib/event-target.js:209:9)
+    at WebSocket.emit (node:events:524:28)
+    at Receiver.receiverOnMessage (/home/runner/workspace/node_modules/ws/lib/websocket.js:1220:20)
+    at Receiver.emit (node:events:524:28)
+    at Receiver.dataMessage (/home/runner/workspace/node_modules/ws/lib/receiver.js:569:14)
+    at Receiver.getData (/home/runner/workspace/node_modules/ws/lib/receiver.js:496:10)
+    at Receiver.startLoop (/home/runner/workspace/node_modules/ws/lib/receiver.js:167:16)
+    at Receiver._write (/home/runner/workspace/node_modules/ws/lib/receiver.js:94:10)
+    at writeOrBuffer (node:internal/streams/writable:572:12) {
+  length: 117,
+  severity: 'ERROR',
+  code: '42P01',
+  detail: undefined,
+  hint: undefined,
+  position: '13',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '1449',
+  routine: 'parserOpenTable'
+}
+  ✗ Failed to create checklist for Application Migration and Testing: error: current transaction is aborted, commands ignored until end of transaction block
+    at xn.parseErrorMessage (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:954:41)
+    at xn.handlePacket (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:922:75)
+    at xn.parse (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:910:36)
+    at S.<anonymous> (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:961:16)
+    at S.emit (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:316:79)
+    at WebSocket.<anonymous> (/home/runner/workspace/node_modules/@neondatabase/serverless/index.js:402:19)
+    at callListener (/home/runner/workspace/node_modules/ws/lib/event-target.js:290:14)
+    at WebSocket.onMessage (/home/runner/workspace/node_modules/ws/lib/event-target.js:209:9)
+    at WebSocket.emit (node:events:524:28)
+    at Receiver.receiverOnMessage (/home/runner/workspace/node_modules/ws/lib/websocket.js:1220:20)
+    at Receiver.emit (node:events:524:28)
+    at Receiver.dataMessage (/home/runner/workspace/node_modules/ws/lib/receiver.js:569:14)
+    at Receiver.getData (/home/runner/workspace/node_modules/ws/lib/receiver.js:496:10)
+    at Receiver.startLoop (/home/runner/workspace/node_modules/ws/lib/receiver.js:167:16)
+    at Receiver._write (/home/runner/workspace/node_modules/ws/lib/receiver.js:94:10)
+    at writeOrBuffer (node:internal/streams/writable:572:12) {
+  length: 145,
+  severity: 'ERROR',
+  code: '25P02',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'postgres.c',
+  line: '1500',
+  routine: 'exec_parse_message'
+}
+✅ Batch creation complete: 0 created, 2 failed

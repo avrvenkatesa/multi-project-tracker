@@ -507,7 +507,7 @@ async function changeIssue(index) {
 
 async function linkToExisting(index) {
   try {
-    const response = await fetch(`/api/projects/${currentProjectId}/issues`, {
+    const response = await fetch(`/api/issues?projectId=${currentProjectId}`, {
       credentials: 'include'
     });
     
