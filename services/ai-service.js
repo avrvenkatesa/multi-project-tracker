@@ -477,6 +477,13 @@ async function callAI(prompt, sourceType) {
     
   } catch (error) {
     console.error('AI generation error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      type: error.type,
+      stack: error.stack
+    });
     
     // Enhanced error handling with specific types
     if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
