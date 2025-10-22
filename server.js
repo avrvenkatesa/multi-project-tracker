@@ -10233,6 +10233,194 @@ app.get('/api/checklists/:id/validation/latest', authenticateToken, async (req, 
   }
 });
 
+// ============================================
+// Checklist Completion Validation
+// ============================================
+
+/**
+ * Get checklist completion status for an issue
+ * GET /api/issues/:issueId/checklist-status
+ * Returns: { hasChecklist, total, completed, percentage }
+ */
+app.get('/api/issues/:issueId/checklist-status', authenticateToken, async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    
+    // Get all checklists for this issue (exclude standalone)
+    const checklistsResult = await pool.query(
+      `SELECT id FROM checklists 
+       WHERE related_issue_id = $1 
+         AND (is_standalone = false OR is_standalone IS NULL)`,
+      [issueId]
+    );
+    
+    if (checklistsResult.rows.length === 0) {
+      return res.json({ 
+        hasChecklist: false,
+        total: 0,
+        completed: 0,
+        percentage: 0
+      });
+    }
+    
+    // Get total and completed items across all checklists for this issue
+    const statusResult = await pool.query(
+      `SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE is_completed = true) as completed
+       FROM checklist_responses cr
+       JOIN checklist_sections cs ON cr.section_id = cs.id
+       JOIN checklists c ON cs.checklist_id = c.id
+       WHERE c.related_issue_id = $1 
+         AND (c.is_standalone = false OR c.is_standalone IS NULL)`,
+      [issueId]
+    );
+    
+    const total = parseInt(statusResult.rows[0].total) || 0;
+    const completed = parseInt(statusResult.rows[0].completed) || 0;
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    
+    res.json({
+      hasChecklist: true,
+      total: total,
+      completed: completed,
+      percentage: percentage
+    });
+    
+  } catch (error) {
+    console.error('Error getting checklist status:', error);
+    res.status(500).json({ 
+      error: 'Failed to get checklist status',
+      hasChecklist: false 
+    });
+  }
+});
+
+/**
+ * Get incomplete checklist items for an issue
+ * GET /api/issues/:issueId/incomplete-checklist-items
+ * Returns: Array of { text } for incomplete items
+ */
+app.get('/api/issues/:issueId/incomplete-checklist-items', authenticateToken, async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    
+    const result = await pool.query(
+      `SELECT cr.item_text as text
+       FROM checklist_responses cr
+       JOIN checklist_sections cs ON cr.section_id = cs.id
+       JOIN checklists c ON cs.checklist_id = c.id
+       WHERE c.related_issue_id = $1 
+         AND (c.is_standalone = false OR c.is_standalone IS NULL)
+         AND cr.is_completed = false
+       ORDER BY cs.display_order, cr.display_order
+       LIMIT 10`,
+      [issueId]
+    );
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error getting incomplete items:', error);
+    res.status(500).json({ 
+      error: 'Failed to get incomplete items',
+      items: [] 
+    });
+  }
+});
+
+/**
+ * Get checklist completion status for an action item
+ * GET /api/action-items/:actionId/checklist-status
+ * Returns: { hasChecklist, total, completed, percentage }
+ */
+app.get('/api/action-items/:actionId/checklist-status', authenticateToken, async (req, res) => {
+  try {
+    const { actionId } = req.params;
+    
+    // Get all checklists for this action item (exclude standalone)
+    const checklistsResult = await pool.query(
+      `SELECT id FROM checklists 
+       WHERE related_action_id = $1 
+         AND (is_standalone = false OR is_standalone IS NULL)`,
+      [actionId]
+    );
+    
+    if (checklistsResult.rows.length === 0) {
+      return res.json({ 
+        hasChecklist: false,
+        total: 0,
+        completed: 0,
+        percentage: 0
+      });
+    }
+    
+    // Get total and completed items across all checklists for this action item
+    const statusResult = await pool.query(
+      `SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE is_completed = true) as completed
+       FROM checklist_responses cr
+       JOIN checklist_sections cs ON cr.section_id = cs.id
+       JOIN checklists c ON cs.checklist_id = c.id
+       WHERE c.related_action_id = $1 
+         AND (c.is_standalone = false OR c.is_standalone IS NULL)`,
+      [actionId]
+    );
+    
+    const total = parseInt(statusResult.rows[0].total) || 0;
+    const completed = parseInt(statusResult.rows[0].completed) || 0;
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    
+    res.json({
+      hasChecklist: true,
+      total: total,
+      completed: completed,
+      percentage: percentage
+    });
+    
+  } catch (error) {
+    console.error('Error getting checklist status:', error);
+    res.status(500).json({ 
+      error: 'Failed to get checklist status',
+      hasChecklist: false 
+    });
+  }
+});
+
+/**
+ * Get incomplete checklist items for an action item
+ * GET /api/action-items/:actionId/incomplete-checklist-items
+ * Returns: Array of { text } for incomplete items
+ */
+app.get('/api/action-items/:actionId/incomplete-checklist-items', authenticateToken, async (req, res) => {
+  try {
+    const { actionId } = req.params;
+    
+    const result = await pool.query(
+      `SELECT cr.item_text as text
+       FROM checklist_responses cr
+       JOIN checklist_sections cs ON cr.section_id = cs.id
+       JOIN checklists c ON cs.checklist_id = c.id
+       WHERE c.related_action_id = $1 
+         AND (c.is_standalone = false OR c.is_standalone IS NULL)
+         AND cr.is_completed = false
+       ORDER BY cs.display_order, cr.display_order
+       LIMIT 10`,
+      [actionId]
+    );
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error getting incomplete items:', error);
+    res.status(500).json({ 
+      error: 'Failed to get incomplete items',
+      items: [] 
+    });
+  }
+});
+
 // Get mismatched assignee names
 app.get('/api/admin/assignee-mismatches', authenticateToken, async (req, res) => {
   try {

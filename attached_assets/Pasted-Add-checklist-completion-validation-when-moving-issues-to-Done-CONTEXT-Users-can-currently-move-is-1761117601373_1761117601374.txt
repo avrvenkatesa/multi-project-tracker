@@ -1,0 +1,415 @@
+Add checklist completion validation when moving issues to Done
+
+CONTEXT:
+Users can currently move issues to "Done" status even when associated checklists are incomplete, leading to incomplete work and quality issues. Need soft enforcement that warns users but allows override.
+
+BRANCH: feature/checklist-completion-validation
+
+OBJECTIVE:
+Implement Option A (Soft Warning) - show warning modal when moving issues to Done with incomplete checklists, but allow user to proceed after acknowledgment.
+
+IMPLEMENTATION:
+
+Part 1: Add Checklist Status API Endpoints
+
+Add to server.js:
+```javascript
+// ============================================
+// Checklist Completion Validation
+// ============================================
+
+/**
+ * Get checklist completion status for an issue
+ * GET /api/issues/:issueId/checklist-status
+ * Returns: { hasChecklist, total, completed, percentage }
+ */
+app.get('/api/issues/:issueId/checklist-status', async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    
+    // Get all checklists for this issue (exclude standalone)
+    const checklistsResult = await pool.query(
+      `SELECT id FROM checklists 
+       WHERE related_issue_id = $1 
+         AND (is_standalone = false OR is_standalone IS NULL)`,
+      [issueId]
+    );
+    
+    if (checklistsResult.rows.length === 0) {
+      return res.json({ 
+        hasChecklist: false,
+        total: 0,
+        completed: 0,
+        percentage: 0
+      });
+    }
+    
+    // Get total and completed items across all checklists for this issue
+    const statusResult = await pool.query(
+      `SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE is_completed = true) as completed
+       FROM checklist_responses cr
+       JOIN checklist_sections cs ON cr.section_id = cs.id
+       JOIN checklists c ON cs.checklist_id = c.id
+       WHERE c.related_issue_id = $1 
+         AND (c.is_standalone = false OR c.is_standalone IS NULL)`,
+      [issueId]
+    );
+    
+    const total = parseInt(statusResult.rows[0].total) || 0;
+    const completed = parseInt(statusResult.rows[0].completed) || 0;
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    
+    res.json({
+      hasChecklist: true,
+      total: total,
+      completed: completed,
+      percentage: percentage
+    });
+    
+  } catch (error) {
+    console.error('Error getting checklist status:', error);
+    res.status(500).json({ 
+      error: 'Failed to get checklist status',
+      hasChecklist: false 
+    });
+  }
+});
+
+/**
+ * Get incomplete checklist items for an issue
+ * GET /api/issues/:issueId/incomplete-checklist-items
+ * Returns: Array of { text } for incomplete items
+ */
+app.get('/api/issues/:issueId/incomplete-checklist-items', async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    
+    const result = await pool.query(
+      `SELECT cr.item_text as text
+       FROM checklist_responses cr
+       JOIN checklist_sections cs ON cr.section_id = cs.id
+       JOIN checklists c ON cs.checklist_id = c.id
+       WHERE c.related_issue_id = $1 
+         AND (c.is_standalone = false OR c.is_standalone IS NULL)
+         AND cr.is_completed = false
+       ORDER BY cs.display_order, cr.display_order
+       LIMIT 10`,
+      [issueId]
+    );
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error getting incomplete items:', error);
+    res.status(500).json({ 
+      error: 'Failed to get incomplete items',
+      items: [] 
+    });
+  }
+});
+```
+
+Part 2: Add Visual Indicators to Issue Cards
+
+Update the issue card rendering in your kanban board JavaScript:
+
+Find the function that renders issue cards (likely in public/js/kanban.js or projects.js).
+
+Add this helper function:
+```javascript
+/**
+ * Get checklist status for an issue
+ */
+async function getChecklistInfo(issueId) {
+  try {
+    const response = await fetch(`/api/issues/${issueId}/checklist-status`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      return { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error getting checklist info:', error);
+    return { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+  }
+}
+
+/**
+ * Generate checklist status badge HTML
+ */
+function generateChecklistBadge(checklistInfo) {
+  if (!checklistInfo.hasChecklist || checklistInfo.total === 0) {
+    return '';
+  }
+  
+  const { completed, total, percentage } = checklistInfo;
+  
+  // Determine badge color based on completion
+  let badgeClass, icon;
+  if (percentage === 100) {
+    badgeClass = 'bg-green-100 text-green-700';
+    icon = '✓';
+  } else if (percentage >= 50) {
+    badgeClass = 'bg-yellow-100 text-yellow-700';
+    icon = '⚠️';
+  } else {
+    badgeClass = 'bg-red-100 text-red-700';
+    icon = '⚠️';
+  }
+  
+  return `
+    <div class="text-xs ${badgeClass} px-2 py-1 rounded flex items-center gap-1 mt-2">
+      <span>${icon}</span>
+      <span>Checklist: ${completed}/${total} (${percentage}%)</span>
+    </div>
+  `;
+}
+```
+
+Modify your issue card rendering to include the badge:
+```javascript
+async function renderIssueCard(issue) {
+  // Get checklist info for this issue
+  const checklistInfo = await getChecklistInfo(issue.id);
+  const checklistBadge = generateChecklistBadge(checklistInfo);
+  
+  // Your existing card HTML with badge added
+  return `
+    <div class="issue-card" data-issue-id="${issue.id}" draggable="true">
+      <div class="flex justify-between items-start mb-2">
+        <h3 class="font-semibold">${issue.title}</h3>
+        <span class="text-xs px-2 py-1 rounded ${getPriorityClass(issue.priority)}">
+          ${issue.priority}
+        </span>
+      </div>
+      
+      <p class="text-sm text-gray-600 mb-2">${issue.description || ''}</p>
+      
+      <div class="flex items-center gap-2 text-xs text-gray-500">
+        <span class="px-2 py-1 bg-gray-100 rounded">${issue.type}</span>
+        ${issue.assignee ? `<span>👤 ${issue.assignee}</span>` : ''}
+      </div>
+      
+      ${checklistBadge}
+    </div>
+  `;
+}
+```
+
+Part 3: Add Status Change Validation
+
+Intercept status changes and show warning for incomplete checklists:
+
+Find where issue status is changed (likely in drag-and-drop handler or status update function).
+
+Add validation logic:
+```javascript
+/**
+ * Change issue status with checklist validation
+ */
+async function changeIssueStatus(issueId, newStatus) {
+  
+  // If moving to "Done", check checklist completion
+  if (newStatus === 'Done' || newStatus === 'done') {
+    const checklistInfo = await getChecklistInfo(issueId);
+    
+    if (checklistInfo.hasChecklist && checklistInfo.completed < checklistInfo.total) {
+      // Show warning modal
+      const proceed = await showChecklistWarningModal(issueId, checklistInfo);
+      
+      if (!proceed) {
+        return false; // User cancelled
+      }
+    }
+  }
+  
+  // Proceed with status change
+  try {
+    const response = await fetch(`/api/issues/${issueId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ status: newStatus })
+    });
+    
+    if (!response.ok) throw new Error('Status update failed');
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating status:', error);
+    showNotification('Failed to update status', 'error');
+    return false;
+  }
+}
+```
+
+Part 4: Create Warning Modal
+
+Add the modal function:
+```javascript
+/**
+ * Show warning modal for incomplete checklist
+ * Returns: Promise<boolean> - true if user proceeds, false if cancelled
+ */
+async function showChecklistWarningModal(issueId, checklistInfo) {
+  return new Promise(async (resolve) => {
+    const percentage = checklistInfo.percentage;
+    const remaining = checklistInfo.total - checklistInfo.completed;
+    
+    // Get incomplete items
+    let incompleteItems = [];
+    try {
+      const response = await fetch(`/api/issues/${issueId}/incomplete-checklist-items`, {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        incompleteItems = await response.json();
+      }
+    } catch (error) {
+      console.error('Error getting incomplete items:', error);
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg shadow-xl p-6 max-w-md mx-4 animate-fadeIn">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="text-3xl">⚠️</span>
+          <h3 class="text-xl font-bold text-gray-900">Incomplete Checklist</h3>
+        </div>
+        
+        <p class="text-gray-700 mb-4">
+          This issue has an incomplete checklist:
+        </p>
+        
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+          <div class="font-medium text-gray-900 mb-2">
+            ${checklistInfo.completed} of ${checklistInfo.total} items completed (${percentage}%)
+          </div>
+          
+          ${incompleteItems.length > 0 ? `
+            <div class="text-sm text-gray-600 mb-3">
+              ${remaining} item${remaining !== 1 ? 's' : ''} remaining:
+            </div>
+            <ul class="text-sm text-gray-700 space-y-1 max-h-32 overflow-y-auto">
+              ${incompleteItems.slice(0, 5).map(item => `
+                <li class="flex items-start gap-2">
+                  <span class="text-yellow-600">☐</span>
+                  <span>${item.text}</span>
+                </li>
+              `).join('')}
+              ${incompleteItems.length > 5 ? `
+                <li class="text-gray-500 italic">... and ${incompleteItems.length - 5} more</li>
+              ` : ''}
+            </ul>
+          ` : ''}
+        </div>
+        
+        <p class="text-sm text-gray-600 mb-6">
+          Are you sure you want to mark this issue as Done?
+        </p>
+        
+        <div class="flex flex-col sm:flex-row gap-2">
+          <button 
+            id="cancelBtn"
+            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button 
+            id="viewChecklistBtn"
+            class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+          >
+            View Checklist
+          </button>
+          <button 
+            id="proceedBtn"
+            class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+          >
+            Mark as Done Anyway
+          </button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    const cancelBtn = modal.querySelector('#cancelBtn');
+    const viewChecklistBtn = modal.querySelector('#viewChecklistBtn');
+    const proceedBtn = modal.querySelector('#proceedBtn');
+    
+    cancelBtn.addEventListener('click', () => {
+      modal.remove();
+      resolve(false);
+    });
+    
+    viewChecklistBtn.addEventListener('click', () => {
+      modal.remove();
+      window.location.href = `/checklist.html?issue=${issueId}`;
+      resolve(false);
+    });
+    
+    proceedBtn.addEventListener('click', () => {
+      modal.remove();
+      resolve(true);
+    });
+    
+    // Close on outside click (optional)
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+        resolve(false);
+      }
+    });
+  });
+}
+```
+
+Part 5: Add CSS Animation (optional)
+
+Add to your CSS file:
+```css
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+```
+
+Part 6: Update Drag-and-Drop Handler
+
+Modify your drag-and-drop code to use the validation:
+```javascript
+// Example: In your drop handler
+async function handleDrop(event, newStatus) {
+  event.preventDefault();
+  
+  const issueId = event.dataTransfer.getData('issueId');
+  
+  // Use validation function
+  const success = await changeIssueStatus(issueId, newStatus);
+  
+  if (success) {
+    // Refresh the board
+    loadIssues();
+    showNotification('Issue status updated', 'success');
+  } else {
+    // User cancelled or error occurred
+    // Card will stay in original position
+  }
+}
