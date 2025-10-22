@@ -556,7 +556,8 @@ app.post("/api/auth/register", async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/'
     });
 
     // If invitation token provided, store it in a separate cookie
@@ -565,7 +566,8 @@ app.post("/api/auth/register", async (req, res) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 10 * 60 * 1000 // 10 minutes
+        maxAge: 10 * 60 * 1000, // 10 minutes
+        path: '/'
       });
     }
 
@@ -614,7 +616,8 @@ app.post("/api/auth/login", async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/'
     });
 
     // If invitation token provided, store it in a separate cookie
@@ -623,7 +626,8 @@ app.post("/api/auth/login", async (req, res) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 10 * 60 * 1000 // 10 minutes
+        maxAge: 10 * 60 * 1000, // 10 minutes
+        path: '/'
       });
     }
 
