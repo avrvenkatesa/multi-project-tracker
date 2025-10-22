@@ -1,5 +1,6 @@
 // Global state
 let currentProject = null;
+let currentDetailItem = null; // Stores current issue/action item being viewed
 let projects = [];
 let issues = [];
 let actionItems = [];
@@ -638,13 +639,10 @@ function setupEventListeners() {
         const relationshipBtn = e.target.closest('[data-action="add-relationship"]');
         if (relationshipBtn) {
             const relationshipType = relationshipBtn.getAttribute('data-type');
-            if (relationshipType && currentItemDetail) {
+            if (relationshipType && currentDetailItem) {
                 // Pre-fill the relationship type in the modal
-                const modal = document.getElementById('relationship-modal');
-                if (modal) {
-                    document.getElementById('relationship-type').value = relationshipType;
-                    showRelationshipModal(currentItemDetail.id, currentItemDetail.type, currentItemDetail.title);
-                }
+                document.getElementById('relationship-type').value = relationshipType;
+                showRelationshipModal(currentDetailItem.id, currentDetailItem.type, currentDetailItem.title);
             }
         }
     });

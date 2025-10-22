@@ -577,6 +577,9 @@ async function openItemDetailModal(itemId, itemType) {
     const response = await axios.get(endpoint, { withCredentials: true });
     const item = response.data;
     
+    // Set global state for relationship buttons
+    currentDetailItem = { id: itemId, type: itemType, title: item.title };
+    
     title.textContent = item.title;
     
     info.innerHTML = `
@@ -674,6 +677,7 @@ function closeItemDetailModal() {
   modal.classList.add('hidden');
   currentItemId = null;
   currentItemType = null;
+  currentDetailItem = null;
 }
 
 async function loadItemDetailComments() {
