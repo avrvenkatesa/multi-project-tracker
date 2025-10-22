@@ -2358,22 +2358,34 @@ let currentRelationshipItem = null;
 
 // Show relationship modal
 async function showRelationshipModal(itemId, itemType, itemTitle) {
-  currentRelationshipItem = { id: itemId, type: itemType, title: itemTitle };
-  
-  // Show modal
-  document.getElementById('relationship-modal').classList.remove('hidden');
-  
-  // Display item info
-  document.getElementById('relationship-item-info').innerHTML = `
-    <p class="font-medium">${itemTitle}</p>
-    <p class="text-sm text-gray-600">${itemType === 'issue' ? 'Issue' : 'Action Item'} #${itemId}</p>
-  `;
-  
-  // Load relationships
-  await loadRelationships();
-  
-  // Populate target dropdown
-  await populateTargetDropdown();
+  console.log('showRelationshipModal called with:', {itemId, itemType, itemTitle});
+  try {
+    currentRelationshipItem = { id: itemId, type: itemType, title: itemTitle };
+    
+    // Show modal
+    const modal = document.getElementById('relationship-modal');
+    console.log('Modal element:', modal);
+    if (!modal) {
+      console.error('Relationship modal not found!');
+      return;
+    }
+    modal.classList.remove('hidden');
+    console.log('Modal should now be visible');
+    
+    // Display item info
+    document.getElementById('relationship-item-info').innerHTML = `
+      <p class="font-medium">${itemTitle}</p>
+      <p class="text-sm text-gray-600">${itemType === 'issue' ? 'Issue' : 'Action Item'} #${itemId}</p>
+    `;
+    
+    // Load relationships
+    await loadRelationships();
+    
+    // Populate target dropdown
+    await populateTargetDropdown();
+  } catch (error) {
+    console.error('Error in showRelationshipModal:', error);
+  }
 }
 
 // Close relationship modal
