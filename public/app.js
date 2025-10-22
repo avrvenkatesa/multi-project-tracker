@@ -638,11 +638,16 @@ function setupEventListeners() {
         // Handle add relationship buttons
         const relationshipBtn = e.target.closest('[data-action="add-relationship"]');
         if (relationshipBtn) {
+            console.log('Relationship button clicked!', relationshipBtn);
             const relationshipType = relationshipBtn.getAttribute('data-type');
+            console.log('Relationship type:', relationshipType);
+            console.log('Current detail item:', currentDetailItem);
             if (relationshipType && currentDetailItem) {
                 // Pre-fill the relationship type in the modal
                 document.getElementById('relationship-type').value = relationshipType;
                 showRelationshipModal(currentDetailItem.id, currentDetailItem.type, currentDetailItem.title);
+            } else {
+                console.warn('Missing relationshipType or currentDetailItem', {relationshipType, currentDetailItem});
             }
         }
     });
