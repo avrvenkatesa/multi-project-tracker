@@ -10269,15 +10269,21 @@ app.get('/api/issues/:issueId/checklist-status', authenticateToken, async (req, 
   try {
     const { issueId } = req.params;
     
-    // Get all checklists for this issue (exclude standalone)
+    // Get all checklists for this issue (exclude standalone) and aggregate totals
     const checklistsResult = await pool.query(
-      `SELECT id FROM checklists 
+      `SELECT 
+        SUM(COALESCE(total_items, 0)) as total,
+        SUM(COALESCE(completed_items, 0)) as completed
+       FROM checklists 
        WHERE related_issue_id = $1 
          AND (is_standalone = false OR is_standalone IS NULL)`,
       [issueId]
     );
     
-    if (checklistsResult.rows.length === 0) {
+    const total = parseInt(checklistsResult.rows[0].total) || 0;
+    const completed = parseInt(checklistsResult.rows[0].completed) || 0;
+    
+    if (total === 0) {
       return res.json({ 
         hasChecklist: false,
         total: 0,
@@ -10286,22 +10292,7 @@ app.get('/api/issues/:issueId/checklist-status', authenticateToken, async (req, 
       });
     }
     
-    // Get total and completed items across all checklists for this issue
-    const statusResult = await pool.query(
-      `SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE is_completed = true) as completed
-       FROM checklist_responses cr
-       JOIN checklist_sections cs ON cr.section_id = cs.id
-       JOIN checklists c ON cs.checklist_id = c.id
-       WHERE c.related_issue_id = $1 
-         AND (c.is_standalone = false OR c.is_standalone IS NULL)`,
-      [issueId]
-    );
-    
-    const total = parseInt(statusResult.rows[0].total) || 0;
-    const completed = parseInt(statusResult.rows[0].completed) || 0;
-    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const percentage = Math.round((completed / total) * 100);
     
     res.json({
       hasChecklist: true,
@@ -10361,15 +10352,21 @@ app.get('/api/action-items/:actionId/checklist-status', authenticateToken, async
   try {
     const { actionId } = req.params;
     
-    // Get all checklists for this action item (exclude standalone)
+    // Get all checklists for this action item (exclude standalone) and aggregate totals
     const checklistsResult = await pool.query(
-      `SELECT id FROM checklists 
+      `SELECT 
+        SUM(COALESCE(total_items, 0)) as total,
+        SUM(COALESCE(completed_items, 0)) as completed
+       FROM checklists 
        WHERE related_action_id = $1 
          AND (is_standalone = false OR is_standalone IS NULL)`,
       [actionId]
     );
     
-    if (checklistsResult.rows.length === 0) {
+    const total = parseInt(checklistsResult.rows[0].total) || 0;
+    const completed = parseInt(checklistsResult.rows[0].completed) || 0;
+    
+    if (total === 0) {
       return res.json({ 
         hasChecklist: false,
         total: 0,
@@ -10378,22 +10375,7 @@ app.get('/api/action-items/:actionId/checklist-status', authenticateToken, async
       });
     }
     
-    // Get total and completed items across all checklists for this action item
-    const statusResult = await pool.query(
-      `SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE is_completed = true) as completed
-       FROM checklist_responses cr
-       JOIN checklist_sections cs ON cr.section_id = cs.id
-       JOIN checklists c ON cs.checklist_id = c.id
-       WHERE c.related_action_id = $1 
-         AND (c.is_standalone = false OR c.is_standalone IS NULL)`,
-      [actionId]
-    );
-    
-    const total = parseInt(statusResult.rows[0].total) || 0;
-    const completed = parseInt(statusResult.rows[0].completed) || 0;
-    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const percentage = Math.round((completed / total) * 100);
     
     res.json({
       hasChecklist: true,
@@ -10403,7 +10385,7 @@ app.get('/api/action-items/:actionId/checklist-status', authenticateToken, async
     });
     
   } catch (error) {
-    console.error('Error getting checklist status:', error);
+    console.error('Error getting action item checklist status:', error);
     res.status(500).json({ 
       error: 'Failed to get checklist status',
       hasChecklist: false 
