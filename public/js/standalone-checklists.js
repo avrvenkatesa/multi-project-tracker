@@ -513,6 +513,12 @@ async function confirmLinking() {
       throw new Error(error.message || 'Failed to link checklist');
     }
     
+    // Dispatch checklist update event for real-time badge refresh
+    if (window.dispatchChecklistUpdate) {
+      const itemType = linkType === 'issue' ? 'issue' : 'action-item';
+      window.dispatchChecklistUpdate(itemType, parseInt(targetId));
+    }
+    
     const copyMode = keepStandalone ? ' (copy created)' : '';
     showNotification(`✅ Checklist linked successfully${copyMode}!`, 'success');
     closeLinkingModal();

@@ -17,6 +17,67 @@ let currentFilters = {
   tag: ''
 };
 
+// ==================== CHECKLIST UPDATE SYSTEM ====================
+
+/**
+ * Dispatch checklist update event to refresh badges in real-time
+ * Call this after creating, linking, or updating a checklist
+ * @param {string} itemType - 'issue' or 'action-item'
+ * @param {number} itemId - The ID of the issue or action item
+ */
+window.dispatchChecklistUpdate = function(itemType, itemId) {
+  const event = new CustomEvent('checklist:updated', {
+    detail: { itemType, itemId }
+  });
+  window.dispatchEvent(event);
+  console.log(`[Checklist Update] Dispatched event for ${itemType} ${itemId}`);
+};
+
+/**
+ * Listen for checklist updates and refresh badges in real-time
+ */
+window.addEventListener('checklist:updated', async function(event) {
+  const { itemType, itemId } = event.detail;
+  console.log(`[Checklist Update] Received event for ${itemType} ${itemId}`);
+  
+  try {
+    // Fetch updated checklist status
+    const checklistStatus = await getChecklistStatus(itemId, itemType);
+    
+    // Find the card in the kanban board
+    const cardType = itemType === 'issue' ? 'issue' : 'action-item';
+    const card = document.querySelector(`.kanban-card[data-item-id="${itemId}"][data-item-type="${cardType}"]`);
+    
+    if (card) {
+      // Find existing badge or create placeholder
+      let badgeContainer = card.querySelector('.checklist-badge-container');
+      
+      if (!badgeContainer) {
+        // Create container after tags if badge doesn't exist
+        const tagsContainer = card.querySelector('.flex.flex-wrap.gap-1.mb-2');
+        badgeContainer = document.createElement('div');
+        badgeContainer.className = 'checklist-badge-container';
+        
+        if (tagsContainer) {
+          tagsContainer.insertAdjacentElement('afterend', badgeContainer);
+        } else {
+          // Insert before action buttons
+          const cardContent = card.querySelector('.flex-1');
+          cardContent.appendChild(badgeContainer);
+        }
+      }
+      
+      // Update badge HTML
+      badgeContainer.innerHTML = generateChecklistBadge(checklistStatus);
+      console.log(`[Checklist Update] Updated badge for ${itemType} ${itemId}`, checklistStatus);
+    } else {
+      console.warn(`[Checklist Update] Card not found for ${itemType} ${itemId}`);
+    }
+  } catch (error) {
+    console.error('[Checklist Update] Error refreshing badge:', error);
+  }
+});
+
 // ==================== AI BADGE HELPERS ====================
 
 /**
@@ -1113,7 +1174,7 @@ async function renderKanbanBoard() {
                                 `).join('')}
                             </div>
                         ` : ''}
-                        ${generateChecklistBadge(checklistStatus)}
+                        <div class="checklist-badge-container">${generateChecklistBadge(checklistStatus)}</div>
                             </div>
                         </div>
                     </div>
@@ -5184,6 +5245,12 @@ async function confirmAIChecklistCreation() {
       attachment_ids: currentAIChecklistData.attachment_ids || [],
       use_description: currentAIChecklistData.use_description !== undefined ? currentAIChecklistData.use_description : true
     }, { withCredentials: true });
+    
+    // Dispatch checklist update event for real-time badge refresh
+    window.dispatchChecklistUpdate(
+      currentAIChecklistData.itemType === 'issue' ? 'issue' : 'action-item',
+      currentAIChecklistData.itemId
+    );
     
     // Close modal
     document.getElementById('ai-checklist-modal').classList.add('hidden');

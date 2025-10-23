@@ -720,6 +720,16 @@ async function approveSelected() {
     
     const result = await response.json();
     
+    // Dispatch checklist update events for real-time badge refresh
+    if (window.dispatchChecklistUpdate) {
+      approvedMatches.forEach(match => {
+        if (match.issueId) {
+          // For checklists linked to existing issues
+          window.dispatchChecklistUpdate('issue', match.issueId);
+        }
+      });
+    }
+    
     showSuccessSection(result);
     
   } catch (error) {
