@@ -185,6 +185,11 @@ async function showChecklistWarningModal(itemId, itemType, checklistInfo) {
  * @returns {Promise<boolean>} - true if change should proceed, false otherwise
  */
 async function validateStatusChange(itemId, itemType, newStatus) {
+  // Check if checklist completion is enabled for current project
+  if (typeof currentProject !== 'undefined' && currentProject && currentProject.checklist_completion_enabled === false) {
+    return true; // Skip validation if feature is disabled
+  }
+  
   // Only validate when moving to "Done"
   if (newStatus !== 'Done') {
     return true;
@@ -219,6 +224,11 @@ async function validateStatusChange(itemId, itemType, newStatus) {
  * @returns {string} - HTML string for badge
  */
 function generateChecklistBadge(checklistInfo) {
+  // Check if checklist completion is enabled for current project
+  if (typeof currentProject !== 'undefined' && currentProject && currentProject.checklist_completion_enabled === false) {
+    return ''; // Don't show badges if feature is disabled
+  }
+  
   // Show error badge if API failed
   if (checklistInfo && checklistInfo.error) {
     return `
