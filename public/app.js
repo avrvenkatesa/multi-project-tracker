@@ -1673,7 +1673,7 @@ async function createIssue(event) {
         category: document.getElementById('issue-category').value,
         phase: document.getElementById('issue-phase').value,
         component: document.getElementById('issue-component').value,
-        assignee: document.getElementById('issue-assignee').value,
+        assignee: document.getElementById('issue-assignee').value.trim(),
         dueDate: document.getElementById('issue-due-date').value,
         projectId: currentProject.id,
         type: 'issue',
@@ -1836,7 +1836,7 @@ async function createActionItem(event) {
         description: document.getElementById('action-item-description').value,
         priority: document.getElementById('action-item-priority').value,
         status: document.getElementById('action-item-status').value,
-        assignee: document.getElementById('action-item-assignee').value,
+        assignee: document.getElementById('action-item-assignee').value.trim(),
         dueDate: document.getElementById('action-item-due-date').value,
         projectId: currentProject.id,
         type: 'action-item'
@@ -2306,11 +2306,11 @@ function populateAssigneeFilter() {
   const select = document.getElementById('assignee-filter');
   if (!select) return;
   
-  // Get unique assignees from issues and action items
+  // Get unique assignees from issues and action items (trim to prevent duplicates)
   const assignees = new Set();
   [...issues, ...actionItems].forEach(item => {
     if (item.assignee && item.assignee.trim()) {
-      assignees.add(item.assignee);
+      assignees.add(item.assignee.trim());
     }
   });
   
@@ -4097,7 +4097,7 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
   const data = {
     title: document.getElementById('edit-issue-title').value,
     description: document.getElementById('edit-issue-description').value,
-    assignee: document.getElementById('edit-issue-assignee').value,
+    assignee: document.getElementById('edit-issue-assignee').value.trim(),
     due_date: document.getElementById('edit-issue-due-date').value,
     priority: document.getElementById('edit-issue-priority').value,
     status: document.getElementById('edit-issue-status').value,
@@ -4150,7 +4150,7 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
   const data = {
     title: document.getElementById('edit-action-item-title').value,
     description: document.getElementById('edit-action-item-description').value,
-    assignee: document.getElementById('edit-action-item-assignee').value,
+    assignee: document.getElementById('edit-action-item-assignee').value.trim(),
     due_date: document.getElementById('edit-action-item-due-date').value,
     priority: document.getElementById('edit-action-item-priority').value,
     status: document.getElementById('edit-action-item-status').value,
