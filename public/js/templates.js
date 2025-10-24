@@ -65,7 +65,11 @@ function setupTemplatePageListeners() {
     }
   });
   document.getElementById('view-templates-btn')?.addEventListener('click', () => {
-    window.location.href = 'templates.html';
+    if (currentProjectId) {
+      window.location.href = `templates.html?project=${currentProjectId}`;
+    } else {
+      window.location.href = 'templates.html';
+    }
   });
   
   // Create dropdown navigation
