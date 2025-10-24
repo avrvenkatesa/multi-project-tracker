@@ -38,6 +38,7 @@ async function openEditProjectModal(projectId) {
     document.getElementById('editProjectEndDate').value = project.end_date ? project.end_date.split('T')[0] : '';
     document.getElementById('editTeamsNotificationsEnabled').checked = project.teams_notifications_enabled || false;
     document.getElementById('editTeamsWebhookUrl').value = project.teams_webhook_url || '';
+    document.getElementById('editChecklistCompletionEnabled').checked = project.checklist_completion_enabled !== false;
     
     document.getElementById('editProjectModal').classList.remove('hidden');
     
@@ -59,6 +60,7 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
   const end_date = document.getElementById('editProjectEndDate').value || null;
   const teams_notifications_enabled = document.getElementById('editTeamsNotificationsEnabled').checked;
   const teams_webhook_url = document.getElementById('editTeamsWebhookUrl').value || null;
+  const checklist_completion_enabled = document.getElementById('editChecklistCompletionEnabled').checked;
   
   try {
     const response = await fetch(`/api/projects/${projectId}`, {
@@ -72,7 +74,8 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
         start_date, 
         end_date, 
         teams_notifications_enabled, 
-        teams_webhook_url 
+        teams_webhook_url,
+        checklist_completion_enabled
       })
     });
     

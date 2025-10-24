@@ -1422,6 +1422,26 @@
                         </div>
                     </div>
                     
+                    <!-- Checklist Completion Settings -->
+                    <div class="mb-6 border-t pt-6">
+                        <div class="flex items-center gap-2 mb-4">
+                            <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                                <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+                            </svg>
+                            <h3 class="text-lg font-semibold text-gray-900">Checklist Settings</h3>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="editChecklistCompletionEnabled" 
+                                       class="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500">
+                                <span class="text-sm font-medium text-gray-700">Enable Checklist Completion Requirements</span>
+                            </label>
+                            <p class="text-sm text-gray-500 mt-1 ml-6">When enabled, issues and action items must have complete checklists before they can be marked as Done. Checklist badges will appear on kanban cards showing completion status.</p>
+                        </div>
+                    </div>
+                    
                     <div class="flex justify-end gap-3">
                         <button type="button" id="cancelEditProject"
                                 class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
