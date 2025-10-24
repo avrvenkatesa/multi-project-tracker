@@ -10317,7 +10317,7 @@ app.get('/api/issues/:issueId/checklist-status', authenticateToken, async (req, 
     const individualChecklistsResult = await pool.query(
       `SELECT 
         id,
-        name,
+        title as name,
         COALESCE(total_items, 0) as total,
         COALESCE(completed_items, 0) as completed
        FROM checklists 
@@ -10425,7 +10425,7 @@ app.get('/api/action-items/:actionId/checklist-status', authenticateToken, async
     const individualChecklistsResult = await pool.query(
       `SELECT 
         id,
-        name,
+        title as name,
         COALESCE(total_items, 0) as total,
         COALESCE(completed_items, 0) as completed
        FROM checklists 
