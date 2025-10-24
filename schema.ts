@@ -16,9 +16,17 @@ export const projects = pgTable('projects', {
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
   template: varchar('template', { length: 50 }).default('generic'),
-  createdBy: varchar('created_by', { length: 255 }),
+  createdBy: varchar('created_by', { length: 255 }).default('Demo User'),
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  archived: boolean('archived').default(false),
+  archivedAt: timestamp('archived_at'),
+  archivedBy: integer('archived_by').references(() => users.id),
+  updatedBy: integer('updated_by').references(() => users.id),
+  startDate: date('start_date'),
+  endDate: date('end_date'),
+  teamsWebhookUrl: text('teams_webhook_url'),
+  teamsNotificationsEnabled: boolean('teams_notifications_enabled').default(true),
+  checklistCompletionEnabled: boolean('checklist_completion_enabled').default(true),
 });
 
 export const projectMembers = pgTable('project_members', {
