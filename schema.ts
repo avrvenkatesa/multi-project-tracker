@@ -296,6 +296,7 @@ export const checklists = pgTable('checklists', {
   ),
   sourceDocument: text('source_document'),
   isStandalone: boolean('is_standalone').default(false),
+  userFeedback: varchar('user_feedback', { length: 20 }),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
