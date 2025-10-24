@@ -7686,6 +7686,48 @@ app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// PATCH /api/checklists/:id/feedback - Save user feedback (thumbs up/down)
+app.patch('/api/checklists/:id/feedback', authenticateToken, async (req, res) => {
+  try {
+    const checklistId = req.params.id;
+    const userId = req.user.id;
+    const { feedback } = req.body; // 'positive', 'negative', or null
+    
+    // Validate feedback value
+    if (feedback && !['positive', 'negative'].includes(feedback)) {
+      return res.status(400).json({ error: 'Invalid feedback value. Must be "positive" or "negative"' });
+    }
+    
+    // Check access
+    const hasAccess = await canAccessChecklist(userId, checklistId);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const result = await pool.query(
+      `UPDATE checklists
+       SET user_feedback = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
+      [feedback, checklistId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    
+    res.json({ 
+      success: true, 
+      feedback: result.rows[0].user_feedback,
+      message: feedback ? 'Feedback saved successfully' : 'Feedback cleared'
+    });
+    
+  } catch (error) {
+    console.error('Error saving checklist feedback:', error);
+    res.status(500).json({ error: 'Failed to save feedback' });
+  }
+});
+
 // POST /api/checklists/:id/responses - Save checklist responses
 app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) => {
   try {
