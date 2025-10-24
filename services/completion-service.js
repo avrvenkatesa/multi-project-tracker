@@ -224,9 +224,30 @@ async function checkAndApplyCompletionAction(checklistId) {
     const currentStatus = entity.status;
     console.log(`📊 Current ${entityType} status: ${currentStatus}`);
     
-    // 3. Calculate checklist completion
-    const completion = await calculateChecklistCompletion(checklistId);
-    console.log(`✓ Checklist completion: ${completion.percentage}% (${completion.completed}/${completion.total})`);
+    // 3. Calculate AGGREGATE completion across ALL checklists for this entity
+    // This is critical - we must check ALL checklists, not just the one that was updated
+    const completionQuery = entityType === 'issue' 
+      ? `SELECT 
+          COALESCE(SUM(total_items), 0) as total_items,
+          COALESCE(SUM(completed_items), 0) as completed_items
+         FROM checklists 
+         WHERE related_issue_id = $1 
+           AND (is_standalone = false OR is_standalone IS NULL)`
+      : `SELECT 
+          COALESCE(SUM(total_items), 0) as total_items,
+          COALESCE(SUM(completed_items), 0) as completed_items
+         FROM checklists 
+         WHERE related_action_id = $1 
+           AND (is_standalone = false OR is_standalone IS NULL)`;
+    
+    const aggregateResult = await pool.query(completionQuery, [entityId]);
+    const aggregateRow = aggregateResult.rows[0];
+    const total = parseInt(aggregateRow.total_items);
+    const completed = parseInt(aggregateRow.completed_items);
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    
+    const completion = { total, completed, percentage };
+    console.log(`✓ AGGREGATE checklist completion across ALL checklists: ${completion.percentage}% (${completion.completed}/${completion.total})`);
     
     // 4. Find applicable completion action rule
     const actionsResult = await pool.query(
