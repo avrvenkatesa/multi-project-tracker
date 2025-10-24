@@ -10313,7 +10313,21 @@ app.get('/api/issues/:issueId/checklist-status', authenticateToken, async (req, 
   try {
     const { issueId } = req.params;
     
-    // Get all checklists for this issue (exclude standalone) and aggregate totals
+    // Get individual checklists with their details
+    const individualChecklistsResult = await pool.query(
+      `SELECT 
+        id,
+        name,
+        COALESCE(total_items, 0) as total,
+        COALESCE(completed_items, 0) as completed
+       FROM checklists 
+       WHERE related_issue_id = $1 
+         AND (is_standalone = false OR is_standalone IS NULL)
+       ORDER BY created_at`,
+      [issueId]
+    );
+    
+    // Get aggregate totals
     const checklistsResult = await pool.query(
       `SELECT 
         SUM(COALESCE(total_items, 0)) as total,
@@ -10332,17 +10346,28 @@ app.get('/api/issues/:issueId/checklist-status', authenticateToken, async (req, 
         hasChecklist: false,
         total: 0,
         completed: 0,
-        percentage: 0
+        percentage: 0,
+        checklists: []
       });
     }
     
     const percentage = Math.round((completed / total) * 100);
     
+    // Format individual checklists data
+    const checklists = individualChecklistsResult.rows.map(cl => ({
+      id: cl.id,
+      name: cl.name,
+      total: parseInt(cl.total),
+      completed: parseInt(cl.completed),
+      percentage: cl.total > 0 ? Math.round((parseInt(cl.completed) / parseInt(cl.total)) * 100) : 0
+    }));
+    
     res.json({
       hasChecklist: true,
       total: total,
       completed: completed,
-      percentage: percentage
+      percentage: percentage,
+      checklists: checklists
     });
     
   } catch (error) {
@@ -10396,7 +10421,21 @@ app.get('/api/action-items/:actionId/checklist-status', authenticateToken, async
   try {
     const { actionId } = req.params;
     
-    // Get all checklists for this action item (exclude standalone) and aggregate totals
+    // Get individual checklists with their details
+    const individualChecklistsResult = await pool.query(
+      `SELECT 
+        id,
+        name,
+        COALESCE(total_items, 0) as total,
+        COALESCE(completed_items, 0) as completed
+       FROM checklists 
+       WHERE related_action_id = $1 
+         AND (is_standalone = false OR is_standalone IS NULL)
+       ORDER BY created_at`,
+      [actionId]
+    );
+    
+    // Get aggregate totals
     const checklistsResult = await pool.query(
       `SELECT 
         SUM(COALESCE(total_items, 0)) as total,
@@ -10415,17 +10454,28 @@ app.get('/api/action-items/:actionId/checklist-status', authenticateToken, async
         hasChecklist: false,
         total: 0,
         completed: 0,
-        percentage: 0
+        percentage: 0,
+        checklists: []
       });
     }
     
     const percentage = Math.round((completed / total) * 100);
     
+    // Format individual checklists data
+    const checklists = individualChecklistsResult.rows.map(cl => ({
+      id: cl.id,
+      name: cl.name,
+      total: parseInt(cl.total),
+      completed: parseInt(cl.completed),
+      percentage: cl.total > 0 ? Math.round((parseInt(cl.completed) / parseInt(cl.total)) * 100) : 0
+    }));
+    
     res.json({
       hasChecklist: true,
       total: total,
       completed: completed,
-      percentage: percentage
+      percentage: percentage,
+      checklists: checklists
     });
     
   } catch (error) {
