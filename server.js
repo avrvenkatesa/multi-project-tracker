@@ -7798,12 +7798,28 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
           responseValue = value;
         }
         
+        // Get existing item_text and section_id if this is an update
+        const existingItem = await client.query(
+          `SELECT item_text, section_id, display_order 
+           FROM checklist_responses 
+           WHERE checklist_id = $1 AND template_item_id = $2`,
+          [checklistId, templateItemId]
+        );
+        
+        // Use provided values or preserve existing ones
+        const itemText = response.item_text !== undefined ? response.item_text : 
+                        (existingItem.rows.length > 0 ? existingItem.rows[0].item_text : null);
+        const sectionId = response.section_id !== undefined ? response.section_id :
+                         (existingItem.rows.length > 0 ? existingItem.rows[0].section_id : null);
+        const displayOrder = response.display_order !== undefined ? response.display_order :
+                            (existingItem.rows.length > 0 ? existingItem.rows[0].display_order : null);
+        
         await client.query(
           `INSERT INTO checklist_responses (
             checklist_id, template_item_id, response_value, response_date,
             response_boolean, notes, is_completed, completed_by, completed_at,
-            updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+            item_text, section_id, display_order, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
           ON CONFLICT (checklist_id, template_item_id)
           DO UPDATE SET
             response_value = EXCLUDED.response_value,
@@ -7813,6 +7829,9 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
             is_completed = EXCLUDED.is_completed,
             completed_by = EXCLUDED.completed_by,
             completed_at = EXCLUDED.completed_at,
+            item_text = EXCLUDED.item_text,
+            section_id = EXCLUDED.section_id,
+            display_order = EXCLUDED.display_order,
             updated_at = CURRENT_TIMESTAMP`,
           [
             checklistId,
@@ -7823,31 +7842,40 @@ app.post('/api/checklists/:id/responses', authenticateToken, async (req, res) =>
             notes || null,
             is_completed || false,
             userId,
-            is_completed ? new Date() : null
+            is_completed ? new Date() : null,
+            itemText,
+            sectionId,
+            displayOrder
           ]
         );
       }
       
-      // Update completed_items count
-      const completedCount = await client.query(
-        `SELECT COUNT(*) as count
+      // Update completed_items AND total_items counts to ensure data integrity
+      const countsResult = await client.query(
+        `SELECT 
+          COUNT(*) as total_count,
+          COUNT(*) FILTER (WHERE is_completed = true) as completed_count
          FROM checklist_responses
-         WHERE checklist_id = $1 AND is_completed = true`,
+         WHERE checklist_id = $1`,
         [checklistId]
       );
+      
+      const totalCount = parseInt(countsResult.rows[0].total_count);
+      const completedCount = parseInt(countsResult.rows[0].completed_count);
       
       await client.query(
         `UPDATE checklists
          SET 
-           completed_items = $1,
+           total_items = $1,
+           completed_items = $2,
            updated_at = CURRENT_TIMESTAMP,
            status = CASE 
-             WHEN $1 = 0 THEN 'not-started'
-             WHEN $1 = total_items THEN 'completed'
+             WHEN $2 = 0 THEN 'not-started'
+             WHEN $2 = $1 AND $1 > 0 THEN 'completed'
              ELSE 'in-progress'
            END
-         WHERE id = $2`,
-        [parseInt(completedCount.rows[0].count), checklistId]
+         WHERE id = $3`,
+        [totalCount, completedCount, checklistId]
       );
       
       await client.query('COMMIT');
