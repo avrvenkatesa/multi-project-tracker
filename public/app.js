@@ -2259,14 +2259,16 @@ function displayActiveFilters() {
   
   // Add event listeners for remove buttons
   container.querySelectorAll('[data-remove-filter]').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       removeFilter(btn.getAttribute('data-remove-filter'));
     });
   });
 }
 
 // Remove a single filter
-function removeFilter(filterKey) {
+async function removeFilter(filterKey) {
   currentFilters[filterKey] = '';
   
   // Update UI
@@ -2278,7 +2280,8 @@ function removeFilter(filterKey) {
     if (filterElement) filterElement.value = '';
   }
   
-  applyFilters();
+  // Apply filters and wait for completion to ensure consistent state
+  await applyFilters();
   updateURL();
 }
 
