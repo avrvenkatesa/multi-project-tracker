@@ -321,6 +321,18 @@ function setupChecklistFillPageListeners() {
     addCommentBtn.addEventListener('click', addComment);
   }
   
+  // Feedback buttons (thumbs up/down)
+  const thumbsUpBtn = document.getElementById('thumbsUpBtn');
+  const thumbsDownBtn = document.getElementById('thumbsDownBtn');
+  
+  if (thumbsUpBtn) {
+    thumbsUpBtn.addEventListener('click', () => submitFeedback('positive'));
+  }
+  
+  if (thumbsDownBtn) {
+    thumbsDownBtn.addEventListener('click', () => submitFeedback('negative'));
+  }
+  
   // Close dependency modal button
   const closeDepsBtn = document.getElementById('closeDependencyModalBtn');
   if (closeDepsBtn) {
@@ -750,6 +762,9 @@ function displayChecklistForFilling(checklist) {
   
   // Display comments
   displayComments(checklist.comments || []);
+  
+  // Load existing feedback state
+  loadFeedbackState(checklist);
 }
 
 function renderSections(sections) {
@@ -1062,6 +1077,70 @@ async function addComment() {
   } catch (error) {
     console.error('Error adding comment:', error);
     showToast('Failed to add comment', 'error');
+  }
+}
+
+// =====================================================
+// FEEDBACK
+// =====================================================
+
+async function submitFeedback(feedbackType) {
+  if (!currentChecklistId) return;
+  
+  try {
+    const response = await fetch(`/api/checklists/${currentChecklistId}/feedback`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ feedback: feedbackType })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to save feedback');
+    }
+    
+    const result = await response.json();
+    
+    // Update UI to show feedback was saved
+    updateFeedbackUI(feedbackType);
+    showToast(result.message || 'Thank you for your feedback!', 'success');
+    
+  } catch (error) {
+    console.error('Error saving feedback:', error);
+    showToast('Failed to save feedback', 'error');
+  }
+}
+
+function updateFeedbackUI(feedbackType) {
+  const thumbsUpBtn = document.getElementById('thumbsUpBtn');
+  const thumbsDownBtn = document.getElementById('thumbsDownBtn');
+  const feedbackMessage = document.getElementById('feedbackMessage');
+  
+  // Reset both buttons to default state
+  thumbsUpBtn.classList.remove('bg-green-100', 'border-green-500', 'text-green-600', 'bg-red-100', 'border-red-500', 'text-red-600');
+  thumbsDownBtn.classList.remove('bg-green-100', 'border-green-500', 'text-green-600', 'bg-red-100', 'border-red-500', 'text-red-600');
+  thumbsUpBtn.classList.add('border-gray-300', 'text-gray-400', 'hover:border-gray-400', 'hover:text-gray-600');
+  thumbsDownBtn.classList.add('border-gray-300', 'text-gray-400', 'hover:border-gray-400', 'hover:text-gray-600');
+  
+  // Highlight selected button
+  if (feedbackType === 'positive') {
+    thumbsUpBtn.classList.remove('border-gray-300', 'text-gray-400', 'hover:border-gray-400', 'hover:text-gray-600');
+    thumbsUpBtn.classList.add('bg-green-100', 'border-green-500', 'text-green-600');
+    feedbackMessage.className = 'mt-4 p-3 rounded-lg bg-green-50 text-green-800 text-sm';
+    feedbackMessage.textContent = '✓ Thank you! Your positive feedback helps us improve our checklists.';
+    feedbackMessage.classList.remove('hidden');
+  } else if (feedbackType === 'negative') {
+    thumbsDownBtn.classList.remove('border-gray-300', 'text-gray-400', 'hover:border-gray-400', 'hover:text-gray-600');
+    thumbsDownBtn.classList.add('bg-red-100', 'border-red-500', 'text-red-600');
+    feedbackMessage.className = 'mt-4 p-3 rounded-lg bg-blue-50 text-blue-800 text-sm';
+    feedbackMessage.textContent = 'Thank you for your feedback. We\'ll review this checklist to improve it.';
+    feedbackMessage.classList.remove('hidden');
+  }
+}
+
+function loadFeedbackState(checklist) {
+  if (checklist && checklist.user_feedback) {
+    updateFeedbackUI(checklist.user_feedback);
   }
 }
 

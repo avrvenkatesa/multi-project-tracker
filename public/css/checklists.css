@@ -720,3 +720,45 @@
     width: 100%;
   }
 }
+
+/* =====================================================
+   FEEDBACK SECTION
+   ===================================================== */
+
+.feedback-btn {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.feedback-btn:hover {
+  transform: scale(1.05);
+}
+
+.feedback-btn:active {
+  transform: scale(0.95);
+}
+
+/* Default state */
+.feedback-btn {
+  border-color: #d1d5db;
+  color: #9ca3af;
+}
+
+.feedback-btn:hover {
+  border-color: #9ca3af;
+  color: #6b7280;
+}
+
+/* Active positive state */
+.feedback-btn.active-positive {
+  background-color: #dcfce7;
+  border-color: #22c55e;
+  color: #16a34a;
+}
+
+/* Active negative state */
+.feedback-btn.active-negative {
+  background-color: #fee2e2;
+  border-color: #ef4444;
+  color: #dc2626;
+}
