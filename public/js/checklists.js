@@ -286,7 +286,13 @@ function setupChecklistFillPageListeners() {
   const backBtn = document.getElementById('backToListBtn');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      window.location.href = 'checklists.html';
+      const urlParams = new URLSearchParams(window.location.search);
+      const projectId = urlParams.get('project') || urlParams.get('projectId');
+      if (projectId) {
+        window.location.href = `checklists.html?project=${projectId}`;
+      } else {
+        window.location.href = 'checklists.html';
+      }
     });
   }
   

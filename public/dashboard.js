@@ -56,7 +56,11 @@ function setupEventListeners() {
   const backToProjectsBtn = document.getElementById('backToProjectsBtn');
   if (backToProjectsBtn) {
     backToProjectsBtn.addEventListener('click', () => {
-      window.location.href = 'index.html';
+      if (currentProjectId) {
+        window.location.href = `index.html?project=${currentProjectId}`;
+      } else {
+        window.location.href = 'index.html';
+      }
     });
   }
   
@@ -74,7 +78,11 @@ function setupEventListeners() {
     window.location.href = `risks.html?projectId=${currentProjectId}`;
   });
   document.getElementById('view-templates-btn')?.addEventListener('click', () => {
-    window.location.href = 'templates.html';
+    if (currentProjectId) {
+      window.location.href = `templates.html?project=${currentProjectId}`;
+    } else {
+      window.location.href = 'templates.html';
+    }
   });
   
   // Create dropdown navigation
