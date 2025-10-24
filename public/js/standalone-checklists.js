@@ -44,7 +44,13 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
   // Back to Projects button
   document.getElementById('backToProjectsBtn')?.addEventListener('click', () => {
-    window.location.href = '/index.html';
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectId = urlParams.get('project') || urlParams.get('project_id') || currentProjectId;
+    if (projectId) {
+      window.location.href = `/index.html?project=${projectId}`;
+    } else {
+      window.location.href = '/index.html';
+    }
   });
   
   // Upload buttons

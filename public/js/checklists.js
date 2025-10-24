@@ -76,7 +76,13 @@ function setupChecklistsPageListeners() {
   const backBtn = document.getElementById('backToProjectsBtn');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      window.location.href = 'index.html';
+      const urlParams = new URLSearchParams(window.location.search);
+      const projectId = urlParams.get('project');
+      if (projectId) {
+        window.location.href = `index.html?project=${projectId}`;
+      } else {
+        window.location.href = 'index.html';
+      }
     });
   }
   

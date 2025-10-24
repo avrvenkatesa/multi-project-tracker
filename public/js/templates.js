@@ -28,31 +28,119 @@ document.addEventListener('DOMContentLoaded', () => {
 // =====================================================
 
 function setupTemplatePageListeners() {
-  // Logout functionality
-  document.getElementById('logoutBtn')?.addEventListener('click', async () => {
-    if (typeof AuthManager !== 'undefined') {
-      await AuthManager.logout();
+  // Get project ID from URL for dropdown navigation
+  const urlParams = new URLSearchParams(window.location.search);
+  const currentProjectId = urlParams.get('project') || urlParams.get('projectId');
+  
+  // Back to Projects button
+  document.getElementById('backToProjectsBtn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `index.html?project=${currentProjectId}`;
     } else {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
       window.location.href = 'index.html';
     }
   });
   
-  // Display user info once AuthManager is ready
-  const displayUserInfo = async () => {
-    let retries = 0;
-    while (typeof AuthManager === 'undefined' && retries < 50) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      retries++;
+  // View dropdown navigation
+  document.getElementById('dashboard-btn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `dashboard.html?projectId=${currentProjectId}`;
     }
-    
-    if (typeof AuthManager !== 'undefined' && AuthManager.currentUser) {
-      const user = AuthManager.currentUser;
-      document.getElementById('userName').textContent = user.username;
-      document.getElementById('userRole').textContent = user.role;
+  });
+  document.getElementById('view-checklists-btn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `checklists.html?project=${currentProjectId}`;
+    } else {
+      window.location.href = 'checklists.html';
     }
-  };
-  displayUserInfo();
+  });
+  document.getElementById('view-tags-btn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `tags.html?projectId=${currentProjectId}`;
+    }
+  });
+  document.getElementById('view-risks-btn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `risks.html?projectId=${currentProjectId}`;
+    }
+  });
+  document.getElementById('view-templates-btn')?.addEventListener('click', () => {
+    window.location.href = 'templates.html';
+  });
+  
+  // Create dropdown navigation
+  document.getElementById('create-issue-btn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `index.html?project=${currentProjectId}#create-issue`;
+    }
+  });
+  document.getElementById('create-action-item-btn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `index.html?project=${currentProjectId}#create-action`;
+    }
+  });
+  
+  // Dropdown menu functionality
+  const viewDropdownBtn = document.getElementById('view-dropdown-btn');
+  const viewDropdownMenu = document.getElementById('view-dropdown-menu');
+  const createDropdownBtn = document.getElementById('create-dropdown-btn');
+  const createDropdownMenu = document.getElementById('create-dropdown-menu');
+  
+  function openDropdown(btn, menu, otherBtn, otherMenu) {
+    menu?.classList.remove('hidden');
+    otherMenu?.classList.add('hidden');
+    btn?.setAttribute('aria-expanded', 'true');
+    otherBtn?.setAttribute('aria-expanded', 'false');
+    const firstItem = menu?.querySelector('button[role="menuitem"]');
+    firstItem?.focus();
+  }
+  
+  function closeDropdown(btn, menu) {
+    menu?.classList.add('hidden');
+    btn?.setAttribute('aria-expanded', 'false');
+  }
+  
+  function closeAllDropdowns() {
+    closeDropdown(viewDropdownBtn, viewDropdownMenu);
+    closeDropdown(createDropdownBtn, createDropdownMenu);
+  }
+  
+  // View Dropdown  
+  viewDropdownBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = viewDropdownMenu?.classList.contains('hidden') === false;
+    if (isOpen) {
+      closeAllDropdowns();
+    } else {
+      openDropdown(viewDropdownBtn, viewDropdownMenu, createDropdownBtn, createDropdownMenu);
+    }
+  });
+  
+  // Create Dropdown
+  createDropdownBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = createDropdownMenu?.classList.contains('hidden') === false;
+    if (isOpen) {
+      closeAllDropdowns();
+    } else {
+      openDropdown(createDropdownBtn, createDropdownMenu, viewDropdownBtn, viewDropdownMenu);
+    }
+  });
+  
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#view-dropdown-btn') && !e.target.closest('#view-dropdown-menu') &&
+        !e.target.closest('#create-dropdown-btn') && !e.target.closest('#create-dropdown-menu')) {
+      closeAllDropdowns();
+    }
+  });
+  
+  // Close dropdowns on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeAllDropdowns();
+    }
+  });
 }
 
 // =====================================================

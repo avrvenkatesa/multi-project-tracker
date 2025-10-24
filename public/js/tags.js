@@ -27,7 +27,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupEventListeners() {
   // Navigation buttons
   document.getElementById('backToProjectsBtn')?.addEventListener('click', () => {
-    window.location.href = 'index.html';
+    if (currentProjectId) {
+      window.location.href = `index.html?project=${currentProjectId}`;
+    } else {
+      window.location.href = 'index.html';
+    }
   });
   
   // View dropdown navigation
