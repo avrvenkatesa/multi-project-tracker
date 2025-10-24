@@ -321,7 +321,7 @@ function setupChecklistFillPageListeners() {
     addCommentBtn.addEventListener('click', addComment);
   }
   
-  // Feedback buttons (thumbs up/down)
+  // Feedback buttons (thumbs up/down) - Top section
   const thumbsUpBtn = document.getElementById('thumbsUpBtn');
   const thumbsDownBtn = document.getElementById('thumbsDownBtn');
   
@@ -331,6 +331,18 @@ function setupChecklistFillPageListeners() {
   
   if (thumbsDownBtn) {
     thumbsDownBtn.addEventListener('click', () => submitFeedback('negative'));
+  }
+  
+  // Feedback buttons (thumbs up/down) - Bottom section
+  const thumbsUpBtnBottom = document.getElementById('thumbsUpBtnBottom');
+  const thumbsDownBtnBottom = document.getElementById('thumbsDownBtnBottom');
+  
+  if (thumbsUpBtnBottom) {
+    thumbsUpBtnBottom.addEventListener('click', () => submitFeedback('positive'));
+  }
+  
+  if (thumbsDownBtnBottom) {
+    thumbsDownBtnBottom.addEventListener('click', () => submitFeedback('negative'));
   }
   
   // Close dependency modal button
@@ -1112,29 +1124,54 @@ async function submitFeedback(feedbackType) {
 }
 
 function updateFeedbackUI(feedbackType) {
+  // Get both sets of feedback buttons and messages (top and bottom)
   const thumbsUpBtn = document.getElementById('thumbsUpBtn');
   const thumbsDownBtn = document.getElementById('thumbsDownBtn');
   const feedbackMessage = document.getElementById('feedbackMessage');
   
-  // Reset both buttons to default state
-  thumbsUpBtn.classList.remove('bg-green-100', 'border-green-500', 'text-green-600', 'bg-red-100', 'border-red-500', 'text-red-600');
-  thumbsDownBtn.classList.remove('bg-green-100', 'border-green-500', 'text-green-600', 'bg-red-100', 'border-red-500', 'text-red-600');
-  thumbsUpBtn.classList.add('border-gray-300', 'text-gray-400', 'hover:border-gray-400', 'hover:text-gray-600');
-  thumbsDownBtn.classList.add('border-gray-300', 'text-gray-400', 'hover:border-gray-400', 'hover:text-gray-600');
+  const thumbsUpBtnBottom = document.getElementById('thumbsUpBtnBottom');
+  const thumbsDownBtnBottom = document.getElementById('thumbsDownBtnBottom');
+  const feedbackMessageBottom = document.getElementById('feedbackMessageBottom');
   
-  // Highlight selected button
+  // Combine all buttons for easier processing
+  const allThumbsUpBtns = [thumbsUpBtn, thumbsUpBtnBottom].filter(Boolean);
+  const allThumbsDownBtns = [thumbsDownBtn, thumbsDownBtnBottom].filter(Boolean);
+  const allMessages = [feedbackMessage, feedbackMessageBottom].filter(Boolean);
+  
+  // Reset all buttons to default state
+  allThumbsUpBtns.forEach(btn => {
+    btn.classList.remove('bg-green-100', 'border-green-500', 'text-green-600', 'active-positive');
+    btn.classList.add('border-gray-300', 'text-gray-400');
+  });
+  
+  allThumbsDownBtns.forEach(btn => {
+    btn.classList.remove('bg-red-100', 'border-red-500', 'text-red-600', 'active-negative');
+    btn.classList.add('border-gray-300', 'text-gray-400');
+  });
+  
+  // Highlight selected button and show message
   if (feedbackType === 'positive') {
-    thumbsUpBtn.classList.remove('border-gray-300', 'text-gray-400', 'hover:border-gray-400', 'hover:text-gray-600');
-    thumbsUpBtn.classList.add('bg-green-100', 'border-green-500', 'text-green-600');
-    feedbackMessage.className = 'mt-4 p-3 rounded-lg bg-green-50 text-green-800 text-sm';
-    feedbackMessage.textContent = '✓ Thank you! Your positive feedback helps us improve our checklists.';
-    feedbackMessage.classList.remove('hidden');
+    allThumbsUpBtns.forEach(btn => {
+      btn.classList.remove('border-gray-300', 'text-gray-400');
+      btn.classList.add('active-positive');
+    });
+    
+    allMessages.forEach(msg => {
+      msg.className = 'mt-4 p-3 rounded-lg bg-green-50 text-green-800 text-sm';
+      msg.textContent = '✓ Thank you! Your positive feedback helps us improve our checklists.';
+      msg.classList.remove('hidden');
+    });
   } else if (feedbackType === 'negative') {
-    thumbsDownBtn.classList.remove('border-gray-300', 'text-gray-400', 'hover:border-gray-400', 'hover:text-gray-600');
-    thumbsDownBtn.classList.add('bg-red-100', 'border-red-500', 'text-red-600');
-    feedbackMessage.className = 'mt-4 p-3 rounded-lg bg-blue-50 text-blue-800 text-sm';
-    feedbackMessage.textContent = 'Thank you for your feedback. We\'ll review this checklist to improve it.';
-    feedbackMessage.classList.remove('hidden');
+    allThumbsDownBtns.forEach(btn => {
+      btn.classList.remove('border-gray-300', 'text-gray-400');
+      btn.classList.add('active-negative');
+    });
+    
+    allMessages.forEach(msg => {
+      msg.className = 'mt-4 p-3 rounded-lg bg-blue-50 text-blue-800 text-sm';
+      msg.textContent = 'Thank you for your feedback. We\'ll review this checklist to improve it.';
+      msg.classList.remove('hidden');
+    });
   }
 }
 
