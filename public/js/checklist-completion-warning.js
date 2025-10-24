@@ -190,8 +190,8 @@ async function validateStatusChange(itemId, itemType, newStatus) {
     return true; // Skip validation if feature is disabled
   }
   
-  // Only validate when moving to "Done"
-  if (newStatus !== 'Done') {
+  // Only validate when moving to "Done" (case-insensitive)
+  if (!newStatus || newStatus.toLowerCase() !== 'done') {
     return true;
   }
   
