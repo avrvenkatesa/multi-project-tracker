@@ -219,6 +219,30 @@ async function validateStatusChange(itemId, itemType, newStatus) {
 }
 
 /**
+ * Abbreviate checklist name for display in badges
+ * @param {string} name - The full checklist name
+ * @param {number} maxLength - Maximum length for abbreviation (default: 20)
+ * @returns {string} - Abbreviated name
+ */
+function abbreviateChecklistName(name, maxLength = 20) {
+  if (!name || name.length <= maxLength) {
+    return name;
+  }
+  
+  // Try to abbreviate by taking first letters of words
+  const words = name.split(/\s+/);
+  if (words.length > 1) {
+    const abbreviated = words.map(w => w.charAt(0).toUpperCase()).join('');
+    if (abbreviated.length <= 8) {
+      return abbreviated;
+    }
+  }
+  
+  // Otherwise, truncate and add ellipsis
+  return name.substring(0, maxLength - 1) + '…';
+}
+
+/**
  * Generate checklist status badge HTML
  * @param {Object} checklistInfo - The checklist status info
  * @returns {string} - HTML string for badge
@@ -243,7 +267,38 @@ function generateChecklistBadge(checklistInfo) {
     return '';
   }
   
-  const { completed, total, percentage } = checklistInfo;
+  const { completed, total, percentage, checklists } = checklistInfo;
+  
+  // If multiple checklists, show individual checklist badges
+  if (checklists && checklists.length > 1) {
+    const badges = checklists.map(cl => {
+      let badgeClass, icon;
+      if (cl.percentage === 100) {
+        badgeClass = 'bg-green-100 text-green-700 border-green-300';
+        icon = '✓';
+      } else if (cl.percentage >= 50) {
+        badgeClass = 'bg-yellow-100 text-yellow-700 border-yellow-300';
+        icon = '📋';
+      } else {
+        badgeClass = 'bg-red-100 text-red-700 border-red-300';
+        icon = '⚠️';
+      }
+      
+      const abbrevName = abbreviateChecklistName(cl.name, 18);
+      
+      return `
+        <div class="text-xs ${badgeClass} border px-2 py-1 rounded flex items-center gap-1" title="${escapeHtml(cl.name)}: ${cl.completed}/${cl.total} items (${cl.percentage}%)">
+          <span>${icon}</span>
+          <span>${escapeHtml(abbrevName)}: ${cl.completed}/${cl.total}</span>
+        </div>
+      `;
+    }).join('');
+    
+    return `<div class="flex flex-wrap gap-1 mt-2">${badges}</div>`;
+  }
+  
+  // Single checklist - show original badge format
+  const { completed: singleCompleted, total: singleTotal, percentage: singlePercentage } = checklistInfo;
   
   // Determine badge color based on completion
   let badgeClass, icon;
