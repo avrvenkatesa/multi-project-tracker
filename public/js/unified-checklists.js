@@ -59,7 +59,11 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
   // Back to Projects button
   document.getElementById('backToProjectsBtn')?.addEventListener('click', () => {
-    window.location.href = '/index.html';
+    if (currentProjectId) {
+      window.location.href = `/index.html?project=${currentProjectId}`;
+    } else {
+      window.location.href = '/index.html';
+    }
   });
   
   // Tab buttons
@@ -90,7 +94,11 @@ function setupEventListeners() {
   });
   
   document.getElementById('view-templates-btn')?.addEventListener('click', () => {
-    window.location.href = 'templates.html';
+    if (currentProjectId) {
+      window.location.href = `templates.html?project=${currentProjectId}`;
+    } else {
+      window.location.href = 'templates.html';
+    }
   });
   
   // View dropdown toggle
