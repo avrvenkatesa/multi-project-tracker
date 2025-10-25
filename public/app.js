@@ -502,6 +502,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
     setupEventListeners();
     initializeFilters();
+    initBulkActions();
+    initializeTableView();
 });
 
 // Setup event listeners (replaces inline onclick handlers)
@@ -659,6 +661,9 @@ function setupEventListeners() {
     // AI Analysis and Transcripts buttons (CSP-compliant event delegation)
     document.getElementById('ai-analysis-btn')?.addEventListener('click', showAIAnalysisModal);
     document.getElementById('transcripts-btn')?.addEventListener('click', openTranscriptsModal);
+    
+    // Export button
+    document.getElementById('copy-clipboard-btn')?.addEventListener('click', copyToClipboard);
     
     // Close dropdowns when a menu item is clicked
     viewDropdownMenu?.querySelectorAll('button').forEach(btn => {
@@ -885,6 +890,8 @@ async function selectProject(projectId) {
 // Load project data with filters
 async function loadProjectData(projectId) {
     try {
+        const startTime = performance.now();
+        
         // Build query params with filters
         const params = new URLSearchParams({ projectId: projectId.toString() });
         
@@ -905,15 +912,27 @@ async function loadProjectData(projectId) {
         actionItems = actionItemsResponse.data;
 
         await renderKanbanBoard();
-        displayActiveFilters();
         displayResultsCount();
         populateAssigneeFilter();
         populateTagFilter();
         
-        // Load review queue
-        await loadReviewQueue(projectId);
+        // Sync dropdowns AFTER populating them to preserve filter values
+        syncFilterDropdowns();
+        displayActiveFilters();
+        
+        // Render table view if active
+        if (currentView === 'table') {
+          renderTableView();
+        }
+        
+        // Load review queue (non-blocking)
+        loadReviewQueue(projectId).catch(err => console.error('Review queue error:', err));
+        
+        const endTime = performance.now();
+        console.log(`✅ Page loaded in ${(endTime - startTime).toFixed(0)}ms`);
     } catch (error) {
         console.error("Error loading project data:", error);
+        hideLoadingIndicator();
     }
 }
 
@@ -1038,48 +1057,55 @@ async function renderKanbanBoard() {
     
     const allItems = itemsToDisplay;
     
-    // Load relationship counts, comment counts, and checklist statuses for ALL items first (BEFORE rendering)
-    const relationshipCounts = {};
-    const commentCounts = {};
-    const checklistStatuses = {};
+    // PERFORMANCE OPTIMIZATION: Use bulk metadata endpoint instead of individual API calls
+    // This replaces 150+ individual API calls with a single bulk request
+    let relationshipCounts = {};
+    let commentCounts = {};
+    let checklistStatuses = {};
     
-    await Promise.all(allItems.map(async (item) => {
+    if (currentProject && currentProject.id) {
         try {
-            const endpoint = item.type === 'issue' ? 'issues' : 'action-items';
-            const response = await axios.get(
-                `/api/${endpoint}/${item.id}/relationships`,
+            const metadataResponse = await axios.get(
+                `/api/projects/${currentProject.id}/items-metadata`,
                 { withCredentials: true }
             );
             
-            const { outgoing, incoming } = response.data;
-            const count = (outgoing?.length || 0) + (incoming?.length || 0);
-            relationshipCounts[`${item.type}-${item.id}`] = count;
+            const metadata = metadataResponse.data;
+            
+            // Extract metadata from bulk response
+            relationshipCounts = metadata.relationships || {};
+            commentCounts = metadata.comments || {};
+            
+            // Process checklist metadata - add default values for items without checklists
+            allItems.forEach(item => {
+                const key = `${item.type}-${item.id}`;
+                if (metadata.checklists[key]) {
+                    checklistStatuses[key] = metadata.checklists[key];
+                } else {
+                    checklistStatuses[key] = { 
+                        hasChecklist: false, 
+                        total: 0, 
+                        completed: 0, 
+                        percentage: 0 
+                    };
+                }
+            });
         } catch (error) {
-            console.error(`Error loading relationships for ${item.type} ${item.id}:`, error);
-            relationshipCounts[`${item.type}-${item.id}`] = 0;
+            console.error('Error loading bulk metadata:', error);
+            // Fallback: initialize with empty values
+            allItems.forEach(item => {
+                const key = `${item.type}-${item.id}`;
+                relationshipCounts[key] = 0;
+                commentCounts[key] = 0;
+                checklistStatuses[key] = { 
+                    hasChecklist: false, 
+                    total: 0, 
+                    completed: 0, 
+                    percentage: 0 
+                };
+            });
         }
-        
-        try {
-            const endpoint = item.type === 'issue' ? 'issues' : 'action-items';
-            const commentResponse = await axios.get(
-                `/api/${endpoint}/${item.id}/comments`,
-                { withCredentials: true }
-            );
-            commentCounts[`${item.type}-${item.id}`] = commentResponse.data.length;
-        } catch (error) {
-            console.error(`Error loading comments for ${item.type} ${item.id}:`, error);
-            commentCounts[`${item.type}-${item.id}`] = 0;
-        }
-        
-        try {
-            const itemType = item.type === 'issue' ? 'issue' : 'action-item';
-            const checklistStatus = await getChecklistStatus(item.id, itemType);
-            checklistStatuses[`${item.type}-${item.id}`] = checklistStatus;
-        } catch (error) {
-            console.error(`Error loading checklist status for ${item.type} ${item.id}:`, error);
-            checklistStatuses[`${item.type}-${item.id}`] = { hasChecklist: false, total: 0, completed: 0, percentage: 0, error: true };
-        }
-    }));
+    }
     
     const columns = ["To Do", "In Progress", "Blocked", "Done"];
 
@@ -1212,6 +1238,15 @@ async function renderKanbanBoard() {
             container.addEventListener('drop', handleDrop);
         }
     });
+    
+    if (currentView === 'table') {
+        renderTableView();
+    }
+    
+    if (pendingViewSwitch === 'table') {
+        pendingViewSwitch = null;
+        switchToTableView();
+    }
 }
 
 // Drag and drop handlers
@@ -2109,6 +2144,7 @@ function initializeFilters() {
   if (statusFilter) {
     statusFilter.addEventListener('change', (e) => {
       currentFilters.status = e.target.value;
+      displayActiveFilters();
       applyFilters();
       updateURL();
     });
@@ -2119,6 +2155,7 @@ function initializeFilters() {
   if (priorityFilter) {
     priorityFilter.addEventListener('change', (e) => {
       currentFilters.priority = e.target.value;
+      displayActiveFilters();
       applyFilters();
       updateURL();
     });
@@ -2165,11 +2202,44 @@ function initializeFilters() {
   populateTagFilter();
 }
 
+// Debounce helper for performance optimization
+let filterDebounceTimeout = null;
+
 // Apply filters - reload data with filter params
 async function applyFilters() {
   if (!currentProject) return;
   
+  // Show loading indicator
+  showLoadingIndicator();
+  
   await loadProjectData(currentProject.id);
+  displayActiveFilters();
+  
+  // Hide loading indicator
+  hideLoadingIndicator();
+}
+
+// Debounced filter application for better performance
+function applyFiltersDebounced(delay = 300) {
+  clearTimeout(filterDebounceTimeout);
+  filterDebounceTimeout = setTimeout(() => {
+    applyFilters();
+  }, delay);
+}
+
+// Loading indicator helpers
+function showLoadingIndicator() {
+  const indicator = document.getElementById('loading-indicator');
+  if (indicator) {
+    indicator.classList.remove('hidden');
+  }
+}
+
+function hideLoadingIndicator() {
+  const indicator = document.getElementById('loading-indicator');
+  if (indicator) {
+    indicator.classList.add('hidden');
+  }
 }
 
 // Clear all filters
@@ -2226,10 +2296,18 @@ function displayActiveFilters() {
     activeFilters.push({ key: 'type', label: `Type: ${typeLabel}` });
   }
   if (currentFilters.status) {
-    activeFilters.push({ key: 'status', label: `Status: ${currentFilters.status}` });
+    const statusLabels = {
+      'todo': 'To Do',
+      'inprogress': 'In Progress',
+      'blocked': 'Blocked',
+      'done': 'Done'
+    };
+    const statusLabel = statusLabels[currentFilters.status] || currentFilters.status;
+    activeFilters.push({ key: 'status', label: `Status: ${statusLabel}` });
   }
   if (currentFilters.priority) {
-    activeFilters.push({ key: 'priority', label: `Priority: ${currentFilters.priority}` });
+    const priorityLabel = currentFilters.priority.charAt(0).toUpperCase() + currentFilters.priority.slice(1);
+    activeFilters.push({ key: 'priority', label: `Priority: ${priorityLabel}` });
   }
   if (currentFilters.assignee) {
     activeFilters.push({ key: 'assignee', label: `Assignee: ${currentFilters.assignee}` });
@@ -2310,6 +2388,9 @@ function populateAssigneeFilter() {
   const select = document.getElementById('assignee-filter');
   if (!select) return;
   
+  // Save current selection
+  const currentSelection = select.value;
+  
   // Get unique assignees from issues and action items (trim to prevent duplicates)
   const assignees = new Set();
   [...issues, ...actionItems].forEach(item => {
@@ -2319,7 +2400,6 @@ function populateAssigneeFilter() {
   });
   
   // Add assignee options (keep existing options)
-  const existingOptions = select.innerHTML;
   const assigneeOptions = Array.from(assignees)
     .sort()
     .map(assignee => `<option value="${assignee}">${assignee}</option>`)
@@ -2339,6 +2419,9 @@ async function populateTagFilter() {
   if (!select || !currentProject) return;
   
   try {
+    // Save current selection
+    const currentSelection = select.value;
+    
     // Get all tags from the current project's items
     const tagSet = new Map(); // Use Map to store tag id and name
     
@@ -2362,13 +2445,18 @@ async function populateTagFilter() {
       <option value="">All Tags</option>
       ${tags}
     `;
+    
+    // Restore previous selection if it still exists
+    if (currentSelection && select.querySelector(`option[value="${currentSelection}"]`)) {
+      select.value = currentSelection;
+    }
   } catch (error) {
     console.error('Error populating tag filter:', error);
   }
 }
 
 // Update URL with current filters (for shareable links)
-function updateURL() {
+function updateURL(additionalParams = {}) {
   if (!currentProject) return;
   
   const params = new URLSearchParams();
@@ -2381,6 +2469,16 @@ function updateURL() {
   if (currentFilters.assignee) params.set('assignee', currentFilters.assignee);
   if (currentFilters.category) params.set('category', currentFilters.category);
   if (currentFilters.tag) params.set('tag', currentFilters.tag);
+  
+  // Preserve view parameter if present
+  const currentParams = new URLSearchParams(window.location.search);
+  const view = currentParams.get('view');
+  if (view) params.set('view', view);
+  
+  // Add any additional parameters
+  Object.entries(additionalParams).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
   
   const newURL = `${window.location.pathname}?${params.toString()}`;
   window.history.replaceState({}, '', newURL);
@@ -2397,8 +2495,10 @@ function loadFiltersFromURL() {
   currentFilters.assignee = params.get('assignee') || '';
   currentFilters.category = params.get('category') || '';
   currentFilters.tag = params.get('tag') || '';
-  
-  // Update form inputs
+}
+
+// Sync dropdown values with filter state
+function syncFilterDropdowns() {
   const searchInput = document.getElementById('search-input');
   const typeFilter = document.getElementById('type-filter');
   const statusFilter = document.getElementById('status-filter');
@@ -2406,12 +2506,12 @@ function loadFiltersFromURL() {
   const assigneeFilter = document.getElementById('assignee-filter');
   const tagFilter = document.getElementById('tag-filter');
   
-  if (searchInput && currentFilters.search) searchInput.value = currentFilters.search;
-  if (typeFilter && currentFilters.type) typeFilter.value = currentFilters.type;
-  if (statusFilter && currentFilters.status) statusFilter.value = currentFilters.status;
-  if (priorityFilter && currentFilters.priority) priorityFilter.value = currentFilters.priority;
-  if (assigneeFilter && currentFilters.assignee) assigneeFilter.value = currentFilters.assignee;
-  if (tagFilter && currentFilters.tag) tagFilter.value = currentFilters.tag;
+  if (searchInput) searchInput.value = currentFilters.search || '';
+  if (typeFilter) typeFilter.value = currentFilters.type || '';
+  if (statusFilter) statusFilter.value = currentFilters.status || '';
+  if (priorityFilter) priorityFilter.value = currentFilters.priority || '';
+  if (assigneeFilter) assigneeFilter.value = currentFilters.assignee || '';
+  if (tagFilter) tagFilter.value = currentFilters.tag || '';
 }
 
 // ============= RELATIONSHIP MANAGEMENT =============
@@ -5918,8 +6018,862 @@ function showNotification(message, type = 'info') {
   }, 3000);
 }
 
-// Initialize bulk actions when page loads
-document.addEventListener('DOMContentLoaded', () => {
-  initBulkActions();
-});
+// ========================================
+// TABLE VIEW FUNCTIONS
+// ========================================
+
+let currentView = 'kanban';
+let tableSortColumn = 'priority';
+let tableSortDirection = 'asc';
+let tableSelectedItems = new Set();
+let pendingViewSwitch = null;
+let currentPage = 1;
+let itemsPerPage = 25;
+
+function initializeTableView() {
+  const kanbanViewBtn = document.getElementById('kanban-view-btn');
+  const tableViewBtn = document.getElementById('table-view-btn');
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const viewParam = urlParams.get('view');
+  if (viewParam === 'table') {
+    if (currentProject) {
+      switchToTableView();
+    } else {
+      pendingViewSwitch = 'table';
+    }
+  }
+  
+  kanbanViewBtn?.addEventListener('click', switchToKanbanView);
+  tableViewBtn?.addEventListener('click', switchToTableView);
+  
+  const tableHeaders = document.querySelectorAll('th[data-sort]');
+  tableHeaders.forEach(header => {
+    header.addEventListener('click', () => {
+      const column = header.dataset.sort;
+      handleTableSort(column);
+    });
+  });
+  
+  document.getElementById('table-select-all')?.addEventListener('change', handleTableSelectAll);
+  
+  document.getElementById('table-bulk-status-select')?.addEventListener('change', (e) => {
+    const btn = document.getElementById('table-bulk-status-btn');
+    btn.disabled = !e.target.value;
+  });
+  
+  document.getElementById('table-bulk-status-btn')?.addEventListener('click', handleTableBulkStatusUpdate);
+  document.getElementById('table-bulk-delete-btn')?.addEventListener('click', handleTableBulkDelete);
+  document.getElementById('table-clear-selection-btn')?.addEventListener('click', clearTableSelection);
+}
+
+function switchToKanbanView() {
+  currentView = 'kanban';
+  
+  const kanbanViewBtn = document.getElementById('kanban-view-btn');
+  const tableViewBtn = document.getElementById('table-view-btn');
+  const kanbanContainer = document.querySelector('.grid.grid-cols-1.md\\:grid-cols-4');
+  const tableView = document.getElementById('table-view');
+  
+  kanbanViewBtn.classList.add('bg-white', 'shadow-sm');
+  kanbanViewBtn.classList.remove('hover:bg-gray-200');
+  tableViewBtn.classList.remove('bg-white', 'shadow-sm');
+  tableViewBtn.classList.add('hover:bg-gray-200');
+  
+  kanbanContainer?.classList.remove('hidden');
+  tableView?.classList.add('hidden');
+  
+  updateURL({ view: 'kanban' });
+}
+
+function switchToTableView() {
+  currentView = 'table';
+  
+  const kanbanViewBtn = document.getElementById('kanban-view-btn');
+  const tableViewBtn = document.getElementById('table-view-btn');
+  const kanbanContainer = document.querySelector('.grid.grid-cols-1.md\\:grid-cols-4');
+  const tableView = document.getElementById('table-view');
+  
+  tableViewBtn.classList.add('bg-white', 'shadow-sm');
+  tableViewBtn.classList.remove('hover:bg-gray-200');
+  kanbanViewBtn.classList.remove('bg-white', 'shadow-sm');
+  kanbanViewBtn.classList.add('hover:bg-gray-200');
+  
+  kanbanContainer?.classList.add('hidden');
+  tableView?.classList.remove('hidden');
+  
+  updateURL({ view: 'table' });
+  
+  renderTableView();
+}
+
+function renderTableView() {
+  const tableBody = document.getElementById('table-body');
+  const tableEmptyState = document.getElementById('table-empty-state');
+  
+  if (!tableBody) return;
+  
+  const allItems = getAllItemsForTable();
+  
+  if (allItems.length === 0) {
+    tableBody.innerHTML = '';
+    tableEmptyState?.classList.remove('hidden');
+    document.getElementById('table-pagination-top')?.classList.add('hidden');
+    document.getElementById('table-pagination-bottom')?.classList.add('hidden');
+    return;
+  }
+  
+  tableEmptyState?.classList.add('hidden');
+  
+  const sortedItems = sortTableItems(allItems);
+  
+  // Calculate pagination
+  const totalPages = Math.ceil(sortedItems.length / itemsPerPage);
+  if (currentPage > totalPages) {
+    currentPage = totalPages || 1;
+  }
+  
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const pageItems = sortedItems.slice(startIndex, endIndex);
+  
+  tableBody.innerHTML = pageItems.map(item => createTableRow(item)).join('');
+  
+  renderPagination(sortedItems.length, totalPages);
+  
+  attachTableRowEventListeners();
+}
+
+function renderPagination(totalItems, totalPages) {
+  const paginationHTML = createPaginationHTML(totalItems, totalPages);
+  
+  const topPagination = document.getElementById('table-pagination-top');
+  const bottomPagination = document.getElementById('table-pagination-bottom');
+  
+  if (topPagination) {
+    topPagination.innerHTML = paginationHTML;
+    topPagination.classList.remove('hidden');
+  }
+  
+  if (bottomPagination) {
+    bottomPagination.innerHTML = paginationHTML;
+    bottomPagination.classList.remove('hidden');
+  }
+  
+  attachPaginationEventListeners();
+}
+
+function createPaginationHTML(totalItems, totalPages) {
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+  
+  let pageNumbers = [];
+  
+  // Always show first page
+  pageNumbers.push(1);
+  
+  if (totalPages <= 7) {
+    // Show all pages if 7 or fewer
+    for (let i = 2; i <= totalPages; i++) {
+      pageNumbers.push(i);
+    }
+  } else {
+    // Show smart pagination with ellipsis
+    if (currentPage <= 3) {
+      // Near start: 1 2 3 4 ... last
+      for (let i = 2; i <= 4; i++) {
+        pageNumbers.push(i);
+      }
+      pageNumbers.push('...');
+      pageNumbers.push(totalPages);
+    } else if (currentPage >= totalPages - 2) {
+      // Near end: 1 ... last-3 last-2 last-1 last
+      pageNumbers.push('...');
+      for (let i = totalPages - 3; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      // Middle: 1 ... current-1 current current+1 ... last
+      pageNumbers.push('...');
+      pageNumbers.push(currentPage - 1);
+      pageNumbers.push(currentPage);
+      pageNumbers.push(currentPage + 1);
+      pageNumbers.push('...');
+      pageNumbers.push(totalPages);
+    }
+  }
+  
+  return `
+    <div class="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <label for="items-per-page" class="text-sm text-gray-700">Rows per page:</label>
+          <select 
+            id="items-per-page" 
+            class="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="10" ${itemsPerPage === 10 ? 'selected' : ''}>10</option>
+            <option value="25" ${itemsPerPage === 25 ? 'selected' : ''}>25</option>
+            <option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option>
+            <option value="100" ${itemsPerPage === 100 ? 'selected' : ''}>100</option>
+          </select>
+        </div>
+        <div class="text-sm text-gray-700">
+          Showing ${startItem}-${endItem} of ${totalItems} items
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-2">
+        <button 
+          data-action="first-page"
+          class="px-2 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          ${currentPage === 1 ? 'disabled' : ''}
+          title="First page"
+        >
+          &laquo;
+        </button>
+        
+        <button 
+          data-action="prev-page"
+          class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          ${currentPage === 1 ? 'disabled' : ''}
+          title="Previous page"
+        >
+          Previous
+        </button>
+        
+        <div class="flex gap-1">
+          ${pageNumbers.map(page => {
+            if (page === '...') {
+              return '<span class="px-2 py-1 text-gray-500">...</span>';
+            }
+            const isActive = page === currentPage;
+            return `
+              <button 
+                data-action="goto-page"
+                data-page="${page}"
+                class="px-3 py-1 border rounded text-sm ${
+                  isActive 
+                    ? 'bg-blue-600 text-white border-blue-600' 
+                    : 'border-gray-300 hover:bg-gray-50'
+                }"
+              >
+                ${page}
+              </button>
+            `;
+          }).join('')}
+        </div>
+        
+        <button 
+          data-action="next-page"
+          class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          ${currentPage === totalPages ? 'disabled' : ''}
+          title="Next page"
+        >
+          Next
+        </button>
+        
+        <button 
+          data-action="last-page"
+          data-total-pages="${totalPages}"
+          class="px-2 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          ${currentPage === totalPages ? 'disabled' : ''}
+          title="Last page"
+        >
+          &raquo;
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function attachPaginationEventListeners() {
+  document.querySelectorAll('[data-action="first-page"]').forEach(btn => {
+    btn.addEventListener('click', () => goToPage(1));
+  });
+  
+  document.querySelectorAll('[data-action="prev-page"]').forEach(btn => {
+    btn.addEventListener('click', () => goToPage(currentPage - 1));
+  });
+  
+  document.querySelectorAll('[data-action="next-page"]').forEach(btn => {
+    btn.addEventListener('click', () => goToPage(currentPage + 1));
+  });
+  
+  document.querySelectorAll('[data-action="last-page"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const totalPages = parseInt(e.target.dataset.totalPages);
+      goToPage(totalPages);
+    });
+  });
+  
+  document.querySelectorAll('[data-action="goto-page"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const page = parseInt(e.target.dataset.page);
+      goToPage(page);
+    });
+  });
+  
+  document.querySelectorAll('#items-per-page').forEach(select => {
+    select.addEventListener('change', (e) => {
+      itemsPerPage = parseInt(e.target.value);
+      currentPage = 1; // Reset to first page when changing items per page
+      renderTableView();
+    });
+  });
+}
+
+function goToPage(page) {
+  currentPage = page;
+  renderTableView();
+  // Scroll to top of table
+  document.getElementById('table-view')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function getAllItemsForTable() {
+  const allItems = [];
+  
+  let itemsToDisplay = [];
+  if (currentFilters.type === 'issue') {
+    itemsToDisplay = [...issues];
+  } else if (currentFilters.type === 'action') {
+    itemsToDisplay = [...actionItems];
+  } else {
+    itemsToDisplay = [...issues, ...actionItems];
+  }
+  
+  itemsToDisplay.forEach(item => {
+    let matches = true;
+    
+    if (currentFilters.status && item.status?.toLowerCase() !== currentFilters.status.toLowerCase()) {
+      matches = false;
+    }
+    if (currentFilters.priority && item.priority?.toLowerCase() !== currentFilters.priority.toLowerCase()) {
+      matches = false;
+    }
+    if (currentFilters.assignee && item.assignee !== currentFilters.assignee) {
+      matches = false;
+    }
+    if (currentFilters.category && item.category !== currentFilters.category) {
+      matches = false;
+    }
+    if (currentFilters.search) {
+      const searchLower = currentFilters.search.toLowerCase();
+      const titleMatch = item.title?.toLowerCase().includes(searchLower);
+      const descMatch = item.description?.toLowerCase().includes(searchLower);
+      if (!titleMatch && !descMatch) {
+        matches = false;
+      }
+    }
+    if (currentFilters.tag) {
+      const itemTags = item.tags || [];
+      if (!itemTags.some(tag => tag.name === currentFilters.tag)) {
+        matches = false;
+      }
+    }
+    
+    if (matches) {
+      allItems.push({
+        id: item.id,
+        type: item.type,
+        title: item.title || '',
+        assignee: item.assignee || 'Unassigned',
+        priority: item.priority || 'low',
+        dueDate: item.due_date ? new Date(item.due_date).toLocaleDateString() : '',
+        status: item.status || 'todo'
+      });
+    }
+  });
+  
+  return allItems;
+}
+
+function sortTableItems(items) {
+  const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+  const statusOrder = { todo: 0, inprogress: 1, blocked: 2, done: 3 };
+  
+  return items.sort((a, b) => {
+    let comparison = 0;
+    
+    switch (tableSortColumn) {
+      case 'type':
+        comparison = a.type.localeCompare(b.type);
+        break;
+      case 'title':
+        comparison = a.title.localeCompare(b.title);
+        break;
+      case 'assignee':
+        comparison = a.assignee.localeCompare(b.assignee);
+        break;
+      case 'priority':
+        comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
+        break;
+      case 'due_date':
+        if (!a.dueDate && !b.dueDate) comparison = 0;
+        else if (!a.dueDate) comparison = 1;
+        else if (!b.dueDate) comparison = -1;
+        else comparison = new Date(a.dueDate) - new Date(b.dueDate);
+        break;
+      case 'status':
+        comparison = statusOrder[a.status] - statusOrder[b.status];
+        break;
+      default:
+        comparison = 0;
+    }
+    
+    return tableSortDirection === 'asc' ? comparison : -comparison;
+  });
+}
+
+function handleTableSort(column) {
+  if (tableSortColumn === column) {
+    tableSortDirection = tableSortDirection === 'asc' ? 'desc' : 'asc';
+  } else {
+    tableSortColumn = column;
+    tableSortDirection = 'asc';
+  }
+  
+  updateTableHeaders();
+  renderTableView();
+}
+
+function updateTableHeaders() {
+  const headers = document.querySelectorAll('th[data-sort]');
+  headers.forEach(header => {
+    const svg = header.querySelector('svg');
+    if (header.dataset.sort === tableSortColumn) {
+      svg?.classList.remove('text-gray-400');
+      svg?.classList.add('text-blue-600');
+      if (tableSortDirection === 'desc') {
+        svg?.classList.add('rotate-180');
+      } else {
+        svg?.classList.remove('rotate-180');
+      }
+    } else {
+      svg?.classList.remove('text-blue-600', 'rotate-180');
+      svg?.classList.add('text-gray-400');
+    }
+  });
+}
+
+function createTableRow(item) {
+  const priorityColors = {
+    critical: 'bg-red-100 text-red-800',
+    high: 'bg-orange-100 text-orange-800',
+    medium: 'bg-yellow-100 text-yellow-800',
+    low: 'bg-green-100 text-green-800'
+  };
+  
+  const statusColors = {
+    todo: 'bg-gray-100 text-gray-800',
+    inprogress: 'bg-blue-100 text-blue-800',
+    blocked: 'bg-yellow-100 text-yellow-800',
+    done: 'bg-green-100 text-green-800'
+  };
+  
+  const statusLabels = {
+    todo: 'To Do',
+    inprogress: 'In Progress',
+    blocked: 'Blocked',
+    done: 'Done'
+  };
+  
+  const isSelected = tableSelectedItems.has(item.id);
+  
+  return `
+    <tr class="hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}" data-item-id="${item.id}" data-item-type="${item.type}">
+      <td class="px-4 py-3">
+        <input 
+          type="checkbox" 
+          class="table-row-checkbox cursor-pointer w-4 h-4"
+          data-item-id="${item.id}"
+          ${isSelected ? 'checked' : ''}
+        />
+      </td>
+      <td class="px-4 py-3">
+        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${item.type === 'issue' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
+          ${item.type === 'issue' ? 'Issue' : 'Action Item'}
+        </span>
+      </td>
+      <td class="px-4 py-3 font-medium text-gray-900 max-w-md truncate" title="${item.title}">
+        ${item.title}
+      </td>
+      <td class="px-4 py-3 text-gray-600">
+        ${item.assignee}
+      </td>
+      <td class="px-4 py-3">
+        <span class="px-2 py-1 rounded text-xs font-medium ${priorityColors[item.priority]}">
+          ${item.priority.charAt(0).toUpperCase() + item.priority.slice(1)}
+        </span>
+      </td>
+      <td class="px-4 py-3 text-gray-600 text-sm">
+        ${item.dueDate || '-'}
+      </td>
+      <td class="px-4 py-3">
+        <select 
+          class="table-status-select px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer ${statusColors[item.status]}"
+          data-item-id="${item.id}"
+          data-item-type="${item.type}"
+          data-current-status="${item.status}"
+        >
+          <option value="todo" ${item.status === 'todo' ? 'selected' : ''}>To Do</option>
+          <option value="inprogress" ${item.status === 'inprogress' ? 'selected' : ''}>In Progress</option>
+          <option value="blocked" ${item.status === 'blocked' ? 'selected' : ''}>Blocked</option>
+          <option value="done" ${item.status === 'done' ? 'selected' : ''}>Done</option>
+        </select>
+      </td>
+      <td class="px-4 py-3">
+        <button 
+          class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+          data-action="view-item"
+          data-item-id="${item.id}"
+          data-item-type="${item.type}"
+        >
+          View
+        </button>
+      </td>
+    </tr>
+  `;
+}
+
+function attachTableRowEventListeners() {
+  const checkboxes = document.querySelectorAll('.table-row-checkbox');
+  checkboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', handleTableRowSelect);
+  });
+  
+  const statusSelects = document.querySelectorAll('.table-status-select');
+  statusSelects.forEach(select => {
+    select.addEventListener('change', handleTableStatusChange);
+  });
+  
+  const viewButtons = document.querySelectorAll('[data-action="view-item"]');
+  viewButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      const itemId = parseInt(e.target.dataset.itemId);
+      const itemType = e.target.dataset.itemType;
+      openItemDetailModal(itemId, itemType);
+    });
+  });
+}
+
+function handleTableRowSelect(e) {
+  const itemId = e.target.dataset.itemId;
+  const row = e.target.closest('tr');
+  
+  if (e.target.checked) {
+    tableSelectedItems.add(itemId);
+    row?.classList.add('bg-blue-50');
+  } else {
+    tableSelectedItems.delete(itemId);
+    row?.classList.remove('bg-blue-50');
+  }
+  
+  updateTableSelectionUI();
+}
+
+function handleTableSelectAll(e) {
+  const checkboxes = document.querySelectorAll('.table-row-checkbox');
+  const rows = document.querySelectorAll('#table-body tr');
+  
+  if (e.target.checked) {
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = true;
+      const itemId = checkbox.dataset.itemId;
+      tableSelectedItems.add(itemId);
+    });
+    rows.forEach(row => row.classList.add('bg-blue-50'));
+  } else {
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = false;
+    });
+    tableSelectedItems.clear();
+    rows.forEach(row => row.classList.remove('bg-blue-50'));
+  }
+  
+  updateTableSelectionUI();
+}
+
+function updateTableSelectionUI() {
+  const selectAllCheckbox = document.getElementById('table-select-all');
+  const checkboxes = document.querySelectorAll('.table-row-checkbox');
+  const bulkActionsBar = document.getElementById('table-bulk-actions-bar');
+  const selectedCount = document.getElementById('table-selected-count');
+  
+  if (tableSelectedItems.size === 0) {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = false;
+    bulkActionsBar?.classList.add('hidden');
+  } else if (tableSelectedItems.size === checkboxes.length) {
+    selectAllCheckbox.checked = true;
+    selectAllCheckbox.indeterminate = false;
+    bulkActionsBar?.classList.remove('hidden');
+  } else {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = true;
+    bulkActionsBar?.classList.remove('hidden');
+  }
+  
+  if (selectedCount) {
+    selectedCount.textContent = `${tableSelectedItems.size} selected`;
+  }
+}
+
+function clearTableSelection() {
+  const checkboxes = document.querySelectorAll('.table-row-checkbox');
+  const rows = document.querySelectorAll('#table-body tr');
+  
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  
+  tableSelectedItems.clear();
+  
+  rows.forEach(row => row.classList.remove('bg-blue-50'));
+  
+  updateTableSelectionUI();
+  
+  const statusSelect = document.getElementById('table-bulk-status-select');
+  if (statusSelect) statusSelect.value = '';
+  
+  const statusBtn = document.getElementById('table-bulk-status-btn');
+  if (statusBtn) statusBtn.disabled = true;
+}
+
+async function handleTableBulkStatusUpdate() {
+  const statusSelect = document.getElementById('table-bulk-status-select');
+  const newStatus = statusSelect?.value;
+  
+  if (!newStatus || tableSelectedItems.size === 0) {
+    alert('Please select a status');
+    return;
+  }
+  
+  const confirmed = confirm(`Update status to "${newStatus.replace('inprogress', 'In Progress')}" for ${tableSelectedItems.size} item(s)?`);
+  if (!confirmed) return;
+  
+  try {
+    const promises = [];
+    const rows = document.querySelectorAll('#table-body tr');
+    
+    rows.forEach(row => {
+      const itemId = row.dataset.itemId;
+      if (tableSelectedItems.has(itemId)) {
+        const itemType = row.dataset.itemType;
+        const endpoint = itemType === 'issue' ? '/api/issues' : '/api/action-items';
+        promises.push(axios.patch(`${endpoint}/${itemId}`, { status: newStatus }));
+      }
+    });
+    
+    await Promise.all(promises);
+    
+    showNotification(`Updated ${tableSelectedItems.size} item(s) successfully`, 'success');
+    
+    clearTableSelection();
+    
+    await loadProjectData(currentProject.id);
+    
+    if (currentView === 'table') {
+      renderTableView();
+    }
+    
+  } catch (error) {
+    console.error('Bulk status update error:', error);
+    showNotification('Failed to update some items', 'error');
+  }
+}
+
+async function handleTableBulkDelete() {
+  if (tableSelectedItems.size === 0) {
+    alert('Please select items to delete');
+    return;
+  }
+  
+  const confirmed = confirm(`Are you sure you want to delete ${tableSelectedItems.size} item(s)? This action cannot be undone.`);
+  if (!confirmed) return;
+  
+  try {
+    const promises = [];
+    const rows = document.querySelectorAll('#table-body tr');
+    
+    rows.forEach(row => {
+      const itemId = row.dataset.itemId;
+      if (tableSelectedItems.has(itemId)) {
+        const itemType = row.dataset.itemType;
+        const endpoint = itemType === 'issue' ? '/api/issues' : '/api/action-items';
+        promises.push(axios.delete(`${endpoint}/${itemId}`));
+      }
+    });
+    
+    await Promise.all(promises);
+    
+    showNotification(`Deleted ${tableSelectedItems.size} item(s) successfully`, 'success');
+    
+    clearTableSelection();
+    
+    await loadProjectData(currentProject.id);
+    
+    if (currentView === 'table') {
+      renderTableView();
+    }
+    
+  } catch (error) {
+    console.error('Bulk delete error:', error);
+    showNotification('Failed to delete some items', 'error');
+  }
+}
+
+async function handleTableStatusChange(e) {
+  const select = e.target;
+  const itemId = select.dataset.itemId;
+  const itemType = select.dataset.itemType;
+  const oldStatus = select.dataset.currentStatus;
+  const newStatus = select.value;
+  
+  if (oldStatus === newStatus) return;
+  
+  try {
+    select.disabled = true;
+    
+    const endpoint = itemType === 'issue' ? '/api/issues' : '/api/action-items';
+    await axios.patch(`${endpoint}/${itemId}`, {
+      status: newStatus
+    });
+    
+    select.dataset.currentStatus = newStatus;
+    
+    updateStatusSelectColors(select, newStatus);
+    
+    showNotification(`Status updated to ${newStatus.replace('inprogress', 'In Progress')}`, 'success');
+    
+    if (currentView === 'kanban') {
+      loadProjectIssuesAndActions(currentProject.id);
+    } else {
+      renderTableView();
+    }
+    
+  } catch (error) {
+    console.error('Error updating status:', error);
+    showNotification('Failed to update status', 'error');
+    select.value = oldStatus;
+  } finally {
+    select.disabled = false;
+  }
+}
+
+function updateStatusSelectColors(select, status) {
+  const statusColors = {
+    todo: 'bg-gray-100 text-gray-800',
+    inprogress: 'bg-blue-100 text-blue-800',
+    blocked: 'bg-yellow-100 text-yellow-800',
+    done: 'bg-green-100 text-green-800'
+  };
+  
+  select.className = `table-status-select px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer ${statusColors[status]}`;
+}
+
+// ========================================
+// EXPORT FUNCTIONS
+// ========================================
+
+// Export Kanban data as plain text file
+async function exportAsText() {
+  if (!currentProject) {
+    alert('Please select a project first');
+    return;
+  }
+  
+  try {
+    // Build query params with current filters
+    const params = new URLSearchParams({ projectId: currentProject.id });
+    
+    if (currentFilters.status) params.append('status', currentFilters.status);
+    if (currentFilters.priority) params.append('priority', currentFilters.priority);
+    if (currentFilters.assignee) params.append('assignee', currentFilters.assignee);
+    if (currentFilters.category) params.append('category', currentFilters.category);
+    if (currentFilters.search) params.append('search', currentFilters.search);
+    if (currentFilters.tag) params.append('tag', currentFilters.tag);
+    
+    // Trigger download
+    window.location.href = `/api/projects/${currentProject.id}/export/txt?${params.toString()}`;
+    
+    showNotification('Text file export started', 'success');
+  } catch (error) {
+    console.error('Export error:', error);
+    showNotification('Failed to export data', 'error');
+  }
+}
+
+// Copy Kanban data to clipboard
+async function copyToClipboard() {
+  if (!currentProject) {
+    alert('Please select a project first');
+    return;
+  }
+  
+  const btn = document.getElementById('copy-clipboard-btn');
+  const btnText = document.getElementById('copy-btn-text');
+  
+  try {
+    // Build query params with current filters
+    const params = new URLSearchParams({ projectId: currentProject.id });
+    
+    if (currentFilters.status) params.append('status', currentFilters.status);
+    if (currentFilters.priority) params.append('priority', currentFilters.priority);
+    if (currentFilters.assignee) params.append('assignee', currentFilters.assignee);
+    if (currentFilters.category) params.append('category', currentFilters.category);
+    if (currentFilters.search) params.append('search', currentFilters.search);
+    if (currentFilters.tag) params.append('tag', currentFilters.tag);
+    
+    // Fetch data from server
+    const response = await axios.get(`/api/projects/${currentProject.id}/export/clipboard?${params.toString()}`);
+    
+    if (!response.data.success) {
+      throw new Error('Failed to fetch data');
+    }
+    
+    const data = response.data.data;
+    
+    // Convert to tab-separated format for Excel compatibility
+    const rows = data.map(row => {
+      return [
+        row.type,
+        row.title,
+        row.assignee,
+        row.priority,
+        row.dueDate,
+        row.status
+      ].join('\t');
+    });
+    
+    const textToCopy = rows.join('\n');
+    
+    // Copy to clipboard
+    await navigator.clipboard.writeText(textToCopy);
+    
+    // Show success feedback
+    btnText.textContent = '✓ Copied!';
+    btn.classList.remove('bg-blue-50', 'hover:bg-blue-100', 'border-blue-300');
+    btn.classList.add('bg-green-50', 'border-green-300');
+    
+    showNotification(`Copied ${response.data.count} items to clipboard. Paste into Excel!`, 'success');
+    
+    // Reset button after 2 seconds
+    setTimeout(() => {
+      btnText.textContent = 'Copy to Clipboard';
+      btn.classList.remove('bg-green-50', 'border-green-300');
+      btn.classList.add('bg-blue-50', 'hover:bg-blue-100', 'border-blue-300');
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Copy to clipboard error:', error);
+    showNotification('Failed to copy to clipboard', 'error');
+    
+    // Reset button
+    btnText.textContent = 'Copy to Clipboard';
+    btn.classList.remove('bg-green-50', 'border-green-300');
+    btn.classList.add('bg-blue-50', 'hover:bg-blue-100', 'border-blue-300');
+  }
+}
+
 

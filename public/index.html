@@ -121,6 +121,17 @@
                 </div>
             </header>
 
+            <!-- Loading Indicator -->
+            <div id="loading-indicator" class="hidden fixed top-20 left-1/2 transform -translate-x-1/2 z-50">
+                <div class="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
+                    <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="font-medium">Loading...</span>
+                </div>
+            </div>
+
             <!-- Main Content -->
             <main class="max-w-7xl mx-auto px-4 py-8">
                 <!-- Project Selection -->
@@ -242,6 +253,30 @@
                                     <span>🎙️</span>
                                     <span>Transcripts</span>
                                 </button>
+                                
+                                <!-- View Mode Toggle -->
+                                <div class="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                                    <button 
+                                        id="kanban-view-btn"
+                                        class="px-3 py-1.5 bg-white text-gray-700 rounded-md shadow-sm flex items-center gap-1.5 transition-all font-medium text-sm"
+                                        title="Kanban View"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+                                        </svg>
+                                        Kanban
+                                    </button>
+                                    <button 
+                                        id="table-view-btn"
+                                        class="px-3 py-1.5 text-gray-600 rounded-md flex items-center gap-1.5 transition-all font-medium text-sm hover:bg-gray-200"
+                                        title="Table View"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                        </svg>
+                                        Table
+                                    </button>
+                                </div>
                             </div>
                             
                             <!-- Create Dropdown on right -->
@@ -324,10 +359,10 @@
                                         class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     >
                                         <option value="">All Statuses</option>
-                                        <option value="To Do">To Do</option>
-                                        <option value="In Progress">In Progress</option>
-                                        <option value="Blocked">Blocked</option>
-                                        <option value="Done">Done</option>
+                                        <option value="todo">To Do</option>
+                                        <option value="inprogress">In Progress</option>
+                                        <option value="blocked">Blocked</option>
+                                        <option value="done">Done</option>
                                     </select>
                                 </div>
                                 
@@ -381,6 +416,21 @@
                             <div id="results-count" class="mt-2 text-sm text-gray-600 hidden">
                                 <!-- Count will be displayed here -->
                             </div>
+                            
+                            <!-- Export Actions -->
+                            <div class="mt-3 flex items-center gap-2 border-t pt-3">
+                                <span class="text-xs font-medium text-gray-600">Export:</span>
+                                <button 
+                                    id="copy-clipboard-btn"
+                                    class="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors border border-blue-300 flex items-center gap-1.5"
+                                    title="Copy to clipboard (paste into Excel/Google Sheets)"
+                                >
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                    </svg>
+                                    <span id="copy-btn-text">Copy to Clipboard</span>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Bulk Actions Bar -->
@@ -416,15 +466,15 @@
                                         To Do <span id="todo-count" class="text-sm text-gray-500">(0)</span>
                                     </h4>
                                     <select class="column-sort-select flex-shrink-0 text-xs px-2 py-1 border border-gray-300 rounded" data-column="todo">
-                                        <option value="overdue-first">Overdue First</option>
-                                        <option value="earliest">Earliest</option>
-                                        <option value="latest">Latest</option>
+                                        <option value="due-overdue-first">Overdue First</option>
+                                        <option value="due-earliest">Earliest</option>
+                                        <option value="due-latest">Latest</option>
                                         <option value="priority">Priority</option>
-                                        <option value="recent">Recent</option>
-                                        <option value="updated">Updated</option>
+                                        <option value="created-desc">Recent</option>
+                                        <option value="updated-desc">Updated</option>
                                         <option value="manual">Manual</option>
-                                        <option value="priority+due-date">Priority+Due Date</option>
-                                        <option value="overdue+priority">Overdue+Priority</option>
+                                        <option value="priority-due-date">Priority+Due Date</option>
+                                        <option value="overdue-priority">Overdue+Priority</option>
                                         <option value="smart-sort">Smart Sort</option>
                                     </select>
                                 </div>
@@ -438,15 +488,15 @@
                                         In Progress <span id="inprogress-count" class="text-sm text-blue-500">(0)</span>
                                     </h4>
                                     <select class="column-sort-select flex-shrink-0 text-xs px-2 py-1 border border-gray-300 rounded" data-column="inprogress">
-                                        <option value="overdue-first">Overdue First</option>
-                                        <option value="earliest">Earliest</option>
-                                        <option value="latest">Latest</option>
+                                        <option value="due-overdue-first">Overdue First</option>
+                                        <option value="due-earliest">Earliest</option>
+                                        <option value="due-latest">Latest</option>
                                         <option value="priority">Priority</option>
-                                        <option value="recent">Recent</option>
-                                        <option value="updated">Updated</option>
+                                        <option value="created-desc">Recent</option>
+                                        <option value="updated-desc">Updated</option>
                                         <option value="manual">Manual</option>
-                                        <option value="priority+due-date">Priority+Due Date</option>
-                                        <option value="overdue+priority">Overdue+Priority</option>
+                                        <option value="priority-due-date">Priority+Due Date</option>
+                                        <option value="overdue-priority">Overdue+Priority</option>
                                         <option value="smart-sort">Smart Sort</option>
                                     </select>
                                 </div>
@@ -460,15 +510,15 @@
                                         Blocked <span id="blocked-count" class="text-sm text-yellow-600">(0)</span>
                                     </h4>
                                     <select class="column-sort-select flex-shrink-0 text-xs px-2 py-1 border border-gray-300 rounded" data-column="blocked">
-                                        <option value="overdue-first">Overdue First</option>
-                                        <option value="earliest">Earliest</option>
-                                        <option value="latest">Latest</option>
+                                        <option value="due-overdue-first">Overdue First</option>
+                                        <option value="due-earliest">Earliest</option>
+                                        <option value="due-latest">Latest</option>
                                         <option value="priority">Priority</option>
-                                        <option value="recent">Recent</option>
-                                        <option value="updated">Updated</option>
+                                        <option value="created-desc">Recent</option>
+                                        <option value="updated-desc">Updated</option>
                                         <option value="manual">Manual</option>
-                                        <option value="priority+due-date">Priority+Due Date</option>
-                                        <option value="overdue+priority">Overdue+Priority</option>
+                                        <option value="priority-due-date">Priority+Due Date</option>
+                                        <option value="overdue-priority">Overdue+Priority</option>
                                         <option value="smart-sort">Smart Sort</option>
                                     </select>
                                 </div>
@@ -482,20 +532,153 @@
                                         Done <span id="done-count" class="text-sm text-green-600">(0)</span>
                                     </h4>
                                     <select class="column-sort-select flex-shrink-0 text-xs px-2 py-1 border border-gray-300 rounded" data-column="done">
-                                        <option value="overdue-first">Overdue First</option>
-                                        <option value="earliest">Earliest</option>
-                                        <option value="latest">Latest</option>
+                                        <option value="due-overdue-first">Overdue First</option>
+                                        <option value="due-earliest">Earliest</option>
+                                        <option value="due-latest">Latest</option>
                                         <option value="priority">Priority</option>
-                                        <option value="recent">Recent</option>
-                                        <option value="updated">Updated</option>
+                                        <option value="created-desc">Recent</option>
+                                        <option value="updated-desc">Updated</option>
                                         <option value="manual">Manual</option>
-                                        <option value="priority+due-date">Priority+Due Date</option>
-                                        <option value="overdue+priority">Overdue+Priority</option>
+                                        <option value="priority-due-date">Priority+Due Date</option>
+                                        <option value="overdue-priority">Overdue+Priority</option>
                                         <option value="smart-sort">Smart Sort</option>
                                     </select>
                                 </div>
                                 <div id="done-column" class="space-y-2">
                                     <!-- Items will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Table View -->
+                        <div id="table-view" class="hidden">
+                            <!-- Table Bulk Actions Bar -->
+                            <div id="table-bulk-actions-bar" class="mb-4 hidden">
+                                <div class="flex items-center gap-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <span id="table-selected-count" class="font-medium text-gray-700">0 selected</span>
+                                    
+                                    <select id="table-bulk-status-select" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="">Change Status...</option>
+                                        <option value="todo">To Do</option>
+                                        <option value="inprogress">In Progress</option>
+                                        <option value="blocked">Blocked</option>
+                                        <option value="done">Done</option>
+                                    </select>
+                                    
+                                    <button 
+                                        id="table-bulk-status-btn" 
+                                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+                                        disabled
+                                    >
+                                        Apply Status
+                                    </button>
+                                    
+                                    <button 
+                                        id="table-bulk-delete-btn" 
+                                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                    >
+                                        Delete Selected
+                                    </button>
+                                    
+                                    <button 
+                                        id="table-clear-selection-btn" 
+                                        class="ml-auto px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                    >
+                                        Clear Selection
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                                <!-- Top Pagination -->
+                                <div id="table-pagination-top" class="hidden">
+                                    <!-- Pagination controls will be rendered here -->
+                                </div>
+                                
+                                <!-- Table Container with horizontal scroll -->
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm">
+                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th class="px-4 py-3 text-left">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        id="table-select-all" 
+                                                        class="cursor-pointer w-4 h-4"
+                                                        title="Select All"
+                                                    />
+                                                </th>
+                                                <th class="px-4 py-3 text-left font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" data-sort="type">
+                                                    <div class="flex items-center gap-2">
+                                                        Type
+                                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                                <th class="px-4 py-3 text-left font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" data-sort="title">
+                                                    <div class="flex items-center gap-2">
+                                                        Title
+                                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                                <th class="px-4 py-3 text-left font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" data-sort="assignee">
+                                                    <div class="flex items-center gap-2">
+                                                        Assignee
+                                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                                <th class="px-4 py-3 text-left font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" data-sort="priority">
+                                                    <div class="flex items-center gap-2">
+                                                        Priority
+                                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                                <th class="px-4 py-3 text-left font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" data-sort="due_date">
+                                                    <div class="flex items-center gap-2">
+                                                        Due Date
+                                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                                <th class="px-4 py-3 text-left font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" data-sort="status">
+                                                    <div class="flex items-center gap-2">
+                                                        Status
+                                                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                                        </svg>
+                                                    </div>
+                                                </th>
+                                                <th class="px-4 py-3 text-left font-semibold text-gray-700">
+                                                    Actions
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-body" class="divide-y divide-gray-200">
+                                            <!-- Table rows will be dynamically generated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- Empty State -->
+                                <div id="table-empty-state" class="hidden p-12 text-center">
+                                    <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    <p class="text-gray-500 text-lg">No items to display</p>
+                                    <p class="text-gray-400 text-sm mt-2">Try adjusting your filters</p>
+                                </div>
+                                
+                                <!-- Bottom Pagination -->
+                                <div id="table-pagination-bottom" class="hidden">
+                                    <!-- Pagination controls will be rendered here -->
                                 </div>
                             </div>
                         </div>

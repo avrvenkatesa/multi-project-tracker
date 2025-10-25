@@ -42,6 +42,7 @@ const { generateChecklistPDF } = require('./services/pdf-service');
 const { validateChecklist, getValidationStatus } = require('./services/validation-service');
 const dependencyService = require('./services/dependency-service');
 const documentService = require('./services/document-service');
+const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -3574,10 +3575,16 @@ app.delete('/api/issues/:id', authenticateToken, async (req, res) => {
       });
     }
     
-    // Delete related attachments first (no FK constraint exists)
+    // Delete related data first (no FK constraint exists for attachments)
     await sql`
       DELETE FROM attachments 
       WHERE entity_type = 'issue' AND entity_id = ${id}
+    `;
+    
+    // Delete related checklists (must be done before deleting the issue)
+    await sql`
+      DELETE FROM checklists 
+      WHERE related_issue_id = ${id}
     `;
     
     // Delete the issue (comments will cascade automatically)
@@ -4074,10 +4081,16 @@ app.delete('/api/action-items/:id', authenticateToken, async (req, res) => {
       });
     }
     
-    // Delete related attachments first (no FK constraint exists)
+    // Delete related data first (no FK constraint exists for attachments)
     await sql`
       DELETE FROM attachments 
       WHERE entity_type = 'action-item' AND entity_id = ${id}
+    `;
+    
+    // Delete related checklists (must be done before deleting the action item)
+    await sql`
+      DELETE FROM checklists 
+      WHERE related_action_id = ${id}
     `;
     
     // Delete the action item (comments will cascade automatically)
@@ -10176,6 +10189,464 @@ app.get('/api/checklists/:id/export/pdf', authenticateToken, async (req, res) =>
   }
 });
 
+// GET /api/projects/:projectId/export/csv - Export Kanban data as CSV
+app.get('/api/projects/:projectId/export/csv', authenticateToken, async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.projectId);
+    const userId = req.user.id;
+    
+    // Check project access
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Build query params with filters (same as Kanban board)
+    const filters = {
+      status: req.query.status,
+      priority: req.query.priority,
+      assignee: req.query.assignee,
+      category: req.query.category,
+      search: req.query.search,
+      tag: req.query.tag
+    };
+    
+    // Base queries with separate parameter indices
+    let issuesQuery = 'SELECT * FROM issues WHERE project_id = $1';
+    let actionsQuery = 'SELECT * FROM action_items WHERE project_id = $1';
+    const issuesParams = [projectId];
+    const actionsParams = [projectId];
+    
+    // Apply filters with independent parameter tracking
+    if (filters.status) {
+      issuesQuery += ` AND LOWER(status) = LOWER($${issuesParams.length + 1})`;
+      issuesParams.push(filters.status);
+      actionsQuery += ` AND LOWER(status) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.status);
+    }
+    
+    if (filters.priority) {
+      issuesQuery += ` AND LOWER(priority) = LOWER($${issuesParams.length + 1})`;
+      issuesParams.push(filters.priority);
+      actionsQuery += ` AND LOWER(priority) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.priority);
+    }
+    
+    if (filters.assignee) {
+      issuesQuery += ` AND LOWER(assignee) = LOWER($${issuesParams.length + 1})`;
+      issuesParams.push(filters.assignee);
+      actionsQuery += ` AND LOWER(assignee) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.assignee);
+    }
+    
+    if (filters.category) {
+      // Category only applies to action items
+      actionsQuery += ` AND LOWER(category) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.category);
+    }
+    
+    if (filters.search) {
+      const searchPattern = `%${filters.search}%`;
+      const issuesSearchIndex = issuesParams.length + 1;
+      issuesQuery += ` AND (LOWER(title) LIKE LOWER($${issuesSearchIndex}) OR LOWER(description) LIKE LOWER($${issuesSearchIndex}))`;
+      issuesParams.push(searchPattern);
+      const actionsSearchIndex = actionsParams.length + 1;
+      actionsQuery += ` AND (LOWER(title) LIKE LOWER($${actionsSearchIndex}) OR LOWER(description) LIKE LOWER($${actionsSearchIndex}))`;
+      actionsParams.push(searchPattern);
+    }
+    
+    if (filters.tag) {
+      issuesQuery += ` AND $${issuesParams.length + 1} = ANY(tags)`;
+      issuesParams.push(filters.tag);
+      actionsQuery += ` AND $${actionsParams.length + 1} = ANY(tags)`;
+      actionsParams.push(filters.tag);
+    }
+    
+    // Fetch data
+    const [issuesResult, actionsResult] = await Promise.all([
+      pool.query(issuesQuery, issuesParams),
+      pool.query(actionsQuery, actionsParams)
+    ]);
+    
+    // Combine and format data for CSV
+    const csvData = [];
+    
+    // Add issues
+    issuesResult.rows.forEach(issue => {
+      csvData.push({
+        type: 'Issue',
+        title: issue.title || '',
+        assignee: issue.assignee || 'Unassigned',
+        priority: issue.priority || 'medium',
+        dueDate: issue.due_date ? new Date(issue.due_date).toLocaleDateString() : '',
+        status: issue.status || 'To Do'
+      });
+    });
+    
+    // Add action items
+    actionsResult.rows.forEach(action => {
+      csvData.push({
+        type: 'Action Item',
+        title: action.title || '',
+        assignee: action.assignee || 'Unassigned',
+        priority: action.priority || 'medium',
+        dueDate: action.due_date ? new Date(action.due_date).toLocaleDateString() : '',
+        status: action.status || 'To Do'
+      });
+    });
+    
+    // Manual CSV generation (more reliable and virus-safe)
+    const filename = `project-${projectId}-export.csv`;
+    
+    // Build CSV manually with proper escaping and CSV injection prevention
+    const escapeCSV = (value) => {
+      if (value === null || value === undefined) return '';
+      let str = String(value).trim();
+      
+      // Prevent CSV injection: remove or escape dangerous characters at start
+      // Characters that can trigger formulas: = + - @ \t \r
+      const dangerousChars = ['=', '+', '-', '@', '\t', '\r'];
+      if (dangerousChars.some(char => str.startsWith(char))) {
+        str = "'" + str; // Prefix with single quote to treat as text
+      }
+      
+      // Remove any control characters that might trigger AV
+      str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+      
+      // Escape quotes and wrap in quotes if contains comma, quote, or newline
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+    
+    // Create CSV rows
+    const rows = [];
+    rows.push('Item Type,Item Title,Assignee,Priority,Due Date,Status'); // Header
+    
+    csvData.forEach(item => {
+      const row = [
+        escapeCSV(item.type),
+        escapeCSV(item.title),
+        escapeCSV(item.assignee),
+        escapeCSV(item.priority),
+        escapeCSV(item.dueDate),
+        escapeCSV(item.status)
+      ].join(',');
+      rows.push(row);
+    });
+    
+    // Join with CRLF (Windows line endings) for better compatibility
+    const csvContent = rows.join('\r\n');
+    
+    // Create buffer with UTF-8 BOM
+    const BOM = Buffer.from([0xEF, 0xBB, 0xBF]);
+    const content = Buffer.from(csvContent, 'utf8');
+    const finalBuffer = Buffer.concat([BOM, content]);
+    
+    // Set comprehensive headers to prevent virus flagging
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', finalBuffer.length);
+    res.setHeader('Content-Transfer-Encoding', 'binary');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    
+    res.send(finalBuffer);
+    
+    console.log(`📊 CSV exported: ${filename} by user ${userId} (${csvData.length} items)`);
+    
+  } catch (error) {
+    console.error('CSV export error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate CSV',
+      message: error.message 
+    });
+  }
+});
+
+// GET /api/projects/:projectId/export/txt - Export Kanban data as plain text (TSV)
+app.get('/api/projects/:projectId/export/txt', authenticateToken, async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.projectId);
+    const userId = req.user.id;
+    
+    // Check project access
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Build query params with filters (same as CSV export)
+    const filters = {
+      status: req.query.status,
+      priority: req.query.priority,
+      assignee: req.query.assignee,
+      category: req.query.category,
+      search: req.query.search,
+      tag: req.query.tag
+    };
+    
+    // Base queries with separate parameter indices
+    let issuesQuery = 'SELECT * FROM issues WHERE project_id = $1';
+    let actionsQuery = 'SELECT * FROM action_items WHERE project_id = $1';
+    const issuesParams = [projectId];
+    const actionsParams = [projectId];
+    
+    // Apply filters with independent parameter tracking
+    if (filters.status) {
+      issuesQuery += ` AND LOWER(status) = LOWER($${issuesParams.length + 1})`;
+      issuesParams.push(filters.status);
+      actionsQuery += ` AND LOWER(status) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.status);
+    }
+    
+    if (filters.priority) {
+      issuesQuery += ` AND LOWER(priority) = LOWER($${issuesParams.length + 1})`;
+      issuesParams.push(filters.priority);
+      actionsQuery += ` AND LOWER(priority) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.priority);
+    }
+    
+    if (filters.assignee) {
+      issuesQuery += ` AND LOWER(assignee) = LOWER($${issuesParams.length + 1})`;
+      issuesParams.push(filters.assignee);
+      actionsQuery += ` AND LOWER(assignee) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.assignee);
+    }
+    
+    if (filters.category) {
+      actionsQuery += ` AND LOWER(category) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.category);
+    }
+    
+    if (filters.search) {
+      const searchPattern = `%${filters.search}%`;
+      const issuesSearchIndex = issuesParams.length + 1;
+      issuesQuery += ` AND (LOWER(title) LIKE LOWER($${issuesSearchIndex}) OR LOWER(description) LIKE LOWER($${issuesSearchIndex}))`;
+      issuesParams.push(searchPattern);
+      const actionsSearchIndex = actionsParams.length + 1;
+      actionsQuery += ` AND (LOWER(title) LIKE LOWER($${actionsSearchIndex}) OR LOWER(description) LIKE LOWER($${actionsSearchIndex}))`;
+      actionsParams.push(searchPattern);
+    }
+    
+    if (filters.tag) {
+      issuesQuery += ` AND $${issuesParams.length + 1} = ANY(tags)`;
+      issuesParams.push(filters.tag);
+      actionsQuery += ` AND $${actionsParams.length + 1} = ANY(tags)`;
+      actionsParams.push(filters.tag);
+    }
+    
+    // Fetch data
+    const [issuesResult, actionsResult] = await Promise.all([
+      pool.query(issuesQuery, issuesParams),
+      pool.query(actionsQuery, actionsParams)
+    ]);
+    
+    // Combine and format data for TSV
+    const rows = [];
+    
+    // Header row with tabs
+    rows.push('Item Type\tItem Title\tAssignee\tPriority\tDue Date\tStatus');
+    
+    // Add issues
+    issuesResult.rows.forEach(issue => {
+      const row = [
+        'Issue',
+        (issue.title || '').replace(/[\t\n\r]/g, ' '),
+        issue.assignee || 'Unassigned',
+        issue.priority || 'medium',
+        issue.due_date ? new Date(issue.due_date).toLocaleDateString() : '',
+        issue.status || 'To Do'
+      ].join('\t');
+      rows.push(row);
+    });
+    
+    // Add action items
+    actionsResult.rows.forEach(action => {
+      const row = [
+        'Action Item',
+        (action.title || '').replace(/[\t\n\r]/g, ' '),
+        action.assignee || 'Unassigned',
+        action.priority || 'medium',
+        action.due_date ? new Date(action.due_date).toLocaleDateString() : '',
+        action.status || 'To Do'
+      ].join('\t');
+      rows.push(row);
+    });
+    
+    // Join with newlines
+    const textContent = rows.join('\n');
+    
+    // Set headers for plain text
+    const filename = `project-${projectId}-export.txt`;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    
+    res.send(textContent);
+    
+    const itemCount = issuesResult.rows.length + actionsResult.rows.length;
+    console.log(`📄 TXT exported: ${filename} by user ${userId} (${itemCount} items)`);
+    
+  } catch (error) {
+    console.error('TXT export error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate text export',
+      message: error.message 
+    });
+  }
+});
+
+// GET /api/projects/:projectId/export/clipboard - Get data for clipboard copy
+app.get('/api/projects/:projectId/export/clipboard', authenticateToken, async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.projectId);
+    const userId = req.user.id;
+    
+    // Check project access
+    const accessCheck = await pool.query(
+      'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, userId]
+    );
+    
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Build query params with filters (same as CSV export)
+    const filters = {
+      status: req.query.status,
+      priority: req.query.priority,
+      assignee: req.query.assignee,
+      category: req.query.category,
+      search: req.query.search,
+      tag: req.query.tag
+    };
+    
+    // Base queries with separate parameter indices
+    let issuesQuery = 'SELECT * FROM issues WHERE project_id = $1';
+    let actionsQuery = 'SELECT * FROM action_items WHERE project_id = $1';
+    const issuesParams = [projectId];
+    const actionsParams = [projectId];
+    
+    // Apply filters with independent parameter tracking
+    if (filters.status) {
+      issuesQuery += ` AND LOWER(status) = LOWER($${issuesParams.length + 1})`;
+      issuesParams.push(filters.status);
+      actionsQuery += ` AND LOWER(status) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.status);
+    }
+    
+    if (filters.priority) {
+      issuesQuery += ` AND LOWER(priority) = LOWER($${issuesParams.length + 1})`;
+      issuesParams.push(filters.priority);
+      actionsQuery += ` AND LOWER(priority) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.priority);
+    }
+    
+    if (filters.assignee) {
+      issuesQuery += ` AND LOWER(assignee) = LOWER($${issuesParams.length + 1})`;
+      issuesParams.push(filters.assignee);
+      actionsQuery += ` AND LOWER(assignee) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.assignee);
+    }
+    
+    if (filters.category) {
+      actionsQuery += ` AND LOWER(category) = LOWER($${actionsParams.length + 1})`;
+      actionsParams.push(filters.category);
+    }
+    
+    if (filters.search) {
+      const searchPattern = `%${filters.search}%`;
+      const issuesSearchIndex = issuesParams.length + 1;
+      issuesQuery += ` AND (LOWER(title) LIKE LOWER($${issuesSearchIndex}) OR LOWER(description) LIKE LOWER($${issuesSearchIndex}))`;
+      issuesParams.push(searchPattern);
+      const actionsSearchIndex = actionsParams.length + 1;
+      actionsQuery += ` AND (LOWER(title) LIKE LOWER($${actionsSearchIndex}) OR LOWER(description) LIKE LOWER($${actionsSearchIndex}))`;
+      actionsParams.push(searchPattern);
+    }
+    
+    if (filters.tag) {
+      issuesQuery += ` AND $${issuesParams.length + 1} = ANY(tags)`;
+      issuesParams.push(filters.tag);
+      actionsQuery += ` AND $${actionsParams.length + 1} = ANY(tags)`;
+      actionsParams.push(filters.tag);
+    }
+    
+    // Fetch data
+    const [issuesResult, actionsResult] = await Promise.all([
+      pool.query(issuesQuery, issuesParams),
+      pool.query(actionsQuery, actionsParams)
+    ]);
+    
+    // Format data for clipboard (tab-separated for Excel paste compatibility)
+    const rows = [];
+    
+    // Header row
+    rows.push({
+      type: 'Item Type',
+      title: 'Item Title',
+      assignee: 'Assignee',
+      priority: 'Priority',
+      dueDate: 'Due Date',
+      status: 'Status'
+    });
+    
+    // Add issues
+    issuesResult.rows.forEach(issue => {
+      rows.push({
+        type: 'Issue',
+        title: issue.title || '',
+        assignee: issue.assignee || 'Unassigned',
+        priority: issue.priority || 'medium',
+        dueDate: issue.due_date ? new Date(issue.due_date).toLocaleDateString() : '',
+        status: issue.status || 'To Do'
+      });
+    });
+    
+    // Add action items
+    actionsResult.rows.forEach(action => {
+      rows.push({
+        type: 'Action Item',
+        title: action.title || '',
+        assignee: action.assignee || 'Unassigned',
+        priority: action.priority || 'medium',
+        dueDate: action.due_date ? new Date(action.due_date).toLocaleDateString() : '',
+        status: action.status || 'To Do'
+      });
+    });
+    
+    // Return as JSON for client-side clipboard handling
+    res.json({ 
+      success: true,
+      data: rows,
+      count: rows.length - 1 // Exclude header
+    });
+    
+    const itemCount = issuesResult.rows.length + actionsResult.rows.length;
+    console.log(`📋 Clipboard data prepared for user ${userId} (${itemCount} items)`);
+    
+  } catch (error) {
+    console.error('Clipboard data error:', error);
+    res.status(500).json({ 
+      error: 'Failed to prepare clipboard data',
+      message: error.message 
+    });
+  }
+});
+
 // ========================================
 // VALIDATION ENDPOINTS
 // ========================================
@@ -10768,6 +11239,159 @@ app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error updating assignees:', error);
     res.status(500).json({ error: 'Failed to update assignees' });
+  }
+});
+
+// ==================== BULK METADATA ENDPOINT (PERFORMANCE OPTIMIZATION) ====================
+
+/**
+ * Get bulk metadata for all items in a project
+ * Returns relationships, comments, and checklist status for all issues and action items
+ * This replaces hundreds of individual API calls with a single bulk request
+ */
+app.get('/api/projects/:projectId/items-metadata', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    // Verify project access
+    const projectCheck = await pool.query(
+      'SELECT id FROM projects WHERE id = $1',
+      [projectId]
+    );
+    
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Get all relationship counts for issues and action items in this project
+    const relationshipsResult = await pool.query(`
+      WITH project_items AS (
+        SELECT id, 'issue' as type FROM issues WHERE project_id = $1
+        UNION ALL
+        SELECT id, 'action-item' as type FROM action_items WHERE project_id = $1
+      ),
+      outgoing_counts AS (
+        SELECT source_id, source_type, COUNT(*) as count
+        FROM issue_relationships r
+        INNER JOIN project_items pi ON r.source_id = pi.id AND r.source_type = pi.type
+        GROUP BY source_id, source_type
+      ),
+      incoming_counts AS (
+        SELECT target_id, target_type, COUNT(*) as count
+        FROM issue_relationships r
+        INNER JOIN project_items pi ON r.target_id = pi.id AND r.target_type = pi.type
+        GROUP BY target_id, target_type
+      )
+      SELECT 
+        COALESCE(o.source_id, i.target_id) as item_id,
+        COALESCE(o.source_type, i.target_type) as item_type,
+        COALESCE(o.count, 0) + COALESCE(i.count, 0) as total_count
+      FROM outgoing_counts o
+      FULL OUTER JOIN incoming_counts i 
+        ON o.source_id = i.target_id AND o.source_type = i.target_type
+    `, [projectId]);
+    
+    // Get all comment counts
+    const commentsResult = await pool.query(`
+      SELECT item_id, item_type, COUNT(*) as count
+      FROM comments c
+      WHERE EXISTS (
+        SELECT 1 FROM issues WHERE id = c.item_id AND project_id = $1 AND c.item_type = 'issue'
+        UNION ALL
+        SELECT 1 FROM action_items WHERE id = c.item_id AND project_id = $1 AND c.item_type = 'action-item'
+      )
+      GROUP BY item_id, item_type
+    `, [projectId]);
+    
+    // Get all checklist statuses for issues
+    const issueChecklistsResult = await pool.query(`
+      SELECT 
+        related_issue_id as item_id,
+        'issue' as item_type,
+        ARRAY_AGG(json_build_object(
+          'id', id,
+          'name', title,
+          'total', COALESCE(total_items, 0),
+          'completed', COALESCE(completed_items, 0)
+        ) ORDER BY created_at) as checklists,
+        SUM(COALESCE(total_items, 0)) as total,
+        SUM(COALESCE(completed_items, 0)) as completed
+      FROM checklists 
+      WHERE related_issue_id IN (SELECT id FROM issues WHERE project_id = $1)
+        AND (is_standalone = false OR is_standalone IS NULL)
+      GROUP BY related_issue_id
+    `, [projectId]);
+    
+    // Get all checklist statuses for action items
+    const actionChecklistsResult = await pool.query(`
+      SELECT 
+        related_action_id as item_id,
+        'action-item' as item_type,
+        ARRAY_AGG(json_build_object(
+          'id', id,
+          'name', title,
+          'total', COALESCE(total_items, 0),
+          'completed', COALESCE(completed_items, 0)
+        ) ORDER BY created_at) as checklists,
+        SUM(COALESCE(total_items, 0)) as total,
+        SUM(COALESCE(completed_items, 0)) as completed
+      FROM checklists 
+      WHERE related_action_id IN (SELECT id FROM action_items WHERE project_id = $1)
+        AND (is_standalone = false OR is_standalone IS NULL)
+      GROUP BY related_action_id
+    `, [projectId]);
+    
+    // Build response object with all metadata
+    const metadata = {
+      relationships: {},
+      comments: {},
+      checklists: {}
+    };
+    
+    // Process relationships
+    relationshipsResult.rows.forEach(row => {
+      const key = `${row.item_type}-${row.item_id}`;
+      metadata.relationships[key] = parseInt(row.total_count);
+    });
+    
+    // Process comments
+    commentsResult.rows.forEach(row => {
+      const key = `${row.item_type}-${row.item_id}`;
+      metadata.comments[key] = parseInt(row.count);
+    });
+    
+    // Process issue checklists
+    issueChecklistsResult.rows.forEach(row => {
+      const key = `issue-${row.item_id}`;
+      const total = parseInt(row.total) || 0;
+      const completed = parseInt(row.completed) || 0;
+      metadata.checklists[key] = {
+        hasChecklist: true,
+        total,
+        completed,
+        percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+        checklists: row.checklists || []
+      };
+    });
+    
+    // Process action item checklists
+    actionChecklistsResult.rows.forEach(row => {
+      const key = `action-item-${row.item_id}`;
+      const total = parseInt(row.total) || 0;
+      const completed = parseInt(row.completed) || 0;
+      metadata.checklists[key] = {
+        hasChecklist: true,
+        total,
+        completed,
+        percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+        checklists: row.checklists || []
+      };
+    });
+    
+    res.json(metadata);
+  } catch (error) {
+    console.error('Error fetching bulk metadata:', error);
+    res.status(500).json({ error: 'Failed to fetch metadata' });
   }
 });
 
