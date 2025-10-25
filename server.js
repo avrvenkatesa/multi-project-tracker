@@ -1310,18 +1310,21 @@ app.get('/api/projects/:projectId/team', authenticateToken, async (req, res) => 
     console.log('User:', req.user);
     
     const result = await pool.query(`
-      SELECT DISTINCT ON (u.id)
-        pm.id,
-        pm.user_id,
-        u.username as name,
-        u.email,
-        pm.role,
-        pm.joined_at,
-        pm.status
-      FROM project_members pm
-      JOIN users u ON pm.user_id = u.id
-      WHERE pm.project_id = $1 AND pm.status = 'active'
-      ORDER BY u.id, pm.role, pm.joined_at
+      SELECT * FROM (
+        SELECT DISTINCT ON (u.id)
+          pm.id,
+          pm.user_id,
+          u.username as name,
+          u.email,
+          pm.role,
+          pm.joined_at,
+          pm.status
+        FROM project_members pm
+        JOIN users u ON pm.user_id = u.id
+        WHERE pm.project_id = $1 AND pm.status = 'active'
+        ORDER BY u.id, pm.joined_at DESC
+      ) unique_members
+      ORDER BY role, joined_at
     `, [projectId]);
     
     res.json(result.rows);
