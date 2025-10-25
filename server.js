@@ -10656,6 +10656,7 @@ app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
     
     let issuesUpdated = 0;
     let actionsUpdated = 0;
+    let usersUpdated = 0;
     
     // Update each assignee name
     for (const update of updates) {
@@ -10667,21 +10668,37 @@ app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
       
       console.log(`[ADMIN UPDATE] Updating assignee: "${oldName}" -> "${newName}"`);
       
-      // Update issues
+      // Update issues - use case-insensitive matching
       const issueResult = await pool.query(
-        'UPDATE issues SET assignee = $1 WHERE TRIM(assignee) = $2',
+        'UPDATE issues SET assignee = $1 WHERE LOWER(TRIM(assignee)) = LOWER($2)',
         [newName, oldName.trim()]
       );
       console.log(`[ADMIN UPDATE]   Issues updated: ${issueResult.rowCount || 0}`);
       issuesUpdated += issueResult.rowCount || 0;
       
-      // Update action items
+      // Update action items - use case-insensitive matching
       const actionResult = await pool.query(
-        'UPDATE action_items SET assignee = $1 WHERE TRIM(assignee) = $2',
+        'UPDATE action_items SET assignee = $1 WHERE LOWER(TRIM(assignee)) = LOWER($2)',
         [newName, oldName.trim()]
       );
       console.log(`[ADMIN UPDATE]   Action items updated: ${actionResult.rowCount || 0}`);
       actionsUpdated += actionResult.rowCount || 0;
+      
+      // Update users table - only safe to update if no conflict exists
+      // Use case-insensitive matching to handle variations like "gajalakshmi" vs "Gajalakshmi"
+      // Skip users that would conflict with existing usernames (including case variants)
+      const userResult = await pool.query(
+        `UPDATE users u1 SET username = $1 
+         WHERE LOWER(TRIM(u1.username)) = LOWER($2)
+         AND NOT EXISTS (
+           SELECT 1 FROM users u2
+           WHERE LOWER(TRIM(u2.username)) = LOWER($1) 
+           AND u2.id != u1.id
+         )`,
+        [newName, oldName.trim()]
+      );
+      console.log(`[ADMIN UPDATE]   Users updated: ${userResult.rowCount || 0}`);
+      usersUpdated += userResult.rowCount || 0;
     }
     
     res.json({
@@ -10689,7 +10706,11 @@ app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
       updatesApplied: updates.length,
       issuesUpdated,
       actionsUpdated,
-      totalUpdated: issuesUpdated + actionsUpdated
+      usersUpdated,
+      totalUpdated: issuesUpdated + actionsUpdated + usersUpdated,
+      message: usersUpdated === 0 && (issuesUpdated > 0 || actionsUpdated > 0) ? 
+        'Assignee names updated in issues/action items. If old names still appear in dropdowns, manually update user profiles or remove inactive users from projects.' : 
+        'Assignee consolidation completed successfully.'
     });
   } catch (error) {
     console.error('Error updating assignees:', error);

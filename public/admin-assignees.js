@@ -123,10 +123,16 @@ async function applyUpdates() {
     const result = await response.json();
     
     const successDiv = document.getElementById('success');
-    successDiv.querySelector('p').innerHTML = `
+    let message = `
       <strong>Success!</strong> Updated ${result.totalUpdated} items 
-      (${result.issuesUpdated} issues, ${result.actionsUpdated} action items)
+      (${result.issuesUpdated} issues, ${result.actionsUpdated} action items, ${result.usersUpdated} users)
     `;
+    
+    if (result.message && result.message.includes('manually update')) {
+      message += `<br><br><em class="text-sm">${result.message}</em>`;
+    }
+    
+    successDiv.querySelector('p').innerHTML = message;
     successDiv.classList.remove('hidden');
 
     selectedUpdates = {};
