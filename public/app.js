@@ -947,6 +947,52 @@ async function loadTeamMembers(projectId) {
     }
 }
 
+// Create effort estimation badge (Phase 1)
+function createEffortEstimateBadge(item) {
+  if (!item.estimated_hours && !item.ai_estimated_hours) {
+    return '';
+  }
+  
+  const estimate = item.estimated_hours || item.ai_estimated_hours;
+  const actual = item.actual_hours;
+  const isAI = item.ai_estimated_hours && !item.estimated_hours;
+  
+  let badgeContent = '';
+  
+  if (actual && item.status === 'Done') {
+    const variance = actual - estimate;
+    const variancePercent = Math.round((variance / estimate) * 100);
+    
+    let varClass = 'bg-gray-100 text-gray-700';
+    let icon = '⏱️';
+    
+    if (Math.abs(variancePercent) <= 10) {
+      varClass = 'bg-green-100 text-green-700';
+      icon = '✓';
+    } else if (variancePercent > 10) {
+      varClass = 'bg-red-100 text-red-700';
+      icon = '⚠️';
+    }
+    
+    badgeContent = `
+      <div class="flex items-center gap-1 px-2 py-1 rounded text-xs ${varClass}">
+        <span>${icon}</span>
+        <span>${estimate}h est / ${actual}h actual</span>
+      </div>
+    `;
+  } else {
+    const aiIndicator = isAI ? '🤖' : '⏱️';
+    badgeContent = `
+      <div class="flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-50 text-blue-700">
+        <span>${aiIndicator}</span>
+        <span>${estimate}h estimated</span>
+      </div>
+    `;
+  }
+  
+  return `<div class="mb-2">${badgeContent}</div>`;
+}
+
 // Create due date badge with color coding
 function createDueDateBadge(dueDate, status, completedAt) {
   // For Done items, show delivery performance
@@ -1195,6 +1241,7 @@ async function renderKanbanBoard() {
                             <span>${item.assignee || "Unassigned"}</span>
                         </div>
                         ${createDueDateBadge(item.due_date, item.status, item.completed_at)}
+                        ${createEffortEstimateBadge(item)}
                         ${item.tags && item.tags.length > 0 ? `
                             <div class="flex flex-wrap gap-1 mb-2">
                                 ${item.tags.map(tag => `
@@ -3865,6 +3912,9 @@ async function openEditModal(itemId, itemType) {
       // Load attachments
       await loadEditAttachments(item.id, 'issue');
       
+      // Load effort estimate data
+      await loadEffortEstimate(item.id, 'issue');
+      
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
     } else {
@@ -4205,7 +4255,9 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     due_date: document.getElementById('edit-issue-due-date').value,
     priority: document.getElementById('edit-issue-priority').value,
     status: document.getElementById('edit-issue-status').value,
-    category: document.getElementById('edit-issue-category').value
+    category: document.getElementById('edit-issue-category').value,
+    estimated_hours: document.getElementById('edit-issue-estimated-hours').value || null,
+    actual_hours: document.getElementById('edit-issue-actual-hours').value || null
   };
   
   // Get selected tag IDs
@@ -6875,5 +6927,628 @@ async function copyToClipboard() {
     btn.classList.add('bg-blue-50', 'hover:bg-blue-100', 'border-blue-300');
   }
 }
+
+// ==================== EFFORT ESTIMATION (PHASE 1) ====================
+
+let currentEstimateData = null;
+
+async function loadEffortEstimate(itemId, itemType) {
+  try {
+    const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${endpoint}/${itemId}`, { withCredentials: true });
+    const item = response.data;
+    
+    document.getElementById('edit-issue-estimated-hours').value = item.estimated_hours || '';
+    document.getElementById('edit-issue-actual-hours').value = item.actual_hours || '';
+    
+    if (item.ai_estimated_hours) {
+      currentEstimateData = {
+        hours: item.ai_estimated_hours,
+        confidence: item.ai_confidence || 'medium',
+        version: item.estimate_version || 1,
+        itemId,
+        itemType,
+        hasHybrid: item.hybrid_effort_estimate_hours && item.hybrid_effort_estimate_hours > 0,
+        hybridHours: item.hybrid_effort_estimate_hours || 0,
+        hybridSelectedCount: 0,
+        hybridTotalTasks: 0
+      };
+      
+      // Load hybrid task count if hybrid exists
+      if (currentEstimateData.hasHybrid && item.hybrid_estimate_data) {
+        try {
+          const hybridData = typeof item.hybrid_estimate_data === 'string' 
+            ? JSON.parse(item.hybrid_estimate_data) 
+            : item.hybrid_estimate_data;
+          if (hybridData && hybridData.selectedTasks) {
+            currentEstimateData.hybridSelectedCount = hybridData.selectedTasks.filter(t => t.selected !== false).length;
+            currentEstimateData.hybridTotalTasks = hybridData.totalTasks || hybridData.selectedTasks.length;
+          }
+        } catch (e) {
+          console.error('Error parsing hybrid data:', e);
+        }
+      }
+      
+      document.getElementById('edit-issue-ai-hours').textContent = item.ai_estimated_hours;
+      const confidenceBadge = document.getElementById('edit-issue-ai-confidence');
+      confidenceBadge.textContent = item.ai_confidence || 'medium';
+      confidenceBadge.className = `ml-2 text-xs px-2 py-1 rounded ${
+        item.ai_confidence === 'high' ? 'bg-green-200 text-green-800' :
+        item.ai_confidence === 'low' ? 'bg-red-200 text-red-800' :
+        'bg-blue-200 text-blue-800'
+      }`;
+      
+      document.getElementById('edit-issue-ai-estimate-section').classList.remove('hidden');
+      
+      // Show hybrid section if it exists
+      if (currentEstimateData.hasHybrid) {
+        document.getElementById('edit-issue-hybrid-hours').textContent = currentEstimateData.hybridHours.toFixed(1);
+        document.getElementById('edit-issue-hybrid-count').textContent = `${currentEstimateData.hybridSelectedCount}/${currentEstimateData.hybridTotalTasks} tasks`;
+        document.getElementById('edit-issue-hybrid-estimate-section').classList.remove('hidden');
+      }
+      
+      // Update the three-way selector to show hybrid option if available
+      updateThreeWayEstimateSelector();
+    } else {
+      document.getElementById('edit-issue-ai-estimate-section').classList.add('hidden');
+      currentEstimateData = null;
+    }
+    
+    await loadRateLimitStatus();
+    
+  } catch (error) {
+    console.error('Error loading effort estimate:', error);
+  }
+}
+
+async function loadRateLimitStatus() {
+  try {
+    const response = await axios.get('/api/ai-usage/rate-limit', { withCredentials: true });
+    const { limits } = response.data;
+    
+    if (!limits || !limits.user) {
+      console.warn('Rate limit data not available');
+      return;
+    }
+    
+    const user = limits.user;
+    const project = limits.project;
+    
+    const warningDiv = document.getElementById('edit-issue-estimate-warning');
+    const msgSpan = document.getElementById('edit-issue-rate-limit-msg');
+    
+    if (user.exceeded || (project && project.exceeded)) {
+      warningDiv.classList.remove('hidden');
+      if (user.exceeded) {
+        const resetDate = new Date(user.resetAt);
+        msgSpan.textContent = `User limit exceeded. Resets in ${Math.ceil((resetDate - Date.now()) / 60000)} min.`;
+      } else if (project) {
+        const resetDate = new Date(project.resetAt);
+        msgSpan.textContent = `Project limit exceeded. Resets in ${Math.ceil((resetDate - Date.now()) / 60000)} min.`;
+      }
+      document.getElementById('edit-issue-generate-estimate').disabled = true;
+    } else if (user.warning || (project && project.warning)) {
+      warningDiv.classList.remove('hidden');
+      const projectMsg = project ? ` ${project.remaining} project estimates today.` : '';
+      msgSpan.textContent = `${user.remaining} user estimates remaining this hour.${projectMsg}`;
+    } else {
+      warningDiv.classList.add('hidden');
+    }
+    
+  } catch (error) {
+    console.error('Error loading rate limit status:', error);
+  }
+}
+
+document.getElementById('edit-issue-generate-estimate')?.addEventListener('click', async function() {
+  const itemId = document.getElementById('edit-issue-id').value;
+  if (!itemId) return;
+  
+  // Warn if regenerating will clear hybrid estimate
+  if (currentEstimateData && currentEstimateData.hasHybrid && currentEstimateData.hybridHours > 0) {
+    const confirmRegenerate = confirm(
+      `⚠️ Warning: Regenerating the AI estimate will reset your hybrid selections.\n\n` +
+      `Current hybrid estimate: ${currentEstimateData.hybridHours.toFixed(1)} hours (${currentEstimateData.hybridSelectedCount} tasks selected)\n\n` +
+      `Do you want to continue?`
+    );
+    
+    if (!confirmRegenerate) {
+      return; // User cancelled
+    }
+  }
+  
+  const btn = this;
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="animate-pulse">🤖 Generating...</span>';
+  
+  try {
+    // Clear hybrid estimate data when regenerating
+    if (currentEstimateData) {
+      currentEstimateData.hasHybrid = false;
+      currentEstimateData.hybridHours = 0;
+      currentEstimateData.hybridSelectedCount = 0;
+      currentEstimateData.hybridTotalTasks = 0;
+    }
+    document.getElementById('edit-issue-hybrid-estimate-section').classList.add('hidden');
+    
+    const response = await axios.post(`/api/issues/${itemId}/estimate`, 
+      { model: 'gpt-4o' },
+      { withCredentials: true }
+    );
+    
+    const { estimate, rateLimitStatus } = response.data;
+    
+    currentEstimateData = {
+      hours: estimate.hours,
+      confidence: estimate.confidence,
+      version: estimate.version,
+      itemId,
+      itemType: 'issue'
+    };
+    
+    document.getElementById('edit-issue-ai-hours').textContent = estimate.hours;
+    const confidenceBadge = document.getElementById('edit-issue-ai-confidence');
+    confidenceBadge.textContent = estimate.confidence;
+    confidenceBadge.className = `ml-2 text-xs px-2 py-1 rounded ${
+      estimate.confidence === 'high' ? 'bg-green-200 text-green-800' :
+      estimate.confidence === 'low' ? 'bg-red-200 text-red-800' :
+      'bg-blue-200 text-blue-800'
+    }`;
+    
+    document.getElementById('edit-issue-ai-estimate-section').classList.remove('hidden');
+    
+    // Update three-way selector
+    updateThreeWayEstimateSelector();
+    
+    showToast('AI estimate generated successfully! Click "View Breakdown" to review details.', 'success');
+    await loadRateLimitStatus();
+    
+  } catch (error) {
+    console.error('Error generating estimate:', error);
+    if (error.response?.status === 429) {
+      showToast('Rate limit exceeded. Please try again later.', 'error');
+    } else {
+      showToast(error.response?.data?.error || 'Failed to generate estimate', 'error');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+});
+
+let hybridSelectionState = { tasks: [], totalHours: 0, selectedCount: 0 };
+
+document.getElementById('edit-issue-view-breakdown')?.addEventListener('click', async function() {
+  if (!currentEstimateData) return;
+  
+  const { itemId, itemType } = currentEstimateData;
+  const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+  
+  try {
+    // Load AI breakdown
+    const response = await axios.get(`/api/${endpoint}/${itemId}/estimate/breakdown`, 
+      { withCredentials: true }
+    );
+    
+    const breakdown = response.data;
+    
+    // Initialize hybrid selection state with all tasks
+    hybridSelectionState.tasks = breakdown.tasks.map(task => ({
+      ...task,
+      selected: false,
+      editedHours: task.hours,
+      originalHours: task.hours
+    }));
+    hybridSelectionState.totalHours = 0;
+    hybridSelectionState.selectedCount = 0;
+    
+    // Try to load saved hybrid data and hydrate
+    try {
+      const hybridResponse = await axios.get(`/api/${endpoint}/${itemId}/estimate/breakdown?type=hybrid`, 
+        { withCredentials: true }
+      );
+      
+      if (hybridResponse.data && hybridResponse.data.selectedTasks) {
+        // Hydrate saved hybrid selections
+        const savedSelections = hybridResponse.data.selectedTasks;
+        
+        savedSelections.forEach(savedTask => {
+          // Find matching task in current breakdown
+          const taskIndex = hybridSelectionState.tasks.findIndex(t => 
+            t.task === savedTask.task || t.task === savedTask.description
+          );
+          
+          if (taskIndex !== -1) {
+            hybridSelectionState.tasks[taskIndex].selected = true;
+            hybridSelectionState.tasks[taskIndex].editedHours = savedTask.editedHours || savedTask.hours;
+          }
+        });
+        
+        // Recalculate totals
+        const selectedTasks = hybridSelectionState.tasks.filter(t => t.selected);
+        hybridSelectionState.totalHours = selectedTasks.reduce((sum, task) => sum + task.editedHours, 0);
+        hybridSelectionState.selectedCount = selectedTasks.length;
+      }
+    } catch (hybridError) {
+      // No saved hybrid data, that's okay
+      console.log('No saved hybrid data found, starting fresh');
+    }
+    
+    renderBreakdownModal(breakdown, itemId, itemType);
+    document.getElementById('estimateBreakdownModal').classList.remove('hidden');
+    
+  } catch (error) {
+    console.error('Error loading breakdown:', error);
+    showToast('Failed to load estimate breakdown', 'error');
+  }
+});
+
+function renderBreakdownModal(breakdown, itemId, itemType) {
+  const contentDiv = document.getElementById('breakdown-content');
+  
+  contentDiv.innerHTML = `
+    <div class="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg mb-4">
+      <div class="grid grid-cols-4 gap-4 text-center">
+        <div>
+          <div class="text-sm text-gray-600">AI Total</div>
+          <div class="text-2xl font-bold text-blue-600">${breakdown.totalHours} hrs</div>
+        </div>
+        <div>
+          <div class="text-sm text-gray-600">Confidence</div>
+          <div class="text-2xl font-bold ${
+            breakdown.confidence === 'high' ? 'text-green-600' :
+            breakdown.confidence === 'low' ? 'text-red-600' : 'text-blue-600'
+          }">${breakdown.confidence}</div>
+        </div>
+        <div>
+          <div class="text-sm text-gray-600">Selected</div>
+          <div class="text-2xl font-bold text-purple-600" id="hybrid-selected-count">0/${breakdown.tasks.length}</div>
+        </div>
+        <div>
+          <div class="text-sm text-gray-600">Hybrid Total</div>
+          <div class="text-2xl font-bold text-green-600" id="hybrid-total-hours">0 hrs</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="mb-4">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-lg font-semibold">📋 Select Tasks for Hybrid Estimate</h3>
+        <button id="select-all-tasks" class="text-sm px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded">
+          Select All
+        </button>
+      </div>
+      <div class="space-y-2" id="tasks-list">
+        ${breakdown.tasks.map((task, idx) => `
+          <div class="border-2 ${hybridSelectionState.tasks[idx]?.selected ? 'border-green-300 bg-green-50' : 'border-gray-200'} rounded-lg p-3 hover:border-blue-300 transition-colors task-item" data-task-index="${idx}">
+            <div class="flex items-start gap-3">
+              <input type="checkbox" 
+                     id="task-${idx}" 
+                     class="task-checkbox mt-1 w-5 h-5 cursor-pointer" 
+                     data-index="${idx}"
+                     ${hybridSelectionState.tasks[idx]?.selected ? 'checked' : ''}>
+              <div class="flex-1">
+                <label for="task-${idx}" class="font-medium cursor-pointer block">
+                  ${idx + 1}. ${task.task || task.description || 'Task'}
+                </label>
+                ${task.reasoning ? `
+                  <div class="text-xs text-gray-500 mt-1">
+                    <strong>Reasoning:</strong> ${task.reasoning}
+                  </div>
+                ` : ''}
+                ${task.complexity || task.category ? `
+                  <div class="flex gap-2 mt-2">
+                    ${task.complexity ? `<span class="text-xs px-2 py-1 rounded bg-gray-100">${task.complexity}</span>` : ''}
+                    ${task.category ? `<span class="text-xs px-2 py-1 rounded bg-blue-100">${task.category}</span>` : ''}
+                  </div>
+                ` : ''}
+              </div>
+              <div class="flex items-center gap-2">
+                <input type="number" 
+                       id="hours-${idx}" 
+                       class="task-hours w-20 px-2 py-1 border rounded text-center font-bold"
+                       value="${hybridSelectionState.tasks[idx]?.editedHours || task.hours}" 
+                       min="0.5" 
+                       step="0.5"
+                       ${hybridSelectionState.tasks[idx]?.selected ? '' : 'disabled'}
+                       data-index="${idx}">
+                <span class="text-gray-500">hrs</span>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    
+    ${breakdown.assumptions && breakdown.assumptions.length > 0 ? `
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold mb-2">💭 Key Assumptions</h3>
+        <ul class="list-disc list-inside space-y-1 text-sm text-gray-700">
+          ${breakdown.assumptions.map(a => `<li>${a}</li>`).join('')}
+        </ul>
+      </div>
+    ` : ''}
+    
+    <div class="text-xs text-gray-500 mt-4 p-3 bg-gray-50 rounded">
+      <strong>Tip:</strong> Select tasks you want to include in your hybrid estimate. Edit hours if needed. Your selections auto-save.
+      <br>Generated on ${new Date(breakdown.timestamp).toLocaleString()}
+    </div>
+  `;
+  
+  // Attach event listeners
+  attachBreakdownEventListeners(itemId, itemType);
+}
+
+function attachBreakdownEventListeners(itemId, itemType) {
+  // Select all button
+  document.getElementById('select-all-tasks')?.addEventListener('click', function() {
+    const allSelected = hybridSelectionState.selectedCount === hybridSelectionState.tasks.length;
+    
+    hybridSelectionState.tasks.forEach((task, idx) => {
+      task.selected = !allSelected;
+      document.getElementById(`task-${idx}`).checked = !allSelected;
+      document.getElementById(`hours-${idx}`).disabled = allSelected;
+    });
+    
+    recalculateHybridTotal();
+    saveHybridEstimate(itemId, itemType);
+    
+    this.textContent = allSelected ? 'Select All' : 'Deselect All';
+  });
+  
+  // Task checkbox listeners
+  document.querySelectorAll('.task-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+      const idx = parseInt(this.dataset.index);
+      hybridSelectionState.tasks[idx].selected = this.checked;
+      document.getElementById(`hours-${idx}`).disabled = !this.checked;
+      
+      // Update visual styling
+      const taskItem = this.closest('.task-item');
+      if (this.checked) {
+        taskItem.classList.remove('border-gray-200');
+        taskItem.classList.add('border-green-300', 'bg-green-50');
+      } else {
+        taskItem.classList.remove('border-green-300', 'bg-green-50');
+        taskItem.classList.add('border-gray-200');
+      }
+      
+      // If unchecked, reset to original hours
+      if (!this.checked) {
+        hybridSelectionState.tasks[idx].editedHours = hybridSelectionState.tasks[idx].originalHours;
+        document.getElementById(`hours-${idx}`).value = hybridSelectionState.tasks[idx].originalHours;
+      }
+      
+      recalculateHybridTotal();
+      saveHybridEstimate(itemId, itemType);
+    });
+  });
+  
+  // Hours input listeners
+  document.querySelectorAll('.task-hours').forEach(input => {
+    input.addEventListener('input', function() {
+      const idx = parseInt(this.dataset.index);
+      const newHours = parseFloat(this.value) || 0;
+      hybridSelectionState.tasks[idx].editedHours = newHours;
+      
+      recalculateHybridTotal();
+      saveHybridEstimate(itemId, itemType);
+    });
+  });
+}
+
+function recalculateHybridTotal() {
+  const selectedTasks = hybridSelectionState.tasks.filter(t => t.selected);
+  const total = selectedTasks.reduce((sum, task) => sum + task.editedHours, 0);
+  
+  hybridSelectionState.totalHours = total;
+  hybridSelectionState.selectedCount = selectedTasks.length;
+  
+  // Update UI
+  document.getElementById('hybrid-selected-count').textContent = `${selectedTasks.length}/${hybridSelectionState.tasks.length}`;
+  document.getElementById('hybrid-total-hours').textContent = `${total.toFixed(1)} hrs`;
+  
+  // Update select all button
+  const selectAllBtn = document.getElementById('select-all-tasks');
+  if (selectAllBtn) {
+    selectAllBtn.textContent = hybridSelectionState.selectedCount === hybridSelectionState.tasks.length ? 'Deselect All' : 'Select All';
+  }
+}
+
+async function saveHybridEstimate(itemId, itemType) {
+  if (hybridSelectionState.selectedCount === 0) {
+    // Clear hybrid if nothing selected
+    if (currentEstimateData) {
+      currentEstimateData.hasHybrid = false;
+      currentEstimateData.hybridHours = 0;
+      currentEstimateData.hybridSelectedCount = 0;
+      currentEstimateData.hybridTotalTasks = 0;
+      updateThreeWayEstimateSelector();
+    }
+    return;
+  }
+  
+  const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+  
+  try {
+    await axios.post(`/api/${endpoint}/${itemId}/estimate/hybrid`, {
+      selectedTasks: hybridSelectionState.tasks,
+      totalHours: hybridSelectionState.totalHours
+    }, { withCredentials: true });
+    
+    console.log('✅ Hybrid estimate saved:', {
+      totalHours: hybridSelectionState.totalHours,
+      selectedCount: hybridSelectionState.selectedCount,
+      totalTasks: hybridSelectionState.tasks.length
+    });
+    
+    // Update global estimate data to trigger UI refresh
+    if (currentEstimateData) {
+      currentEstimateData.hybridHours = hybridSelectionState.totalHours;
+      currentEstimateData.hasHybrid = true;
+      currentEstimateData.hybridSelectedCount = hybridSelectionState.selectedCount;
+      currentEstimateData.hybridTotalTasks = hybridSelectionState.tasks.length;
+    }
+    
+    // Update hybrid estimate section
+    document.getElementById('edit-issue-hybrid-hours').textContent = hybridSelectionState.totalHours.toFixed(1);
+    document.getElementById('edit-issue-hybrid-count').textContent = `${hybridSelectionState.selectedCount}/${hybridSelectionState.tasks.length} tasks`;
+    document.getElementById('edit-issue-hybrid-estimate-section').classList.remove('hidden');
+    
+    // Update three-way selector
+    updateThreeWayEstimateSelector();
+    
+  } catch (error) {
+    console.error('Error saving hybrid estimate:', error);
+    showToast('Failed to save hybrid estimate', 'error');
+  }
+}
+
+function updateThreeWayEstimateSelector() {
+  const manualInput = document.getElementById('edit-issue-estimated-hours');
+  const manualHours = parseFloat(manualInput.value) || 0;
+  
+  const selector = document.getElementById('edit-issue-estimate-selector');
+  const manualLabel = document.getElementById('planning-manual-label');
+  const aiLabel = document.getElementById('planning-ai-label');
+  const hybridLabel = document.getElementById('planning-hybrid-label');
+  
+  // Update manual hours display
+  document.getElementById('planning-manual-hours').textContent = manualHours > 0 ? `${manualHours} hours` : '0 hours';
+  
+  // Show/hide AI option
+  if (currentEstimateData && currentEstimateData.hours) {
+    document.getElementById('planning-ai-hours').textContent = `${currentEstimateData.hours} hours`;
+    document.getElementById('planning-ai-confidence').textContent = currentEstimateData.confidence;
+    document.getElementById('planning-ai-confidence').className = `ml-2 text-xs px-2 py-1 rounded ${
+      currentEstimateData.confidence === 'high' ? 'bg-green-200 text-green-800' :
+      currentEstimateData.confidence === 'low' ? 'bg-red-200 text-red-800' :
+      'bg-blue-200 text-blue-800'
+    }`;
+    aiLabel.classList.remove('hidden');
+  } else {
+    aiLabel.classList.add('hidden');
+  }
+  
+  // Show/hide hybrid option
+  if (currentEstimateData && currentEstimateData.hasHybrid && currentEstimateData.hybridHours > 0) {
+    document.getElementById('planning-hybrid-hours').textContent = `${currentEstimateData.hybridHours.toFixed(1)} hours`;
+    document.getElementById('planning-hybrid-tasks').textContent = `${currentEstimateData.hybridSelectedCount}/${currentEstimateData.hybridTotalTasks} tasks`;
+    hybridLabel.classList.remove('hidden');
+  } else {
+    hybridLabel.classList.add('hidden');
+  }
+  
+  // Show selector if AI or Hybrid exists
+  if ((currentEstimateData && currentEstimateData.hours) || (currentEstimateData && currentEstimateData.hasHybrid)) {
+    selector.classList.remove('hidden');
+  } else {
+    selector.classList.add('hidden');
+  }
+  
+  // Update border colors based on selection
+  document.querySelectorAll('[name="planning-estimate"]').forEach(radio => {
+    const label = radio.closest('label');
+    if (radio.checked) {
+      label.classList.add('border-blue-500', 'bg-blue-50');
+      label.classList.remove('border-gray-200');
+    } else {
+      label.classList.remove('border-blue-500', 'bg-blue-50');
+      label.classList.add('border-gray-200');
+    }
+  });
+}
+
+document.getElementById('closeBreakdownModal')?.addEventListener('click', function() {
+  document.getElementById('estimateBreakdownModal').classList.add('hidden');
+  // Update the three-way selector to reflect any hybrid selections made
+  if (currentEstimateData) {
+    updateThreeWayEstimateSelector();
+  }
+});
+
+// Handle View Hybrid Breakdown
+document.getElementById('edit-issue-view-hybrid-breakdown')?.addEventListener('click', async function() {
+  if (!currentEstimateData || !currentEstimateData.hasHybrid) {
+    console.warn('No hybrid estimate data available', currentEstimateData);
+    showToast('No hybrid estimate found', 'error');
+    return;
+  }
+  
+  const { itemId, itemType } = currentEstimateData;
+  const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+  
+  console.log('Loading hybrid breakdown for:', { itemId, itemType, endpoint });
+  
+  try {
+    const response = await axios.get(`/api/${endpoint}/${itemId}/estimate/breakdown?type=hybrid`, 
+      { withCredentials: true }
+    );
+    
+    console.log('Hybrid breakdown response:', response.data);
+    const hybridBreakdown = response.data;
+    const contentDiv = document.getElementById('breakdown-content');
+    
+    contentDiv.innerHTML = `
+      <div class="bg-green-50 p-4 rounded-lg mb-4">
+        <div class="grid grid-cols-2 gap-4 text-center">
+          <div>
+            <div class="text-sm text-gray-600">Hybrid Total</div>
+            <div class="text-2xl font-bold text-green-600">${hybridBreakdown.totalHours.toFixed(1)} hrs</div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-600">Tasks Selected</div>
+            <div class="text-2xl font-bold text-purple-600">${hybridBreakdown.selectedTasks.length}</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold mb-2">✅ Selected Tasks</h3>
+        <div class="space-y-2">
+          ${hybridBreakdown.selectedTasks.map((task, idx) => `
+            <div class="border-2 border-green-200 bg-green-50 rounded-lg p-3">
+              <div class="flex justify-between items-start mb-2">
+                <span class="font-medium">${idx + 1}. ${task.task || task.description || 'Task'}</span>
+                <span class="text-green-600 font-bold">${task.editedHours || task.hours}h</span>
+              </div>
+              ${task.complexity || task.category ? `
+                <div class="flex gap-2 mt-2">
+                  ${task.complexity ? `<span class="text-xs px-2 py-1 rounded bg-gray-100">${task.complexity}</span>` : ''}
+                  ${task.category ? `<span class="text-xs px-2 py-1 rounded bg-blue-100">${task.category}</span>` : ''}
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="text-xs text-gray-500 mt-4 p-3 bg-gray-50 rounded">
+        <strong>Note:</strong> This hybrid estimate was created by selecting specific tasks from the AI breakdown.
+        <br>Created on ${new Date(hybridBreakdown.timestamp).toLocaleString()}
+      </div>
+    `;
+    
+    document.getElementById('estimateBreakdownModal').classList.remove('hidden');
+    
+  } catch (error) {
+    console.error('Error loading hybrid breakdown:', error);
+    showToast('No hybrid estimate found', 'info');
+  }
+});
+
+// Handle radio button selection for planning estimate
+document.querySelectorAll('[name="planning-estimate"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    updateThreeWayEstimateSelector();
+    showToast(`Using ${this.value} estimate for planning`, 'success');
+  });
+});
+
+// Update manual estimate input listener to refresh selector
+document.getElementById('edit-issue-estimated-hours')?.addEventListener('input', function() {
+  updateThreeWayEstimateSelector();
+});
 
 

@@ -35,6 +35,12 @@ const {
   autoCreateChecklistForIssue,
   autoCreateChecklistForActionItem
 } = require('./services/template-service');
+const {
+  generateEstimateFromItem,
+  getEstimateBreakdown,
+  getEstimateHistory
+} = require('./services/effort-estimation-service');
+const { rateLimitMiddleware, getUsageStats } = require('./middleware/ai-rate-limiter');
 const { analyzeDocumentForWorkstreams } = require('./services/document-analyzer');
 const { extractTextFromFile } = require('./services/file-processor');
 const { initializeDailyJobs } = require('./jobs/dailyNotifications');
@@ -11293,14 +11299,15 @@ app.get('/api/projects/:projectId/items-metadata', authenticateToken, async (req
     
     // Get all comment counts
     const commentsResult = await pool.query(`
-      SELECT item_id, item_type, COUNT(*) as count
-      FROM comments c
-      WHERE EXISTS (
-        SELECT 1 FROM issues WHERE id = c.item_id AND project_id = $1 AND c.item_type = 'issue'
-        UNION ALL
-        SELECT 1 FROM action_items WHERE id = c.item_id AND project_id = $1 AND c.item_type = 'action-item'
-      )
-      GROUP BY item_id, item_type
+      SELECT issue_id as item_id, 'issue' as item_type, COUNT(*) as count
+      FROM issue_comments ic
+      WHERE issue_id IN (SELECT id FROM issues WHERE project_id = $1)
+      GROUP BY issue_id
+      UNION ALL
+      SELECT action_item_id as item_id, 'action-item' as item_type, COUNT(*) as count
+      FROM action_item_comments ac
+      WHERE action_item_id IN (SELECT id FROM action_items WHERE project_id = $1)
+      GROUP BY action_item_id
     `, [projectId]);
     
     // Get all checklist statuses for issues
@@ -11392,6 +11399,399 @@ app.get('/api/projects/:projectId/items-metadata', authenticateToken, async (req
   } catch (error) {
     console.error('Error fetching bulk metadata:', error);
     res.status(500).json({ error: 'Failed to fetch metadata' });
+  }
+});
+
+// ==================== EFFORT ESTIMATION ENDPOINTS (PHASE 1) ====================
+
+/**
+ * Generate AI effort estimate for an issue or action item
+ * POST /api/:itemType/:id/estimate
+ * Body: { model: 'gpt-4o' | 'gpt-3.5-turbo' } (optional)
+ */
+app.post('/api/:itemType/:id/estimate', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const { model = 'gpt-4o' } = req.body;
+    const userId = req.user.id;
+
+    // Validate item type
+    if (!['issues', 'action-items'].includes(itemType)) {
+      return res.status(400).json({ error: 'Invalid item type' });
+    }
+
+    const actualItemType = itemType === 'issues' ? 'issue' : 'action-item';
+    
+    // CRITICAL FIX: Fetch projectId before rate limiting check
+    const tableName = itemType === 'issues' ? 'issues' : 'action_items';
+    const projectResult = await pool.query(`SELECT project_id FROM ${tableName} WHERE id = $1`, [id]);
+    
+    if (projectResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    
+    const projectId = projectResult.rows[0].project_id;
+    
+    // Check rate limits with actual projectId
+    const { checkRateLimit } = require('./middleware/ai-rate-limiter');
+    const rateLimitStatus = await checkRateLimit(pool, userId, projectId, 'effort_estimation');
+    
+    if (!rateLimitStatus.allowed) {
+      return res.status(429).json({
+        error: 'rate_limit_exceeded',
+        message: rateLimitStatus.message,
+        limits: rateLimitStatus.limits,
+        retryAfter: rateLimitStatus.limits.user.exceeded 
+          ? Math.ceil((rateLimitStatus.limits.user.resetAt - Date.now()) / 1000)
+          : Math.ceil((rateLimitStatus.limits.project.resetAt - Date.now()) / 1000)
+      });
+    }
+
+    // Generate estimate
+    const result = await generateEstimateFromItem(pool, actualItemType, id, {
+      userId,
+      model,
+      source: 'manual_regenerate'
+    });
+
+    if (!result.success) {
+      return res.status(400).json({
+        error: result.error,
+        message: result.message
+      });
+    }
+
+    // Return estimate with rate limit warnings
+    const response = {
+      success: true,
+      estimate: {
+        hours: result.totalHours,
+        confidence: result.confidence,
+        version: result.version
+      },
+      rateLimitStatus
+    };
+
+    // Add warning if approaching rate limit
+    if (rateLimitStatus?.limits?.user?.warning) {
+      response.warning = {
+        type: 'rate_limit_warning',
+        message: `You have ${rateLimitStatus.limits.user.remaining} AI estimates remaining this hour.`
+      };
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error generating estimate:', error);
+    res.status(500).json({ error: 'Failed to generate estimate' });
+  }
+});
+
+/**
+ * Get estimate breakdown (detailed tasks)
+ * GET /api/:itemType/:id/estimate/breakdown?version=N&type=ai|hybrid
+ */
+app.get('/api/:itemType/:id/estimate/breakdown', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const { version, type = 'ai' } = req.query;
+
+    const actualItemType = itemType === 'issues' ? 'issue' : 'action-item';
+
+    // If requesting hybrid breakdown
+    if (type === 'hybrid') {
+      console.log('Fetching hybrid breakdown:', { actualItemType, id });
+      
+      const hybridQuery = `
+        SELECT hybrid_estimate_data, estimate_hours, version, created_at
+        FROM effort_estimate_history
+        WHERE item_type = $1 AND item_id = $2 AND hybrid_estimate_data IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      const hybridResult = await pool.query(hybridQuery, [actualItemType, id]);
+      
+      console.log('Hybrid query result:', {
+        rowCount: hybridResult.rows.length,
+        hasData: hybridResult.rows.length > 0
+      });
+      
+      if (hybridResult.rows.length === 0) {
+        console.warn('No hybrid estimate found for:', { actualItemType, id });
+        return res.status(404).json({ error: 'No hybrid estimate found for this item' });
+      }
+
+      const hybridData = hybridResult.rows[0].hybrid_estimate_data;
+      
+      // Convert totalHours from string to number
+      const totalHours = parseFloat(hybridResult.rows[0].estimate_hours);
+      
+      console.log('Returning hybrid data:', {
+        totalHours: totalHours,
+        tasksCount: hybridData.selectedTasks?.length
+      });
+      
+      return res.json({
+        type: 'hybrid',
+        totalHours: totalHours,
+        version: hybridResult.rows[0].version,
+        selectedTasks: hybridData.selectedTasks || [],
+        timestamp: hybridResult.rows[0].created_at
+      });
+    }
+
+    // Otherwise, get AI breakdown
+    const breakdown = await getEstimateBreakdown(pool, actualItemType, id, version ? parseInt(version) : null);
+
+    if (!breakdown) {
+      return res.status(404).json({ error: 'No estimate found for this item' });
+    }
+
+    const breakdownData = breakdown.breakdown || {};
+    
+    const response = {
+      type: 'ai',
+      totalHours: breakdown.estimateHours,
+      confidence: breakdown.confidence,
+      version: breakdown.version,
+      tasks: breakdownData.tasks || [],
+      assumptions: breakdownData.assumptions || [],
+      timestamp: breakdown.createdAt,
+      source: breakdown.source
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching breakdown:', error);
+    res.status(500).json({ error: 'Failed to fetch breakdown' });
+  }
+});
+
+/**
+ * Get estimate history (all versions)
+ * GET /api/:itemType/:id/estimate/history
+ */
+app.get('/api/:itemType/:id/estimate/history', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const actualItemType = itemType === 'issues' ? 'issue' : 'action-item';
+
+    const history = await getEstimateHistory(pool, actualItemType, id);
+
+    res.json(history);
+  } catch (error) {
+    console.error('Error fetching history:', error);
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+/**
+ * Update manual estimate
+ * PATCH /api/:itemType/:id/estimate/manual
+ * Body: { estimatedHours: number, actualHours: number (optional), planningSource: 'manual'|'ai'|'hybrid' }
+ */
+app.patch('/api/:itemType/:id/estimate/manual', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const { estimatedHours, actualHours, planningSource } = req.body;
+
+    const tableName = itemType === 'issues' ? 'issues' : 'action_items';
+
+    // Build update query
+    const updates = [];
+    const params = [];
+    let paramIndex = 1;
+
+    if (estimatedHours !== undefined) {
+      updates.push(`estimated_effort_hours = $${paramIndex}`);
+      params.push(estimatedHours);
+      paramIndex++;
+    }
+
+    if (actualHours !== undefined) {
+      updates.push(`actual_effort_hours = $${paramIndex}`);
+      params.push(actualHours);
+      paramIndex++;
+    }
+
+    if (planningSource !== undefined) {
+      updates.push(`planning_estimate_source = $${paramIndex}`);
+      params.push(planningSource);
+      paramIndex++;
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    updates.push(`updated_at = NOW()`);
+
+    params.push(id);
+    const query = `UPDATE ${tableName} SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+
+    const result = await pool.query(query, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    res.json({
+      success: true,
+      estimatedHours: result.rows[0].estimated_effort_hours,
+      actualHours: result.rows[0].actual_effort_hours,
+      planningSource: result.rows[0].planning_estimate_source
+    });
+  } catch (error) {
+    console.error('Error updating manual estimate:', error);
+    res.status(500).json({ error: 'Failed to update estimate' });
+  }
+});
+
+/**
+ * Save hybrid estimate (selected AI tasks)
+ * POST /api/:itemType/:id/estimate/hybrid
+ * Body: { selectedTasks: [{task, hours, originalHours, complexity, category, selected}], totalHours: number }
+ */
+app.post('/api/:itemType/:id/estimate/hybrid', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const { selectedTasks, totalHours } = req.body;
+
+    if (!selectedTasks || !Array.isArray(selectedTasks)) {
+      return res.status(400).json({ error: 'selectedTasks array is required' });
+    }
+
+    if (totalHours === undefined || totalHours < 0) {
+      return res.status(400).json({ error: 'totalHours is required and must be non-negative' });
+    }
+
+    const tableName = itemType === 'issues' ? 'issues' : 'action_items';
+    const actualItemType = itemType === 'issues' ? 'issue' : 'action-item';
+
+    // Prepare hybrid estimate data
+    const hybridData = {
+      selectedTasks: selectedTasks.filter(t => t.selected),
+      totalHours,
+      totalTasks: selectedTasks.length,
+      createdAt: new Date().toISOString()
+    };
+
+    // Start transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Update item with hybrid hours
+      const updateQuery = `
+        UPDATE ${tableName} 
+        SET hybrid_effort_estimate_hours = $1, 
+            planning_estimate_source = 'hybrid',
+            updated_at = NOW() 
+        WHERE id = $2 
+        RETURNING *
+      `;
+      const updateResult = await client.query(updateQuery, [totalHours, id]);
+
+      if (updateResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Item not found' });
+      }
+
+      // Get current AI estimate version for this item
+      const versionQuery = `
+        SELECT COALESCE(MAX(version), 0) as max_version
+        FROM effort_estimate_history
+        WHERE item_type = $1 AND item_id = $2
+      `;
+      const versionResult = await client.query(versionQuery, [actualItemType, id]);
+      const currentVersion = versionResult.rows[0].max_version;
+
+      // Save to history table
+      const historyQuery = `
+        INSERT INTO effort_estimate_history 
+        (item_type, item_id, estimate_hours, version, hybrid_estimate_data, source, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `;
+      const historyResult = await client.query(historyQuery, [
+        actualItemType,
+        id,
+        totalHours,
+        currentVersion, // Use same version as AI estimate
+        JSON.stringify(hybridData),
+        'hybrid_selection',
+        req.user.id
+      ]);
+
+      await client.query('COMMIT');
+
+      res.json({
+        success: true,
+        hybridHours: totalHours,
+        selectedTasksCount: hybridData.selectedTasks.length,
+        totalTasksCount: selectedTasks.length,
+        historyId: historyResult.rows[0].id
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error saving hybrid estimate:', error);
+    res.status(500).json({ error: 'Failed to save hybrid estimate' });
+  }
+});
+
+/**
+ * Get AI usage statistics
+ * GET /api/ai-usage/stats?userId=N&projectId=N&timeRange=day|week|month
+ */
+app.get('/api/ai-usage/stats', authenticateToken, async (req, res) => {
+  try {
+    const { userId, projectId, timeRange = 'month' } = req.query;
+
+    // Non-admins can only view their own stats
+    const requestUserId = parseInt(userId) || req.user.id;
+    if (requestUserId !== req.user.id && !['System Administrator', 'Project Manager'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const stats = await getUsageStats(pool, {
+      userId: requestUserId,
+      projectId: projectId ? parseInt(projectId) : null,
+      feature: 'effort_estimation',
+      timeRange
+    });
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching usage stats:', error);
+    res.status(500).json({ error: 'Failed to fetch usage statistics' });
+  }
+});
+
+/**
+ * Get current rate limit status
+ * GET /api/ai-usage/rate-limit
+ */
+app.get('/api/ai-usage/rate-limit', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    const { checkRateLimit } = require('./middleware/ai-rate-limiter');
+
+    const status = await checkRateLimit(
+      pool,
+      req.user.id,
+      projectId ? parseInt(projectId) : null,
+      'effort_estimation'
+    );
+
+    res.json(status);
+  } catch (error) {
+    console.error('Error checking rate limit:', error);
+    res.status(500).json({ error: 'Failed to check rate limit' });
   }
 });
 
