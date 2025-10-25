@@ -10683,7 +10683,7 @@ app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
   }
 });
 
-// Get all valid usernames for dropdown
+// Get all valid usernames for dropdown (includes users AND all assignee names)
 app.get('/api/admin/valid-usernames', authenticateToken, async (req, res) => {
   try {
     // Check admin permission
@@ -10692,10 +10692,27 @@ app.get('/api/admin/valid-usernames', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
     
+    // Get all users plus all unique assignee names from issues and action items
     const result = await pool.query(`
-      SELECT id, username, email, role 
-      FROM users 
-      ORDER BY username
+      WITH all_names AS (
+        SELECT username as name, email, role FROM users
+        UNION
+        SELECT DISTINCT TRIM(assignee) as name, NULL as email, NULL as role 
+        FROM issues 
+        WHERE assignee IS NOT NULL AND assignee <> ''
+        UNION
+        SELECT DISTINCT TRIM(assignee) as name, NULL as email, NULL as role 
+        FROM action_items 
+        WHERE assignee IS NOT NULL AND assignee <> ''
+      )
+      SELECT DISTINCT 
+        name as username, 
+        email, 
+        role,
+        CASE WHEN email IS NOT NULL THEN 1 ELSE 0 END as is_user
+      FROM all_names
+      WHERE name IS NOT NULL AND name <> ''
+      ORDER BY is_user DESC, name
     `);
     
     res.json(result.rows);

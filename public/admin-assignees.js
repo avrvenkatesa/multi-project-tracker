@@ -60,7 +60,12 @@ function renderTable() {
           ? `<select id="select-${index}" data-old-name="${item.assignee_name.replace(/"/g, '&quot;')}" data-index="${index}"
               class="assignee-select block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
               <option value="">-- Select Correct Username --</option>
-              ${validUsernames.map(u => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.username)} (${escapeHtml(u.email)})</option>`).join('')}
+              ${validUsernames.map(u => {
+                const label = u.email 
+                  ? `${escapeHtml(u.username)} (${escapeHtml(u.email)})` 
+                  : `${escapeHtml(u.username)} (assignee name only)`;
+                return `<option value="${escapeHtml(u.username)}">${label}</option>`;
+              }).join('')}
             </select>`
           : `<span class="text-gray-400">${escapeHtml(item.matched_username || 'N/A')}</span>`
         }
