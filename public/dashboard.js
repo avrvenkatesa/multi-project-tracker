@@ -317,10 +317,19 @@ function renderDashboard() {
       </div>
     </div>
     
-    <!-- Trend Chart -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-      <h3 class="text-lg font-semibold text-gray-800 mb-4">Activity Trend (30 Days)</h3>
-      <canvas id="activityTrendChart" class="w-full" style="max-height: 300px;"></canvas>
+    <!-- Trend Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-2">Activity Trend (30 Days)</h3>
+        <p class="text-sm text-gray-600 mb-4">Click legend items to toggle activity types</p>
+        <canvas id="activityTrendChart" class="w-full" style="max-height: 300px;"></canvas>
+      </div>
+      
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-2">Velocity Trends (30 Days)</h3>
+        <p class="text-sm text-gray-600 mb-4">Status transitions over time</p>
+        <canvas id="velocityTrendChart" class="w-full" style="max-height: 300px;"></canvas>
+      </div>
     </div>
     
     <!-- Activity Feed and Team Metrics -->
@@ -840,31 +849,187 @@ function initializeCharts() {
     }
   }
   
-  // Activity trend line chart
+  // Activity trend stacked area chart with breakdown by type
   const trendCtx = document.getElementById('activityTrendChart');
   if (trendCtx && trends.activityTrend) {
-    const dates = trends.activityTrend.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-    const counts = trends.activityTrend.map(d => parseInt(d.count));
+    // Transform data into datasets by activity type
+    const activityData = trends.activityTrend;
+    const allDates = [...new Set(activityData.map(d => d.date))].sort();
+    const labels = allDates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    
+    // Group by activity type
+    const dataByType = {
+      'issue_created': {},
+      'action_created': {},
+      'issue_comment': {},
+      'action_comment': {}
+    };
+    
+    activityData.forEach(row => {
+      if (dataByType[row.activity_type]) {
+        dataByType[row.activity_type][row.date] = parseInt(row.count);
+      }
+    });
+    
+    // Create datasets for each activity type
+    const datasets = [
+      {
+        label: 'Issues Created',
+        data: allDates.map(date => dataByType['issue_created'][date] || 0),
+        borderColor: '#3B82F6',
+        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+        fill: true,
+        tension: 0.4
+      },
+      {
+        label: 'Action Items Created',
+        data: allDates.map(date => dataByType['action_created'][date] || 0),
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16, 185, 129, 0.5)',
+        fill: true,
+        tension: 0.4
+      },
+      {
+        label: 'Issue Comments',
+        data: allDates.map(date => dataByType['issue_comment'][date] || 0),
+        borderColor: '#8B5CF6',
+        backgroundColor: 'rgba(139, 92, 246, 0.5)',
+        fill: true,
+        tension: 0.4
+      },
+      {
+        label: 'Action Comments',
+        data: allDates.map(date => dataByType['action_comment'][date] || 0),
+        borderColor: '#F59E0B',
+        backgroundColor: 'rgba(245, 158, 11, 0.5)',
+        fill: true,
+        tension: 0.4
+      }
+    ];
     
     charts.activityTrend = new Chart(trendCtx, {
       type: 'line',
       data: {
-        labels: dates,
-        datasets: [{
-          label: 'Activity Count',
-          data: counts,
-          borderColor: '#8B5CF6',
-          backgroundColor: 'rgba(139, 92, 246, 0.1)',
-          tension: 0.4,
-          fill: true
-        }]
+        labels: labels,
+        datasets: datasets
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
         plugins: {
           legend: {
-            display: false
+            display: true,
+            position: 'bottom',
+            onClick: (e, legendItem, legend) => {
+              const index = legendItem.datasetIndex;
+              const chart = legend.chart;
+              const meta = chart.getDatasetMeta(index);
+              meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+              chart.update();
+            }
+          },
+          tooltip: {
+            callbacks: {
+              footer: (tooltipItems) => {
+                const total = tooltipItems.reduce((sum, item) => sum + item.parsed.y, 0);
+                return `Total: ${total}`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            ticks: {
+              precision: 0
+            }
+          },
+          x: {
+            stacked: true
+          }
+        }
+      }
+    });
+  }
+  
+  // Velocity trend chart (status transitions)
+  const velocityCtx = document.getElementById('velocityTrendChart');
+  if (velocityCtx && trends.velocityTrend) {
+    const velocityData = trends.velocityTrend;
+    const allDates = [...new Set(velocityData.map(d => d.date))].sort();
+    const labels = allDates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    
+    // Group by status
+    const dataByStatus = {
+      'To Do': {},
+      'In Progress': {},
+      'Done': {}
+    };
+    
+    velocityData.forEach(row => {
+      if (dataByStatus[row.to_status]) {
+        dataByStatus[row.to_status][row.date] = parseInt(row.count);
+      }
+    });
+    
+    // Create datasets for each status
+    const velocityDatasets = [
+      {
+        label: 'Moved to To Do',
+        data: allDates.map(date => dataByStatus['To Do'][date] || 0),
+        borderColor: '#9CA3AF',
+        backgroundColor: 'rgba(156, 163, 175, 0.2)',
+        fill: false,
+        tension: 0.4
+      },
+      {
+        label: 'Moved to In Progress',
+        data: allDates.map(date => dataByStatus['In Progress'][date] || 0),
+        borderColor: '#FCD34D',
+        backgroundColor: 'rgba(252, 211, 77, 0.2)',
+        fill: false,
+        tension: 0.4
+      },
+      {
+        label: 'Moved to Done',
+        data: allDates.map(date => dataByStatus['Done'][date] || 0),
+        borderColor: '#34D399',
+        backgroundColor: 'rgba(52, 211, 153, 0.2)',
+        fill: false,
+        tension: 0.4
+      }
+    ];
+    
+    charts.velocityTrend = new Chart(velocityCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: velocityDatasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom'
+          },
+          tooltip: {
+            callbacks: {
+              footer: (tooltipItems) => {
+                const total = tooltipItems.reduce((sum, item) => sum + item.parsed.y, 0);
+                return `Total Transitions: ${total}`;
+              }
+            }
           }
         },
         scales: {

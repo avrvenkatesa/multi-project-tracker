@@ -2413,7 +2413,7 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
     const teamResult = await pool.query(`
       SELECT 
         pm.user_id,
-        u.username as user_name,
+        COALESCE(actual_name.assignee_name, u.username) as user_name,
         u.email as user_email,
         pm.role,
         COALESCE(issues_assigned.count, 0) as issues_assigned,
@@ -2429,54 +2429,89 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
       FROM project_members pm
       JOIN users u ON pm.user_id = u.id
       LEFT JOIN (
-        SELECT assignee, COUNT(*) as count
-        FROM issues
-        WHERE project_id = $1
-        GROUP BY assignee
-      ) issues_assigned ON issues_assigned.assignee = u.username
+        SELECT DISTINCT ON (LOWER(TRIM(assignee))) 
+          assignee as assignee_name,
+          LOWER(TRIM(assignee)) as assignee_lower
+        FROM (
+          SELECT assignee FROM issues WHERE project_id = $1 AND assignee IS NOT NULL
+          UNION
+          SELECT assignee FROM action_items WHERE project_id = $1 AND assignee IS NOT NULL
+        ) all_assignees
+      ) actual_name ON (
+        LOWER(TRIM(actual_name.assignee_lower)) = LOWER(TRIM(u.username))
+        OR LOWER(TRIM(actual_name.assignee_lower)) LIKE LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(actual_name.assignee_lower)) LIKE '% ' || LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(actual_name.assignee_lower)) LIKE '% ' || LOWER(TRIM(u.username))
+      )
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM issues
-        WHERE project_id = $2 AND status = 'Done'
+        WHERE project_id = $2
         GROUP BY assignee
-      ) issues_completed ON issues_completed.assignee = u.username
+      ) issues_assigned ON (
+        LOWER(TRIM(issues_assigned.assignee)) = LOWER(TRIM(u.username))
+        OR LOWER(TRIM(issues_assigned.assignee)) LIKE LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(issues_assigned.assignee)) LIKE '% ' || LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(issues_assigned.assignee)) LIKE '% ' || LOWER(TRIM(u.username))
+      )
+      LEFT JOIN (
+        SELECT assignee, COUNT(*) as count
+        FROM issues
+        WHERE project_id = $3 AND status = 'Done'
+        GROUP BY assignee
+      ) issues_completed ON (
+        LOWER(TRIM(issues_completed.assignee)) = LOWER(TRIM(u.username))
+        OR LOWER(TRIM(issues_completed.assignee)) LIKE LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(issues_completed.assignee)) LIKE '% ' || LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(issues_completed.assignee)) LIKE '% ' || LOWER(TRIM(u.username))
+      )
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM action_items
-        WHERE project_id = $3
+        WHERE project_id = $4
         GROUP BY assignee
-      ) actions_assigned ON actions_assigned.assignee = u.username
+      ) actions_assigned ON (
+        LOWER(TRIM(actions_assigned.assignee)) = LOWER(TRIM(u.username))
+        OR LOWER(TRIM(actions_assigned.assignee)) LIKE LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(actions_assigned.assignee)) LIKE '% ' || LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(actions_assigned.assignee)) LIKE '% ' || LOWER(TRIM(u.username))
+      )
       LEFT JOIN (
         SELECT assignee, COUNT(*) as count
         FROM action_items
-        WHERE project_id = $4 AND status = 'Done'
+        WHERE project_id = $5 AND status = 'Done'
         GROUP BY assignee
-      ) actions_completed ON actions_completed.assignee = u.username
+      ) actions_completed ON (
+        LOWER(TRIM(actions_completed.assignee)) = LOWER(TRIM(u.username))
+        OR LOWER(TRIM(actions_completed.assignee)) LIKE LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(actions_completed.assignee)) LIKE '% ' || LOWER(TRIM(u.username)) || ' %'
+        OR LOWER(TRIM(actions_completed.assignee)) LIKE '% ' || LOWER(TRIM(u.username))
+      )
       LEFT JOIN (
         SELECT user_id, COUNT(*) as count
         FROM (
           SELECT ic.user_id
           FROM issue_comments ic
           JOIN issues i ON ic.issue_id = i.id
-          WHERE i.project_id = $5
+          WHERE i.project_id = $6
           UNION ALL
           SELECT aic.user_id
           FROM action_item_comments aic
           JOIN action_items ai ON aic.action_item_id = ai.id
-          WHERE ai.project_id = $6
+          WHERE ai.project_id = $7
         ) all_comments
         GROUP BY user_id
       ) comments ON comments.user_id = pm.user_id
       LEFT JOIN (
         SELECT created_by, MAX(created_at) as last_created
         FROM issues
-        WHERE project_id = $7
+        WHERE project_id = $8
         GROUP BY created_by
       ) last_issue ON last_issue.created_by = CAST(pm.user_id AS TEXT)
       LEFT JOIN (
         SELECT created_by, MAX(created_at) as last_created
         FROM action_items
-        WHERE project_id = $8
+        WHERE project_id = $9
         GROUP BY created_by
       ) last_action ON last_action.created_by = CAST(pm.user_id AS TEXT)
       LEFT JOIN (
@@ -2485,18 +2520,18 @@ app.get('/api/projects/:projectId/dashboard/team-metrics', authenticateToken, as
           SELECT ic.user_id, ic.created_at
           FROM issue_comments ic
           JOIN issues i ON ic.issue_id = i.id
-          WHERE i.project_id = $9
+          WHERE i.project_id = $10
           UNION ALL
           SELECT aic.user_id, aic.created_at
           FROM action_item_comments aic
           JOIN action_items ai ON aic.action_item_id = ai.id
-          WHERE ai.project_id = $10
+          WHERE ai.project_id = $11
         ) all_comments
         GROUP BY user_id
       ) last_comment ON last_comment.user_id = pm.user_id
-      WHERE pm.project_id = $11 AND pm.status = 'active'
+      WHERE pm.project_id = $12 AND pm.status = 'active'
       ORDER BY (COALESCE(issues_completed.count, 0) + COALESCE(actions_completed.count, 0)) DESC
-    `, [projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId]);
+    `, [projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId, projectId]);
     
     console.log(`[DASHBOARD_TEAM] Retrieved metrics for ${teamResult.rows.length} team members`);
     
@@ -2554,33 +2589,51 @@ app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (r
       ORDER BY date ASC
     `, [projectId, days]);
     
-    // Get activity trend
+    // Get activity trend with breakdown by type
     const activityTrendResult = await pool.query(`
-      SELECT DATE(activity_date) as date, COUNT(*) as count
+      SELECT 
+        DATE(activity_date) as date, 
+        activity_type,
+        COUNT(*) as count
       FROM (
-        SELECT created_at as activity_date FROM issues WHERE project_id = $1
+        SELECT created_at as activity_date, 'issue_created' as activity_type FROM issues WHERE project_id = $1
         UNION ALL
-        SELECT created_at FROM action_items WHERE project_id = $2
+        SELECT created_at, 'action_created' FROM action_items WHERE project_id = $2
         UNION ALL
-        SELECT ic.created_at
+        SELECT ic.created_at, 'issue_comment'
         FROM issue_comments ic
         JOIN issues i ON ic.issue_id = i.id
         WHERE i.project_id = $3
         UNION ALL
-        SELECT aic.created_at
+        SELECT aic.created_at, 'action_comment'
         FROM action_item_comments aic
         JOIN action_items ai ON aic.action_item_id = ai.id
         WHERE ai.project_id = $4
       ) all_activity
       WHERE activity_date >= NOW() - ($5 || ' days')::INTERVAL
-      GROUP BY DATE(activity_date)
-      ORDER BY date ASC
+      GROUP BY DATE(activity_date), activity_type
+      ORDER BY date ASC, activity_type
     `, [projectId, projectId, projectId, projectId, days]);
+    
+    // Get velocity trends (status transitions)
+    const velocityTrendResult = await pool.query(`
+      SELECT 
+        DATE(changed_at) as date,
+        to_status,
+        COUNT(*) as count
+      FROM status_history
+      WHERE project_id = $1 
+        AND changed_at >= NOW() - ($2 || ' days')::INTERVAL
+        AND to_status IN ('To Do', 'In Progress', 'Done')
+      GROUP BY DATE(changed_at), to_status
+      ORDER BY date ASC, to_status
+    `, [projectId, days]);
     
     const trends = {
       issuesTrend: issuesTrendResult.rows,
       actionItemsTrend: actionsTrendResult.rows,
-      activityTrend: activityTrendResult.rows
+      activityTrend: activityTrendResult.rows,
+      velocityTrend: velocityTrendResult.rows
     };
     
     console.log(`[DASHBOARD_TRENDS] Retrieved trends for ${days} days`);
