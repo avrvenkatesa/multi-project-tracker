@@ -294,10 +294,27 @@ function renderDashboard() {
       ${renderStatsCards()}
     </div>
     
-    <!-- Charts Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      ${renderStatusChart()}
-      ${renderPriorityChart()}
+    <!-- Charts Section -->
+    <div class="mb-6">
+      <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 Status & Priority Distribution</h3>
+      
+      <!-- Issues Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        ${renderStatusChart()}
+        ${renderPriorityChart()}
+      </div>
+      
+      <!-- Action Items Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        ${renderActionStatusChart()}
+        ${renderActionPriorityChart()}
+      </div>
+      
+      <!-- Combined Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        ${renderCombinedStatusChart()}
+        ${renderCombinedPriorityChart()}
+      </div>
     </div>
     
     <!-- Trend Chart -->
@@ -449,6 +466,46 @@ function renderPriorityChart() {
   `;
 }
 
+// Render action items status chart
+function renderActionStatusChart() {
+  return `
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Action Items by Status</h3>
+      <canvas id="actionStatusChart" style="max-height: 300px;"></canvas>
+    </div>
+  `;
+}
+
+// Render action items priority chart
+function renderActionPriorityChart() {
+  return `
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Action Items by Priority</h3>
+      <canvas id="actionPriorityChart" style="max-height: 300px;"></canvas>
+    </div>
+  `;
+}
+
+// Render combined status chart
+function renderCombinedStatusChart() {
+  return `
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Combined (Issues + Action Items) by Status</h3>
+      <canvas id="combinedStatusChart" style="max-height: 300px;"></canvas>
+    </div>
+  `;
+}
+
+// Render combined priority chart
+function renderCombinedPriorityChart() {
+  return `
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Combined (Issues + Action Items) by Priority</h3>
+      <canvas id="combinedPriorityChart" style="max-height: 300px;"></canvas>
+    </div>
+  `;
+}
+
 // Render activity feed
 function renderActivityFeed() {
   const activities = dashboardData.activity;
@@ -595,6 +652,176 @@ function initializeCharts() {
           labels: priorityLabels,
           datasets: [{
             data: priorityData,
+            backgroundColor: ['#EF4444', '#F97316', '#3B82F6'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+  }
+  
+  // Action Items Status pie chart
+  const actionStatusCtx = document.getElementById('actionStatusChart');
+  if (actionStatusCtx) {
+    const actionStatusLabels = Object.keys(stats.actionItemsByStatus);
+    const actionStatusData = Object.values(stats.actionItemsByStatus);
+    
+    if (actionStatusLabels.length === 0) {
+      actionStatusCtx.parentElement.innerHTML = `
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Action Items by Status</h3>
+          <p class="text-gray-500 text-center py-8">No action item data available</p>
+        </div>
+      `;
+    } else {
+      charts.actionStatus = new Chart(actionStatusCtx, {
+        type: 'doughnut',
+        data: {
+          labels: actionStatusLabels,
+          datasets: [{
+            data: actionStatusData,
+            backgroundColor: ['#9CA3AF', '#FCD34D', '#34D399'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+  }
+  
+  // Action Items Priority pie chart
+  const actionPriorityCtx = document.getElementById('actionPriorityChart');
+  if (actionPriorityCtx) {
+    const actionPriorityLabels = Object.keys(stats.actionItemsByPriority);
+    const actionPriorityData = Object.values(stats.actionItemsByPriority);
+    
+    if (actionPriorityLabels.length === 0) {
+      actionPriorityCtx.parentElement.innerHTML = `
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Action Items by Priority</h3>
+          <p class="text-gray-500 text-center py-8">No action item data available</p>
+        </div>
+      `;
+    } else {
+      charts.actionPriority = new Chart(actionPriorityCtx, {
+        type: 'doughnut',
+        data: {
+          labels: actionPriorityLabels,
+          datasets: [{
+            data: actionPriorityData,
+            backgroundColor: ['#EF4444', '#F97316', '#3B82F6'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+  }
+  
+  // Combined Status pie chart
+  const combinedStatusCtx = document.getElementById('combinedStatusChart');
+  if (combinedStatusCtx) {
+    const combinedStatus = {};
+    // Merge issues and action items by status
+    Object.keys(stats.issuesByStatus).forEach(status => {
+      combinedStatus[status] = (combinedStatus[status] || 0) + stats.issuesByStatus[status];
+    });
+    Object.keys(stats.actionItemsByStatus).forEach(status => {
+      combinedStatus[status] = (combinedStatus[status] || 0) + stats.actionItemsByStatus[status];
+    });
+    
+    const combinedStatusLabels = Object.keys(combinedStatus);
+    const combinedStatusData = Object.values(combinedStatus);
+    
+    if (combinedStatusLabels.length === 0) {
+      combinedStatusCtx.parentElement.innerHTML = `
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Combined by Status</h3>
+          <p class="text-gray-500 text-center py-8">No data available</p>
+        </div>
+      `;
+    } else {
+      charts.combinedStatus = new Chart(combinedStatusCtx, {
+        type: 'doughnut',
+        data: {
+          labels: combinedStatusLabels,
+          datasets: [{
+            data: combinedStatusData,
+            backgroundColor: ['#9CA3AF', '#FCD34D', '#34D399'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+  }
+  
+  // Combined Priority pie chart
+  const combinedPriorityCtx = document.getElementById('combinedPriorityChart');
+  if (combinedPriorityCtx) {
+    const combinedPriority = {};
+    // Merge issues and action items by priority
+    Object.keys(stats.issuesByPriority).forEach(priority => {
+      combinedPriority[priority] = (combinedPriority[priority] || 0) + stats.issuesByPriority[priority];
+    });
+    Object.keys(stats.actionItemsByPriority).forEach(priority => {
+      combinedPriority[priority] = (combinedPriority[priority] || 0) + stats.actionItemsByPriority[priority];
+    });
+    
+    const combinedPriorityLabels = Object.keys(combinedPriority);
+    const combinedPriorityData = Object.values(combinedPriority);
+    
+    if (combinedPriorityLabels.length === 0) {
+      combinedPriorityCtx.parentElement.innerHTML = `
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Combined by Priority</h3>
+          <p class="text-gray-500 text-center py-8">No data available</p>
+        </div>
+      `;
+    } else {
+      charts.combinedPriority = new Chart(combinedPriorityCtx, {
+        type: 'doughnut',
+        data: {
+          labels: combinedPriorityLabels,
+          datasets: [{
+            data: combinedPriorityData,
             backgroundColor: ['#EF4444', '#F97316', '#3B82F6'],
             borderWidth: 2,
             borderColor: '#fff'

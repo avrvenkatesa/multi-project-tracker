@@ -2193,6 +2193,19 @@ app.get('/api/projects/:projectId/dashboard/stats', authenticateToken, async (re
       actionItemsByStatus[row.status] = parseInt(row.count);
     });
     
+    // Get action items by priority
+    const actionItemsByPriorityResult = await pool.query(`
+      SELECT priority, COUNT(*) as count
+      FROM action_items
+      WHERE project_id = $1
+      GROUP BY priority
+    `, [projectId]);
+    
+    const actionItemsByPriority = {};
+    actionItemsByPriorityResult.rows.forEach(row => {
+      actionItemsByPriority[row.priority] = parseInt(row.count);
+    });
+    
     // Calculate completion rate
     const completedIssues = issuesByStatus['Done'] || 0;
     const completedActionItems = actionItemsByStatus['Done'] || 0;
@@ -2254,6 +2267,7 @@ app.get('/api/projects/:projectId/dashboard/stats', authenticateToken, async (re
       issuesByStatus,
       issuesByPriority,
       actionItemsByStatus,
+      actionItemsByPriority,
       completionRate: parseFloat(completionRate.toFixed(2)),
       overdueCount: parseInt(overdueResult.rows[0].count),
       upcomingDeadlines: upcomingResult.rows,
