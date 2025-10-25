@@ -540,7 +540,11 @@ function setupEventListeners() {
         }
     });
     document.getElementById('view-templates-btn')?.addEventListener('click', () => {
-        window.location.href = 'templates.html';
+        if (currentProject) {
+            window.location.href = `templates.html?project=${currentProject.id}`;
+        } else {
+            window.location.href = 'templates.html';
+        }
     });
     
     // Dropdown menu functionality

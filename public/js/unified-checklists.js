@@ -652,12 +652,14 @@ function viewChecklist(checklistId) {
 }
 
 function viewTemplate(templateId) {
-  window.location.href = `/templates.html?id=${templateId}`;
+  const projectParam = currentProjectId ? `&project=${currentProjectId}` : '';
+  window.location.href = `/templates.html?id=${templateId}${projectParam}`;
 }
 
 function useTemplate(templateId) {
   // Redirect to templates page with use action
-  window.location.href = `/templates.html?use=${templateId}`;
+  const projectParam = currentProjectId ? `&project=${currentProjectId}` : '';
+  window.location.href = `/templates.html?use=${templateId}${projectParam}`;
 }
 
 async function deleteChecklist(checklistId) {
@@ -857,7 +859,8 @@ async function saveStandaloneChecklists() {
 
 function openCreateChecklistModal() {
   // Redirect to templates page to create checklist from template
-  window.location.href = '/templates.html';
+  const projectParam = currentProjectId ? `?project=${currentProjectId}` : '';
+  window.location.href = `/templates.html${projectParam}`;
 }
 
 // ============================================
