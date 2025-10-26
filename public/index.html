@@ -1807,6 +1807,25 @@
                         </div>
                     </div>
                     
+                    <!-- Actual Hours - Time Tracking -->
+                    <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">⏱️ Actual Hours Logged</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="edit-issue-actual-hours" step="0.5" min="0" max="999" readonly
+                                           class="w-32 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500"
+                                           title="Auto-calculated from time entries">
+                                    <span class="text-sm text-gray-600">hours</span>
+                                    <span id="edit-issue-time-count" class="text-xs px-2 py-1 rounded bg-blue-200">0 entries</span>
+                                </div>
+                            </div>
+                            <button type="button" id="edit-issue-view-timesheet" class="text-sm px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                📋 View Timesheet
+                            </button>
+                        </div>
+                    </div>
+                    
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
                         <select id="edit-issue-category"
@@ -2017,7 +2036,27 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Progress %</label>
                             <input type="number" id="edit-action-item-progress" min="0" max="100" value="0"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" readonly
+                                   title="Auto-calculated from actual hours / estimated hours">
+                        </div>
+                    </div>
+                    
+                    <!-- Actual Hours - Moved up from estimation section -->
+                    <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">⏱️ Actual Hours Logged</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="edit-action-item-actual-hours" step="0.5" min="0" max="999" readonly
+                                           class="w-32 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500"
+                                           title="Auto-calculated from time entries">
+                                    <span class="text-sm text-gray-600">hours</span>
+                                    <span id="edit-action-item-time-count" class="text-xs px-2 py-1 rounded bg-blue-200">0 entries</span>
+                                </div>
+                            </div>
+                            <button type="button" id="edit-action-item-view-timesheet" class="text-sm px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                📋 View Timesheet
+                            </button>
                         </div>
                     </div>
                     
@@ -2113,14 +2152,6 @@
                                 class="w-full py-2 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 text-sm">
                             🤖 Generate AI Estimate
                         </button>
-                        
-                        <!-- Actual Hours (below all estimate options) -->
-                        <div class="mt-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Actual Hours <span class="text-xs text-gray-500">(when done)</span></label>
-                            <input type="number" id="edit-action-item-actual-hours" step="0.5" min="0" max="999"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                   placeholder="e.g., 10">
-                        </div>
                         
                         <div id="edit-action-item-estimate-warning" class="hidden mt-2 text-xs text-amber-600">
                             ⚠️ <span id="edit-action-item-rate-limit-msg">Loading rate limit...</span>
@@ -2390,8 +2421,76 @@
                 }
             }
         </style>
+
+        <!-- Timesheet Modal -->
+        <div id="timesheetModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="timesheetModalTitle" class="text-2xl font-bold">⏱️ Timesheet Entries</h2>
+                    <button id="closeTimesheetModal" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                </div>
+                
+                <!-- Quick Log Time Form -->
+                <div class="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h3 class="text-lg font-semibold mb-3">➕ Log New Time Entry</h3>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Hours *</label>
+                            <input type="number" id="quick-log-hours" step="0.5" min="0.5" max="24" required
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                   placeholder="e.g., 2.5">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                            <input type="text" id="quick-log-notes"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                   placeholder="What did you work on?">
+                        </div>
+                    </div>
+                    <button type="button" id="submit-quick-log" class="mt-3 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        ⏱️ Log Time
+                    </button>
+                </div>
+                
+                <!-- Time Entries Table -->
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold mb-2">Time Log History</h3>
+                    <div id="timesheet-entries-container" class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-100 border-b">
+                                <tr>
+                                    <th class="px-4 py-2 text-left">Date & Time</th>
+                                    <th class="px-4 py-2 text-left">Logged By</th>
+                                    <th class="px-4 py-2 text-right">Hours</th>
+                                    <th class="px-4 py-2 text-left">Notes</th>
+                                    <th class="px-4 py-2 text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="timesheet-entries-tbody">
+                                <!-- Entries populated by JavaScript -->
+                            </tbody>
+                            <tfoot class="bg-gray-50 border-t-2 border-gray-300 font-bold">
+                                <tr>
+                                    <td colspan="2" class="px-4 py-3 text-right">Total Hours:</td>
+                                    <td class="px-4 py-3 text-right" id="timesheet-total-hours">0.00</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end">
+                    <button id="closeTimesheetModalBtn" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <script src="comments.js?v=3"></script>
         <script src="js/checklist-completion-warning.js"></script>
+        <script src="js/timesheet.js"></script>
         <script src="app.js?v=32"></script>
         <script src="js/project-management.js"></script>
     </body>

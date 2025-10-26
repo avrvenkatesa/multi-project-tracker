@@ -7580,6 +7580,22 @@ async function loadEffortEstimate(itemId, itemType) {
     document.getElementById(`${prefix}-estimated-hours`).value = item.estimated_effort_hours || item.estimated_hours || '';
     document.getElementById(`${prefix}-actual-hours`).value = item.actual_effort_hours || item.actual_hours || '';
     
+    // Load time entry count
+    try {
+      const timeCountBadge = document.getElementById(`${prefix}-time-count`);
+      if (timeCountBadge) {
+        const timeEntriesResponse = await axios.get(`/api/${endpoint}/${itemId}/time-entries`, { withCredentials: true });
+        const entriesCount = timeEntriesResponse.data.entries.length;
+        timeCountBadge.textContent = `${entriesCount} ${entriesCount === 1 ? 'entry' : 'entries'}`;
+      }
+    } catch (error) {
+      console.error('Error loading time entry count:', error);
+      const timeCountBadge = document.getElementById(`${prefix}-time-count`);
+      if (timeCountBadge) {
+        timeCountBadge.textContent = '0 entries';
+      }
+    }
+    
     if (item.ai_estimated_hours || item.ai_effort_estimate_hours) {
       // Parse as numbers (PostgreSQL returns NUMERIC/DECIMAL as strings)
       const aiHours = parseFloat(item.ai_effort_estimate_hours || item.ai_estimated_hours);
