@@ -8036,7 +8036,7 @@ async function saveHybridEstimate(itemId, itemType) {
       currentEstimateData.hybridTotalTasks = hybridSelectionState.tasks.length;
     }
     
-    // Update hybrid estimate section based on itemType
+    // Update EDIT modal elements (if they exist - for Edit Issue/Action modal context)
     const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
     const hybridHoursElement = document.getElementById(`${prefix}-hybrid-hours`);
     const hybridCountElement = document.getElementById(`${prefix}-hybrid-count`);
@@ -8052,8 +8052,14 @@ async function saveHybridEstimate(itemId, itemType) {
       hybridSectionElement.classList.remove('hidden');
     }
     
-    // Update three-way selector with correct itemType
+    // Update three-way selector (Edit modals)
     updateThreeWayEstimateSelector(itemType);
+    
+    // ALSO refresh Detail modal's Effort Estimates tab (if it exists - for Detail modal context)
+    if (typeof loadEstimateForm === 'function') {
+      await loadEstimateForm();
+      console.log('✅ Detail modal Effort Estimates tab refreshed');
+    }
     
   } catch (error) {
     console.error('Error saving hybrid estimate:', error);
