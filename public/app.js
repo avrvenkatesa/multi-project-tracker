@@ -1449,10 +1449,10 @@ async function showTimeEntryModal(item, fromStatus, toStatus) {
                     </label>
                     <input type="number" 
                            id="hours-input" 
-                           step="0.5" 
-                           min="0.1"
+                           step="any" 
+                           min="0.01"
                            required 
-                           placeholder="Enter hours..."
+                           placeholder="Enter hours (e.g., 2, 3.5, 10)..."
                            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
                     <p class="text-xs text-gray-500 mt-1">
                         How many hours did you spend on this work?
