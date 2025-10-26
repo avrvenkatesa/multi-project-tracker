@@ -1,4 +1,5 @@
-const pool = require('../db');
+const { Pool } = require('@neondatabase/serverless');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 /**
  * Time Entries Service
@@ -27,6 +28,23 @@ async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, not
       throw new Error('Hours must be a positive number between 0 and 999');
     }
     
+    // Verify item exists and belongs to the project (prevents orphaned records)
+    const tableName = itemType === 'issue' ? 'issues' : 'action_items';
+    const itemCheckResult = await client.query(
+      `SELECT id, project_id FROM ${tableName} WHERE id = $1`,
+      [itemId]
+    );
+    
+    if (itemCheckResult.rows.length === 0) {
+      throw new Error(`${itemType === 'issue' ? 'Issue' : 'Action item'} not found`);
+    }
+    
+    const checkedItem = itemCheckResult.rows[0];
+    // Normalize to numbers for comparison (handles string vs number mismatch)
+    if (Number(checkedItem.project_id) !== Number(projectId)) {
+      throw new Error('Item does not belong to the specified project');
+    }
+    
     // Insert time entry
     const entryResult = await client.query(
       `INSERT INTO time_entries 
@@ -49,7 +67,6 @@ async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, not
     const totalHours = parseFloat(totalResult.rows[0].total);
     
     // Update item's actual_effort_hours, last_time_logged_at, and time_log_count
-    const tableName = itemType === 'issue' ? 'issues' : 'action_items';
     await client.query(
       `UPDATE ${tableName}
        SET actual_effort_hours = $1,
@@ -172,14 +189,25 @@ async function deleteTimeEntry(entryId, userId) {
     
     const totalHours = parseFloat(totalResult.rows[0].total);
     
-    // Update item
+    // Recalculate last_time_logged_at from remaining entries
+    const lastLogResult = await client.query(
+      `SELECT MAX(logged_at) as last_logged
+       FROM time_entries
+       WHERE item_type = $1 AND item_id = $2`,
+      [entry.item_type, entry.item_id]
+    );
+    
+    const lastLogged = lastLogResult.rows[0].last_logged || null;
+    
+    // Update item with recalculated values
     const tableName = entry.item_type === 'issue' ? 'issues' : 'action_items';
     await client.query(
       `UPDATE ${tableName}
        SET actual_effort_hours = $1,
-           time_log_count = GREATEST(0, COALESCE(time_log_count, 0) - 1)
-       WHERE id = $2`,
-      [totalHours, entry.item_id]
+           time_log_count = GREATEST(0, COALESCE(time_log_count, 0) - 1),
+           last_time_logged_at = $2
+       WHERE id = $3`,
+      [totalHours, lastLogged, entry.item_id]
     );
     
     // Recalculate completion percentage
