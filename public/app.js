@@ -14,7 +14,8 @@ let currentFilters = {
   priority: '',
   assignee: '',
   category: '',
-  tag: ''
+  tag: '',
+  hasPlanning: false
 };
 
 // ==================== CHECKLIST UPDATE SYSTEM ====================
@@ -993,6 +994,46 @@ function createEffortEstimateBadge(item) {
   return `<div class="mb-2">${badgeContent}</div>`;
 }
 
+// Create planning estimate indicator badge
+function createPlanningEstimateBadge(item) {
+  if (!item.planning_estimate_source) {
+    return ''; // No planning estimate set
+  }
+  
+  const source = item.planning_estimate_source;
+  let hours = 0;
+  let badgeColor = '';
+  let icon = '';
+  let label = '';
+  
+  if (source === 'manual') {
+    hours = item.estimated_effort_hours || 0;
+    badgeColor = 'bg-gray-100 text-gray-700 border border-gray-300';
+    icon = '✏️';
+    label = 'M';
+  } else if (source === 'ai') {
+    hours = item.ai_effort_estimate_hours || 0;
+    badgeColor = 'bg-purple-100 text-purple-700 border border-purple-300';
+    icon = '🤖';
+    label = 'AI';
+  } else if (source === 'hybrid') {
+    hours = item.hybrid_effort_estimate_hours || 0;
+    badgeColor = 'bg-blue-100 text-blue-700 border border-blue-300';
+    icon = '⚡';
+    label = 'H';
+  }
+  
+  const hoursDisplay = parseFloat(hours).toFixed(1);
+  
+  return `
+    <div class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${badgeColor}" title="Planning Estimate: ${label === 'M' ? 'Manual' : label === 'AI' ? 'AI Generated' : 'Hybrid'} (${hoursDisplay}h)">
+      <span>${icon}</span>
+      <span>${label}</span>
+      <span class="font-semibold">${hoursDisplay}h</span>
+    </div>
+  `;
+}
+
 // Create due date badge with color coding
 function createDueDateBadge(dueDate, status, completedAt) {
   // For Done items, show delivery performance
@@ -1101,6 +1142,11 @@ async function renderKanbanBoard() {
         itemsToDisplay = [...issues, ...actionItems];
     }
     
+    // Filter by planning estimate if selected
+    if (currentFilters.hasPlanning) {
+        itemsToDisplay = itemsToDisplay.filter(item => item.planning_estimate_source);
+    }
+    
     const allItems = itemsToDisplay;
     
     // PERFORMANCE OPTIMIZATION: Use bulk metadata endpoint instead of individual API calls
@@ -1188,6 +1234,7 @@ async function renderKanbanBoard() {
                         const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
                         const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
                         const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+                        const planningBadge = createPlanningEstimateBadge(item);
                         
                         // Check permissions for edit/delete
                         const currentUser = AuthManager.currentUser;
@@ -1242,6 +1289,7 @@ async function renderKanbanBoard() {
                         </div>
                         ${createDueDateBadge(item.due_date, item.status, item.completed_at)}
                         ${createEffortEstimateBadge(item)}
+                        ${planningBadge ? `<div class="mb-2">${planningBadge}</div>` : ''}
                         ${item.tags && item.tags.length > 0 ? `
                             <div class="flex flex-wrap gap-1 mb-2">
                                 ${item.tags.map(tag => `
@@ -2228,6 +2276,17 @@ function initializeFilters() {
     });
   }
   
+  // Planning estimate filter
+  const hasPlanningFilter = document.getElementById('has-planning-filter');
+  if (hasPlanningFilter) {
+    hasPlanningFilter.addEventListener('change', (e) => {
+      currentFilters.hasPlanning = e.target.checked;
+      displayActiveFilters();
+      applyFilters();
+      updateURL();
+    });
+  }
+  
   // Clear filters button
   const clearBtn = document.getElementById('clear-filters-btn');
   if (clearBtn) {
@@ -2289,7 +2348,7 @@ function hideLoadingIndicator() {
   }
 }
 
-// Clear all filters
+// Clear all filters and reset to defaults
 function clearAllFilters() {
   currentFilters = {
     search: '',
@@ -2298,7 +2357,8 @@ function clearAllFilters() {
     priority: '',
     assignee: '',
     category: '',
-    tag: ''
+    tag: '',
+    hasPlanning: false
   };
   
   // Reset form inputs
@@ -2308,6 +2368,7 @@ function clearAllFilters() {
   const priorityFilter = document.getElementById('priority-filter');
   const assigneeFilter = document.getElementById('assignee-filter');
   const tagFilter = document.getElementById('tag-filter');
+  const hasPlanningFilter = document.getElementById('has-planning-filter');
   
   if (searchInput) searchInput.value = '';
   if (typeFilter) typeFilter.value = '';
@@ -2315,6 +2376,10 @@ function clearAllFilters() {
   if (priorityFilter) priorityFilter.value = '';
   if (assigneeFilter) assigneeFilter.value = '';
   if (tagFilter) tagFilter.value = '';
+  if (hasPlanningFilter) hasPlanningFilter.checked = false;
+  
+  // Hide filter restored indicator if present
+  closeFilterIndicator();
   
   // Reload data
   applyFilters();
@@ -2326,6 +2391,9 @@ function clearAllFilters() {
   
   if (activeFiltersDiv) activeFiltersDiv.classList.add('hidden');
   if (resultsCountDiv) resultsCountDiv.classList.add('hidden');
+  
+  // Show success message
+  showToast('Filters reset to defaults', 'success');
 }
 
 // Display active filters as badges
@@ -2367,6 +2435,9 @@ function displayActiveFilters() {
     const tagName = tagSelect?.selectedOptions[0]?.text?.replace('🏷️ ', '') || currentFilters.tag;
     activeFilters.push({ key: 'tag', label: `Tag: ${tagName}` });
   }
+  if (currentFilters.hasPlanning) {
+    activeFilters.push({ key: 'hasPlanning', label: '📊 Has Planning Estimate' });
+  }
   
   if (activeFilters.length === 0) {
     container.classList.add('hidden');
@@ -2398,15 +2469,21 @@ function displayActiveFilters() {
 
 // Remove a single filter
 async function removeFilter(filterKey) {
-  currentFilters[filterKey] = '';
-  
-  // Update UI
-  if (filterKey === 'search') {
-    const searchInput = document.getElementById('search-input');
-    if (searchInput) searchInput.value = '';
+  if (filterKey === 'hasPlanning') {
+    currentFilters[filterKey] = false;
+    const checkbox = document.getElementById('has-planning-filter');
+    if (checkbox) checkbox.checked = false;
   } else {
-    const filterElement = document.getElementById(`${filterKey}-filter`);
-    if (filterElement) filterElement.value = '';
+    currentFilters[filterKey] = '';
+    
+    // Update UI
+    if (filterKey === 'search') {
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) searchInput.value = '';
+    } else {
+      const filterElement = document.getElementById(`${filterKey}-filter`);
+      if (filterElement) filterElement.value = '';
+    }
   }
   
   // Apply filters and wait for completion to ensure consistent state
@@ -2516,6 +2593,7 @@ function updateURL(additionalParams = {}) {
   if (currentFilters.assignee) params.set('assignee', currentFilters.assignee);
   if (currentFilters.category) params.set('category', currentFilters.category);
   if (currentFilters.tag) params.set('tag', currentFilters.tag);
+  if (currentFilters.hasPlanning) params.set('hasPlanning', 'true');
   
   // Preserve view parameter if present
   const currentParams = new URLSearchParams(window.location.search);
@@ -2542,7 +2620,78 @@ function loadFiltersFromURL() {
   currentFilters.assignee = params.get('assignee') || '';
   currentFilters.category = params.get('category') || '';
   currentFilters.tag = params.get('tag') || '';
+  currentFilters.hasPlanning = params.get('hasPlanning') === 'true';
+  
+  // Update UI for checkbox
+  const hasPlanningFilter = document.getElementById('has-planning-filter');
+  if (hasPlanningFilter) {
+    hasPlanningFilter.checked = currentFilters.hasPlanning;
+  }
+  
+  // Check if any filters were restored
+  const hasFilters = !!(
+    currentFilters.search ||
+    currentFilters.type ||
+    currentFilters.status ||
+    currentFilters.priority ||
+    currentFilters.assignee ||
+    currentFilters.category ||
+    currentFilters.tag ||
+    currentFilters.hasPlanning
+  );
+  
+  // Show indicator if filters were restored from URL
+  if (hasFilters) {
+    showFilterRestoredIndicator();
+  }
+  
+  return hasFilters;
 }
+
+// Show visual indicator that filters were restored from URL
+function showFilterRestoredIndicator() {
+  const container = document.getElementById('filter-restored-indicator');
+  if (!container) {
+    // Create indicator element if it doesn't exist
+    const indicator = document.createElement('div');
+    indicator.id = 'filter-restored-indicator';
+    indicator.className = 'bg-blue-50 border-l-4 border-blue-400 p-3 mb-4 rounded shadow-sm flex items-center justify-between';
+    indicator.innerHTML = `
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+        </svg>
+        <span class="text-sm text-blue-800 font-medium">Filters restored from previous session</span>
+      </div>
+      <button onclick="closeFilterIndicator()" class="text-blue-600 hover:text-blue-800">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+        </svg>
+      </button>
+    `;
+    
+    // Insert before the filters section
+    const filtersSection = document.querySelector('.bg-white.rounded-lg.shadow-md.p-4.mb-4');
+    if (filtersSection) {
+      filtersSection.parentNode.insertBefore(indicator, filtersSection);
+    }
+  } else {
+    container.classList.remove('hidden');
+  }
+  
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    closeFilterIndicator();
+  }, 5000);
+}
+
+// Close filter restored indicator
+window.closeFilterIndicator = function() {
+  const container = document.getElementById('filter-restored-indicator');
+  if (container) {
+    container.classList.add('hidden');
+  }
+};
 
 // Sync dropdown values with filter state
 function syncFilterDropdowns() {
@@ -3937,6 +4086,9 @@ async function openEditModal(itemId, itemType) {
       
       // Load attachments
       await loadEditAttachments(item.id, 'action-item');
+      
+      // Load effort estimate data
+      await loadEffortEstimate(item.id, 'action-item');
       
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
@@ -5885,6 +6037,20 @@ function initBulkActions() {
   document.getElementById('confirmBulkApply')?.addEventListener('click', () => {
     executeBulkApply();
   });
+  
+  // Batch Generate Estimates button
+  document.getElementById('bulkGenerateEstimatesBtn')?.addEventListener('click', () => {
+    startBatchEstimation();
+  });
+  
+  // Close batch results modal
+  document.getElementById('closeBatchResultsModal')?.addEventListener('click', () => {
+    document.getElementById('batchResultsModal').classList.add('hidden');
+  });
+  
+  document.getElementById('closeBatchResultsBtn')?.addEventListener('click', () => {
+    document.getElementById('batchResultsModal').classList.add('hidden');
+  });
 }
 
 // Update bulk actions bar visibility and counts
@@ -5892,6 +6058,7 @@ function updateBulkActionsBar() {
   const bar = document.getElementById('bulkActionsBar');
   const countSpan = document.getElementById('selectedCount');
   const applyBtn = document.getElementById('bulkApplyTemplateBtn');
+  const estimateBtn = document.getElementById('bulkGenerateEstimatesBtn');
   const selectAllCheckbox = document.getElementById('selectAllItems');
   
   const count = selectedItems.size;
@@ -5900,9 +6067,11 @@ function updateBulkActionsBar() {
     bar.style.display = 'block';
     countSpan.textContent = `${count} selected`;
     applyBtn.disabled = false;
+    if (estimateBtn) estimateBtn.disabled = false;
   } else {
     bar.style.display = 'none';
     applyBtn.disabled = true;
+    if (estimateBtn) estimateBtn.disabled = true;
     if (selectAllCheckbox) selectAllCheckbox.checked = false;
   }
 }
@@ -6050,6 +6219,191 @@ async function executeBulkApply() {
   }
 }
 
+// ============================================
+// BATCH ESTIMATION FUNCTIONS (Phase 2)
+// ============================================
+
+let batchJobId = null;
+let batchPollInterval = null;
+
+async function startBatchEstimation() {
+  if (selectedItems.size === 0) {
+    showToast('No items selected', 'warning');
+    return;
+  }
+
+  // Convert selectedItems Map to array
+  const items = Array.from(selectedItems.values());
+  
+  // Show confirmation
+  const confirm = window.confirm(
+    `Generate AI estimates for ${items.length} selected item(s)?\n\n` +
+    `This will use AI credits and may take a few minutes.`
+  );
+  
+  if (!confirm) return;
+
+  try {
+    // Start batch job
+    const response = await axios.post('/api/estimates/batch', {
+      items,
+      projectId: currentProject?.id || parseInt(localStorage.getItem('currentProjectId'))
+    }, { withCredentials: true });
+
+    batchJobId = response.data.jobId;
+    
+    // Show progress modal
+    document.getElementById('batchEstimateProgressModal').classList.remove('hidden');
+    document.getElementById('batch-progress-total').textContent = response.data.total;
+    document.getElementById('batch-progress-current').textContent = '0';
+    document.getElementById('batch-progress-percentage').textContent = '0%';
+    document.getElementById('batch-estimate-progress-bar').style.width = '0%';
+    document.getElementById('batch-status-log').innerHTML = 
+      '<div class="text-green-600">✓ Batch job started...</div>';
+    
+    // Start polling for progress
+    startBatchProgressPolling();
+    
+  } catch (error) {
+    console.error('Error starting batch estimation:', error);
+    showToast('Failed to start batch estimation: ' + (error.response?.data?.error || error.message), 'error');
+  }
+}
+
+function startBatchProgressPolling() {
+  // Clear any existing interval
+  if (batchPollInterval) {
+    clearInterval(batchPollInterval);
+  }
+  
+  // Poll every 1 second
+  batchPollInterval = setInterval(async () => {
+    try {
+      const response = await axios.get(`/api/estimates/batch/${batchJobId}`, {
+        withCredentials: true
+      });
+      
+      const job = response.data;
+      updateBatchProgressUI(job);
+      
+      // If completed, stop polling and show results
+      if (job.status === 'completed' || job.status === 'error') {
+        clearInterval(batchPollInterval);
+        batchPollInterval = null;
+        
+        setTimeout(() => {
+          document.getElementById('batchEstimateProgressModal').classList.add('hidden');
+          showBatchResults(job);
+        }, 1000);
+      }
+      
+    } catch (error) {
+      console.error('Error polling batch progress:', error);
+      clearInterval(batchPollInterval);
+      batchPollInterval = null;
+      document.getElementById('batchEstimateProgressModal').classList.add('hidden');
+      showToast('Error checking batch progress', 'error');
+    }
+  }, 1000);
+}
+
+function updateBatchProgressUI(job) {
+  const percentage = job.total > 0 ? Math.round((job.completed / job.total) * 100) : 0;
+  
+  document.getElementById('batch-progress-current').textContent = job.completed;
+  document.getElementById('batch-progress-percentage').textContent = `${percentage}%`;
+  document.getElementById('batch-estimate-progress-bar').style.width = `${percentage}%`;
+  
+  if (job.currentItem) {
+    document.getElementById('batch-current-item').textContent = job.currentItem;
+  }
+  
+  // Calculate ETA
+  if (job.completed > 0 && job.completed < job.total) {
+    const elapsed = new Date() - new Date(job.startedAt);
+    const avgTimePerItem = elapsed / job.completed;
+    const remaining = job.total - job.completed;
+    const etaMs = remaining * avgTimePerItem;
+    const etaSeconds = Math.round(etaMs / 1000);
+    document.getElementById('batch-eta').textContent = 
+      `Estimated time remaining: ${etaSeconds} seconds`;
+  } else if (job.completed === job.total) {
+    document.getElementById('batch-eta').textContent = 'Complete!';
+  }
+  
+  // Add latest results to log
+  const logDiv = document.getElementById('batch-status-log');
+  const latestResults = job.results.slice(job.completed - 3, job.completed); // Last 3
+  
+  latestResults.forEach(result => {
+    const existing = logDiv.querySelector(`[data-item="${result.itemType}-${result.itemId}"]`);
+    if (!existing) {
+      const logEntry = document.createElement('div');
+      logEntry.setAttribute('data-item', `${result.itemType}-${result.itemId}`);
+      logEntry.className = result.success ? 'text-green-600' : 'text-red-600';
+      logEntry.textContent = result.success 
+        ? `✓ ${result.title}: ${result.hours}h (${result.confidence})`
+        : `✗ ${result.title}: ${result.error}`;
+      logDiv.appendChild(logEntry);
+      
+      // Auto-scroll to bottom
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+  });
+}
+
+function showBatchResults(job) {
+  // Update summary stats
+  document.getElementById('batch-success-count').textContent = job.successful;
+  document.getElementById('batch-error-count').textContent = job.failed;
+  
+  const totalHours = job.results
+    .filter(r => r.success)
+    .reduce((sum, r) => sum + (r.hours || 0), 0);
+  document.getElementById('batch-total-hours').textContent = totalHours.toFixed(1);
+  
+  // Render detailed results
+  const contentDiv = document.getElementById('batch-results-content');
+  contentDiv.innerHTML = job.results.map(result => {
+    if (result.success) {
+      return `
+        <div class="border-l-4 border-green-500 bg-green-50 p-3 rounded">
+          <div class="flex justify-between items-start">
+            <div class="flex-1">
+              <div class="font-medium text-gray-800">${result.title || `${result.itemType} #${result.itemId}`}</div>
+              <div class="text-sm text-gray-600 mt-1">
+                ${result.hours} hours • ${result.confidence} confidence • ${result.taskCount} tasks
+              </div>
+            </div>
+            <span class="text-green-600 font-bold">✓</span>
+          </div>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="border-l-4 border-red-500 bg-red-50 p-3 rounded">
+          <div class="flex justify-between items-start">
+            <div class="flex-1">
+              <div class="font-medium text-gray-800">${result.title || `${result.itemType} #${result.itemId}`}</div>
+              <div class="text-sm text-red-600 mt-1">${result.error}</div>
+            </div>
+            <span class="text-red-600 font-bold">✗</span>
+          </div>
+        </div>
+      `;
+    }
+  }).join('');
+  
+  // Show results modal
+  document.getElementById('batchResultsModal').classList.remove('hidden');
+  
+  // Clear selection and reload project data
+  clearSelection();
+  if (currentProject?.id) {
+    loadProjectData(currentProject.id);
+  }
+}
+
 // Notification helper
 function showNotification(message, type = 'info') {
   const colors = {
@@ -6115,6 +6469,7 @@ function initializeTableView() {
   });
   
   document.getElementById('table-bulk-status-btn')?.addEventListener('click', handleTableBulkStatusUpdate);
+  document.getElementById('table-generate-estimates-btn')?.addEventListener('click', handleTableGenerateEstimates);
   document.getElementById('table-bulk-delete-btn')?.addEventListener('click', handleTableBulkDelete);
   document.getElementById('table-clear-selection-btn')?.addEventListener('click', clearTableSelection);
 }
@@ -6423,6 +6778,11 @@ function getAllItemsForTable() {
         matches = false;
       }
     }
+    if (currentFilters.hasPlanning) {
+      if (!item.planning_estimate_source) {
+        matches = false;
+      }
+    }
     
     if (matches) {
       allItems.push({
@@ -6432,7 +6792,11 @@ function getAllItemsForTable() {
         assignee: item.assignee || 'Unassigned',
         priority: item.priority || 'low',
         dueDate: item.due_date ? new Date(item.due_date).toLocaleDateString() : '',
-        status: item.status || 'todo'
+        status: item.status || 'todo',
+        planning_estimate_source: item.planning_estimate_source,
+        estimated_effort_hours: item.estimated_effort_hours,
+        ai_effort_estimate_hours: item.ai_effort_estimate_hours,
+        hybrid_effort_estimate_hours: item.hybrid_effort_estimate_hours
       });
     }
   });
@@ -6562,6 +6926,9 @@ function createTableRow(item) {
         ${item.dueDate || '-'}
       </td>
       <td class="px-4 py-3">
+        ${createPlanningEstimateBadge(item) || '<span class="text-gray-400 text-xs">-</span>'}
+      </td>
+      <td class="px-4 py-3">
         <select 
           class="table-status-select px-2 py-1 rounded text-xs font-medium border-0 cursor-pointer ${statusColors[item.status]}"
           data-item-id="${item.id}"
@@ -6651,19 +7018,23 @@ function updateTableSelectionUI() {
   const checkboxes = document.querySelectorAll('.table-row-checkbox');
   const bulkActionsBar = document.getElementById('table-bulk-actions-bar');
   const selectedCount = document.getElementById('table-selected-count');
+  const generateEstimatesBtn = document.getElementById('table-generate-estimates-btn');
   
   if (tableSelectedItems.size === 0) {
     selectAllCheckbox.checked = false;
     selectAllCheckbox.indeterminate = false;
     bulkActionsBar?.classList.add('hidden');
+    if (generateEstimatesBtn) generateEstimatesBtn.disabled = true;
   } else if (tableSelectedItems.size === checkboxes.length) {
     selectAllCheckbox.checked = true;
     selectAllCheckbox.indeterminate = false;
     bulkActionsBar?.classList.remove('hidden');
+    if (generateEstimatesBtn) generateEstimatesBtn.disabled = false;
   } else {
     selectAllCheckbox.checked = false;
     selectAllCheckbox.indeterminate = true;
     bulkActionsBar?.classList.remove('hidden');
+    if (generateEstimatesBtn) generateEstimatesBtn.disabled = false;
   }
   
   if (selectedCount) {
@@ -6773,6 +7144,36 @@ async function handleTableBulkDelete() {
     console.error('Bulk delete error:', error);
     showNotification('Failed to delete some items', 'error');
   }
+}
+
+async function handleTableGenerateEstimates() {
+  if (tableSelectedItems.size === 0) {
+    showToast('No items selected', 'warning');
+    return;
+  }
+  
+  // Convert tableSelectedItems to the format expected by startBatchEstimation
+  // We need to reconstruct the items with type and id from the table rows
+  selectedItems.clear();
+  
+  const rows = document.querySelectorAll('#table-body tr');
+  rows.forEach(row => {
+    const itemId = row.dataset.itemId;
+    if (tableSelectedItems.has(itemId)) {
+      const itemType = row.dataset.itemType;
+      const key = `${itemType}-${itemId}`;
+      selectedItems.set(key, {
+        id: parseInt(itemId),
+        type: itemType
+      });
+    }
+  });
+  
+  // Call the existing batch estimation function
+  await startBatchEstimation();
+  
+  // Clear table selection after batch completes
+  clearTableSelection();
 }
 
 async function handleTableStatusChange(e) {
@@ -6938,18 +7339,35 @@ async function loadEffortEstimate(itemId, itemType) {
     const response = await axios.get(`/api/${endpoint}/${itemId}`, { withCredentials: true });
     const item = response.data;
     
-    document.getElementById('edit-issue-estimated-hours').value = item.estimated_hours || '';
-    document.getElementById('edit-issue-actual-hours').value = item.actual_hours || '';
+    // Determine which form elements to use based on itemType
+    const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
     
-    if (item.ai_estimated_hours) {
+    // RESET: Hide all estimate sections first to ensure clean state
+    const aiSection = document.getElementById(`${prefix}-ai-estimate-section`);
+    const hybridSection = document.getElementById(`${prefix}-hybrid-estimate-section`);
+    const selectorSection = document.getElementById(`${prefix}-estimate-selector`);
+    
+    if (aiSection) aiSection.classList.add('hidden');
+    if (hybridSection) hybridSection.classList.add('hidden');
+    if (selectorSection) selectorSection.classList.add('hidden');
+    
+    document.getElementById(`${prefix}-estimated-hours`).value = item.estimated_hours || '';
+    document.getElementById(`${prefix}-actual-hours`).value = item.actual_hours || '';
+    
+    if (item.ai_estimated_hours || item.ai_effort_estimate_hours) {
+      // Parse as numbers (PostgreSQL returns NUMERIC/DECIMAL as strings)
+      const aiHours = parseFloat(item.ai_effort_estimate_hours || item.ai_estimated_hours);
+      const aiConfidence = item.ai_estimate_confidence || item.ai_confidence || 'medium';
+      const hybridHours = parseFloat(item.hybrid_effort_estimate_hours) || 0;
+      
       currentEstimateData = {
-        hours: item.ai_estimated_hours,
-        confidence: item.ai_confidence || 'medium',
-        version: item.estimate_version || 1,
+        hours: aiHours,
+        confidence: aiConfidence,
+        version: item.ai_estimate_version || 1,
         itemId,
         itemType,
-        hasHybrid: item.hybrid_effort_estimate_hours && item.hybrid_effort_estimate_hours > 0,
-        hybridHours: item.hybrid_effort_estimate_hours || 0,
+        hasHybrid: hybridHours > 0,
+        hybridHours: hybridHours,
         hybridSelectedCount: 0,
         hybridTotalTasks: 0
       };
@@ -6969,28 +7387,29 @@ async function loadEffortEstimate(itemId, itemType) {
         }
       }
       
-      document.getElementById('edit-issue-ai-hours').textContent = item.ai_estimated_hours;
-      const confidenceBadge = document.getElementById('edit-issue-ai-confidence');
-      confidenceBadge.textContent = item.ai_confidence || 'medium';
+      // Display AI hours with 2 decimal places
+      document.getElementById(`${prefix}-ai-hours`).textContent = aiHours.toFixed(2);
+      const confidenceBadge = document.getElementById(`${prefix}-ai-confidence`);
+      confidenceBadge.textContent = aiConfidence;
       confidenceBadge.className = `ml-2 text-xs px-2 py-1 rounded ${
-        item.ai_confidence === 'high' ? 'bg-green-200 text-green-800' :
-        item.ai_confidence === 'low' ? 'bg-red-200 text-red-800' :
+        aiConfidence === 'high' ? 'bg-green-200 text-green-800' :
+        aiConfidence === 'low' ? 'bg-red-200 text-red-800' :
         'bg-blue-200 text-blue-800'
       }`;
       
-      document.getElementById('edit-issue-ai-estimate-section').classList.remove('hidden');
+      document.getElementById(`${prefix}-ai-estimate-section`).classList.remove('hidden');
       
       // Show hybrid section if it exists
       if (currentEstimateData.hasHybrid) {
-        document.getElementById('edit-issue-hybrid-hours').textContent = currentEstimateData.hybridHours.toFixed(1);
-        document.getElementById('edit-issue-hybrid-count').textContent = `${currentEstimateData.hybridSelectedCount}/${currentEstimateData.hybridTotalTasks} tasks`;
-        document.getElementById('edit-issue-hybrid-estimate-section').classList.remove('hidden');
+        document.getElementById(`${prefix}-hybrid-hours`).textContent = hybridHours.toFixed(1);
+        document.getElementById(`${prefix}-hybrid-count`).textContent = `${currentEstimateData.hybridSelectedCount}/${currentEstimateData.hybridTotalTasks} tasks`;
+        document.getElementById(`${prefix}-hybrid-estimate-section`).classList.remove('hidden');
       }
       
       // Update the three-way selector to show hybrid option if available
-      updateThreeWayEstimateSelector();
+      updateThreeWayEstimateSelector(itemType);
     } else {
-      document.getElementById('edit-issue-ai-estimate-section').classList.add('hidden');
+      document.getElementById(`${prefix}-ai-estimate-section`).classList.add('hidden');
       currentEstimateData = null;
     }
     
@@ -7391,13 +7810,24 @@ async function saveHybridEstimate(itemId, itemType) {
       currentEstimateData.hybridTotalTasks = hybridSelectionState.tasks.length;
     }
     
-    // Update hybrid estimate section
-    document.getElementById('edit-issue-hybrid-hours').textContent = hybridSelectionState.totalHours.toFixed(1);
-    document.getElementById('edit-issue-hybrid-count').textContent = `${hybridSelectionState.selectedCount}/${hybridSelectionState.tasks.length} tasks`;
-    document.getElementById('edit-issue-hybrid-estimate-section').classList.remove('hidden');
+    // Update hybrid estimate section based on itemType
+    const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
+    const hybridHoursElement = document.getElementById(`${prefix}-hybrid-hours`);
+    const hybridCountElement = document.getElementById(`${prefix}-hybrid-count`);
+    const hybridSectionElement = document.getElementById(`${prefix}-hybrid-estimate-section`);
     
-    // Update three-way selector
-    updateThreeWayEstimateSelector();
+    if (hybridHoursElement) {
+      hybridHoursElement.textContent = hybridSelectionState.totalHours.toFixed(1);
+    }
+    if (hybridCountElement) {
+      hybridCountElement.textContent = `${hybridSelectionState.selectedCount}/${hybridSelectionState.tasks.length} tasks`;
+    }
+    if (hybridSectionElement) {
+      hybridSectionElement.classList.remove('hidden');
+    }
+    
+    // Update three-way selector with correct itemType
+    updateThreeWayEstimateSelector(itemType);
     
   } catch (error) {
     console.error('Error saving hybrid estimate:', error);
@@ -7405,27 +7835,43 @@ async function saveHybridEstimate(itemId, itemType) {
   }
 }
 
-function updateThreeWayEstimateSelector() {
-  const manualInput = document.getElementById('edit-issue-estimated-hours');
-  const manualHours = parseFloat(manualInput.value) || 0;
+function updateThreeWayEstimateSelector(itemType = null) {
+  // Determine item type from currentEstimateData if not provided
+  const type = itemType || (currentEstimateData ? currentEstimateData.itemType : 'issue');
+  const prefix = type === 'issue' ? 'edit-issue' : 'edit-action-item';
+  const radioPrefix = type === 'issue' ? 'planning' : 'action-planning';
   
-  const selector = document.getElementById('edit-issue-estimate-selector');
-  const manualLabel = document.getElementById('planning-manual-label');
-  const aiLabel = document.getElementById('planning-ai-label');
-  const hybridLabel = document.getElementById('planning-hybrid-label');
+  const manualInput = document.getElementById(`${prefix}-estimated-hours`);
+  const manualHours = parseFloat(manualInput?.value) || 0;
+  
+  const selector = document.getElementById(`${prefix}-estimate-selector`);
+  const manualLabel = document.getElementById(`${radioPrefix}-manual-label`);
+  const aiLabel = document.getElementById(`${radioPrefix}-ai-label`);
+  const hybridLabel = document.getElementById(`${radioPrefix}-hybrid-label`);
+  
+  if (!selector || !manualLabel) return;
   
   // Update manual hours display
-  document.getElementById('planning-manual-hours').textContent = manualHours > 0 ? `${manualHours} hours` : '0 hours';
+  const manualHoursElement = document.getElementById(`${radioPrefix}-manual-hours`);
+  if (manualHoursElement) {
+    manualHoursElement.textContent = manualHours > 0 ? `${manualHours} hours` : '0 hours';
+  }
   
   // Show/hide AI option
   if (currentEstimateData && currentEstimateData.hours) {
-    document.getElementById('planning-ai-hours').textContent = `${currentEstimateData.hours} hours`;
-    document.getElementById('planning-ai-confidence').textContent = currentEstimateData.confidence;
-    document.getElementById('planning-ai-confidence').className = `ml-2 text-xs px-2 py-1 rounded ${
-      currentEstimateData.confidence === 'high' ? 'bg-green-200 text-green-800' :
-      currentEstimateData.confidence === 'low' ? 'bg-red-200 text-red-800' :
-      'bg-blue-200 text-blue-800'
-    }`;
+    const aiHoursElement = document.getElementById(`${radioPrefix}-ai-hours`);
+    const aiConfidenceElement = document.getElementById(`${radioPrefix}-ai-confidence`);
+    if (aiHoursElement) {
+      aiHoursElement.textContent = `${currentEstimateData.hours} hours`;
+    }
+    if (aiConfidenceElement) {
+      aiConfidenceElement.textContent = currentEstimateData.confidence;
+      aiConfidenceElement.className = `ml-2 text-xs px-2 py-1 rounded ${
+        currentEstimateData.confidence === 'high' ? 'bg-green-200 text-green-800' :
+        currentEstimateData.confidence === 'low' ? 'bg-red-200 text-red-800' :
+        'bg-blue-200 text-blue-800'
+      }`;
+    }
     aiLabel.classList.remove('hidden');
   } else {
     aiLabel.classList.add('hidden');
@@ -7433,8 +7879,14 @@ function updateThreeWayEstimateSelector() {
   
   // Show/hide hybrid option
   if (currentEstimateData && currentEstimateData.hasHybrid && currentEstimateData.hybridHours > 0) {
-    document.getElementById('planning-hybrid-hours').textContent = `${currentEstimateData.hybridHours.toFixed(1)} hours`;
-    document.getElementById('planning-hybrid-tasks').textContent = `${currentEstimateData.hybridSelectedCount}/${currentEstimateData.hybridTotalTasks} tasks`;
+    const hybridHoursElement = document.getElementById(`${radioPrefix}-hybrid-hours`);
+    const hybridTasksElement = document.getElementById(`${radioPrefix}-hybrid-tasks`);
+    if (hybridHoursElement) {
+      hybridHoursElement.textContent = `${currentEstimateData.hybridHours.toFixed(1)} hours`;
+    }
+    if (hybridTasksElement) {
+      hybridTasksElement.textContent = `${currentEstimateData.hybridSelectedCount}/${currentEstimateData.hybridTotalTasks} tasks`;
+    }
     hybridLabel.classList.remove('hidden');
   } else {
     hybridLabel.classList.add('hidden');
@@ -7448,7 +7900,7 @@ function updateThreeWayEstimateSelector() {
   }
   
   // Update border colors based on selection
-  document.querySelectorAll('[name="planning-estimate"]').forEach(radio => {
+  document.querySelectorAll(`[name="${radioPrefix}-estimate"]`).forEach(radio => {
     const label = radio.closest('label');
     if (radio.checked) {
       label.classList.add('border-blue-500', 'bg-blue-50');
@@ -7464,7 +7916,73 @@ document.getElementById('closeBreakdownModal')?.addEventListener('click', functi
   document.getElementById('estimateBreakdownModal').classList.add('hidden');
   // Update the three-way selector to reflect any hybrid selections made
   if (currentEstimateData) {
-    updateThreeWayEstimateSelector();
+    updateThreeWayEstimateSelector(currentEstimateData.itemType);
+  }
+});
+
+// Handle View Breakdown for ACTION ITEMS
+document.getElementById('edit-action-item-view-breakdown')?.addEventListener('click', async function() {
+  if (!currentEstimateData) return;
+  
+  const { itemId, itemType } = currentEstimateData;
+  const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+  
+  try {
+    // Load AI breakdown
+    const response = await axios.get(`/api/${endpoint}/${itemId}/estimate/breakdown`, 
+      { withCredentials: true }
+    );
+    
+    const breakdown = response.data;
+    
+    // Initialize hybrid selection state with all tasks
+    hybridSelectionState.tasks = breakdown.tasks.map(task => ({
+      ...task,
+      selected: false,
+      editedHours: task.hours,
+      originalHours: task.hours
+    }));
+    hybridSelectionState.totalHours = 0;
+    hybridSelectionState.selectedCount = 0;
+    
+    // Try to load saved hybrid data and hydrate
+    try {
+      const hybridResponse = await axios.get(`/api/${endpoint}/${itemId}/estimate/breakdown?type=hybrid`, 
+        { withCredentials: true }
+      );
+      
+      if (hybridResponse.data && hybridResponse.data.selectedTasks) {
+        // Hydrate saved hybrid selections
+        const savedSelections = hybridResponse.data.selectedTasks;
+        
+        savedSelections.forEach(savedTask => {
+          // Find matching task in current breakdown
+          const taskIndex = hybridSelectionState.tasks.findIndex(t => 
+            t.task === savedTask.task || t.task === savedTask.description
+          );
+          
+          if (taskIndex !== -1) {
+            hybridSelectionState.tasks[taskIndex].selected = true;
+            hybridSelectionState.tasks[taskIndex].editedHours = savedTask.editedHours || savedTask.hours;
+          }
+        });
+        
+        // Recalculate totals
+        const selectedTasks = hybridSelectionState.tasks.filter(t => t.selected);
+        hybridSelectionState.totalHours = selectedTasks.reduce((sum, task) => sum + task.editedHours, 0);
+        hybridSelectionState.selectedCount = selectedTasks.length;
+      }
+    } catch (hybridError) {
+      // No saved hybrid data, that's okay
+      console.log('No saved hybrid data found, starting fresh');
+    }
+    
+    renderBreakdownModal(breakdown, itemId, itemType);
+    document.getElementById('estimateBreakdownModal').classList.remove('hidden');
+    
+  } catch (error) {
+    console.error('Error loading breakdown:', error);
+    showToast('Failed to load estimate breakdown', 'error');
   }
 });
 
@@ -7538,17 +8056,733 @@ document.getElementById('edit-issue-view-hybrid-breakdown')?.addEventListener('c
   }
 });
 
-// Handle radio button selection for planning estimate
+// Handle View Hybrid Breakdown for ACTION ITEMS
+document.getElementById('edit-action-item-view-hybrid-breakdown')?.addEventListener('click', async function() {
+  if (!currentEstimateData || !currentEstimateData.hasHybrid) {
+    console.warn('No hybrid estimate data available', currentEstimateData);
+    showToast('No hybrid estimate found', 'error');
+    return;
+  }
+  
+  const { itemId, itemType } = currentEstimateData;
+  const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+  
+  console.log('Loading hybrid breakdown for:', { itemId, itemType, endpoint });
+  
+  try {
+    const response = await axios.get(`/api/${endpoint}/${itemId}/estimate/breakdown?type=hybrid`, 
+      { withCredentials: true }
+    );
+    
+    console.log('Hybrid breakdown response:', response.data);
+    const hybridBreakdown = response.data;
+    const contentDiv = document.getElementById('breakdown-content');
+    
+    contentDiv.innerHTML = `
+      <div class="bg-green-50 p-4 rounded-lg mb-4">
+        <div class="grid grid-cols-2 gap-4 text-center">
+          <div>
+            <div class="text-sm text-gray-600">Hybrid Total</div>
+            <div class="text-2xl font-bold text-green-600">${hybridBreakdown.totalHours.toFixed(1)} hrs</div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-600">Tasks Selected</div>
+            <div class="text-2xl font-bold text-purple-600">${hybridBreakdown.selectedTasks.length}</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold mb-2">✅ Selected Tasks</h3>
+        <div class="space-y-2">
+          ${hybridBreakdown.selectedTasks.map((task, idx) => `
+            <div class="border-2 border-green-200 bg-green-50 rounded-lg p-3">
+              <div class="flex justify-between items-start mb-2">
+                <span class="font-medium">${idx + 1}. ${task.task || task.description || 'Task'}</span>
+                <span class="text-green-600 font-bold">${task.editedHours || task.hours}h</span>
+              </div>
+              ${task.complexity || task.category ? `
+                <div class="flex gap-2 mt-2">
+                  ${task.complexity ? `<span class="text-xs px-2 py-1 rounded bg-gray-100">${task.complexity}</span>` : ''}
+                  ${task.category ? `<span class="text-xs px-2 py-1 rounded bg-blue-100">${task.category}</span>` : ''}
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="text-xs text-gray-500 mt-4 p-3 bg-gray-50 rounded">
+        <strong>Note:</strong> This hybrid estimate was created by selecting specific tasks from the AI breakdown.
+        <br>Created on ${new Date(hybridBreakdown.timestamp).toLocaleString()}
+      </div>
+    `;
+    
+    document.getElementById('estimateBreakdownModal').classList.remove('hidden');
+    
+  } catch (error) {
+    console.error('Error loading hybrid breakdown:', error);
+    showToast('No hybrid estimate found', 'info');
+  }
+});
+
+// Handle radio button selection for planning estimate (Issues)
 document.querySelectorAll('[name="planning-estimate"]').forEach(radio => {
   radio.addEventListener('change', function() {
-    updateThreeWayEstimateSelector();
+    updateThreeWayEstimateSelector('issue');
     showToast(`Using ${this.value} estimate for planning`, 'success');
   });
 });
 
-// Update manual estimate input listener to refresh selector
+// Handle radio button selection for planning estimate (Action Items)
+document.querySelectorAll('[name="action-planning-estimate"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    updateThreeWayEstimateSelector('action-item');
+    showToast(`Using ${this.value} estimate for planning`, 'success');
+  });
+});
+
+// Update manual estimate input listener to refresh selector (Issues)
 document.getElementById('edit-issue-estimated-hours')?.addEventListener('input', function() {
-  updateThreeWayEstimateSelector();
+  updateThreeWayEstimateSelector('issue');
+});
+
+// Update manual estimate input listener to refresh selector (Action Items)
+document.getElementById('edit-action-item-estimated-hours')?.addEventListener('input', function() {
+  updateThreeWayEstimateSelector('action-item');
+});
+
+// ==================== EFFORT ESTIMATES TAB (DETAIL MODAL) ====================
+
+let estimateHistoryData = [];
+let showAllEstimates = false;
+let currentUserCanEdit = false; // Permission flag set by detail modal
+
+async function loadEffortEstimatesTab() {
+  if (!currentItemId || !currentItemType) {
+    console.error('No current item selected');
+    return;
+  }
+  
+  // Reset show all estimates flag for each new item (UX requirement: default to top 3 versions)
+  showAllEstimates = false;
+  
+  try {
+    // Load both history and form concurrently
+    await Promise.all([
+      loadEstimateHistory(),
+      loadEstimateForm()
+    ]);
+  } catch (error) {
+    console.error('Error loading effort estimates tab:', error);
+    showToast('Failed to load effort estimates', 'error');
+  }
+}
+
+async function loadEstimateHistory() {
+  const container = document.getElementById('estimate-history-container');
+  if (!container) return;
+  
+  container.innerHTML = '<div class="text-center py-8 text-gray-500">Loading estimate history...</div>';
+  
+  try {
+    const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${endpoint}/${currentItemId}/effort-estimate-history`, { withCredentials: true });
+    
+    estimateHistoryData = response.data.history || [];
+    const currentVersion = response.data.currentVersion;
+    const planningSource = response.data.planningSource;
+    
+    if (estimateHistoryData.length === 0) {
+      container.innerHTML = '<div class="text-center py-8 text-gray-500">No estimate history yet. Generate your first AI estimate!</div>';
+      document.getElementById('estimate-history-expand-container').classList.add('hidden');
+      return;
+    }
+    
+    renderEstimateHistory(currentVersion, planningSource);
+    
+  } catch (error) {
+    console.error('Error loading estimate history:', error);
+    container.innerHTML = '<div class="text-center py-8 text-red-500">Failed to load estimate history</div>';
+  }
+}
+
+function renderEstimateHistory(currentVersion, planningSource) {
+  const container = document.getElementById('estimate-history-container');
+  const expandContainer = document.getElementById('estimate-history-expand-container');
+  
+  const visibleHistory = showAllEstimates ? estimateHistoryData : estimateHistoryData.slice(0, 3);
+  
+  let html = '';
+  
+  visibleHistory.forEach((version, index) => {
+    const isCurrent = version.version === currentVersion;
+    const prevVersion = index > 0 ? visibleHistory[index - 1] : null;
+    
+    // Source icon mapping
+    const sourceIcons = {
+      'initial_analysis': '🎯',
+      'transcript_update': '📝',
+      'manual_regenerate': '🔄',
+      'manual_edit': '✏️',
+      'hybrid_selection': '⚡'
+    };
+    
+    const sourceLabels = {
+      'initial_analysis': 'Initial Analysis',
+      'transcript_update': 'Transcript Update',
+      'manual_regenerate': 'Manual Regeneration',
+      'manual_edit': 'Manual Edit',
+      'hybrid_selection': 'Hybrid Selection'
+    };
+    
+    const sourceIcon = sourceIcons[version.source] || '📊';
+    const sourceLabel = sourceLabels[version.source] || version.source;
+    
+    // Confidence badge colors
+    const confidenceColors = {
+      'high': 'bg-green-100 text-green-800 border-green-300',
+      'medium': 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      'low': 'bg-red-100 text-red-800 border-red-300'
+    };
+    
+    const confidenceClass = confidenceColors[version.confidence] || 'bg-gray-100 text-gray-800 border-gray-300';
+    
+    // Parse hybrid data
+    let hybridTaskInfo = '';
+    if (version.source === 'hybrid_selection' && version.hybrid_estimate_data) {
+      try {
+        const hybridData = typeof version.hybrid_estimate_data === 'string' 
+          ? JSON.parse(version.hybrid_estimate_data) 
+          : version.hybrid_estimate_data;
+        const selectedCount = hybridData.selectedTasks?.filter(t => t.selected !== false).length || 0;
+        const totalTasks = hybridData.totalTasks || hybridData.selectedTasks?.length || 0;
+        hybridTaskInfo = ` (${selectedCount}/${totalTasks} tasks)`;
+      } catch (e) {
+        console.error('Error parsing hybrid data:', e);
+      }
+    }
+    
+    // Comparison highlights
+    let comparison = '';
+    if (prevVersion) {
+      const changes = [];
+      
+      if (parseFloat(version.estimate_hours) !== parseFloat(prevVersion.estimate_hours)) {
+        const diff = parseFloat(version.estimate_hours) - parseFloat(prevVersion.estimate_hours);
+        const arrow = diff > 0 ? '↑' : '↓';
+        const color = diff > 0 ? 'text-red-600' : 'text-green-600';
+        changes.push(`<span class="${color}">AI ${arrow} ${Math.abs(diff).toFixed(1)}h</span>`);
+      }
+      
+      if (version.confidence !== prevVersion.confidence && version.confidence && prevVersion.confidence) {
+        changes.push(`<span class="text-blue-600">Confidence: ${prevVersion.confidence} → ${version.confidence}</span>`);
+      }
+      
+      if (changes.length > 0) {
+        comparison = `<div class="mt-2 text-sm flex flex-wrap gap-2">${changes.join(' • ')}</div>`;
+      }
+    }
+    
+    html += `
+      <div class="border-b border-gray-200 pb-4 mb-4 ${isCurrent ? 'bg-blue-50 -mx-4 px-4 py-3 rounded-lg border-2 border-blue-300' : ''}">
+        ${isCurrent ? '<div class="text-xs font-semibold text-blue-600 mb-2">⭐ CURRENT PLANNING ESTIMATE (Source: ' + (planningSource || 'manual').toUpperCase() + ')</div>' : ''}
+        <div class="flex justify-between items-start mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">${sourceIcon}</span>
+            <div>
+              <div class="font-semibold text-gray-800">Version ${version.version}</div>
+              <div class="text-sm text-gray-500">${sourceLabel}</div>
+            </div>
+          </div>
+          <div class="text-sm text-gray-500">
+            ${new Date(version.created_at).toLocaleString()}
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-1 gap-4 mt-3">
+          ${version.source === 'hybrid_selection' ? `
+          <div class="bg-green-50 rounded p-3 border border-green-200">
+            <div class="text-xs text-green-600 font-semibold mb-1">⚡ Hybrid Estimate</div>
+            <div class="text-lg font-bold text-green-900">${parseFloat(version.estimate_hours).toFixed(1)} hrs</div>
+            ${hybridTaskInfo ? `<div class="text-xs text-green-700 mt-1">${hybridTaskInfo}</div>` : ''}
+          </div>
+          ` : version.source === 'manual_edit' ? `
+          <div class="bg-blue-50 rounded p-3 border border-blue-200">
+            <div class="text-xs text-blue-600 font-semibold mb-1">✏️ Manual Estimate</div>
+            <div class="text-lg font-bold text-blue-900">${parseFloat(version.estimate_hours).toFixed(1)} hrs</div>
+          </div>
+          ` : `
+          <div class="bg-purple-50 rounded p-3 border border-purple-200">
+            <div class="text-xs text-purple-600 font-semibold mb-1">💜 AI Estimate</div>
+            <div class="text-lg font-bold text-purple-900">${parseFloat(version.estimate_hours).toFixed(2)} hrs</div>
+            ${version.confidence ? `<span class="inline-block mt-1 text-xs px-2 py-0.5 rounded border ${confidenceClass}">${version.confidence}</span>` : ''}
+          </div>
+          `}
+        </div>
+        
+        ${comparison}
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+  
+  // Show/hide expand button
+  if (estimateHistoryData.length > 3) {
+    expandContainer.classList.remove('hidden');
+    const btn = document.getElementById('show-all-estimates-btn');
+    btn.textContent = showAllEstimates ? 'Show Less' : `Show All Versions (${estimateHistoryData.length})`;
+  } else {
+    expandContainer.classList.add('hidden');
+  }
+}
+
+async function loadEstimateForm() {
+  const container = document.getElementById('effort-estimate-form-container');
+  if (!container) return;
+  
+  try {
+    const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
+    const response = await axios.get(`/api/${endpoint}/${currentItemId}`, { withCredentials: true });
+    const item = response.data;
+    
+    // Parse estimates
+    const aiHours = parseFloat(item.ai_effort_estimate_hours) || 0;
+    const hybridHours = parseFloat(item.hybrid_effort_estimate_hours) || 0;
+    const manualHours = parseFloat(item.estimated_effort_hours || item.estimated_hours) || 0;
+    const aiConfidence = item.ai_estimate_confidence || 'medium';
+    const planningSource = item.planning_estimate_source || 'manual';
+    
+    // Parse hybrid task count
+    let hybridTaskInfo = '';
+    let hybridSelectedCount = 0;
+    let hybridTotalTasks = 0;
+    
+    if (hybridHours > 0 && item.hybrid_estimate_data) {
+      try {
+        const hybridData = typeof item.hybrid_estimate_data === 'string' 
+          ? JSON.parse(item.hybrid_estimate_data) 
+          : item.hybrid_estimate_data;
+        hybridSelectedCount = hybridData.selectedTasks?.filter(t => t.selected !== false).length || 0;
+        hybridTotalTasks = hybridData.totalTasks || hybridData.selectedTasks?.length || 0;
+        hybridTaskInfo = ` <span class="ml-2 text-sm bg-green-100 text-green-800 px-2 py-0.5 rounded">${hybridSelectedCount}/${hybridTotalTasks} tasks</span>`;
+      } catch (e) {
+        console.error('Error parsing hybrid data:', e);
+      }
+    }
+    
+    // Confidence badge
+    const confidenceColors = {
+      'high': 'bg-green-200 text-green-800',
+      'medium': 'bg-blue-200 text-blue-800',
+      'low': 'bg-red-200 text-red-800'
+    };
+    const confidenceClass = confidenceColors[aiConfidence] || 'bg-gray-200 text-gray-800';
+    
+    container.innerHTML = `
+      <div class="space-y-4">
+        <!-- Manual Estimate -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Manual Estimate (hours)</label>
+          <input 
+            type="number" 
+            id="detail-manual-estimate"
+            ${!currentUserCanEdit ? 'disabled' : ''}
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${!currentUserCanEdit ? 'bg-gray-100 cursor-not-allowed' : ''}" 
+            placeholder="e.g., 50"
+            value="${manualHours || ''}"
+            step="0.5"
+            min="0">
+        </div>
+        
+        <!-- AI Estimate Display -->
+        ${aiHours > 0 ? `
+        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div class="flex justify-between items-center">
+            <div>
+              <span class="text-sm font-medium text-purple-700">AI Estimate:</span>
+              <span class="ml-2 text-lg font-bold text-purple-900">${aiHours.toFixed(2)} hours</span>
+              <span class="ml-2 text-xs px-2 py-1 rounded ${confidenceClass}">${aiConfidence}</span>
+            </div>
+            <button 
+              id="detail-view-ai-breakdown"
+              class="px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors flex items-center gap-1">
+              View Breakdown ↗
+            </button>
+          </div>
+        </div>
+        ` : ''}
+        
+        <!-- Hybrid Estimate Display -->
+        ${hybridHours > 0 ? `
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div class="flex justify-between items-center">
+            <div>
+              <span class="text-sm font-medium text-green-700">Hybrid Estimate:</span>
+              <span class="ml-2 text-lg font-bold text-green-900">${hybridHours.toFixed(1)} hours</span>
+              ${hybridTaskInfo}
+            </div>
+            <button 
+              id="detail-view-hybrid-breakdown"
+              class="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1">
+              View Breakdown ↗
+            </button>
+          </div>
+        </div>
+        ` : ''}
+        
+        <!-- Select Estimate for Planning -->
+        ${(aiHours > 0 || hybridHours > 0) ? `
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <label class="block text-sm font-semibold text-gray-700 mb-3">Select Estimate for Planning:</label>
+          <div class="space-y-2">
+            <label class="flex items-center p-3 border-2 rounded-lg ${currentUserCanEdit ? 'cursor-pointer hover:bg-white' : 'cursor-not-allowed'} transition-colors ${planningSource === 'manual' ? 'border-blue-500 bg-white' : 'border-gray-200'}">
+              <input 
+                type="radio" 
+                name="detail-planning-estimate" 
+                value="manual"
+                ${planningSource === 'manual' ? 'checked' : ''}
+                ${!currentUserCanEdit ? 'disabled' : ''}
+                class="mr-3">
+              <span class="flex-1">
+                <span class="text-xl mr-2">✏️</span>
+                <span class="font-medium">Manual Estimate:</span>
+                <span class="ml-2 font-bold">${manualHours || 0} hours</span>
+              </span>
+            </label>
+            
+            ${aiHours > 0 ? `
+            <label class="flex items-center p-3 border-2 rounded-lg ${currentUserCanEdit ? 'cursor-pointer hover:bg-white' : 'cursor-not-allowed'} transition-colors ${planningSource === 'ai' ? 'border-blue-500 bg-white' : 'border-gray-200'}">
+              <input 
+                type="radio" 
+                name="detail-planning-estimate" 
+                value="ai"
+                ${planningSource === 'ai' ? 'checked' : ''}
+                ${!currentUserCanEdit ? 'disabled' : ''}
+                class="mr-3">
+              <span class="flex-1">
+                <span class="text-xl mr-2">💜</span>
+                <span class="font-medium">AI Estimate:</span>
+                <span class="ml-2 font-bold">${aiHours.toFixed(0)} hours</span>
+                <span class="ml-2 text-xs px-2 py-1 rounded ${confidenceClass}">${aiConfidence}</span>
+              </span>
+            </label>
+            ` : ''}
+            
+            ${hybridHours > 0 ? `
+            <label class="flex items-center p-3 border-2 rounded-lg ${currentUserCanEdit ? 'cursor-pointer hover:bg-white' : 'cursor-not-allowed'} transition-colors ${planningSource === 'hybrid' ? 'border-blue-500 bg-white' : 'border-gray-200'}">
+              <input 
+                type="radio" 
+                name="detail-planning-estimate" 
+                value="hybrid"
+                ${planningSource === 'hybrid' ? 'checked' : ''}
+                ${!currentUserCanEdit ? 'disabled' : ''}
+                class="mr-3">
+              <span class="flex-1">
+                <span class="text-xl mr-2">⚡</span>
+                <span class="font-medium">Hybrid Estimate:</span>
+                <span class="ml-2 font-bold">${hybridHours.toFixed(1)} hours</span>
+                ${hybridTaskInfo}
+              </span>
+            </label>
+            ` : ''}
+          </div>
+        </div>
+        ` : ''}
+        
+        <!-- Generate AI Estimate Button -->
+        ${!currentUserCanEdit ? '<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3 text-sm text-yellow-800">ℹ️ You do not have permission to edit estimates for this item.</div>' : ''}
+        <div class="flex gap-3">
+          <button 
+            id="detail-generate-estimate"
+            ${!currentUserCanEdit ? 'disabled' : ''}
+            class="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-medium flex items-center justify-center gap-2 ${!currentUserCanEdit ? 'opacity-50 cursor-not-allowed' : ''}">
+            <span class="text-xl">🤖</span>
+            Generate AI Estimate
+          </button>
+          
+          <button 
+            id="detail-save-estimate"
+            ${!currentUserCanEdit ? 'disabled' : ''}
+            class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 ${!currentUserCanEdit ? 'opacity-50 cursor-not-allowed' : ''}">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            Save Changes
+          </button>
+          
+          <button 
+            type="button"
+            id="detail-close-estimate"
+            class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            Close
+          </button>
+        </div>
+      </div>
+    `;
+    
+    // Attach event listeners
+    setupEstimateFormListeners();
+    
+  } catch (error) {
+    console.error('Error loading estimate form:', error);
+    container.innerHTML = '<div class="text-center py-8 text-red-500">Failed to load estimation form</div>';
+  }
+}
+
+function setupEstimateFormListeners() {
+  // Generate AI Estimate button
+  document.getElementById('detail-generate-estimate')?.addEventListener('click', async function() {
+    const btn = this;
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-pulse">🤖 Generating...</span>';
+    
+    try {
+      const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
+      const response = await axios.post(`/api/${endpoint}/${currentItemId}/estimate`, 
+        { model: 'gpt-4o' },
+        { withCredentials: true }
+      );
+      
+      showToast('AI estimate generated successfully!', 'success');
+      
+      // Reload both history and form
+      await Promise.all([
+        loadEstimateHistory(),
+        loadEstimateForm()
+      ]);
+      
+    } catch (error) {
+      console.error('Error generating estimate:', error);
+      if (error.response?.status === 429) {
+        showToast('Rate limit exceeded. Please try again later.', 'error');
+      } else {
+        showToast(error.response?.data?.error || 'Failed to generate estimate', 'error');
+      }
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+  });
+  
+  // Save Changes button
+  document.getElementById('detail-save-estimate')?.addEventListener('click', async function() {
+    const btn = this;
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-pulse">Saving...</span>';
+    
+    try {
+      const manualEstimate = parseFloat(document.getElementById('detail-manual-estimate').value) || null;
+      const planningSource = document.querySelector('[name="detail-planning-estimate"]:checked')?.value || 'manual';
+      
+      const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
+      await axios.patch(`/api/${endpoint}/${currentItemId}`, 
+        { 
+          estimated_effort_hours: manualEstimate,
+          planning_estimate_source: planningSource
+        },
+        { withCredentials: true }
+      );
+      
+      showToast('Estimate saved successfully!', 'success');
+      
+      // Reload both history and form to show changes
+      await Promise.all([
+        loadEstimateHistory(),
+        loadEstimateForm()
+      ]);
+      
+      // Refresh the kanban/table view if needed
+      if (typeof loadProjectItems === 'function') {
+        loadProjectItems();
+      }
+      
+    } catch (error) {
+      console.error('Error saving estimate:', error);
+      showToast(error.response?.data?.error || 'Failed to save estimate', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+  });
+  
+  // Close button - switch back to Details tab
+  document.getElementById('detail-close-estimate')?.addEventListener('click', function() {
+    // Switch to Details tab
+    const detailsTab = document.querySelector('[data-tab="details"]');
+    if (detailsTab) {
+      detailsTab.click();
+    }
+  });
+  
+  // View AI Breakdown button
+  document.getElementById('detail-view-ai-breakdown')?.addEventListener('click', async function() {
+    const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
+    
+    try {
+      const response = await axios.get(`/api/${endpoint}/${currentItemId}/estimate/breakdown`, 
+        { withCredentials: true }
+      );
+      
+      const breakdown = response.data;
+      
+      // Show breakdown in existing modal
+      document.getElementById('estimateBreakdownModalTitle').textContent = 'AI Estimate Breakdown';
+      let html = `
+        <div class="mb-4">
+          <strong>Total Estimate:</strong> ${breakdown.totalHours} hours
+          <span class="ml-2 text-xs px-2 py-1 rounded ${
+            breakdown.confidence === 'high' ? 'bg-green-200 text-green-800' :
+            breakdown.confidence === 'low' ? 'bg-red-200 text-red-800' :
+            'bg-blue-200 text-blue-800'
+          }">${breakdown.confidence} confidence</span>
+        </div>
+        <div class="space-y-2">
+      `;
+      
+      breakdown.tasks.forEach(task => {
+        html += `
+          <div class="p-3 bg-gray-50 rounded border border-gray-200">
+            <div class="flex justify-between items-start">
+              <span class="font-medium flex-1">${task.title}</span>
+              <span class="text-purple-600 font-bold ml-4">${task.hours}h</span>
+            </div>
+            ${task.description ? `<p class="text-sm text-gray-600 mt-1">${task.description}</p>` : ''}
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      document.getElementById('estimateBreakdownContent').innerHTML = html;
+      document.getElementById('estimateBreakdownModal').classList.remove('hidden');
+      
+    } catch (error) {
+      console.error('Error loading AI breakdown:', error);
+      showToast('Failed to load AI breakdown', 'error');
+    }
+  });
+  
+  // View Hybrid Breakdown button
+  document.getElementById('detail-view-hybrid-breakdown')?.addEventListener('click', async function() {
+    const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
+    
+    try {
+      const response = await axios.get(`/api/${endpoint}/${currentItemId}/estimate/hybrid-breakdown`, 
+        { withCredentials: true }
+      );
+      
+      const hybridBreakdown = response.data;
+      
+      // Show breakdown in existing modal
+      document.getElementById('estimateBreakdownModalTitle').textContent = 'Hybrid Estimate Breakdown';
+      let html = `
+        <div class="mb-4">
+          <strong>Selected Tasks:</strong> ${hybridBreakdown.selectedTasks.length} / ${hybridBreakdown.totalTasks}
+          <br><strong>Total Estimate:</strong> ${hybridBreakdown.totalHours} hours
+        </div>
+        <div class="space-y-2">
+      `;
+      
+      hybridBreakdown.selectedTasks.forEach(task => {
+        if (task.selected !== false) {
+          html += `
+            <div class="p-3 bg-green-50 rounded border border-green-200">
+              <div class="flex justify-between items-start">
+                <span class="font-medium flex-1">✓ ${task.title}</span>
+                <span class="text-green-600 font-bold ml-4">${task.hours}h</span>
+              </div>
+              ${task.description ? `<p class="text-sm text-gray-600 mt-1">${task.description}</p>` : ''}
+            </div>
+          `;
+        }
+      });
+      
+      html += `</div>
+        <div class="mt-4 p-3 bg-blue-50 rounded border border-blue-200 text-sm">
+          <strong>Note:</strong> This hybrid estimate was created by selecting specific tasks from the AI breakdown.
+        </div>
+      `;
+      
+      document.getElementById('estimateBreakdownContent').innerHTML = html;
+      document.getElementById('estimateBreakdownModal').classList.remove('hidden');
+      
+    } catch (error) {
+      console.error('Error loading hybrid breakdown:', error);
+      showToast('No hybrid estimate found', 'info');
+    }
+  });
+}
+
+// Export estimate history to CSV
+document.getElementById('export-estimate-history-btn')?.addEventListener('click', function() {
+  if (estimateHistoryData.length === 0) {
+    showToast('No estimate history to export', 'info');
+    return;
+  }
+  
+  try {
+    // Build CSV content
+    const headers = ['Version', 'Source', 'Created At', 'Estimate (hrs)', 'Confidence', 'Hybrid Tasks', 'Reasoning'];
+    let csv = headers.join(',') + '\n';
+    
+    estimateHistoryData.forEach(version => {
+      let hybridTasks = '';
+      if (version.source === 'hybrid_selection' && version.hybrid_estimate_data) {
+        try {
+          const hybridData = typeof version.hybrid_estimate_data === 'string' 
+            ? JSON.parse(version.hybrid_estimate_data) 
+            : version.hybrid_estimate_data;
+          const selectedCount = hybridData.selectedTasks?.filter(t => t.selected !== false).length || 0;
+          const totalTasks = hybridData.totalTasks || hybridData.selectedTasks?.length || 0;
+          hybridTasks = `${selectedCount}/${totalTasks}`;
+        } catch (e) {
+          console.error('Error parsing hybrid data:', e);
+        }
+      }
+      
+      const row = [
+        version.version,
+        version.source,
+        new Date(version.created_at).toLocaleString(),
+        version.estimate_hours || '',
+        version.confidence || '',
+        hybridTasks,
+        (version.reasoning || '').replace(/"/g, '""') // Escape quotes in reasoning
+      ];
+      
+      csv += row.map(cell => `"${cell}"`).join(',') + '\n';
+    });
+    
+    // Download CSV
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `estimate-history-${currentItemType}-${currentItemId}-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    showToast('Estimate history exported successfully!', 'success');
+    
+  } catch (error) {
+    console.error('Error exporting estimate history:', error);
+    showToast('Failed to export estimate history', 'error');
+  }
+});
+
+// Show all estimates toggle
+document.getElementById('show-all-estimates-btn')?.addEventListener('click', function() {
+  showAllEstimates = !showAllEstimates;
+  const currentVersion = estimateHistoryData.find(v => v.version === estimateHistoryData[0]?.version)?.version;
+  renderEstimateHistory(currentVersion, '');
 });
 
 

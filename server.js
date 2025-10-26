@@ -36,6 +36,7 @@ const {
   autoCreateChecklistForActionItem
 } = require('./services/template-service');
 const {
+  generateEffortEstimate,
   generateEstimateFromItem,
   getEstimateBreakdown,
   getEstimateHistory
@@ -3174,7 +3175,19 @@ app.get('/api/issues/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     
     const result = await pool.query(
-      'SELECT * FROM issues WHERE id = $1',
+      `SELECT i.*, 
+        eeh.hybrid_estimate_data
+      FROM issues i
+      LEFT JOIN LATERAL (
+        SELECT hybrid_estimate_data
+        FROM effort_estimate_history
+        WHERE item_id = i.id 
+          AND item_type = 'issue'
+          AND source = 'hybrid_selection'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) eeh ON true
+      WHERE i.id = $1`,
       [parseInt(id)]
     );
     
@@ -3186,6 +3199,49 @@ app.get('/api/issues/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching issue:', error);
     res.status(500).json({ error: 'Failed to fetch issue' });
+  }
+});
+
+// Get effort estimate version history for an issue
+app.get('/api/issues/:id/effort-estimate-history', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const issueResult = await pool.query('SELECT id, ai_estimate_version, planning_estimate_source FROM issues WHERE id = $1', [parseInt(id)]);
+    
+    if (issueResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    const issue = issueResult.rows[0];
+    
+    const historyResult = await pool.query(
+      `SELECT 
+        version,
+        source,
+        estimate_hours,
+        confidence,
+        breakdown,
+        reasoning,
+        hybrid_estimate_data,
+        created_at,
+        created_by
+      FROM effort_estimate_history
+      WHERE item_id = $1 AND item_type = 'issue'
+      ORDER BY 
+        CASE WHEN version = $2 THEN 0 ELSE 1 END,
+        version DESC`,
+      [parseInt(id), issue.ai_estimate_version]
+    );
+    
+    res.json({
+      currentVersion: issue.ai_estimate_version,
+      planningSource: issue.planning_estimate_source,
+      history: historyResult.rows
+    });
+  } catch (error) {
+    console.error('Error fetching effort estimate history:', error);
+    res.status(500).json({ error: 'Failed to fetch effort estimate history' });
   }
 });
 
@@ -3339,7 +3395,18 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
 app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, assignee, due_date, priority, status, category, progress } = req.body;
+    const { 
+      title, 
+      description, 
+      assignee, 
+      due_date, 
+      priority, 
+      status, 
+      category, 
+      progress,
+      estimated_effort_hours,
+      planning_estimate_source
+    } = req.body;
     
     console.log('PATCH /api/issues/:id - Request body:', req.body);
     console.log('Issue ID:', id);
@@ -3405,6 +3472,14 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       updates.push(`progress = $${valueIndex++}`);
       values.push(progress || 0);
     }
+    if (estimated_effort_hours !== undefined) {
+      updates.push(`estimated_effort_hours = $${valueIndex++}`);
+      values.push(estimated_effort_hours || null);
+    }
+    if (planning_estimate_source !== undefined) {
+      updates.push(`planning_estimate_source = $${valueIndex++}`);
+      values.push(planning_estimate_source || null);
+    }
     
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
@@ -3435,6 +3510,53 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     }
     
     console.log('Updated issue:', updatedIssue);
+    
+    // Handle effort estimate updates
+    if (estimated_effort_hours !== undefined || planning_estimate_source !== undefined) {
+      // Determine if we need to create a history entry
+      const estimateChanged = estimated_effort_hours !== undefined && estimated_effort_hours !== issue.estimated_effort_hours;
+      const planningSourceChanged = planning_estimate_source !== undefined && planning_estimate_source !== issue.planning_estimate_source;
+      
+      if (estimateChanged) {
+        // Manual estimate was changed - create a manual_edit history entry with transaction
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          
+          // Read current version with row lock to prevent race conditions
+          const versionResult = await client.query(
+            `SELECT ai_estimate_version FROM issues WHERE id = $1 FOR UPDATE`,
+            [parseInt(id)]
+          );
+          const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
+          const newVersion = currentVersion + 1;
+          
+          await client.query(
+            `UPDATE issues SET ai_estimate_version = $1 WHERE id = $2`,
+            [newVersion, parseInt(id)]
+          );
+          
+          await client.query(
+            `INSERT INTO effort_estimate_history 
+             (item_type, item_id, estimate_hours, version, source, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            ['issue', parseInt(id), estimated_effort_hours, newVersion, 'manual_edit', req.user.id]
+          );
+          
+          await client.query('COMMIT');
+        } catch (err) {
+          await client.query('ROLLBACK');
+          console.error('Error creating effort estimate history:', err);
+          throw err; // Propagate error to caller
+        } finally {
+          client.release();
+        }
+      } else if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
+        // Planning source changed to AI or Hybrid (not a new estimate, just selecting existing one)
+        // No new history entry needed, just update the planning_estimate_source
+        console.log('Planning source changed to:', planning_estimate_source);
+      }
+    }
     
     // Log status change to history table
     if (status !== undefined && issue.status !== status) {
@@ -3701,7 +3823,19 @@ app.get('/api/action-items/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     
     const result = await pool.query(
-      'SELECT * FROM action_items WHERE id = $1',
+      `SELECT a.*, 
+        eeh.hybrid_estimate_data
+      FROM action_items a
+      LEFT JOIN LATERAL (
+        SELECT hybrid_estimate_data
+        FROM effort_estimate_history
+        WHERE item_id = a.id 
+          AND item_type = 'action-item'
+          AND source = 'hybrid_selection'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) eeh ON true
+      WHERE a.id = $1`,
       [parseInt(id)]
     );
     
@@ -3713,6 +3847,49 @@ app.get('/api/action-items/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching action item:', error);
     res.status(500).json({ error: 'Failed to fetch action item' });
+  }
+});
+
+// Get effort estimate version history for an action item
+app.get('/api/action-items/:id/effort-estimate-history', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const actionItemResult = await pool.query('SELECT id, ai_estimate_version, planning_estimate_source FROM action_items WHERE id = $1', [parseInt(id)]);
+    
+    if (actionItemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    const actionItem = actionItemResult.rows[0];
+    
+    const historyResult = await pool.query(
+      `SELECT 
+        version,
+        source,
+        estimate_hours,
+        confidence,
+        breakdown,
+        reasoning,
+        hybrid_estimate_data,
+        created_at,
+        created_by
+      FROM effort_estimate_history
+      WHERE item_id = $1 AND item_type = 'action-item'
+      ORDER BY 
+        CASE WHEN version = $2 THEN 0 ELSE 1 END,
+        version DESC`,
+      [parseInt(id), actionItem.ai_estimate_version]
+    );
+    
+    res.json({
+      currentVersion: actionItem.ai_estimate_version,
+      planningSource: actionItem.planning_estimate_source,
+      history: historyResult.rows
+    });
+  } catch (error) {
+    console.error('Error fetching effort estimate history:', error);
+    res.status(500).json({ error: 'Failed to fetch effort estimate history' });
   }
 });
 
@@ -3858,7 +4035,17 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
 app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, assignee, due_date, priority, status, progress } = req.body;
+    const { 
+      title, 
+      description, 
+      assignee, 
+      due_date, 
+      priority, 
+      status, 
+      progress,
+      estimated_effort_hours,
+      planning_estimate_source
+    } = req.body;
     
     console.log('PATCH /api/action-items/:id - Request body:', req.body);
     console.log('Action item ID:', id);
@@ -3920,6 +4107,14 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
       updates.push(`progress = $${valueIndex++}`);
       values.push(progress || 0);
     }
+    if (estimated_effort_hours !== undefined) {
+      updates.push(`estimated_effort_hours = $${valueIndex++}`);
+      values.push(estimated_effort_hours || null);
+    }
+    if (planning_estimate_source !== undefined) {
+      updates.push(`planning_estimate_source = $${valueIndex++}`);
+      values.push(planning_estimate_source || null);
+    }
     
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
@@ -3941,6 +4136,53 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     
     const result = await pool.query(query, values);
     const updatedItem = result.rows[0];
+    
+    // Handle effort estimate updates
+    if (estimated_effort_hours !== undefined || planning_estimate_source !== undefined) {
+      // Determine if we need to create a history entry
+      const estimateChanged = estimated_effort_hours !== undefined && estimated_effort_hours !== item.estimated_effort_hours;
+      const planningSourceChanged = planning_estimate_source !== undefined && planning_estimate_source !== item.planning_estimate_source;
+      
+      if (estimateChanged) {
+        // Manual estimate was changed - create a manual_edit history entry with transaction
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          
+          // Read current version with row lock to prevent race conditions
+          const versionResult = await client.query(
+            `SELECT ai_estimate_version FROM action_items WHERE id = $1 FOR UPDATE`,
+            [parseInt(id)]
+          );
+          const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
+          const newVersion = currentVersion + 1;
+          
+          await client.query(
+            `UPDATE action_items SET ai_estimate_version = $1 WHERE id = $2`,
+            [newVersion, parseInt(id)]
+          );
+          
+          await client.query(
+            `INSERT INTO effort_estimate_history 
+             (item_type, item_id, estimate_hours, version, source, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            ['action-item', parseInt(id), estimated_effort_hours, newVersion, 'manual_edit', req.user.id]
+          );
+          
+          await client.query('COMMIT');
+        } catch (err) {
+          await client.query('ROLLBACK');
+          console.error('Error creating effort estimate history:', err);
+          throw err; // Propagate error to caller
+        } finally {
+          client.release();
+        }
+      } else if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
+        // Planning source changed to AI or Hybrid (not a new estimate, just selecting existing one)
+        // No new history entry needed, just update the planning_estimate_source
+        console.log('Planning source changed to:', planning_estimate_source);
+      }
+    }
     
     // Log status change to history table
     if (status !== undefined && item.status !== status) {
@@ -11502,22 +11744,42 @@ app.get('/api/:itemType/:id/estimate/breakdown', authenticateToken, async (req, 
     if (type === 'hybrid') {
       console.log('Fetching hybrid breakdown:', { actualItemType, id });
       
+      // First, get the current hybrid hours from the main table
+      const tableName = actualItemType === 'issue' ? 'issues' : 'action_items';
+      const currentHybridQuery = `
+        SELECT hybrid_effort_estimate_hours
+        FROM ${tableName}
+        WHERE id = $1
+      `;
+      const currentHybridResult = await pool.query(currentHybridQuery, [id]);
+      
+      if (currentHybridResult.rows.length === 0 || !currentHybridResult.rows[0].hybrid_effort_estimate_hours) {
+        console.warn('No current hybrid estimate found for:', { actualItemType, id });
+        return res.status(404).json({ error: 'No hybrid estimate found for this item' });
+      }
+      
+      const currentHybridHours = currentHybridResult.rows[0].hybrid_effort_estimate_hours;
+      
+      // Now fetch the matching hybrid from history that matches these hours
       const hybridQuery = `
         SELECT hybrid_estimate_data, estimate_hours, version, created_at
         FROM effort_estimate_history
-        WHERE item_type = $1 AND item_id = $2 AND hybrid_estimate_data IS NOT NULL
+        WHERE item_type = $1 AND item_id = $2 
+          AND hybrid_estimate_data IS NOT NULL
+          AND ABS(estimate_hours - $3) < 0.1
         ORDER BY created_at DESC
         LIMIT 1
       `;
-      const hybridResult = await pool.query(hybridQuery, [actualItemType, id]);
+      const hybridResult = await pool.query(hybridQuery, [actualItemType, id, currentHybridHours]);
       
       console.log('Hybrid query result:', {
         rowCount: hybridResult.rows.length,
-        hasData: hybridResult.rows.length > 0
+        hasData: hybridResult.rows.length > 0,
+        currentHybridHours
       });
       
       if (hybridResult.rows.length === 0) {
-        console.warn('No hybrid estimate found for:', { actualItemType, id });
+        console.warn('No matching hybrid estimate found in history for:', { actualItemType, id, currentHybridHours });
         return res.status(404).json({ error: 'No hybrid estimate found for this item' });
       }
 
@@ -11697,14 +11959,27 @@ app.post('/api/:itemType/:id/estimate/hybrid', authenticateToken, async (req, re
         return res.status(404).json({ error: 'Item not found' });
       }
 
-      // Get current AI estimate version for this item
+      // Get current AI estimate version for this item and increment it
+      // Use row-level locking to prevent race conditions
       const versionQuery = `
-        SELECT COALESCE(MAX(version), 0) as max_version
+        SELECT version
         FROM effort_estimate_history
         WHERE item_type = $1 AND item_id = $2
+        ORDER BY version DESC
+        LIMIT 1
+        FOR UPDATE
       `;
       const versionResult = await client.query(versionQuery, [actualItemType, id]);
-      const currentVersion = versionResult.rows[0].max_version;
+      const currentVersion = versionResult.rows.length > 0 ? versionResult.rows[0].version : 0;
+      const newVersion = currentVersion + 1;
+
+      // Update the item's AI estimate version
+      const updateVersionQuery = `
+        UPDATE ${tableName} 
+        SET ai_estimate_version = $1
+        WHERE id = $2
+      `;
+      await client.query(updateVersionQuery, [newVersion, id]);
 
       // Save to history table
       const historyQuery = `
@@ -11717,7 +11992,7 @@ app.post('/api/:itemType/:id/estimate/hybrid', authenticateToken, async (req, re
         actualItemType,
         id,
         totalHours,
-        currentVersion, // Use same version as AI estimate
+        newVersion, // Increment version for hybrid selection
         JSON.stringify(hybridData),
         'hybrid_selection',
         req.user.id
@@ -11794,6 +12069,261 @@ app.get('/api/ai-usage/rate-limit', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to check rate limit' });
   }
 });
+
+// ============================================
+// BATCH ESTIMATION ENDPOINTS (Phase 2)
+// ============================================
+
+// In-memory batch job storage (can be replaced with Redis/DB later)
+const batchJobs = new Map();
+
+/**
+ * Start batch estimation for multiple items
+ * POST /api/estimates/batch
+ * Body: { items: [{id, type}], projectId }
+ */
+app.post('/api/estimates/batch', authenticateToken, async (req, res) => {
+  try {
+    const { items, projectId } = req.body;
+    const userId = req.user.id;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'items array is required' });
+    }
+
+    if (items.length > 50) {
+      return res.status(400).json({ error: 'Maximum 50 items per batch' });
+    }
+
+    // Generate job ID
+    const jobId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Initialize job status
+    const job = {
+      id: jobId,
+      userId,
+      projectId,
+      items,
+      total: items.length,
+      completed: 0,
+      successful: 0,
+      failed: 0,
+      status: 'processing',
+      results: [],
+      startedAt: new Date(),
+      completedAt: null,
+      currentItem: null
+    };
+
+    batchJobs.set(jobId, job);
+
+    // Start processing asynchronously (don't await)
+    processBatchEstimation(jobId, items, userId, projectId).catch(err => {
+      console.error(`Batch job ${jobId} failed:`, err);
+      const job = batchJobs.get(jobId);
+      if (job) {
+        job.status = 'error';
+        job.error = err.message;
+      }
+    });
+
+    res.json({
+      jobId,
+      total: items.length,
+      message: 'Batch estimation started'
+    });
+
+  } catch (error) {
+    console.error('Error starting batch estimation:', error);
+    res.status(500).json({ error: 'Failed to start batch estimation' });
+  }
+});
+
+/**
+ * Get batch job progress
+ * GET /api/estimates/batch/:jobId
+ */
+app.get('/api/estimates/batch/:jobId', authenticateToken, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = batchJobs.get(jobId);
+
+    if (!job) {
+      return res.status(404).json({ error: 'Batch job not found' });
+    }
+
+    // Only allow access to own jobs
+    if (job.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    res.json(job);
+
+  } catch (error) {
+    console.error('Error fetching batch job:', error);
+    res.status(500).json({ error: 'Failed to fetch batch job status' });
+  }
+});
+
+/**
+ * Process batch estimation asynchronously
+ */
+async function processBatchEstimation(jobId, items, userId, projectId) {
+  const job = batchJobs.get(jobId);
+  if (!job) return;
+
+  const { checkRateLimit } = require('./middleware/ai-rate-limiter');
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    job.currentItem = `${item.type} #${item.id}`;
+
+    try {
+      // Check rate limit before each estimation
+      const rateLimit = await checkRateLimit(pool, userId, projectId, 'effort_estimation');
+      
+      if (!rateLimit.allowed) {
+        job.results.push({
+          itemId: item.id,
+          itemType: item.type,
+          success: false,
+          error: 'Rate limit exceeded',
+          title: item.title || `${item.type} #${item.id}`
+        });
+        job.failed++;
+        job.completed++;
+        continue;
+      }
+
+      // Fetch item details
+      const tableName = item.type === 'issue' ? 'issues' : 'action_items';
+      const itemResult = await pool.query(
+        `SELECT id, title, description, ai_estimate_version FROM ${tableName} WHERE id = $1`,
+        [item.id]
+      );
+
+      if (itemResult.rows.length === 0) {
+        job.results.push({
+          itemId: item.id,
+          itemType: item.type,
+          success: false,
+          error: 'Item not found',
+          title: `${item.type} #${item.id}`
+        });
+        job.failed++;
+        job.completed++;
+        continue;
+      }
+
+      const itemData = itemResult.rows[0];
+
+      // Generate estimate using AI
+      const estimate = await generateEffortEstimate({
+        title: itemData.title,
+        description: itemData.description,
+        itemType: item.type,
+        model: 'gpt-4o',
+        userId: userId,
+        projectId: projectId
+      });
+
+      if (!estimate.success) {
+        job.results.push({
+          itemId: item.id,
+          itemType: item.type,
+          success: false,
+          error: estimate.message || estimate.error,
+          title: itemData.title
+        });
+        job.failed++;
+        job.completed++;
+        continue;
+      }
+
+      // Increment version
+      const newVersion = (itemData.ai_estimate_version || 0) + 1;
+
+      // Update item with estimate
+      await pool.query(
+        `UPDATE ${tableName} 
+         SET ai_effort_estimate_hours = $1,
+             ai_estimate_confidence = $2,
+             ai_estimate_version = $3,
+             ai_estimate_last_updated = NOW()
+         WHERE id = $4`,
+        [estimate.totalHours, estimate.confidence, newVersion, item.id]
+      );
+
+      // Save to history (normalize item type to match database constraint)
+      const normalizedItemType = item.type === 'issue' ? 'issue' : 'action-item';
+      await pool.query(
+        `INSERT INTO effort_estimate_history 
+         (item_type, item_id, estimate_hours, version, confidence, breakdown, reasoning, source, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          normalizedItemType,
+          item.id,
+          estimate.totalHours,
+          newVersion,
+          estimate.confidence,
+          JSON.stringify({
+            tasks: estimate.breakdown,
+            assumptions: estimate.assumptions,
+            risks: estimate.risks
+          }),
+          estimate.confidenceReasoning,
+          'manual_regenerate',
+          userId
+        ]
+      );
+
+      // Track AI usage
+      await pool.query(
+        `INSERT INTO ai_usage_tracking 
+         (user_id, project_id, feature, operation_type, tokens_used, cost_usd)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          userId,
+          projectId,
+          'effort_estimation',
+          'batch_generate',
+          estimate.metadata.totalTokens.total,
+          estimate.metadata.totalCost
+        ]
+      );
+
+      job.results.push({
+        itemId: item.id,
+        itemType: item.type,
+        success: true,
+        title: itemData.title,
+        hours: estimate.totalHours,
+        confidence: estimate.confidence,
+        taskCount: estimate.breakdown.length
+      });
+      job.successful++;
+
+    } catch (error) {
+      console.error(`Error estimating ${item.type} ${item.id}:`, error);
+      job.results.push({
+        itemId: item.id,
+        itemType: item.type,
+        success: false,
+        error: error.message,
+        title: item.title || `${item.type} #${item.id}`
+      });
+      job.failed++;
+    }
+
+    job.completed++;
+  }
+
+  job.status = 'completed';
+  job.completedAt = new Date();
+  job.currentItem = null;
+
+  console.log(`Batch job ${jobId} completed: ${job.successful} successful, ${job.failed} failed`);
+}
 
 // Get all valid usernames for dropdown (includes users AND all assignee names)
 app.get('/api/admin/valid-usernames', authenticateToken, async (req, res) => {

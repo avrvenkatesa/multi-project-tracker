@@ -635,6 +635,11 @@ async function openItemDetailModal(itemId, itemType) {
     const canEdit = isOwner || isAssignee || isTeamLeadOrAbove;
     const canDelete = isTeamLeadOrAbove;
     
+    // Set global permission flag for effort estimates tab
+    if (typeof currentUserCanEdit !== 'undefined') {
+      currentUserCanEdit = canEdit;
+    }
+    
     // Show/hide edit and delete buttons based on permissions
     const editBtn = document.getElementById('item-detail-edit-btn');
     const deleteBtn = document.getElementById('item-detail-delete-btn');
@@ -952,6 +957,10 @@ function switchItemDetailTab(tabName) {
   // Load content for specific tabs
   if (tabName === 'checklists' && currentItemId && currentItemType) {
     loadLinkedChecklists();
+  }
+  
+  if (tabName === 'effort-estimates' && currentItemId && currentItemType) {
+    loadEffortEstimatesTab();
   }
 }
 
