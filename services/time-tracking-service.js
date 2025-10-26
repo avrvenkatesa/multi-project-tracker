@@ -1,4 +1,8 @@
-const pool = require('../db/index');
+const { neon, Pool } = require('@neondatabase/serverless');
+
+// Database connection
+const sql = neon(process.env.DATABASE_URL);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 /**
  * Time Tracking Service
@@ -73,6 +77,29 @@ function calculateHoursFromPercent(completionPercent, planningEstimate) {
  * Validate status change and calculate time tracking updates
  */
 async function validateStatusChange(itemType, itemId, fromStatus, toStatus, hoursAdded, completionPercent) {
+  // CRITICAL: Coerce inputs to numbers to prevent string concatenation
+  const hoursAddedNum = hoursAdded ? parseFloat(hoursAdded) : 0;
+  const completionPercentNum = completionPercent !== undefined && completionPercent !== null 
+    ? parseFloat(completionPercent) 
+    : null;
+  
+  // Validate numeric conversion
+  if (hoursAdded && isNaN(hoursAddedNum)) {
+    return {
+      valid: false,
+      error: 'Invalid hours',
+      message: 'Hours must be a valid number'
+    };
+  }
+  
+  if (completionPercentNum !== null && isNaN(completionPercentNum)) {
+    return {
+      valid: false,
+      error: 'Invalid completion percentage',
+      message: 'Completion percentage must be a valid number'
+    };
+  }
+  
   // Normalize status values for comparison (case insensitive)
   const transitionKey = `${fromStatus}_${toStatus}`;
   const normalizedKey = transitionKey.toLowerCase();
@@ -91,7 +118,7 @@ async function validateStatusChange(itemType, itemId, fromStatus, toStatus, hour
   }
   
   // Validate hours requirement
-  if (rule.requiresHours && (!hoursAdded || hoursAdded === 0)) {
+  if (rule.requiresHours && hoursAddedNum === 0) {
     return {
       valid: false,
       requiresHours: true,
@@ -102,11 +129,11 @@ async function validateStatusChange(itemType, itemId, fromStatus, toStatus, hour
   
   // Get current item data
   const item = await getItem(itemType, itemId);
-  const planningEstimate = item.estimated_effort_hours || 0;
-  const currentActualHours = item.actual_effort_hours || 0;
+  const planningEstimate = parseFloat(item.estimated_effort_hours) || 0;
+  const currentActualHours = parseFloat(item.actual_effort_hours) || 0;
   
-  // Calculate new totals
-  const newActualHours = currentActualHours + (hoursAdded || 0);
+  // Calculate new totals - using properly coerced numbers
+  const newActualHours = currentActualHours + hoursAddedNum;
   
   // Calculate completion percentage
   let newCompletionPercent;
@@ -115,10 +142,10 @@ async function validateStatusChange(itemType, itemId, fromStatus, toStatus, hour
     // Marking as done - always 100%
     newCompletionPercent = 100;
   } else if (rule.setCompletion === 'calculate') {
-    if (completionPercent !== undefined && completionPercent !== null) {
+    if (completionPercentNum !== null) {
       // User provided percentage directly
-      newCompletionPercent = Math.max(0, Math.min(100, completionPercent));
-    } else if (planningEstimate > 0 && hoursAdded > 0) {
+      newCompletionPercent = Math.max(0, Math.min(100, completionPercentNum));
+    } else if (planningEstimate > 0 && hoursAddedNum > 0) {
       // Calculate from hours
       newCompletionPercent = calculateCompletionPercent(newActualHours, planningEstimate);
     } else {
@@ -151,8 +178,19 @@ async function validateStatusChange(itemType, itemId, fromStatus, toStatus, hour
  * This is the key enhancement for incremental time tracking
  */
 async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, completionPercent = null) {
-  if (!hoursAdded || hoursAdded <= 0) {
-    throw new Error('Hours added must be greater than 0');
+  // CRITICAL: Coerce inputs to numbers to prevent string concatenation
+  const hoursAddedNum = parseFloat(hoursAdded);
+  const completionPercentNum = completionPercent !== undefined && completionPercent !== null 
+    ? parseFloat(completionPercent) 
+    : null;
+  
+  // Validate numeric conversion
+  if (isNaN(hoursAddedNum) || hoursAddedNum <= 0) {
+    throw new Error('Hours added must be a valid number greater than 0');
+  }
+  
+  if (completionPercentNum !== null && (isNaN(completionPercentNum) || completionPercentNum < 0 || completionPercentNum > 100)) {
+    throw new Error('Completion percentage must be a valid number between 0 and 100');
   }
   
   const client = await pool.connect();
@@ -162,17 +200,17 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
     
     // Get current item
     const item = await getItem(itemType, itemId);
-    const planningEstimate = item.estimated_effort_hours || 0;
-    const currentActualHours = item.actual_effort_hours || 0;
+    const planningEstimate = parseFloat(item.estimated_effort_hours) || 0;
+    const currentActualHours = parseFloat(item.actual_effort_hours) || 0;
     const currentTimeLogCount = item.time_log_count || 0;
     
-    // Calculate new values
-    const newActualHours = currentActualHours + hoursAdded;
+    // Calculate new values - using properly coerced numbers
+    const newActualHours = currentActualHours + hoursAddedNum;
     
     let newCompletionPercent;
-    if (completionPercent !== undefined && completionPercent !== null) {
+    if (completionPercentNum !== null) {
       // User manually set completion percentage
-      newCompletionPercent = Math.max(0, Math.min(100, completionPercent));
+      newCompletionPercent = Math.max(0, Math.min(100, completionPercentNum));
     } else if (planningEstimate > 0) {
       // Calculate from hours
       newCompletionPercent = calculateCompletionPercent(newActualHours, planningEstimate);
@@ -203,7 +241,7 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
       [
         itemType,
         itemId,
-        hoursAdded,
+        hoursAddedNum,
         newActualHours,
         newCompletionPercent,
         true, // is_quick_log
