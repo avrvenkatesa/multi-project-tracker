@@ -309,53 +309,66 @@ async function generateEstimateFromItem(pool, itemType, itemId, options = {}) {
     // Increment version
     const newVersion = (item.ai_estimate_version || 0) + 1;
 
-    // Update item with estimate
-    await pool.query(
-      `UPDATE ${tableName} 
-       SET ai_effort_estimate_hours = $1,
-           ai_estimate_confidence = $2,
-           ai_estimate_version = $3,
-           ai_estimate_last_updated = NOW()
-       WHERE id = $4`,
-      [estimate.totalHours, estimate.confidence, newVersion, itemId]
-    );
+    // Use transaction to ensure atomicity between version update and history insert
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    // Save to history
-    await pool.query(
-      `INSERT INTO effort_estimate_history 
-       (item_type, item_id, estimate_hours, version, confidence, breakdown, reasoning, source, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [
-        itemType,
-        itemId,
-        estimate.totalHours,
-        newVersion,
-        estimate.confidence,
-        JSON.stringify({
-          tasks: estimate.breakdown,
-          assumptions: estimate.assumptions,
-          risks: estimate.risks
-        }),
-        estimate.confidenceReasoning,
-        options.source || 'manual_regenerate',
-        userId
-      ]
-    );
+      // Update item with estimate
+      await client.query(
+        `UPDATE ${tableName} 
+         SET ai_effort_estimate_hours = $1,
+             ai_estimate_confidence = $2,
+             ai_estimate_version = $3,
+             ai_estimate_last_updated = NOW()
+         WHERE id = $4`,
+        [estimate.totalHours, estimate.confidence, newVersion, itemId]
+      );
 
-    // Track AI usage
-    await pool.query(
-      `INSERT INTO ai_usage_tracking 
-       (user_id, project_id, feature, operation_type, tokens_used, cost_usd)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        userId,
-        item.project_id,
-        'effort_estimation',
-        'generate_estimate',
-        estimate.metadata.totalTokens.total,
-        estimate.metadata.totalCost
-      ]
-    );
+      // Save to history
+      await client.query(
+        `INSERT INTO effort_estimate_history 
+         (item_type, item_id, estimate_hours, version, confidence, breakdown, reasoning, source, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          itemType,
+          itemId,
+          estimate.totalHours,
+          newVersion,
+          estimate.confidence,
+          JSON.stringify({
+            tasks: estimate.breakdown,
+            assumptions: estimate.assumptions,
+            risks: estimate.risks
+          }),
+          estimate.confidenceReasoning,
+          options.source || 'manual_regenerate',
+          userId
+        ]
+      );
+
+      // Track AI usage
+      await client.query(
+        `INSERT INTO ai_usage_tracking 
+         (user_id, project_id, feature, operation_type, tokens_used, cost_usd)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          userId,
+          item.project_id,
+          'effort_estimation',
+          'generate_estimate',
+          estimate.metadata.totalTokens.total,
+          estimate.metadata.totalCost
+        ]
+      );
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
 
     return {
       ...estimate,

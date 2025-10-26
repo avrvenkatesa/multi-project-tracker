@@ -12417,54 +12417,67 @@ async function processBatchEstimation(jobId, items, userId, projectId) {
       // Increment version
       const newVersion = (itemData.ai_estimate_version || 0) + 1;
 
-      // Update item with estimate
-      await pool.query(
-        `UPDATE ${tableName} 
-         SET ai_effort_estimate_hours = $1,
-             ai_estimate_confidence = $2,
-             ai_estimate_version = $3,
-             ai_estimate_last_updated = NOW()
-         WHERE id = $4`,
-        [estimate.totalHours, estimate.confidence, newVersion, item.id]
-      );
+      // Use transaction to ensure atomicity
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
 
-      // Save to history (normalize item type to match database constraint)
-      const normalizedItemType = item.type === 'issue' ? 'issue' : 'action-item';
-      await pool.query(
-        `INSERT INTO effort_estimate_history 
-         (item_type, item_id, estimate_hours, version, confidence, breakdown, reasoning, source, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
-          normalizedItemType,
-          item.id,
-          estimate.totalHours,
-          newVersion,
-          estimate.confidence,
-          JSON.stringify({
-            tasks: estimate.breakdown,
-            assumptions: estimate.assumptions,
-            risks: estimate.risks
-          }),
-          estimate.confidenceReasoning,
-          'manual_regenerate',
-          userId
-        ]
-      );
+        // Update item with estimate
+        await client.query(
+          `UPDATE ${tableName} 
+           SET ai_effort_estimate_hours = $1,
+               ai_estimate_confidence = $2,
+               ai_estimate_version = $3,
+               ai_estimate_last_updated = NOW()
+           WHERE id = $4`,
+          [estimate.totalHours, estimate.confidence, newVersion, item.id]
+        );
 
-      // Track AI usage
-      await pool.query(
-        `INSERT INTO ai_usage_tracking 
-         (user_id, project_id, feature, operation_type, tokens_used, cost_usd)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          userId,
-          projectId,
-          'effort_estimation',
-          'batch_generate',
-          estimate.metadata.totalTokens.total,
-          estimate.metadata.totalCost
-        ]
-      );
+        // Save to history (normalize item type to match database constraint)
+        const normalizedItemType = item.type === 'issue' ? 'issue' : 'action-item';
+        await client.query(
+          `INSERT INTO effort_estimate_history 
+           (item_type, item_id, estimate_hours, version, confidence, breakdown, reasoning, source, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            normalizedItemType,
+            item.id,
+            estimate.totalHours,
+            newVersion,
+            estimate.confidence,
+            JSON.stringify({
+              tasks: estimate.breakdown,
+              assumptions: estimate.assumptions,
+              risks: estimate.risks
+            }),
+            estimate.confidenceReasoning,
+            'manual_regenerate',
+            userId
+          ]
+        );
+
+        // Track AI usage
+        await client.query(
+          `INSERT INTO ai_usage_tracking 
+           (user_id, project_id, feature, operation_type, tokens_used, cost_usd)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            userId,
+            projectId,
+            'effort_estimation',
+            'batch_generate',
+            estimate.metadata.totalTokens.total,
+            estimate.metadata.totalCost
+          ]
+        );
+
+        await client.query('COMMIT');
+      } catch (dbError) {
+        await client.query('ROLLBACK');
+        throw dbError;
+      } finally {
+        client.release();
+      }
 
       job.results.push({
         itemId: item.id,
