@@ -7577,8 +7577,8 @@ async function loadEffortEstimate(itemId, itemType) {
     if (hybridSection) hybridSection.classList.add('hidden');
     if (selectorSection) selectorSection.classList.add('hidden');
     
-    document.getElementById(`${prefix}-estimated-hours`).value = item.estimated_hours || '';
-    document.getElementById(`${prefix}-actual-hours`).value = item.actual_hours || '';
+    document.getElementById(`${prefix}-estimated-hours`).value = item.estimated_effort_hours || item.estimated_hours || '';
+    document.getElementById(`${prefix}-actual-hours`).value = item.actual_effort_hours || item.actual_hours || '';
     
     if (item.ai_estimated_hours || item.ai_effort_estimate_hours) {
       // Parse as numbers (PostgreSQL returns NUMERIC/DECIMAL as strings)

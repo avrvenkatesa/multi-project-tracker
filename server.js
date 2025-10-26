@@ -3596,9 +3596,24 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
           client.release();
         }
       } else if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
-        // Planning source changed to AI or Hybrid (not a new estimate, just selecting existing one)
-        // No new history entry needed, just update the planning_estimate_source
+        // Planning source changed to AI or Hybrid - copy the selected estimate into planning estimate
         console.log('Planning source changed to:', planning_estimate_source);
+        
+        // Copy the selected estimate hours into estimated_effort_hours for calculations
+        let selectedEstimate = null;
+        if (planning_estimate_source === 'ai') {
+          selectedEstimate = parseFloat(issue.ai_effort_estimate_hours) || null;
+        } else if (planning_estimate_source === 'hybrid') {
+          selectedEstimate = parseFloat(issue.hybrid_effort_estimate_hours) || null;
+        }
+        
+        if (selectedEstimate !== null) {
+          await pool.query(
+            `UPDATE issues SET estimated_effort_hours = $1 WHERE id = $2`,
+            [selectedEstimate, parseInt(id)]
+          );
+          console.log(`Copied ${planning_estimate_source} estimate (${selectedEstimate}h) to planning estimate`);
+        }
       }
     }
     
@@ -4339,9 +4354,24 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
           client.release();
         }
       } else if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
-        // Planning source changed to AI or Hybrid (not a new estimate, just selecting existing one)
-        // No new history entry needed, just update the planning_estimate_source
+        // Planning source changed to AI or Hybrid - copy the selected estimate into planning estimate
         console.log('Planning source changed to:', planning_estimate_source);
+        
+        // Copy the selected estimate hours into estimated_effort_hours for calculations
+        let selectedEstimate = null;
+        if (planning_estimate_source === 'ai') {
+          selectedEstimate = parseFloat(item.ai_effort_estimate_hours) || null;
+        } else if (planning_estimate_source === 'hybrid') {
+          selectedEstimate = parseFloat(item.hybrid_effort_estimate_hours) || null;
+        }
+        
+        if (selectedEstimate !== null) {
+          await pool.query(
+            `UPDATE action_items SET estimated_effort_hours = $1 WHERE id = $2`,
+            [selectedEstimate, parseInt(id)]
+          );
+          console.log(`Copied ${planning_estimate_source} estimate (${selectedEstimate}h) to planning estimate`);
+        }
       }
     }
     
