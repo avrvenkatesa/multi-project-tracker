@@ -1551,11 +1551,14 @@ async function updateItemStatusWithTime(draggedItem, newStatus, timeData) {
         
         // Show success message with time tracking info
         const timeTracking = response.data.timeTracking;
-        if (timeTracking) {
-            const message = `Status updated! ${timeTracking.actualHours}h logged (${timeTracking.completionPercent}% complete)`;
+        const actualHours = response.data.actual_effort_hours || timeTracking?.actualHours;
+        const completionPercent = response.data.completion_percentage || timeTracking?.completionPercent;
+        
+        if (actualHours !== undefined && actualHours !== null) {
+            const message = `Status updated! ${actualHours}h logged${completionPercent !== undefined ? ` (${completionPercent}% complete)` : ''}`;
             showSuccessMessage(message);
             
-            if (timeTracking.warning) {
+            if (timeTracking?.warning) {
                 setTimeout(() => {
                     showWarningMessage(timeTracking.warning);
                 }, 2000);

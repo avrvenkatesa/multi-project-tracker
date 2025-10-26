@@ -3538,11 +3538,19 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     const result = await pool.query(query, values);
     console.log('Query executed successfully. Rows returned:', result.rows.length);
     
-    const updatedIssue = result.rows[0];
+    let updatedIssue = result.rows[0];
     
     if (!updatedIssue) {
       console.error('No issue was updated - issue might not exist');
       return res.status(404).json({ error: 'Issue not found or not updated' });
+    }
+    
+    // If time tracking was performed, refetch the item to get updated time tracking fields
+    if (timeTrackingResult && !timeTrackingResult.skipTimeTracking) {
+      const [refreshedIssue] = await sql`SELECT * FROM issues WHERE id = ${id}`;
+      if (refreshedIssue) {
+        updatedIssue = refreshedIssue;
+      }
     }
     
     console.log('Updated issue:', updatedIssue);
@@ -4280,7 +4288,15 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     console.log('Expected parameter count: $' + valueIndex);
     
     const result = await pool.query(query, values);
-    const updatedItem = result.rows[0];
+    let updatedItem = result.rows[0];
+    
+    // If time tracking was performed, refetch the item to get updated time tracking fields
+    if (timeTrackingResult && !timeTrackingResult.skipTimeTracking) {
+      const [refreshedItem] = await sql`SELECT * FROM action_items WHERE id = ${id}`;
+      if (refreshedItem) {
+        updatedItem = refreshedItem;
+      }
+    }
     
     // Handle effort estimate updates
     if (estimated_effort_hours !== undefined || planning_estimate_source !== undefined) {
