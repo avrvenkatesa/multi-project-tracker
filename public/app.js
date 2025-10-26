@@ -8847,50 +8847,61 @@ function setupEstimateFormListeners() {
     }
   });
   
-  // View AI Breakdown button
+  // View AI Breakdown button - Use the same interactive hybrid selector as Edit modals
   document.getElementById('detail-view-ai-breakdown')?.addEventListener('click', async function() {
     const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
     
     try {
+      // Load AI breakdown
       const response = await axios.get(`/api/${endpoint}/${currentItemId}/estimate/breakdown`, 
         { withCredentials: true }
       );
       
       const breakdown = response.data;
       
-      // Show breakdown in existing modal
-      document.getElementById('estimateBreakdownModalTitle').textContent = 'AI Estimate Breakdown';
-      let html = `
-        <div class="mb-4">
-          <strong>Total Estimate:</strong> ${breakdown.totalHours} hours
-          <span class="ml-2 text-xs px-2 py-1 rounded ${
-            breakdown.confidence === 'high' ? 'bg-green-200 text-green-800' :
-            breakdown.confidence === 'low' ? 'bg-red-200 text-red-800' :
-            'bg-blue-200 text-blue-800'
-          }">${breakdown.confidence} confidence</span>
-        </div>
-        <div class="space-y-2">
-      `;
+      // Initialize hybrid selection state with all tasks
+      hybridSelectionState.tasks = breakdown.tasks.map(task => ({
+        ...task,
+        selected: false,
+        editedHours: task.hours,
+        originalHours: task.hours
+      }));
+      hybridSelectionState.totalHours = 0;
+      hybridSelectionState.selectedCount = 0;
       
-      breakdown.tasks.forEach(task => {
-        const taskName = task.task || task.title || 'Unnamed task';
-        const taskDescription = task.reasoning || task.description || '';
-        const complexity = task.complexity ? `<span class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700 ml-2">${task.complexity}</span>` : '';
+      // Try to load saved hybrid data and hydrate
+      try {
+        const hybridResponse = await axios.get(`/api/${endpoint}/${currentItemId}/estimate/breakdown?type=hybrid`, 
+          { withCredentials: true }
+        );
         
-        html += `
-          <div class="p-3 bg-gray-50 rounded border border-gray-200">
-            <div class="flex justify-between items-start">
-              <span class="font-medium flex-1">${taskName}${complexity}</span>
-              <span class="text-purple-600 font-bold ml-4">${task.hours}h</span>
-            </div>
-            ${taskDescription ? `<p class="text-sm text-gray-600 mt-1">${taskDescription}</p>` : ''}
-            ${task.category ? `<p class="text-xs text-gray-500 mt-1">Category: ${task.category}</p>` : ''}
-          </div>
-        `;
-      });
+        if (hybridResponse.data && hybridResponse.data.selectedTasks) {
+          // Hydrate saved hybrid selections
+          const savedSelections = hybridResponse.data.selectedTasks;
+          
+          savedSelections.forEach(savedTask => {
+            // Find matching task in current breakdown
+            const taskIndex = hybridSelectionState.tasks.findIndex(t => 
+              t.task === savedTask.task || t.task === savedTask.description
+            );
+            
+            if (taskIndex !== -1) {
+              hybridSelectionState.tasks[taskIndex].selected = true;
+              hybridSelectionState.tasks[taskIndex].editedHours = savedTask.editedHours || savedTask.hours;
+            }
+          });
+          
+          // Recalculate totals
+          const selectedTasks = hybridSelectionState.tasks.filter(t => t.selected);
+          hybridSelectionState.totalHours = selectedTasks.reduce((sum, task) => sum + task.editedHours, 0);
+          hybridSelectionState.selectedCount = selectedTasks.length;
+        }
+      } catch (hybridError) {
+        // No saved hybrid data, that's okay
+        console.log('No saved hybrid data found, starting fresh');
+      }
       
-      html += '</div>';
-      document.getElementById('estimateBreakdownContent').innerHTML = html;
+      renderBreakdownModal(breakdown, currentItemId, currentItemType);
       document.getElementById('estimateBreakdownModal').classList.remove('hidden');
       
     } catch (error) {
@@ -8899,58 +8910,10 @@ function setupEstimateFormListeners() {
     }
   });
   
-  // View Hybrid Breakdown button
+  // View Hybrid Breakdown button - Use the same interactive hybrid selector as Edit modals
   document.getElementById('detail-view-hybrid-breakdown')?.addEventListener('click', async function() {
-    const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
-    
-    try {
-      const response = await axios.get(`/api/${endpoint}/${currentItemId}/estimate/hybrid-breakdown`, 
-        { withCredentials: true }
-      );
-      
-      const hybridBreakdown = response.data;
-      
-      // Show breakdown in existing modal
-      document.getElementById('estimateBreakdownModalTitle').textContent = 'Hybrid Estimate Breakdown';
-      let html = `
-        <div class="mb-4">
-          <strong>Selected Tasks:</strong> ${hybridBreakdown.selectedTasks.length} / ${hybridBreakdown.totalTasks}
-          <br><strong>Total Estimate:</strong> ${hybridBreakdown.totalHours} hours
-        </div>
-        <div class="space-y-2">
-      `;
-      
-      hybridBreakdown.selectedTasks.forEach(task => {
-        if (task.selected !== false) {
-          const taskName = task.task || task.title || 'Unnamed task';
-          const taskDescription = task.reasoning || task.description || '';
-          
-          html += `
-            <div class="p-3 bg-green-50 rounded border border-green-200">
-              <div class="flex justify-between items-start">
-                <span class="font-medium flex-1">✓ ${taskName}</span>
-                <span class="text-green-600 font-bold ml-4">${task.hours}h</span>
-              </div>
-              ${taskDescription ? `<p class="text-sm text-gray-600 mt-1">${taskDescription}</p>` : ''}
-              ${task.category ? `<p class="text-xs text-gray-500 mt-1">Category: ${task.category}</p>` : ''}
-            </div>
-          `;
-        }
-      });
-      
-      html += `</div>
-        <div class="mt-4 p-3 bg-blue-50 rounded border border-blue-200 text-sm">
-          <strong>Note:</strong> This hybrid estimate was created by selecting specific tasks from the AI breakdown.
-        </div>
-      `;
-      
-      document.getElementById('estimateBreakdownContent').innerHTML = html;
-      document.getElementById('estimateBreakdownModal').classList.remove('hidden');
-      
-    } catch (error) {
-      console.error('Error loading hybrid breakdown:', error);
-      showToast('No hybrid estimate found', 'info');
-    }
+    // Same as AI breakdown - opens the interactive selector
+    document.getElementById('detail-view-ai-breakdown')?.click();
   });
 }
 
