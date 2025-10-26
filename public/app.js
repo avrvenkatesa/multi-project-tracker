@@ -1380,6 +1380,201 @@ function handleDragOver(e) {
     e.dataTransfer.dropEffect = 'move';
 }
 
+// Time Tracking Functions
+function doesStatusChangeRequireTime(fromStatus, toStatus) {
+    // Normalize statuses (case insensitive)
+    const from = fromStatus.toLowerCase();
+    const to = toStatus.toLowerCase();
+    
+    // Status changes that require time entry
+    const requiresTime = [
+        'to do_in progress',
+        'open_in progress',
+        'todo_in progress',
+        'to do_done',
+        'in progress_done',
+        'open_done',
+        'todo_done',
+        'in progress_done'
+    ];
+    
+    const transitionKey = `${from}_${to}`;
+    return requiresTime.includes(transitionKey);
+}
+
+async function showTimeEntryModal(item, fromStatus, toStatus) {
+    return new Promise((resolve) => {
+        const itemName = item.title || 'Item';
+        const planningEstimate = item.hybrid_effort_estimate_hours || 
+                                item.estimated_effort_hours || 
+                                item.ai_effort_estimate_hours || 
+                                0;
+        const currentActualHours = item.actual_effort_hours || 0;
+        
+        const modalContent = `
+            <h3 class="text-lg font-semibold mb-4">⏱️ Log Time for Status Change</h3>
+            <div class="mb-4">
+                <p class="text-sm text-gray-600 mb-2">
+                    <strong>${itemName}</strong>
+                </p>
+                <p class="text-sm text-gray-500">
+                    Status: <span class="font-medium">${fromStatus}</span> → 
+                    <span class="font-medium text-blue-600">${toStatus}</span>
+                </p>
+            </div>
+            
+            ${planningEstimate > 0 ? `
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <div class="text-sm text-gray-700">
+                    <div class="flex justify-between mb-1">
+                        <span>Planning Estimate:</span>
+                        <span class="font-semibold">${planningEstimate}h</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Actual Hours So Far:</span>
+                        <span class="font-semibold">${currentActualHours}h</span>
+                    </div>
+                    <div class="flex justify-between mt-2 pt-2 border-t border-blue-200">
+                        <span>Remaining:</span>
+                        <span class="font-semibold text-blue-600">${Math.max(0, planningEstimate - currentActualHours).toFixed(1)}h</span>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+            
+            <form id="time-entry-form">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">
+                        Hours Spent <span class="text-red-500">*</span>
+                    </label>
+                    <input type="number" 
+                           id="hours-input" 
+                           step="0.5" 
+                           min="0.1"
+                           required 
+                           placeholder="Enter hours..."
+                           class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">
+                        How many hours did you spend on this work?
+                    </p>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-sm font-medium mb-2">
+                        Notes (optional)
+                    </label>
+                    <textarea id="time-notes-input" 
+                              rows="2"
+                              placeholder="What did you work on?"
+                              class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button type="button" 
+                            id="cancel-time-btn" 
+                            class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                        Log Time & Update Status
+                    </button>
+                </div>
+            </form>
+        `;
+        
+        showModal(modalContent);
+        
+        // Focus on hours input
+        setTimeout(() => {
+            document.getElementById('hours-input')?.focus();
+        }, 100);
+        
+        // Cancel button
+        document.getElementById('cancel-time-btn').addEventListener('click', () => {
+            hideModal();
+            resolve(null);
+        });
+        
+        // Form submit
+        document.getElementById('time-entry-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const hours = parseFloat(document.getElementById('hours-input').value);
+            const notes = document.getElementById('time-notes-input').value.trim();
+            
+            if (hours <= 0 || isNaN(hours)) {
+                showErrorMessage('Please enter a valid number of hours');
+                return;
+            }
+            
+            hideModal();
+            resolve({ hours, notes });
+        });
+    });
+}
+
+async function updateItemStatusWithTime(draggedItem, newStatus, timeData) {
+    try {
+        const endpoint = draggedItem.type === 'action-item' 
+            ? `/api/action-items/${draggedItem.id}`
+            : `/api/issues/${draggedItem.id}`;
+        
+        const payload = {
+            status: newStatus,
+            actual_hours_added: timeData.hours
+        };
+        
+        if (timeData.notes) {
+            payload.time_notes = timeData.notes;
+        }
+        
+        const response = await axios.patch(endpoint, payload);
+        
+        // Update local data with response
+        if (draggedItem.type === 'action-item') {
+            const item = actionItems.find(i => i.id == draggedItem.id);
+            if (item) {
+                item.status = newStatus;
+                item.actual_effort_hours = response.data.actual_effort_hours;
+                item.completion_percentage = response.data.completion_percentage;
+            }
+        } else {
+            const item = issues.find(i => i.id == draggedItem.id);
+            if (item) {
+                item.status = newStatus;
+                item.actual_effort_hours = response.data.actual_effort_hours;
+                item.completion_percentage = response.data.completion_percentage;
+            }
+        }
+        
+        renderKanbanBoard();
+        
+        // Show success message with time tracking info
+        const timeTracking = response.data.timeTracking;
+        if (timeTracking) {
+            const message = `Status updated! ${timeTracking.actualHours}h logged (${timeTracking.completionPercent}% complete)`;
+            showSuccessMessage(message);
+            
+            if (timeTracking.warning) {
+                setTimeout(() => {
+                    showWarningMessage(timeTracking.warning);
+                }, 2000);
+            }
+        } else {
+            showSuccessMessage(`Status updated! ${timeData.hours}h logged`);
+        }
+        
+    } catch (error) {
+        console.error('Error updating status with time:', error);
+        
+        if (error.response?.data?.message) {
+            showErrorMessage(error.response.data.message);
+        } else {
+            showErrorMessage('Failed to update status');
+        }
+    }
+}
+
 async function handleDrop(e) {
     e.preventDefault();
     
@@ -1400,6 +1595,13 @@ async function handleDrop(e) {
     
     if (!newStatus) return;
     
+    // Get current item to check its status
+    const currentItem = draggedItem.type === 'action-item' 
+        ? actionItems.find(i => i.id == draggedItem.id)
+        : issues.find(i => i.id == draggedItem.id);
+    
+    const currentStatus = currentItem?.status || 'To Do';
+    
     // Validate status change (check for incomplete checklists when moving to Done)
     const canProceed = await validateStatusChange(draggedItem.id, draggedItem.type, newStatus);
     
@@ -1412,27 +1614,48 @@ async function handleDrop(e) {
         return;
     }
     
-    try {
-        const endpoint = draggedItem.type === 'action-item' 
-            ? `/api/action-items/${draggedItem.id}`
-            : `/api/issues/${draggedItem.id}`;
+    // Check if this status change requires time entry
+    const requiresTime = doesStatusChangeRequireTime(currentStatus, newStatus);
+    
+    if (requiresTime) {
+        // Show time entry modal
+        const timeData = await showTimeEntryModal(currentItem, currentStatus, newStatus);
         
-        await axios.patch(endpoint, { status: newStatus });
-        
-        // Update local data
-        if (draggedItem.type === 'action-item') {
-            const item = actionItems.find(i => i.id == draggedItem.id);
-            if (item) item.status = newStatus;
-        } else {
-            const item = issues.find(i => i.id == draggedItem.id);
-            if (item) item.status = newStatus;
+        if (!timeData) {
+            // User cancelled - reset state
+            draggedItem = null;
+            document.querySelectorAll('.kanban-card').forEach(card => {
+                card.style.opacity = '1';
+            });
+            return;
         }
         
-        renderKanbanBoard();
-        showSuccessMessage('Status updated successfully!');
-    } catch (error) {
-        console.error('Error updating status:', error);
-        showErrorMessage('Failed to update status');
+        // Update status with time tracking
+        await updateItemStatusWithTime(draggedItem, newStatus, timeData);
+    } else {
+        // Simple status update without time tracking
+        try {
+            const endpoint = draggedItem.type === 'action-item' 
+                ? `/api/action-items/${draggedItem.id}`
+                : `/api/issues/${draggedItem.id}`;
+            
+            await axios.patch(endpoint, { status: newStatus });
+            
+            // Update local data
+            if (draggedItem.type === 'action-item') {
+                const item = actionItems.find(i => i.id == draggedItem.id);
+                if (item) item.status = newStatus;
+            } else {
+                const item = issues.find(i => i.id == draggedItem.id);
+                if (item) item.status = newStatus;
+            }
+            
+            renderKanbanBoard();
+            showSuccessMessage('Status updated successfully!');
+        } catch (error) {
+            console.error('Error updating status:', error);
+            showErrorMessage('Failed to update status');
+        }
     }
     
     draggedItem = null;
