@@ -8873,13 +8873,18 @@ function setupEstimateFormListeners() {
       `;
       
       breakdown.tasks.forEach(task => {
+        const taskName = task.task || task.title || 'Unnamed task';
+        const taskDescription = task.reasoning || task.description || '';
+        const complexity = task.complexity ? `<span class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700 ml-2">${task.complexity}</span>` : '';
+        
         html += `
           <div class="p-3 bg-gray-50 rounded border border-gray-200">
             <div class="flex justify-between items-start">
-              <span class="font-medium flex-1">${task.title}</span>
+              <span class="font-medium flex-1">${taskName}${complexity}</span>
               <span class="text-purple-600 font-bold ml-4">${task.hours}h</span>
             </div>
-            ${task.description ? `<p class="text-sm text-gray-600 mt-1">${task.description}</p>` : ''}
+            ${taskDescription ? `<p class="text-sm text-gray-600 mt-1">${taskDescription}</p>` : ''}
+            ${task.category ? `<p class="text-xs text-gray-500 mt-1">Category: ${task.category}</p>` : ''}
           </div>
         `;
       });
@@ -8917,13 +8922,17 @@ function setupEstimateFormListeners() {
       
       hybridBreakdown.selectedTasks.forEach(task => {
         if (task.selected !== false) {
+          const taskName = task.task || task.title || 'Unnamed task';
+          const taskDescription = task.reasoning || task.description || '';
+          
           html += `
             <div class="p-3 bg-green-50 rounded border border-green-200">
               <div class="flex justify-between items-start">
-                <span class="font-medium flex-1">✓ ${task.title}</span>
+                <span class="font-medium flex-1">✓ ${taskName}</span>
                 <span class="text-green-600 font-bold ml-4">${task.hours}h</span>
               </div>
-              ${task.description ? `<p class="text-sm text-gray-600 mt-1">${task.description}</p>` : ''}
+              ${taskDescription ? `<p class="text-sm text-gray-600 mt-1">${taskDescription}</p>` : ''}
+              ${task.category ? `<p class="text-xs text-gray-500 mt-1">Category: ${task.category}</p>` : ''}
             </div>
           `;
         }
