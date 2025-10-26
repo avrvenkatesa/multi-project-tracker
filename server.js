@@ -48,6 +48,7 @@ const {
   getTimeTrackingHistory,
   getTimeTrackingSummary
 } = require('./services/time-tracking-service');
+const timeEntriesService = require('./services/time-entries-service');
 const { rateLimitMiddleware, getUsageStats } = require('./middleware/ai-rate-limiter');
 const { analyzeDocumentForWorkstreams } = require('./services/document-analyzer');
 const { extractTextFromFile } = require('./services/file-processor');
@@ -3812,6 +3813,120 @@ app.get('/api/:itemType/:id/time-history', authenticateToken, async (req, res) =
   } catch (error) {
     console.error('Error getting time tracking history:', error);
     res.status(500).json({ error: 'Failed to get time tracking history' });
+  }
+});
+
+// ============= TIME ENTRIES API (Incremental Logging) =============
+
+// Log time entry (quick log without status change)
+app.post('/api/:itemType/:id/time-entries', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const { hours, notes } = req.body;
+    
+    // Validate item type
+    const type = itemType === 'issues' ? 'issue' : itemType === 'action-items' ? 'action-item' : null;
+    if (!type) {
+      return res.status(400).json({ error: 'Invalid item type. Use "issues" or "action-items"' });
+    }
+    
+    // Get project ID for authorization
+    const tableName = type === 'issue' ? 'issues' : 'action_items';
+    const itemResult = await pool.query(`SELECT project_id FROM ${tableName} WHERE id = $1`, [parseInt(id)]);
+    
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    
+    const projectId = itemResult.rows[0].project_id;
+    
+    // Check project access
+    const hasAccess = await checkProjectAccess(req.user.id, projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Not authorized to access this project' });
+    }
+    
+    // Log the time
+    const result = await timeEntriesService.logTime({
+      itemType: type,
+      itemId: parseInt(id),
+      projectId,
+      hoursLogged: parseFloat(hours),
+      loggedBy: req.user.id,
+      notes
+    });
+    
+    console.log(`✅ Logged ${hours}h for ${type} #${id}. Total: ${result.totalHours}h (${result.completionPercentage}%)`);
+    
+    res.json({
+      success: true,
+      entry: result.entry,
+      totalHours: result.totalHours,
+      completionPercentage: result.completionPercentage
+    });
+    
+  } catch (error) {
+    console.error('Error logging time entry:', error);
+    res.status(500).json({ error: error.message || 'Failed to log time' });
+  }
+});
+
+// Get all time entries for an item
+app.get('/api/:itemType/:id/time-entries', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    
+    // Validate item type
+    const type = itemType === 'issues' ? 'issue' : itemType === 'action-items' ? 'action-item' : null;
+    if (!type) {
+      return res.status(400).json({ error: 'Invalid item type' });
+    }
+    
+    // Get entries
+    const entries = await timeEntriesService.getTimeEntries(type, parseInt(id));
+    const totalHours = await timeEntriesService.getTotalHours(type, parseInt(id));
+    
+    res.json({
+      entries,
+      totalHours
+    });
+    
+  } catch (error) {
+    console.error('Error getting time entries:', error);
+    res.status(500).json({ error: 'Failed to get time entries' });
+  }
+});
+
+// Delete a time entry
+app.delete('/api/time-entries/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Only the user who logged it or admins can delete
+    const entryResult = await pool.query('SELECT logged_by FROM time_entries WHERE id = $1', [parseInt(id)]);
+    
+    if (entryResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Time entry not found' });
+    }
+    
+    const entry = entryResult.rows[0];
+    
+    // Check permission (owner or admin)
+    if (entry.logged_by !== req.user.id && req.user.role < 3) { // 3 = Team Lead
+      return res.status(403).json({ error: 'Not authorized to delete this time entry' });
+    }
+    
+    const result = await timeEntriesService.deleteTimeEntry(parseInt(id), req.user.id);
+    
+    res.json({
+      success: true,
+      totalHours: result.totalHours,
+      completionPercentage: result.completionPercentage
+    });
+    
+  } catch (error) {
+    console.error('Error deleting time entry:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete time entry' });
   }
 });
 
