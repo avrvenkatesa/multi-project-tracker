@@ -41,6 +41,13 @@ const {
   getEstimateBreakdown,
   getEstimateHistory
 } = require('./services/effort-estimation-service');
+const {
+  validateStatusChange,
+  quickLogTime,
+  logTimeWithStatusChange,
+  getTimeTrackingHistory,
+  getTimeTrackingSummary
+} = require('./services/time-tracking-service');
 const { rateLimitMiddleware, getUsageStats } = require('./middleware/ai-rate-limiter');
 const { analyzeDocumentForWorkstreams } = require('./services/document-analyzer');
 const { extractTextFromFile } = require('./services/file-processor');
@@ -3405,7 +3412,9 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       category, 
       progress,
       estimated_effort_hours,
-      planning_estimate_source
+      planning_estimate_source,
+      actual_hours_added,  // NEW: Hours to add during status change
+      completion_percentage  // NEW: Manual completion percentage
     } = req.body;
     
     console.log('PATCH /api/issues/:id - Request body:', req.body);
@@ -3433,6 +3442,33 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     
     if (userRoleLevel < ROLE_HIERARCHY['Team Lead'] && !isOwner && !isAssignee) {
       return res.status(403).json({ error: 'Only the owner, assignee, or Team Lead+ can edit this issue' });
+    }
+    
+    // Handle time tracking for status changes
+    let timeTrackingResult = null;
+    if (status !== undefined && status !== issue.status) {
+      console.log(`Status changing from "${issue.status}" to "${status}"`);
+      
+      timeTrackingResult = await logTimeWithStatusChange(
+        'issue',
+        parseInt(id),
+        issue.status,
+        status,
+        actual_hours_added,
+        completion_percentage,
+        req.user.id,
+        `Status changed from ${issue.status} to ${status}`
+      );
+      
+      if (!timeTrackingResult.valid) {
+        return res.status(400).json({
+          error: timeTrackingResult.error,
+          message: timeTrackingResult.message,
+          requiresHours: timeTrackingResult.requiresHours
+        });
+      }
+      
+      console.log('Time tracking result:', timeTrackingResult);
     }
     
     // Build dynamic update query
@@ -3669,10 +3705,90 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       }
     }
     
-    res.json(updatedIssue);
+    // Include time tracking info in response if status changed
+    const response = {
+      ...updatedIssue,
+      timeTracking: timeTrackingResult ? {
+        actualHours: timeTrackingResult.actualHours,
+        completionPercent: timeTrackingResult.completionPercent,
+        variance: timeTrackingResult.variance,
+        variancePercent: timeTrackingResult.variancePercent,
+        isExceeding: timeTrackingResult.isExceeding,
+        warning: timeTrackingResult.warning
+      } : undefined
+    };
+    
+    res.json(response);
   } catch (error) {
     console.error('Error updating issue:', error);
     res.status(500).json({ error: 'Failed to update issue' });
+  }
+});
+
+// Quick Log Time endpoint - log hours without status change
+app.post('/api/:itemType/:id/log-time', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const { hours, notes, completion_percentage } = req.body;
+    
+    // Validate item type
+    const type = itemType === 'issues' ? 'issue' : itemType === 'action-items' ? 'action-item' : null;
+    if (!type) {
+      return res.status(400).json({ error: 'Invalid item type. Use "issues" or "action-items"' });
+    }
+    
+    // Validate hours
+    if (!hours || hours <= 0) {
+      return res.status(400).json({ error: 'Hours must be greater than 0' });
+    }
+    
+    console.log(`Quick log time: ${hours}h for ${type} #${id}`);
+    
+    // Log the time
+    const result = await quickLogTime(
+      type,
+      parseInt(id),
+      parseFloat(hours),
+      req.user.id,
+      notes,
+      completion_percentage
+    );
+    
+    console.log('Quick log result:', result);
+    
+    res.json({
+      success: true,
+      actualHours: result.actualHours,
+      completionPercent: result.completionPercent,
+      timeLogCount: result.timeLogCount,
+      variance: result.variance,
+      variancePercent: result.variancePercent,
+      isExceeding: result.isExceeding,
+      warning: result.warning
+    });
+    
+  } catch (error) {
+    console.error('Error logging time:', error);
+    res.status(500).json({ error: error.message || 'Failed to log time' });
+  }
+});
+
+// Get time tracking history for an item
+app.get('/api/:itemType/:id/time-history', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, id } = req.params;
+    const type = itemType === 'issues' ? 'issue' : itemType === 'action-items' ? 'action-item' : null;
+    
+    if (!type) {
+      return res.status(400).json({ error: 'Invalid item type' });
+    }
+    
+    const summary = await getTimeTrackingSummary(type, parseInt(id));
+    res.json(summary);
+    
+  } catch (error) {
+    console.error('Error getting time tracking history:', error);
+    res.status(500).json({ error: 'Failed to get time tracking history' });
   }
 });
 
@@ -4044,7 +4160,9 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
       status, 
       progress,
       estimated_effort_hours,
-      planning_estimate_source
+      planning_estimate_source,
+      actual_hours_added,  // NEW: Hours to add during status change
+      completion_percentage  // NEW: Manual completion percentage
     } = req.body;
     
     console.log('PATCH /api/action-items/:id - Request body:', req.body);
@@ -4072,6 +4190,33 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     
     if (userRoleLevel < ROLE_HIERARCHY['Team Lead'] && !isOwner && !isAssignee) {
       return res.status(403).json({ error: 'Only the owner, assignee, or Team Lead+ can edit this action item' });
+    }
+    
+    // Handle time tracking for status changes
+    let timeTrackingResult = null;
+    if (status !== undefined && status !== item.status) {
+      console.log(`Status changing from "${item.status}" to "${status}"`);
+      
+      timeTrackingResult = await logTimeWithStatusChange(
+        'action-item',
+        parseInt(id),
+        item.status,
+        status,
+        actual_hours_added,
+        completion_percentage,
+        req.user.id,
+        `Status changed from ${item.status} to ${status}`
+      );
+      
+      if (!timeTrackingResult.valid) {
+        return res.status(400).json({
+          error: timeTrackingResult.error,
+          message: timeTrackingResult.message,
+          requiresHours: timeTrackingResult.requiresHours
+        });
+      }
+      
+      console.log('Time tracking result:', timeTrackingResult);
     }
     
     // Build dynamic update query
@@ -4295,7 +4440,20 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
       }
     }
     
-    res.json(updatedItem);
+    // Include time tracking info in response if status changed
+    const response = {
+      ...updatedItem,
+      timeTracking: timeTrackingResult ? {
+        actualHours: timeTrackingResult.actualHours,
+        completionPercent: timeTrackingResult.completionPercent,
+        variance: timeTrackingResult.variance,
+        variancePercent: timeTrackingResult.variancePercent,
+        isExceeding: timeTrackingResult.isExceeding,
+        warning: timeTrackingResult.warning
+      } : undefined
+    };
+    
+    res.json(response);
   } catch (error) {
     console.error('Error updating action item:', error);
     res.status(500).json({ error: 'Failed to update action item' });
