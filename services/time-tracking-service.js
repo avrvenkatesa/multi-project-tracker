@@ -316,7 +316,25 @@ async function logTimeWithStatusChange(itemType, itemId, fromStatus, toStatus, h
       [validation.newActualHours, validation.newCompletionPercent, currentTimeLogCount + 1, itemId]
     );
     
-    // Log to history
+    // CRITICAL: Also log to time_entries table for timesheet display
+    // This ensures status change time logs appear in the timesheet modal
+    if (hoursAdded && hoursAdded > 0) {
+      await client.query(
+        `INSERT INTO time_entries 
+         (item_type, item_id, project_id, hours_logged, logged_by, notes, logged_at)
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+        [
+          itemType,
+          itemId,
+          item.project_id,
+          hoursAdded,
+          userId,
+          notes ? `Status change: ${fromStatus} → ${toStatus}. ${notes}` : `Status change: ${fromStatus} → ${toStatus}`
+        ]
+      );
+    }
+    
+    // Log to history (legacy table)
     await client.query(
       `INSERT INTO time_tracking_history 
        (item_type, item_id, hours_added, total_hours_after, completion_percentage_after,
