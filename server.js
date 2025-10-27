@@ -57,6 +57,7 @@ const { generateChecklistPDF } = require('./services/pdf-service');
 const { validateChecklist, getValidationStatus } = require('./services/validation-service');
 const dependencyService = require('./services/dependency-service');
 const documentService = require('./services/document-service');
+const { calculateProjectSchedule } = require('./services/schedule-calculation-service');
 const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 
 // Configure WebSocket for Node.js < v22
@@ -12484,6 +12485,322 @@ app.get('/api/ai-usage/rate-limit', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error checking rate limit:', error);
     res.status(500).json({ error: 'Failed to check rate limit' });
+  }
+});
+
+// ============================================
+// PROJECT SCHEDULING ENDPOINTS (Phase 1)
+// ============================================
+
+/**
+ * Create new project schedule
+ * POST /api/projects/:projectId/schedules
+ * Body: { name, startDate, hoursPerDay, includeWeekends, selectedItems, notes }
+ */
+app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { name, startDate, hoursPerDay = 8, includeWeekends = false, selectedItems, notes } = req.body;
+    const userId = req.user.id;
+
+    // Validation
+    if (!name || !startDate || !selectedItems || !Array.isArray(selectedItems)) {
+      return res.status(400).json({ error: 'name, startDate, and selectedItems are required' });
+    }
+
+    if (selectedItems.length === 0) {
+      return res.status(400).json({ error: 'At least one item must be selected' });
+    }
+
+    // Check project access
+    const projectCheck = await pool.query(
+      `SELECT p.id, p.name, pm.role 
+       FROM projects p
+       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
+       WHERE p.id = $2`,
+      [userId, projectId]
+    );
+
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    // Load item details with estimates
+    const items = [];
+    for (const item of selectedItems) {
+      const tableName = item.type === 'issue' ? 'issues' : 'action_items';
+      const result = await pool.query(
+        `SELECT id, title, assignee, 
+         COALESCE(
+           CASE planning_estimate_source
+             WHEN 'manual' THEN manual_estimated_hours
+             WHEN 'ai' THEN ai_effort_estimate_hours
+             WHEN 'hybrid_selection' THEN hybrid_selected_hours
+             ELSE manual_estimated_hours
+           END,
+           ai_effort_estimate_hours,
+           manual_estimated_hours
+         ) as estimate,
+         planning_estimate_source,
+         due_date
+         FROM ${tableName}
+         WHERE id = $1`,
+        [item.id]
+      );
+
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        items.push({
+          type: item.type,
+          id: item.id,
+          title: row.title,
+          assignee: row.assignee,
+          estimate: parseFloat(row.estimate) || 0,
+          estimateSource: row.planning_estimate_source || 'unknown',
+          dueDate: row.due_date
+        });
+      }
+    }
+
+    if (items.length === 0) {
+      return res.status(400).json({ error: 'No valid items found' });
+    }
+
+    // Calculate schedule
+    const scheduleResult = await calculateProjectSchedule({
+      items,
+      startDate,
+      hoursPerDay,
+      includeWeekends
+    });
+
+    // Start transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Insert schedule
+      const scheduleInsert = await client.query(
+        `INSERT INTO project_schedules 
+         (project_id, name, version, start_date, end_date, hours_per_day, include_weekends,
+          total_tasks, total_hours, critical_path_tasks, critical_path_hours, risks_count,
+          is_active, is_published, created_by, notes)
+         VALUES ($1, $2, 1, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE, FALSE, $12, $13)
+         RETURNING id`,
+        [
+          projectId,
+          name,
+          scheduleResult.summary.startDate,
+          scheduleResult.summary.endDate,
+          hoursPerDay,
+          includeWeekends,
+          scheduleResult.summary.totalTasks,
+          scheduleResult.summary.totalHours,
+          scheduleResult.summary.criticalPathTasks,
+          scheduleResult.summary.criticalPathHours,
+          scheduleResult.summary.risksCount,
+          userId,
+          notes || null
+        ]
+      );
+
+      const scheduleId = scheduleInsert.rows[0].id;
+
+      // Insert schedule items
+      for (const item of items) {
+        await client.query(
+          `INSERT INTO schedule_items (schedule_id, item_type, item_id)
+           VALUES ($1, $2, $3)`,
+          [scheduleId, item.type, item.id]
+        );
+      }
+
+      // Insert task schedules
+      for (const task of scheduleResult.tasks) {
+        await client.query(
+          `INSERT INTO task_schedules 
+           (schedule_id, item_type, item_id, assignee, estimated_hours, estimate_source,
+            scheduled_start, scheduled_end, duration_days, due_date,
+            is_critical_path, has_risk, risk_reason, days_late, dependencies)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+          [
+            scheduleId,
+            task.itemType,
+            task.itemId,
+            task.assignee,
+            task.estimatedHours,
+            task.estimateSource,
+            task.scheduledStart,
+            task.scheduledEnd,
+            task.durationDays,
+            task.dueDate,
+            task.isCriticalPath,
+            task.hasRisk,
+            task.riskReason,
+            task.daysLate,
+            JSON.stringify(task.dependencies)
+          ]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      res.json({
+        scheduleId,
+        version: 1,
+        ...scheduleResult.summary,
+        message: 'Schedule created successfully'
+      });
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+  } catch (error) {
+    console.error('Error creating schedule:', error);
+    res.status(500).json({ error: error.message || 'Failed to create schedule' });
+  }
+});
+
+/**
+ * Get all schedules for a project
+ * GET /api/projects/:projectId/schedules
+ */
+app.get('/api/projects/:projectId/schedules', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const userId = req.user.id;
+
+    // Check project access
+    const projectCheck = await pool.query(
+      `SELECT p.id FROM projects p
+       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
+       WHERE p.id = $2`,
+      [userId, projectId]
+    );
+
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    // Get all schedules
+    const schedules = await pool.query(
+      `SELECT ps.*,
+        u.username as created_by_username,
+        u.name as created_by_name
+       FROM project_schedules ps
+       LEFT JOIN users u ON ps.created_by = u.id
+       WHERE ps.project_id = $1
+       ORDER BY ps.created_at DESC`,
+      [projectId]
+    );
+
+    res.json(schedules.rows);
+
+  } catch (error) {
+    console.error('Error fetching schedules:', error);
+    res.status(500).json({ error: 'Failed to fetch schedules' });
+  }
+});
+
+/**
+ * Get specific schedule with full details
+ * GET /api/schedules/:scheduleId
+ */
+app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
+  try {
+    const { scheduleId } = req.params;
+    const userId = req.user.id;
+
+    // Get schedule with access check
+    const scheduleResult = await pool.query(
+      `SELECT ps.*, u.username as created_by_username, u.name as created_by_name
+       FROM project_schedules ps
+       LEFT JOIN users u ON ps.created_by = u.id
+       LEFT JOIN projects p ON ps.project_id = p.id
+       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
+       WHERE ps.id = $2`,
+      [userId, scheduleId]
+    );
+
+    if (scheduleResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Schedule not found or access denied' });
+    }
+
+    const schedule = scheduleResult.rows[0];
+
+    // Get task schedules
+    const tasks = await pool.query(
+      `SELECT ts.*,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.title
+          ELSE ai.title
+        END as title,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.status
+          ELSE ai.status
+        END as status
+       FROM task_schedules ts
+       LEFT JOIN issues i ON ts.item_type = 'issue' AND ts.item_id = i.id
+       LEFT JOIN action_items ai ON ts.item_type = 'action-item' AND ts.item_id = ai.id
+       WHERE ts.schedule_id = $1
+       ORDER BY ts.scheduled_start`,
+      [scheduleId]
+    );
+
+    res.json({
+      schedule,
+      tasks: tasks.rows
+    });
+
+  } catch (error) {
+    console.error('Error fetching schedule:', error);
+    res.status(500).json({ error: 'Failed to fetch schedule' });
+  }
+});
+
+/**
+ * Delete schedule
+ * DELETE /api/schedules/:scheduleId
+ */
+app.delete('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
+  try {
+    const { scheduleId } = req.params;
+    const userId = req.user.id;
+
+    // Check access (only creator or admin can delete)
+    const scheduleCheck = await pool.query(
+      `SELECT ps.id, ps.created_by, pm.role
+       FROM project_schedules ps
+       LEFT JOIN projects p ON ps.project_id = p.id
+       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
+       WHERE ps.id = $2`,
+      [userId, scheduleId]
+    );
+
+    if (scheduleCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Schedule not found or access denied' });
+    }
+
+    const schedule = scheduleCheck.rows[0];
+    const userRoleLevel = ROLE_HIERARCHY[scheduleCheck.rows[0].role] || 0;
+    const canDelete = schedule.created_by === userId || userRoleLevel >= ROLE_HIERARCHY['Team Lead'];
+
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Only the schedule creator or team lead+ can delete schedules' });
+    }
+
+    // Delete schedule (CASCADE will handle related records)
+    await pool.query('DELETE FROM project_schedules WHERE id = $1', [scheduleId]);
+
+    res.json({ message: 'Schedule deleted successfully' });
+
+  } catch (error) {
+    console.error('Error deleting schedule:', error);
+    res.status(500).json({ error: 'Failed to delete schedule' });
   }
 });
 
