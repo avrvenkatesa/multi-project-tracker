@@ -1,0 +1,40 @@
+~/workspace$ # 1. Find toast function name
+grep -n "function showToast\|showNotification" public/app.js | head -3
+
+# 2. Find card rendering location
+grep -n "kanban-card\|renderKanban" public/app.js | head -5
+
+# 3. Check item.type format
+grep -n "item\.type\|type.*action\|type.*issue" public/app.js | head -10
+
+# 4. Check userRole variable
+grep -n "userRole\|currentUser\.role" public/app.js | head -5
+
+# 5. Check if actual_hours is displayed on cards
+grep -n "actual.*hours\|Act:.*h" public/app.js | head -5
+1695:        AuthManager.showNotification('Insufficient permissions - Project Manager role required', 'error');
+2360:        AuthManager.showNotification('Admin access required', 'error');
+2415:        AuthManager.showNotification('Failed to load users', 'error');
+50:    const card = document.querySelector(`.kanban-card[data-item-id="${itemId}"][data-item-type="${cardType}"]`);
+345:  const cards = container.querySelectorAll('.kanban-card');
+431:  renderKanbanBoard();
+915:        await renderKanbanBoard();
+1134:async function renderKanbanBoard() {
+320:  const itemsMap = new Map(items.map(item => [`${item.type}-${item.id}`, item]));
+1137:    if (currentFilters.type === 'issue') {
+1139:    } else if (currentFilters.type === 'action') {
+1173:                const key = `${item.type}-${item.id}`;
+1189:                const key = `${item.type}-${item.id}`;
+1234:                        const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
+1235:                        const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
+1236:                        const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+1263:                         data-item-type="${item.type || 'issue'}">
+1268:                                   data-item-type="${item.type || 'issue'}" />
+1253:                        const userRoleLevel = currentUser ? (roleHierarchy[currentUser.role] || 0) : 0;
+1254:                        const isTeamLeadOrAbove = userRoleLevel >= roleHierarchy['Team Lead'];
+958:  const actual = item.actual_hours;
+1417:        const currentActualHours = item.actual_effort_hours || 0;
+1529:            actual_hours_added: timeData.hours
+1543:                item.actual_effort_hours = response.data.actual_effort_hours;
+1550:                item.actual_effort_hours = response.data.actual_effort_hours;
+~/workspace$ 
