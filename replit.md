@@ -17,6 +17,7 @@ Key UI features include:
 -   **Effort Estimates Tab**: Dedicated tab in the detail modal for comprehensive estimate management, version history with visual source icons and confidence badges, version comparison, and CSV export. Includes a full estimation UI with AI/Hybrid options and permission-based controls.
 -   **Quick Log Time**: "Log" button on Kanban cards for rapid time entry without opening the full detail modal, visible to Team Members and above.
 -   **Project Scheduling with Advanced Item Selection**: Pre-submission validation for unestimated items, allowing selective estimation or exclusion, with a guided estimation workflow for selected items.
+-   **Strict Resource Assignment Mode**: Optional project-level setting to require all scheduled tasks have assignees. When enabled, prevents schedule creation if any selected items lack resource assignments, ensuring accurate workload calculations and preventing oversight of unassigned work. Users can disable strict mode on-the-fly if needed.
 
 ### Technical Implementations
 The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations, atomic transactions, project-level authorization, and logging.
