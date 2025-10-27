@@ -1,0 +1,415 @@
+1. Where exactly on the card?
+Answer: Place the Log button in the card's footer, next to the Edit button, aligned to the right.
+2. Permission check?
+Answer: Show the Log button to all Team Members and above. Do NOT show to Viewers (read-only role).
+3. Visual feedback on card?
+Answer: Yes! After logging, the card should update to show:
+
+Updated actual hours: Act: 12.5h
+Updated completion percentage: 75%
+A small indicator if time was logged today: 🕐 icon
+
+4. Multiple logs per day?
+Answer: YES. Users can log time multiple times per day to the same item (e.g., log 2h in morning, 3h in afternoon).
+5. Completion Percentage
+Answer: Optional feature. For now, do NOT include completion_percentage in the request. Backend will auto-calculate it if planning estimates exist.
+6. Validation Limits
+Answer: Use frontend validation of 0.25-24 hours for UX, but backend accepts any positive number. This is fine - we're just guiding users to reasonable entries.
+
+🔄 REVISED REPLIT AGENT PROMPT
+Implement a Quick Log Time feature for Kanban cards with robust validation and error handling.
+
+OBJECTIVE:
+Add a "⏱️ Log" button to each Kanban card that opens a modal allowing users to quickly log hours worked on that item without changing its status.
+
+════════════════════════════════════════════════════════════════
+
+PART 1: ADD MODAL HTML TO public/index.html
+════════════════════════════════════════════════════════════════
+
+Place this modal HTML BEFORE the closing </body> tag in public/index.html:
+
+<!-- Quick Log Time Modal -->
+<div id="quickLogModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+  <div class="relative top-20 mx-auto p-6 border w-full max-w-md shadow-lg rounded-lg bg-white">
+    <!-- Header -->
+    <div class="flex justify-between items-start mb-4">
+      <div class="flex-1">
+        <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+          ⏱️ Quick Log Time
+        </h3>
+        <p id="quickLogItemTitle" class="text-sm text-gray-600 mt-1"></p>
+      </div>
+      <button type="button" id="closeQuickLogModal" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Form -->
+    <div class="space-y-4">
+      <!-- Hours Input -->
+      <div>
+        <label for="quickLogHours" class="block text-sm font-medium text-gray-700 mb-1">
+          Hours Logged <span class="text-red-500">*</span>
+        </label>
+        <input 
+          type="number" 
+          id="quickLogHours" 
+          step="0.25" 
+          min="0.25" 
+          max="24" 
+          placeholder="e.g., 2.5"
+          class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          required
+        />
+        <p class="mt-1 text-xs text-gray-500">Enter hours worked (0.25 - 24)</p>
+      </div>
+
+      <!-- Notes Input -->
+      <div>
+        <label for="quickLogNotes" class="block text-sm font-medium text-gray-700 mb-1">
+          Notes (optional)
+        </label>
+        <textarea 
+          id="quickLogNotes" 
+          rows="3"
+          placeholder="What did you work on?"
+          class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- Footer Buttons -->
+    <div class="flex justify-end gap-3 mt-6">
+      <button 
+        type="button"
+        id="cancelQuickLog" 
+        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+      >
+        Cancel
+      </button>
+      <button 
+        type="button"
+        id="submitQuickLog" 
+        class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors flex items-center gap-2"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        Log Time
+      </button>
+    </div>
+  </div>
+</div>
+
+════════════════════════════════════════════════════════════════
+
+PART 2: ADD JAVASCRIPT TO public/app.js
+════════════════════════════════════════════════════════════════
+
+Add this code at the END of public/app.js (after all existing code):
+
+// ============================================
+// QUICK LOG TIME FEATURE
+// ============================================
+
+let quickLogContext = null;
+
+// Normalize item type for API endpoints
+function normalizeItemTypeForAPI(itemType) {
+  // Handle various input formats
+  if (itemType === 'action' || itemType === 'action-item') {
+    return 'action-items';
+  }
+  if (itemType === 'issue') {
+    return 'issues';
+  }
+  // Already normalized
+  if (itemType === 'action-items' || itemType === 'issues') {
+    return itemType;
+  }
+  console.error('Unknown item type:', itemType);
+  return 'issues'; // Fallback
+}
+
+// Open Quick Log Modal
+function openQuickLogModal(itemId, itemType, itemTitle) {
+  quickLogContext = { itemId, itemType };
+  
+  // Set title (truncate if too long)
+  const displayTitle = itemTitle.length > 60 
+    ? itemTitle.substring(0, 60) + '...' 
+    : itemTitle;
+  document.getElementById('quickLogItemTitle').textContent = displayTitle;
+  
+  // Reset and clear form
+  document.getElementById('quickLogHours').value = '';
+  document.getElementById('quickLogNotes').value = '';
+  
+  // Show modal
+  document.getElementById('quickLogModal').classList.remove('hidden');
+  
+  // Focus on hours input
+  setTimeout(() => {
+    document.getElementById('quickLogHours').focus();
+  }, 100);
+}
+
+// Close Quick Log Modal
+function closeQuickLogModal() {
+  document.getElementById('quickLogModal').classList.add('hidden');
+  
+  // Clear form inputs
+  document.getElementById('quickLogHours').value = '';
+  document.getElementById('quickLogNotes').value = '';
+  
+  // Clear context
+  quickLogContext = null;
+}
+
+// Validate Quick Log Input
+function validateQuickLogInput() {
+  const hoursInput = document.getElementById('quickLogHours');
+  const hours = parseFloat(hoursInput.value);
+  
+  // Check if value exists and is a valid number
+  if (!hoursInput.value || isNaN(hours)) {
+    showToast('Please enter the number of hours worked', 'error');
+    hoursInput.focus();
+    return null;
+  }
+  
+  // Check minimum (UX preference - 15 minutes)
+  if (hours < 0.25) {
+    showToast('Minimum time entry is 0.25 hours (15 minutes)', 'error');
+    hoursInput.focus();
+    return null;
+  }
+  
+  // Check maximum (reasonable daily limit)
+  if (hours > 24) {
+    showToast('Maximum time entry is 24 hours per log', 'error');
+    hoursInput.focus();
+    return null;
+  }
+  
+  return hours;
+}
+
+// Submit Quick Log
+async function submitQuickLog() {
+  if (!quickLogContext) {
+    console.error('No quick log context');
+    return;
+  }
+  
+  // Validate input
+  const hours = validateQuickLogInput();
+  if (hours === null) return; // Validation failed
+  
+  const notes = document.getElementById('quickLogNotes').value.trim();
+  
+  // Get submit button and show loading state
+  const submitBtn = document.getElementById('submitQuickLog');
+  const originalHTML = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = `
+    <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    <span>Logging...</span>
+  `;
+  
+  try {
+    // Normalize item type for API
+    const apiItemType = normalizeItemTypeForAPI(quickLogContext.itemType);
+    
+    // Make API call
+    const response = await fetch(`/api/${apiItemType}/${quickLogContext.itemId}/log-time`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        hours: hours,  // Send as number, not string
+        notes: notes || null
+      })
+    });
+    
+    const data = await response.json();
+    
+    // Check if request failed
+    if (!response.ok) {
+      const errorMessage = data.error || data.message || 'Failed to log time';
+      throw new Error(errorMessage);
+    }
+    
+    // Success!
+    showToast(`✅ Successfully logged ${hours}h!`, 'success');
+    
+    // Close modal
+    closeQuickLogModal();
+    
+    // Refresh the project data to show updated hours on cards
+    if (typeof currentProject !== 'undefined' && currentProject && currentProject.id) {
+      if (typeof loadProjectData === 'function') {
+        await loadProjectData(currentProject.id);
+      } else if (typeof renderKanbanBoard === 'function') {
+        renderKanbanBoard();
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error logging time:', error);
+    
+    // Show error message from server or generic message
+    const errorMsg = error.message || 'Failed to log time. Please try again.';
+    showToast(errorMsg, 'error');
+    
+  } finally {
+    // Re-enable button and restore original text
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalHTML;
+  }
+}
+
+// Event Listeners for Quick Log Modal
+document.getElementById('closeQuickLogModal')?.addEventListener('click', closeQuickLogModal);
+document.getElementById('cancelQuickLog')?.addEventListener('click', closeQuickLogModal);
+document.getElementById('submitQuickLog')?.addEventListener('click', submitQuickLog);
+
+// Handle Enter key in hours input
+document.getElementById('quickLogHours')?.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    submitQuickLog();
+  }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const modal = document.getElementById('quickLogModal');
+    if (modal && !modal.classList.contains('hidden')) {
+      closeQuickLogModal();
+    }
+  }
+});
+
+// Close modal when clicking outside
+document.getElementById('quickLogModal')?.addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeQuickLogModal();
+  }
+});
+
+════════════════════════════════════════════════════════════════
+
+PART 3: ADD LOG BUTTON TO KANBAN CARDS
+════════════════════════════════════════════════════════════════
+
+Find the renderKanbanBoard() function in public/app.js where Kanban cards are created.
+
+Look for the card footer/actions section (usually contains Edit/Delete buttons).
+
+Add the Log button in the card footer, positioned to the right side:
+
+<!-- Add this button in the card's action footer -->
+${userRole !== 'Viewer' ? `
+  <button 
+    class="quick-log-btn text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
+    onclick="event.stopPropagation(); openQuickLogModal(${item.id}, '${item.type}', \`${item.title.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`);"
+    title="Quick Log Time"
+  >
+    ⏱️ Log
+  </button>
+` : ''}
+
+IMPORTANT NOTES FOR CARD INTEGRATION:
+- Use event.stopPropagation() to prevent card click event from firing
+- Escape the title properly for template literals
+- Only show button for Team Member role and above (not Viewer)
+- Place button next to existing Edit button in card footer
+- Use small button style (text-xs) to fit in card layout
+
+════════════════════════════════════════════════════════════════
+
+VALIDATION CHECKLIST:
+════════════════════════════════════════════════════════════════
+
+After implementation, verify:
+
+✅ Modal HTML exists in index.html before </body>
+✅ JavaScript functions added to end of app.js
+✅ Log button appears on Kanban cards (except for Viewers)
+✅ Clicking Log button opens modal without opening card detail
+✅ Modal shows item title (truncated if long)
+✅ Entering hours between 0.25-24 works
+✅ Validation error shows for invalid hours (empty, 0, negative, >24, NaN)
+✅ Submit button shows loading state during API call
+✅ Submit button is disabled during API call (prevents double-submission)
+✅ Success toast shows after logging time
+✅ Modal closes after successful logging
+✅ Kanban board refreshes to show updated actual hours
+✅ Error message from server displays if API fails
+✅ Enter key in hours input submits form
+✅ Escape key closes modal
+✅ Clicking outside modal closes it
+✅ Cancel button closes modal
+✅ X button closes modal
+✅ Form inputs clear when modal closes
+
+════════════════════════════════════════════════════════════════
+
+API DETAILS:
+════════════════════════════════════════════════════════════════
+
+Endpoints (already exist in server.js):
+- POST /api/issues/:id/log-time
+- POST /api/action-items/:id/log-time
+
+Request Body:
+{
+  "hours": 2.5,        // Number (not string) - required
+  "notes": "text"      // String or null - optional
+}
+
+Response on Success:
+{
+  "success": true,
+  "message": "Time logged successfully",
+  "data": {
+    "totalHours": 15.5,
+    "completionPercentage": 75
+  }
+}
+
+Response on Error:
+{
+  "error": "Error message here"
+}
+
+Backend Validation:
+- Hours must be > 0 (backend validates this)
+- No maximum limit on backend (frontend enforces 24 for UX)
+- Notes are optional
+
+════════════════════════════════════════════════════════════════
+
+CRITICAL IMPLEMENTATION NOTES:
+════════════════════════════════════════════════════════════════
+
+1. NUMBER PARSING: Always use parseFloat() and check isNaN() before sending
+2. ITEM TYPE: Normalize 'issue' → 'issues', 'action'/'action-item' → 'action-items'
+3. ERROR HANDLING: Display server error messages to user
+4. CLEAR INPUTS: Always clear form when closing modal
+5. PREVENT DOUBLE-SUBMIT: Disable button during API call
+6. ESCAPING: Properly escape item title in onclick handler
+7. PERMISSIONS: Only show button to Team Members and above
+8. REFRESH: Call loadProjectData() after successful logging to update UI
+
+DO NOT modify server.js - the endpoints already exist and work correctly.
