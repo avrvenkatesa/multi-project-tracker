@@ -3263,6 +3263,109 @@ app.get('/api/issues/:id/effort-estimate-history', authenticateToken, async (req
   }
 });
 
+// Generate AI effort estimate for an issue
+app.post('/api/issues/:id/effort-estimate', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { model = 'gpt-4o' } = req.body;
+    
+    const issueResult = await pool.query(
+      'SELECT id, title, description, type, category FROM issues WHERE id = $1',
+      [parseInt(id)]
+    );
+    
+    if (issueResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    const issue = issueResult.rows[0];
+    
+    const prompt = `Analyze this task and provide an effort estimate in hours:
+
+Title: ${issue.title}
+Description: ${issue.description || 'No description provided'}
+Type: ${issue.type || 'Not specified'}
+Category: ${issue.category || 'Not specified'}
+
+Provide:
+1. Total estimated hours (be realistic, consider complexity)
+2. Confidence level (low/medium/high)
+3. Brief reasoning for the estimate
+
+Response format (JSON):
+{
+  "hours": <number>,
+  "confidence": "<low|medium|high>",
+  "reasoning": "<brief explanation>"
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    });
+    
+    const result = JSON.parse(response.choices[0].message.content);
+    
+    await pool.query(
+      `UPDATE issues 
+       SET ai_effort_estimate_hours = $1,
+           ai_estimate_confidence = $2,
+           ai_estimate_last_updated = CURRENT_TIMESTAMP
+       WHERE id = $3`,
+      [result.hours, result.confidence, parseInt(id)]
+    );
+    
+    res.json({
+      hours: result.hours,
+      confidence: result.confidence,
+      reasoning: result.reasoning
+    });
+    
+  } catch (error) {
+    console.error('Error generating AI effort estimate:', error);
+    res.status(500).json({ error: 'Failed to generate AI effort estimate' });
+  }
+});
+
+// Generate hybrid effort estimate for an issue
+app.post('/api/issues/:id/hybrid-estimate', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const issueResult = await pool.query(
+      'SELECT ai_effort_estimate_hours, estimated_effort_hours FROM issues WHERE id = $1',
+      [parseInt(id)]
+    );
+    
+    if (issueResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    const issue = issueResult.rows[0];
+    const aiEstimate = parseFloat(issue.ai_effort_estimate_hours) || 0;
+    const manualEstimate = parseFloat(issue.estimated_effort_hours) || 0;
+    
+    const hybridHours = aiEstimate > 0 && manualEstimate > 0 
+      ? (aiEstimate + manualEstimate) / 2
+      : (aiEstimate || manualEstimate);
+    
+    await pool.query(
+      `UPDATE issues 
+       SET hybrid_effort_estimate_hours = $1
+       WHERE id = $2`,
+      [hybridHours, parseInt(id)]
+    );
+    
+    res.json({ hours: hybridHours });
+    
+  } catch (error) {
+    console.error('Error generating hybrid effort estimate:', error);
+    res.status(500).json({ error: 'Failed to generate hybrid effort estimate' });
+  }
+});
+
 // Create issue (Team Member or higher)
 app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (req, res) => {
   const { 
@@ -4200,6 +4303,107 @@ app.get('/api/action-items/:id/effort-estimate-history', authenticateToken, asyn
   } catch (error) {
     console.error('Error fetching effort estimate history:', error);
     res.status(500).json({ error: 'Failed to fetch effort estimate history' });
+  }
+});
+
+// Generate AI effort estimate for an action item
+app.post('/api/action-items/:id/effort-estimate', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { model = 'gpt-4o' } = req.body;
+    
+    const actionItemResult = await pool.query(
+      'SELECT id, title, description FROM action_items WHERE id = $1',
+      [parseInt(id)]
+    );
+    
+    if (actionItemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    const actionItem = actionItemResult.rows[0];
+    
+    const prompt = `Analyze this task and provide an effort estimate in hours:
+
+Title: ${actionItem.title}
+Description: ${actionItem.description || 'No description provided'}
+
+Provide:
+1. Total estimated hours (be realistic, consider complexity)
+2. Confidence level (low/medium/high)
+3. Brief reasoning for the estimate
+
+Response format (JSON):
+{
+  "hours": <number>,
+  "confidence": "<low|medium|high>",
+  "reasoning": "<brief explanation>"
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    });
+    
+    const result = JSON.parse(response.choices[0].message.content);
+    
+    await pool.query(
+      `UPDATE action_items 
+       SET ai_effort_estimate_hours = $1,
+           ai_estimate_confidence = $2,
+           ai_estimate_last_updated = CURRENT_TIMESTAMP
+       WHERE id = $3`,
+      [result.hours, result.confidence, parseInt(id)]
+    );
+    
+    res.json({
+      hours: result.hours,
+      confidence: result.confidence,
+      reasoning: result.reasoning
+    });
+    
+  } catch (error) {
+    console.error('Error generating AI effort estimate:', error);
+    res.status(500).json({ error: 'Failed to generate AI effort estimate' });
+  }
+});
+
+// Generate hybrid effort estimate for an action item
+app.post('/api/action-items/:id/hybrid-estimate', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const actionItemResult = await pool.query(
+      'SELECT ai_effort_estimate_hours, estimated_effort_hours FROM action_items WHERE id = $1',
+      [parseInt(id)]
+    );
+    
+    if (actionItemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    const actionItem = actionItemResult.rows[0];
+    const aiEstimate = parseFloat(actionItem.ai_effort_estimate_hours) || 0;
+    const manualEstimate = parseFloat(actionItem.estimated_effort_hours) || 0;
+    
+    const hybridHours = aiEstimate > 0 && manualEstimate > 0 
+      ? (aiEstimate + manualEstimate) / 2
+      : (aiEstimate || manualEstimate);
+    
+    await pool.query(
+      `UPDATE action_items 
+       SET hybrid_effort_estimate_hours = $1
+       WHERE id = $2`,
+      [hybridHours, parseInt(id)]
+    );
+    
+    res.json({ hours: hybridHours });
+    
+  } catch (error) {
+    console.error('Error generating hybrid effort estimate:', error);
+    res.status(500).json({ error: 'Failed to generate hybrid effort estimate' });
   }
 });
 
