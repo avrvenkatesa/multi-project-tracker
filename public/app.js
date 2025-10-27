@@ -1304,15 +1304,6 @@ async function renderKanbanBoard() {
                         ` : ''}
                         <div class="flex items-center justify-between gap-2">
                             <div class="checklist-badge-container flex-1">${generateChecklistBadge(checklistStatus)}</div>
-                            ${canEdit ? `
-                                <button class="quick-log-btn px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
-                                        data-item-id="${item.id}"
-                                        data-item-type="${item.type || 'issue'}"
-                                        data-project-id="${currentProject.id}"
-                                        title="Quick Log Time">
-                                    ⏱️ Log
-                                </button>
-                            ` : ''}
                         </div>
                             </div>
                         </div>
