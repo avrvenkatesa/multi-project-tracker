@@ -9111,9 +9111,9 @@ document.getElementById('submitQuickLog')?.addEventListener('click', async funct
   const hours = parseFloat(document.getElementById('quick-log-hours').value);
   const notes = document.getElementById('quick-log-notes').value.trim();
   
-  // Validation
-  if (!hours || isNaN(hours) || hours < 0.25 || hours > 999) {
-    showToast('Please enter valid hours (0.25 - 999)', 'error');
+  // Validation - simplified to match working timesheet modal
+  if (!hours || hours <= 0) {
+    showToast('Please enter a valid number of hours', 'error');
     return;
   }
   
