@@ -440,6 +440,450 @@ function filterItems() {
 }
 
 // ============================================
+// PHASE 2: ESTIMATE VALIDATION
+// ============================================
+
+function getItemsWithoutEstimates() {
+  const itemsWithoutEstimates = [];
+  
+  selectedItemIds.forEach(key => {
+    const [type, id] = key.split(':');
+    const item = allItems.find(i => i.type === type && i.id === parseInt(id));
+    
+    if (item && (!item.estimate || item.estimate === 0)) {
+      itemsWithoutEstimates.push(item);
+    }
+  });
+  
+  return itemsWithoutEstimates;
+}
+
+function showMissingEstimatesModal(items) {
+  const count = items.length;
+  const itemsList = items.map(item => 
+    `<li class="text-sm text-gray-700">• ${escapeHtml(item.title)} (${item.type === 'issue' ? 'Issue' : 'Action Item'})</li>`
+  ).join('');
+  
+  const modalHtml = `
+    <div id="missing-estimates-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-gray-900">
+              <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+              Missing Effort Estimates
+            </h3>
+          </div>
+          
+          <div class="mb-6">
+            <p class="text-gray-700 mb-4">
+              <strong>${count}</strong> ${count === 1 ? 'item has' : 'items have'} no effort estimate. 
+              Items without estimates cannot be accurately scheduled.
+            </p>
+            <ul class="bg-gray-50 p-4 rounded border border-gray-200 max-h-48 overflow-y-auto">
+              ${itemsList}
+            </ul>
+          </div>
+          
+          <p class="text-gray-700 mb-6">Would you like to add effort estimates now?</p>
+          
+          <div class="flex justify-end space-x-3">
+            <button
+              data-action="exclude-items"
+              class="px-6 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+            >
+              <i class="fas fa-times mr-2"></i>Exclude These Items
+            </button>
+            <button
+              data-action="add-estimates"
+              class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              <i class="fas fa-calculator mr-2"></i>Add Estimates
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  // Store items for later use
+  window.itemsNeedingEstimates = items;
+  
+  // Attach event listeners
+  document.querySelector('[data-action="exclude-items"]').addEventListener('click', handleExcludeItems);
+  document.querySelector('[data-action="add-estimates"]').addEventListener('click', handleStartEstimationWorkflow);
+}
+
+function closeMissingEstimatesModal() {
+  const modal = document.getElementById('missing-estimates-modal');
+  if (modal) {
+    modal.remove();
+  }
+  window.itemsNeedingEstimates = null;
+}
+
+function handleExcludeItems() {
+  const items = window.itemsNeedingEstimates || [];
+  
+  // Remove these items from selection
+  items.forEach(item => {
+    const key = `${item.type}:${item.id}`;
+    selectedItemIds.delete(key);
+  });
+  
+  closeMissingEstimatesModal();
+  renderItems();
+  
+  // Try to create schedule again
+  if (selectedItemIds.size > 0) {
+    document.getElementById('create-schedule-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  } else {
+    alert('No items remaining after exclusion. Please select items with estimates.');
+  }
+}
+
+async function handleStartEstimationWorkflow() {
+  closeMissingEstimatesModal();
+  
+  const items = window.itemsNeedingEstimates || [];
+  if (items.length === 0) return;
+  
+  // Start workflow with first item
+  window.estimationQueue = [...items];
+  window.estimationQueueIndex = 0;
+  
+  await showEstimationModal(items[0]);
+}
+
+async function showEstimationModal(item) {
+  const queueIndex = window.estimationQueueIndex + 1;
+  const queueTotal = window.estimationQueue.length;
+  
+  const modalHtml = `
+    <div id="estimation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h3 class="text-xl font-bold text-gray-900">Add Effort Estimate</h3>
+              <p class="text-sm text-gray-500 mt-1">Item ${queueIndex} of ${queueTotal}</p>
+            </div>
+            <button data-action="close-estimation" class="text-gray-400 hover:text-gray-600">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          
+          <!-- Item Details -->
+          <div class="bg-gray-50 rounded-lg p-4 mb-6">
+            <div class="flex items-center space-x-2 mb-2">
+              <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded ${item.type === 'issue' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
+                ${item.type === 'issue' ? 'Issue' : 'Action Item'}
+              </span>
+              <span class="text-sm text-gray-500">#${item.id}</span>
+            </div>
+            <h4 class="text-lg font-semibold text-gray-900 mb-2">${escapeHtml(item.title)}</h4>
+            ${item.description ? `<p class="text-sm text-gray-600 line-clamp-3">${escapeHtml(item.description)}</p>` : ''}
+          </div>
+          
+          <!-- AI Estimate Section -->
+          <div class="mb-6">
+            <h5 class="text-sm font-semibold text-gray-700 mb-3">AI-Generated Estimate</h5>
+            <div id="ai-estimate-section" class="space-y-3">
+              ${item.ai_estimate ? `
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-2xl font-bold text-blue-900">${item.ai_estimate}h</p>
+                      <p class="text-xs text-blue-600 mt-1">Confidence: ${item.ai_confidence || 'N/A'}</p>
+                    </div>
+                    <button data-action="regenerate-ai" class="text-sm text-blue-600 hover:text-blue-800">
+                      <i class="fas fa-sync mr-1"></i>Regenerate
+                    </button>
+                  </div>
+                </div>
+              ` : `
+                <button data-action="generate-ai" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                  <i class="fas fa-magic mr-2"></i>Generate AI Estimate
+                </button>
+              `}
+            </div>
+          </div>
+          
+          <!-- Hybrid Estimate Section -->
+          <div class="mb-6">
+            <h5 class="text-sm font-semibold text-gray-700 mb-3">Hybrid Estimate (Optional)</h5>
+            <div id="hybrid-estimate-section" class="space-y-3">
+              ${item.hybrid_estimate ? `
+                <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                  <p class="text-2xl font-bold text-purple-900">${item.hybrid_estimate}h</p>
+                  <p class="text-xs text-purple-600 mt-1">AI + Manual Adjustments</p>
+                </div>
+              ` : `
+                <button data-action="generate-hybrid" class="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors" ${!item.ai_estimate ? 'disabled' : ''}>
+                  <i class="fas fa-layer-group mr-2"></i>Generate Hybrid Estimate
+                </button>
+                ${!item.ai_estimate ? '<p class="text-xs text-gray-500 mt-2">Generate AI estimate first</p>' : ''}
+              `}
+            </div>
+          </div>
+          
+          <!-- Manual Estimate Section -->
+          <div class="mb-6">
+            <h5 class="text-sm font-semibold text-gray-700 mb-3">Manual Estimate (Optional)</h5>
+            <div class="flex items-center space-x-3">
+              <input 
+                type="number" 
+                id="manual-estimate-input"
+                min="0" 
+                step="0.5" 
+                placeholder="Enter hours" 
+                value="${item.estimated_effort_hours || ''}"
+                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+              <span class="text-gray-600">hours</span>
+            </div>
+          </div>
+          
+          <!-- Planning Estimate Source -->
+          <div class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h5 class="text-sm font-semibold text-gray-700 mb-3">
+              <i class="fas fa-star text-yellow-500 mr-2"></i>Planning Estimate Source
+            </h5>
+            <p class="text-xs text-gray-600 mb-3">Select which estimate to use for scheduling</p>
+            <div class="space-y-2">
+              <label class="flex items-center cursor-pointer">
+                <input type="radio" name="planning-source" value="manual" class="mr-3" ${item.planning_estimate_source === 'manual' ? 'checked' : ''}>
+                <span class="text-sm">Manual Estimate</span>
+              </label>
+              <label class="flex items-center cursor-pointer">
+                <input type="radio" name="planning-source" value="ai" class="mr-3" ${item.planning_estimate_source === 'ai' || (!item.planning_estimate_source && item.ai_estimate) ? 'checked' : ''}>
+                <span class="text-sm">AI Estimate</span>
+              </label>
+              <label class="flex items-center cursor-pointer">
+                <input type="radio" name="planning-source" value="hybrid_selection" class="mr-3" ${item.planning_estimate_source === 'hybrid_selection' ? 'checked' : ''}>
+                <span class="text-sm">Hybrid Estimate</span>
+              </label>
+            </div>
+          </div>
+          
+          <!-- Action Buttons -->
+          <div class="flex justify-between">
+            <button 
+              data-action="skip-item" 
+              class="px-6 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+            >
+              <i class="fas fa-forward mr-2"></i>Skip This Item
+            </button>
+            <button 
+              data-action="save-and-next" 
+              class="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+            >
+              <i class="fas fa-save mr-2"></i>${queueIndex < queueTotal ? 'Save & Next' : 'Save & Complete'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  // Store current item
+  window.currentEstimationItem = item;
+  
+  // Attach event listeners
+  document.querySelector('[data-action="close-estimation"]').addEventListener('click', closeEstimationModal);
+  document.querySelector('[data-action="save-and-next"]').addEventListener('click', handleSaveAndNext);
+  document.querySelector('[data-action="skip-item"]').addEventListener('click', handleSkipItem);
+  
+  const generateAiBtn = document.querySelector('[data-action="generate-ai"]');
+  if (generateAiBtn) {
+    generateAiBtn.addEventListener('click', () => handleGenerateAIEstimate(item));
+  }
+  
+  const generateHybridBtn = document.querySelector('[data-action="generate-hybrid"]');
+  if (generateHybridBtn) {
+    generateHybridBtn.addEventListener('click', () => handleGenerateHybridEstimate(item));
+  }
+}
+
+function closeEstimationModal() {
+  const modal = document.getElementById('estimation-modal');
+  if (modal) {
+    modal.remove();
+  }
+  window.currentEstimationItem = null;
+}
+
+async function handleGenerateAIEstimate(item) {
+  const btn = document.querySelector('[data-action="generate-ai"]');
+  if (!btn) return;
+  
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+  
+  try {
+    const endpoint = item.type === 'issue' ? `/api/issues/${item.id}/effort-estimate` : `/api/action-items/${item.id}/effort-estimate`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-4o' })
+    });
+    
+    if (!response.ok) throw new Error('Failed to generate AI estimate');
+    
+    const data = await response.json();
+    
+    // Update item in memory
+    item.ai_estimate = data.hours;
+    item.ai_confidence = data.confidence;
+    
+    // Reload the modal
+    closeEstimationModal();
+    await showEstimationModal(item);
+    
+  } catch (error) {
+    console.error('Error generating AI estimate:', error);
+    alert('Failed to generate AI estimate');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Generate AI Estimate';
+  }
+}
+
+async function handleGenerateHybridEstimate(item) {
+  const btn = document.querySelector('[data-action="generate-hybrid"]');
+  if (!btn) return;
+  
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+  
+  try {
+    const endpoint = item.type === 'issue' ? `/api/issues/${item.id}/hybrid-estimate` : `/api/action-items/${item.id}/hybrid-estimate`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (!response.ok) throw new Error('Failed to generate hybrid estimate');
+    
+    const data = await response.json();
+    
+    // Update item in memory
+    item.hybrid_estimate = data.hours;
+    
+    // Reload the modal
+    closeEstimationModal();
+    await showEstimationModal(item);
+    
+  } catch (error) {
+    console.error('Error generating hybrid estimate:', error);
+    alert('Failed to generate hybrid estimate');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-layer-group mr-2"></i>Generate Hybrid Estimate';
+  }
+}
+
+async function handleSaveAndNext() {
+  const item = window.currentEstimationItem;
+  if (!item) return;
+  
+  const manualEstimate = document.getElementById('manual-estimate-input').value;
+  const planningSource = document.querySelector('input[name="planning-source"]:checked')?.value;
+  
+  if (!planningSource) {
+    alert('Please select a planning estimate source');
+    return;
+  }
+  
+  const btn = document.querySelector('[data-action="save-and-next"]');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+  
+  try {
+    const endpoint = item.type === 'issue' ? `/api/issues/${item.id}` : `/api/action-items/${item.id}`;
+    const payload = {
+      planning_estimate_source: planningSource
+    };
+    
+    if (manualEstimate) {
+      payload.estimated_effort_hours = parseFloat(manualEstimate);
+    }
+    
+    const response = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) throw new Error('Failed to save estimate');
+    
+    // Update item in allItems array
+    const itemIndex = allItems.findIndex(i => i.type === item.type && i.id === item.id);
+    if (itemIndex !== -1) {
+      allItems[itemIndex].estimated_effort_hours = manualEstimate ? parseFloat(manualEstimate) : allItems[itemIndex].estimated_effort_hours;
+      allItems[itemIndex].planning_estimate_source = planningSource;
+      allItems[itemIndex].estimate = getEstimateForItem(allItems[itemIndex]);
+    }
+    
+    // Move to next item or complete
+    window.estimationQueueIndex++;
+    closeEstimationModal();
+    
+    if (window.estimationQueueIndex < window.estimationQueue.length) {
+      await showEstimationModal(window.estimationQueue[window.estimationQueueIndex]);
+    } else {
+      // All estimates complete, reload items and submit schedule
+      await loadProjectItems();
+      document.getElementById('create-schedule-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    }
+    
+  } catch (error) {
+    console.error('Error saving estimate:', error);
+    alert('Failed to save estimate');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save & Next';
+  }
+}
+
+function handleSkipItem() {
+  const item = window.currentEstimationItem;
+  if (!item) return;
+  
+  // Remove from selection
+  const key = `${item.type}:${item.id}`;
+  selectedItemIds.delete(key);
+  
+  // Move to next or complete
+  window.estimationQueueIndex++;
+  closeEstimationModal();
+  
+  if (window.estimationQueueIndex < window.estimationQueue.length) {
+    showEstimationModal(window.estimationQueue[window.estimationQueueIndex]);
+  } else {
+    // All done
+    renderItems();
+    if (selectedItemIds.size > 0) {
+      document.getElementById('create-schedule-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    } else {
+      alert('No items remaining. Please select items to schedule.');
+    }
+  }
+}
+
+function getEstimateForItem(item) {
+  if (item.planning_estimate_source === 'manual' && item.estimated_effort_hours) {
+    return item.estimated_effort_hours;
+  } else if (item.planning_estimate_source === 'ai' && item.ai_effort_estimate_hours) {
+    return item.ai_effort_estimate_hours;
+  } else if (item.planning_estimate_source === 'hybrid_selection' && item.hybrid_effort_estimate_hours) {
+    return item.hybrid_effort_estimate_hours;
+  }
+  return item.ai_effort_estimate_hours || item.estimated_effort_hours || 0;
+}
+
+// ============================================
 // SCHEDULE CREATION
 // ============================================
 
@@ -448,6 +892,13 @@ async function handleCreateSchedule(e) {
 
   if (selectedItemIds.size === 0) {
     alert('Please select at least one item to schedule');
+    return;
+  }
+
+  // Phase 2: Check for items without estimates
+  const itemsWithoutEstimates = getItemsWithoutEstimates();
+  if (itemsWithoutEstimates.length > 0) {
+    showMissingEstimatesModal(itemsWithoutEstimates);
     return;
   }
 
