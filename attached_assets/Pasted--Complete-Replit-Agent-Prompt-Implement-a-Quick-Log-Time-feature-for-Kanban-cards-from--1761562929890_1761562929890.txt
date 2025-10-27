@@ -1,0 +1,96 @@
+## 🤖 **Complete Replit Agent Prompt**
+```
+Implement a Quick Log Time feature for Kanban cards from scratch.
+
+OBJECTIVE:
+Add a "⏱️ Log" button to each Kanban card that opens a modal allowing users to quickly log hours worked on that item without changing its status.
+
+REQUIREMENTS:
+
+1. ADD MODAL HTML TO public/index.html
+   - Place BEFORE the closing </body> tag
+   - Modal should have:
+     * ID: "quickLogModal"
+     * Hours input: ID "quickLogHours" (type="number", step="0.25", min="0.25", max="24")
+     * Notes textarea: ID "quickLogNotes" 
+     * Item title display: ID "quickLogItemTitle"
+     * Close button: ID "closeQuickLogModal"
+     * Cancel button: ID "cancelQuickLog"
+     * Submit button: ID "submitQuickLog"
+   - Use Tailwind CSS classes for styling
+   - Should be hidden by default (class="hidden")
+
+2. ADD JAVASCRIPT TO public/app.js
+   - Add these functions at the end of the file:
+     * openQuickLogModal(itemId, itemType, itemTitle) - Opens modal and sets context
+     * closeQuickLogModal() - Closes modal and clears context
+     * submitQuickLog() - Validates and submits time entry
+   
+   - API endpoint to use:
+     * For issues: POST /api/issues/:id/log-time
+     * For action items: POST /api/action-items/:id/log-time
+   
+   - Request body format:
+     {
+       "hours": 2.5,
+       "notes": "Optional notes"
+     }
+   
+   - Validation rules:
+     * Hours must be between 0.25 and 24
+     * Hours must be a valid number
+     * Notes are optional
+   
+   - After successful logging:
+     * Show success toast
+     * Close modal
+     * Refresh the project data to show updated values
+
+3. ADD LOG BUTTON TO KANBAN CARDS
+   - Find where Kanban cards are rendered in public/app.js
+   - Add a "⏱️ Log" button to each card's action area
+   - Button should call: openQuickLogModal(item.id, item.type, item.title)
+   - Use event.stopPropagation() to prevent card click event
+   - Style: Small blue button with clock icon
+
+4. EVENT HANDLERS
+   - Close modal on X button click
+   - Close modal on Cancel button click
+   - Submit on "Log Time" button click
+   - Submit on Enter key in hours input
+   - Close on Escape key press
+   - Close when clicking outside modal
+
+VALIDATION:
+After implementation:
+- Click "⏱️ Log" button on any Kanban card
+- Modal should open showing the item title
+- Enter hours (e.g., 2.5) and optional notes
+- Click "Log Time"
+- Should show success message and close modal
+- Card should update to show new actual hours (may need refresh)
+
+CRITICAL NOTES:
+- Do NOT modify the server.js file - the /log-time endpoint already exists
+- Use "issues" and "action-items" (plural, with hyphen) in API URLs
+- Normalize item type: 'action' -> 'action-items', 'issue' -> 'issues'
+- Include credentials in fetch request
+- Disable submit button while logging to prevent double-submission
+- Show loading state during API call
+
+STYLING:
+- Match existing modal styles in the application
+- Use Tailwind CSS classes
+- Ensure responsive design (max-w-md)
+- Blue primary color for submit button
+- Gray for cancel button
+
+✅ Expected Result:
+After implementation:
+
+Kanban Card shows: ⏱️ Log button
+Click Log → Modal opens with item title
+Enter hours (e.g., 2.5) and optional notes
+Click "Log Time" → Success! ✨
+Card updates with new actual hours
+
