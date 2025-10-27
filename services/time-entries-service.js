@@ -58,11 +58,12 @@ async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, not
       statusChanged = true;
       newStatus = 'In Progress';
       
-      // Log status change to history
+      // Log status change to history (auto-transition tracked in status_history)
+      // Get project ID from checked item for status history
       await client.query(
-        `INSERT INTO status_history (item_type, item_id, from_status, to_status, changed_by, changed_at, change_reason)
-         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6)`,
-        [itemType, itemId, oldStatus, newStatus, loggedBy, 'Auto-transitioned when time was logged']
+        `INSERT INTO status_history (item_type, item_id, project_id, from_status, to_status, changed_by, changed_at)
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+        [itemType, itemId, checkedItem.project_id, oldStatus, newStatus, loggedBy]
       );
     }
     
