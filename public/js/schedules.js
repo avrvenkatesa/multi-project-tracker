@@ -460,8 +460,19 @@ function getItemsWithoutEstimates() {
 
 function showMissingEstimatesModal(items) {
   const count = items.length;
-  const itemsList = items.map(item => 
-    `<li class="text-sm text-gray-700">• ${escapeHtml(item.title)} (${item.type === 'issue' ? 'Issue' : 'Action Item'})</li>`
+  const itemsList = items.map((item, index) => 
+    `<li class="flex items-start space-x-3 py-2 hover:bg-gray-100 px-2 rounded">
+      <input 
+        type="checkbox" 
+        data-item-index="${index}"
+        class="mt-1 h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 missing-estimate-checkbox"
+        checked
+      >
+      <div class="flex-1">
+        <p class="text-sm font-medium text-gray-900">${escapeHtml(item.title)}</p>
+        <p class="text-xs text-gray-500">${item.type === 'issue' ? 'Issue' : 'Action Item'} #${item.id}</p>
+      </div>
+    </li>`
   ).join('');
   
   const modalHtml = `
@@ -478,27 +489,38 @@ function showMissingEstimatesModal(items) {
           <div class="mb-6">
             <p class="text-gray-700 mb-4">
               <strong>${count}</strong> ${count === 1 ? 'item has' : 'items have'} no effort estimate. 
-              Items without estimates cannot be accurately scheduled.
+              Select which items you'd like to add estimates for:
             </p>
-            <ul class="bg-gray-50 p-4 rounded border border-gray-200 max-h-48 overflow-y-auto">
+            
+            <div class="mb-2 flex justify-between items-center">
+              <div class="space-x-2">
+                <button data-action="select-all-estimates" class="text-sm text-blue-600 hover:text-blue-800">
+                  <i class="fas fa-check-square mr-1"></i>Select All
+                </button>
+                <button data-action="deselect-all-estimates" class="text-sm text-gray-600 hover:text-gray-800">
+                  <i class="fas fa-square mr-1"></i>Deselect All
+                </button>
+              </div>
+              <span id="selected-estimate-count" class="text-sm text-gray-600">${count} selected</span>
+            </div>
+            
+            <ul class="bg-gray-50 p-3 rounded border border-gray-200 max-h-64 overflow-y-auto">
               ${itemsList}
             </ul>
           </div>
           
-          <p class="text-gray-700 mb-6">Would you like to add effort estimates now?</p>
-          
           <div class="flex justify-end space-x-3">
             <button
-              data-action="exclude-items"
+              data-action="exclude-selected"
               class="px-6 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
             >
-              <i class="fas fa-times mr-2"></i>Exclude These Items
+              <i class="fas fa-times mr-2"></i>Exclude Selected
             </button>
             <button
               data-action="add-estimates"
               class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >
-              <i class="fas fa-calculator mr-2"></i>Add Estimates
+              <i class="fas fa-calculator mr-2"></i>Add Estimates to Selected
             </button>
           </div>
         </div>
@@ -512,8 +534,15 @@ function showMissingEstimatesModal(items) {
   window.itemsNeedingEstimates = items;
   
   // Attach event listeners
-  document.querySelector('[data-action="exclude-items"]').addEventListener('click', handleExcludeItems);
+  document.querySelector('[data-action="exclude-selected"]').addEventListener('click', handleExcludeSelectedItems);
   document.querySelector('[data-action="add-estimates"]').addEventListener('click', handleStartEstimationWorkflow);
+  document.querySelector('[data-action="select-all-estimates"]').addEventListener('click', selectAllEstimateItems);
+  document.querySelector('[data-action="deselect-all-estimates"]').addEventListener('click', deselectAllEstimateItems);
+  
+  // Add change listeners to checkboxes
+  document.querySelectorAll('.missing-estimate-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', updateSelectedEstimateCount);
+  });
 }
 
 function closeMissingEstimatesModal() {
@@ -524,11 +553,66 @@ function closeMissingEstimatesModal() {
   window.itemsNeedingEstimates = null;
 }
 
-function handleExcludeItems() {
-  const items = window.itemsNeedingEstimates || [];
+function selectAllEstimateItems() {
+  document.querySelectorAll('.missing-estimate-checkbox').forEach(checkbox => {
+    checkbox.checked = true;
+  });
+  updateSelectedEstimateCount();
+}
+
+function deselectAllEstimateItems() {
+  document.querySelectorAll('.missing-estimate-checkbox').forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  updateSelectedEstimateCount();
+}
+
+function updateSelectedEstimateCount() {
+  const checked = document.querySelectorAll('.missing-estimate-checkbox:checked').length;
+  const countEl = document.getElementById('selected-estimate-count');
+  if (countEl) {
+    countEl.textContent = `${checked} selected`;
+  }
+}
+
+function getSelectedEstimateItems() {
+  const selectedItems = [];
+  const checkboxes = document.querySelectorAll('.missing-estimate-checkbox:checked');
   
-  // Remove these items from selection
-  items.forEach(item => {
+  checkboxes.forEach(checkbox => {
+    const index = parseInt(checkbox.getAttribute('data-item-index'));
+    if (window.itemsNeedingEstimates && window.itemsNeedingEstimates[index]) {
+      selectedItems.push(window.itemsNeedingEstimates[index]);
+    }
+  });
+  
+  return selectedItems;
+}
+
+function getUnselectedEstimateItems() {
+  const unselectedItems = [];
+  const checkboxes = document.querySelectorAll('.missing-estimate-checkbox:not(:checked)');
+  
+  checkboxes.forEach(checkbox => {
+    const index = parseInt(checkbox.getAttribute('data-item-index'));
+    if (window.itemsNeedingEstimates && window.itemsNeedingEstimates[index]) {
+      unselectedItems.push(window.itemsNeedingEstimates[index]);
+    }
+  });
+  
+  return unselectedItems;
+}
+
+function handleExcludeSelectedItems() {
+  const itemsToExclude = getSelectedEstimateItems();
+  
+  if (itemsToExclude.length === 0) {
+    alert('No items selected to exclude');
+    return;
+  }
+  
+  // Remove selected items from selection
+  itemsToExclude.forEach(item => {
     const key = `${item.type}:${item.id}`;
     selectedItemIds.delete(key);
   });
@@ -545,16 +629,27 @@ function handleExcludeItems() {
 }
 
 async function handleStartEstimationWorkflow() {
+  const selectedItems = getSelectedEstimateItems();
+  
+  if (selectedItems.length === 0) {
+    alert('Please select at least one item to add estimates for');
+    return;
+  }
+  
+  // Exclude unselected items from schedule
+  const unselectedItems = getUnselectedEstimateItems();
+  unselectedItems.forEach(item => {
+    const key = `${item.type}:${item.id}`;
+    selectedItemIds.delete(key);
+  });
+  
   closeMissingEstimatesModal();
   
-  const items = window.itemsNeedingEstimates || [];
-  if (items.length === 0) return;
-  
-  // Start workflow with first item
-  window.estimationQueue = [...items];
+  // Start workflow with selected items only
+  window.estimationQueue = [...selectedItems];
   window.estimationQueueIndex = 0;
   
-  await showEstimationModal(items[0]);
+  await showEstimationModal(selectedItems[0]);
 }
 
 async function showEstimationModal(item) {
