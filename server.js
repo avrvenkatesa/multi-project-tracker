@@ -3571,41 +3571,9 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       const estimateChanged = estimated_effort_hours !== undefined && estimated_effort_hours !== issue.estimated_effort_hours;
       const planningSourceChanged = planning_estimate_source !== undefined && planning_estimate_source !== issue.planning_estimate_source;
       
-      if (estimateChanged) {
-        // Manual estimate was changed - create a manual_edit history entry with transaction
-        const client = await pool.connect();
-        try {
-          await client.query('BEGIN');
-          
-          // Read current version with row lock to prevent race conditions
-          const versionResult = await client.query(
-            `SELECT ai_estimate_version FROM issues WHERE id = $1 FOR UPDATE`,
-            [parseInt(id)]
-          );
-          const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
-          const newVersion = currentVersion + 1;
-          
-          await client.query(
-            `UPDATE issues SET ai_estimate_version = $1 WHERE id = $2`,
-            [newVersion, parseInt(id)]
-          );
-          
-          await client.query(
-            `INSERT INTO effort_estimate_history 
-             (item_type, item_id, estimate_hours, version, source, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            ['issue', parseInt(id), estimated_effort_hours, newVersion, 'manual_edit', req.user.id]
-          );
-          
-          await client.query('COMMIT');
-        } catch (err) {
-          await client.query('ROLLBACK');
-          console.error('Error creating effort estimate history:', err);
-          throw err; // Propagate error to caller
-        } finally {
-          client.release();
-        }
-      } else if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
+      // Priority logic: If planning source changed to AI/Hybrid, that takes precedence over manual edits
+      // This prevents duplicate versions when user changes both at once
+      if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
         // Planning source changed to AI or Hybrid - copy the selected estimate into planning estimate AND create version
         console.log('Planning source changed to:', planning_estimate_source);
         
@@ -3654,6 +3622,41 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
           } finally {
             client.release();
           }
+        }
+      } else if (estimateChanged && !planningSourceChanged) {
+        // ONLY manual estimate changed (no planning source change) - create a manual_edit history entry
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          
+          // Read current version with row lock to prevent race conditions
+          const versionResult = await client.query(
+            `SELECT ai_estimate_version FROM issues WHERE id = $1 FOR UPDATE`,
+            [parseInt(id)]
+          );
+          const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
+          const newVersion = currentVersion + 1;
+          
+          await client.query(
+            `UPDATE issues SET ai_estimate_version = $1 WHERE id = $2`,
+            [newVersion, parseInt(id)]
+          );
+          
+          await client.query(
+            `INSERT INTO effort_estimate_history 
+             (item_type, item_id, estimate_hours, version, source, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            ['issue', parseInt(id), estimated_effort_hours, newVersion, 'manual_edit', req.user.id]
+          );
+          
+          await client.query('COMMIT');
+          console.log(`Created version ${newVersion} for manual estimate edit (${estimated_effort_hours}h)`);
+        } catch (err) {
+          await client.query('ROLLBACK');
+          console.error('Error creating effort estimate history:', err);
+          throw err; // Propagate error to caller
+        } finally {
+          client.release();
         }
       }
     }
@@ -4484,41 +4487,9 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
       const estimateChanged = estimated_effort_hours !== undefined && estimated_effort_hours !== item.estimated_effort_hours;
       const planningSourceChanged = planning_estimate_source !== undefined && planning_estimate_source !== item.planning_estimate_source;
       
-      if (estimateChanged) {
-        // Manual estimate was changed - create a manual_edit history entry with transaction
-        const client = await pool.connect();
-        try {
-          await client.query('BEGIN');
-          
-          // Read current version with row lock to prevent race conditions
-          const versionResult = await client.query(
-            `SELECT ai_estimate_version FROM action_items WHERE id = $1 FOR UPDATE`,
-            [parseInt(id)]
-          );
-          const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
-          const newVersion = currentVersion + 1;
-          
-          await client.query(
-            `UPDATE action_items SET ai_estimate_version = $1 WHERE id = $2`,
-            [newVersion, parseInt(id)]
-          );
-          
-          await client.query(
-            `INSERT INTO effort_estimate_history 
-             (item_type, item_id, estimate_hours, version, source, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            ['action-item', parseInt(id), estimated_effort_hours, newVersion, 'manual_edit', req.user.id]
-          );
-          
-          await client.query('COMMIT');
-        } catch (err) {
-          await client.query('ROLLBACK');
-          console.error('Error creating effort estimate history:', err);
-          throw err; // Propagate error to caller
-        } finally {
-          client.release();
-        }
-      } else if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
+      // Priority logic: If planning source changed to AI/Hybrid, that takes precedence over manual edits
+      // This prevents duplicate versions when user changes both at once
+      if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
         // Planning source changed to AI or Hybrid - copy the selected estimate into planning estimate AND create version
         console.log('Planning source changed to:', planning_estimate_source);
         
@@ -4567,6 +4538,41 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
           } finally {
             client.release();
           }
+        }
+      } else if (estimateChanged && !planningSourceChanged) {
+        // ONLY manual estimate changed (no planning source change) - create a manual_edit history entry
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          
+          // Read current version with row lock to prevent race conditions
+          const versionResult = await client.query(
+            `SELECT ai_estimate_version FROM action_items WHERE id = $1 FOR UPDATE`,
+            [parseInt(id)]
+          );
+          const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
+          const newVersion = currentVersion + 1;
+          
+          await client.query(
+            `UPDATE action_items SET ai_estimate_version = $1 WHERE id = $2`,
+            [newVersion, parseInt(id)]
+          );
+          
+          await client.query(
+            `INSERT INTO effort_estimate_history 
+             (item_type, item_id, estimate_hours, version, source, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            ['action-item', parseInt(id), estimated_effort_hours, newVersion, 'manual_edit', req.user.id]
+          );
+          
+          await client.query('COMMIT');
+          console.log(`Created version ${newVersion} for manual estimate edit (${estimated_effort_hours}h)`);
+        } catch (err) {
+          await client.query('ROLLBACK');
+          console.error('Error creating effort estimate history:', err);
+          throw err; // Propagate error to caller
+        } finally {
+          client.release();
         }
       }
     }
