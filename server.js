@@ -3526,6 +3526,7 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       category, 
       progress,
       estimated_effort_hours,
+      hybrid_effort_estimate_hours,
       planning_estimate_source,
       actual_hours_added,  // NEW: Hours to add during status change
       completion_percentage  // NEW: Manual completion percentage
@@ -3625,6 +3626,10 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     if (estimated_effort_hours !== undefined) {
       updates.push(`estimated_effort_hours = $${valueIndex++}`);
       values.push(estimated_effort_hours || null);
+    }
+    if (hybrid_effort_estimate_hours !== undefined) {
+      updates.push(`hybrid_effort_estimate_hours = $${valueIndex++}`);
+      values.push(hybrid_effort_estimate_hours || null);
     }
     if (planning_estimate_source !== undefined) {
       updates.push(`planning_estimate_source = $${valueIndex++}`);
@@ -4558,6 +4563,7 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
       status, 
       progress,
       estimated_effort_hours,
+      hybrid_effort_estimate_hours,
       planning_estimate_source,
       actual_hours_added,  // NEW: Hours to add during status change
       completion_percentage  // NEW: Manual completion percentage
@@ -4653,6 +4659,10 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     if (estimated_effort_hours !== undefined) {
       updates.push(`estimated_effort_hours = $${valueIndex++}`);
       values.push(estimated_effort_hours || null);
+    }
+    if (hybrid_effort_estimate_hours !== undefined) {
+      updates.push(`hybrid_effort_estimate_hours = $${valueIndex++}`);
+      values.push(hybrid_effort_estimate_hours || null);
     }
     if (planning_estimate_source !== undefined) {
       updates.push(`planning_estimate_source = $${valueIndex++}`);
