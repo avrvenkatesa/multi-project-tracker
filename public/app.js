@@ -9148,114 +9148,178 @@ document.getElementById('show-all-estimates-btn')?.addEventListener('click', fun
 // QUICK LOG TIME FUNCTIONALITY
 // ============================================================================
 
-let quickLogContext = null; // Stores { itemId, itemType, projectId }
+let quickLogContext = null;
 
-// Event delegation for Quick Log buttons on kanban cards
-document.addEventListener('click', function(e) {
-  const quickLogBtn = e.target.closest('.quick-log-btn');
-  if (quickLogBtn) {
-    e.stopPropagation(); // Prevent card click (opening full modal)
-    
-    const itemId = parseInt(quickLogBtn.getAttribute('data-item-id'));
-    const itemType = quickLogBtn.getAttribute('data-item-type');
-    const projectId = parseInt(quickLogBtn.getAttribute('data-project-id'));
-    
-    openQuickLogModal(itemId, itemType, projectId);
+// Normalize item type for API endpoints
+function normalizeItemTypeForAPI(itemType) {
+  // Handle various input formats from kanban cards
+  if (itemType === 'action' || itemType === 'action-item') {
+    return 'action-items';
   }
-});
+  if (itemType === 'issue') {
+    return 'issues';
+  }
+  // Already normalized
+  if (itemType === 'action-items' || itemType === 'issues') {
+    return itemType;
+  }
+  console.warn('Unknown item type:', itemType, 'defaulting to issues');
+  return 'issues'; // Fallback
+}
 
-// Open Quick Log modal
-function openQuickLogModal(itemId, itemType, projectId) {
-  quickLogContext = { itemId, itemType, projectId };
+// Open Quick Log Modal
+function openQuickLogModal(itemId, itemType, itemTitle) {
+  quickLogContext = { itemId, itemType };
   
-  // Find the item to show its title
-  const allItems = [...issues, ...actionItems];
-  const item = allItems.find(i => i.id === itemId && i.type === itemType);
+  // Set title (truncate if too long)
+  const displayTitle = itemTitle.length > 60 
+    ? itemTitle.substring(0, 60) + '...' 
+    : itemTitle;
+  document.getElementById('quickLogItemTitle').textContent = displayTitle;
   
-  if (item) {
-    document.getElementById('quickLogModalTitle').textContent = `⏱️ Quick Log Time: ${item.title.substring(0, 50)}${item.title.length > 50 ? '...' : ''}`;
-  }
-  
-  // Reset form
-  document.getElementById('quick-log-hours').value = '';
-  document.getElementById('quick-log-notes').value = '';
+  // Reset and clear form
+  document.getElementById('quickLogHours').value = '';
+  document.getElementById('quickLogNotes').value = '';
   
   // Show modal
   document.getElementById('quickLogModal').classList.remove('hidden');
-  document.getElementById('quick-log-hours').focus();
+  
+  // Focus on hours input
+  setTimeout(() => {
+    document.getElementById('quickLogHours').focus();
+  }, 100);
 }
 
-// Close Quick Log modal
+// Close Quick Log Modal
 function closeQuickLogModal() {
   document.getElementById('quickLogModal').classList.add('hidden');
+  
+  // Clear form inputs
+  document.getElementById('quickLogHours').value = '';
+  document.getElementById('quickLogNotes').value = '';
+  
+  // Clear context
   quickLogContext = null;
 }
 
-// Event listeners for modal controls
-document.getElementById('closeQuickLogModal')?.addEventListener('click', closeQuickLogModal);
-document.getElementById('cancelQuickLog')?.addEventListener('click', closeQuickLogModal);
+// Validate Quick Log Input
+function validateQuickLogInput() {
+  const hoursInput = document.getElementById('quickLogHours');
+  const hours = parseFloat(hoursInput.value);
+  
+  // Check if value exists and is a valid number
+  if (!hoursInput.value || isNaN(hours)) {
+    AuthManager.showNotification('Please enter the number of hours worked', 'error');
+    hoursInput.focus();
+    return null;
+  }
+  
+  // Check minimum (UX preference - 15 minutes)
+  if (hours < 0.25) {
+    AuthManager.showNotification('Minimum time entry is 0.25 hours (15 minutes)', 'error');
+    hoursInput.focus();
+    return null;
+  }
+  
+  // Check maximum (reasonable daily limit)
+  if (hours > 24) {
+    AuthManager.showNotification('Maximum time entry is 24 hours per log', 'error');
+    hoursInput.focus();
+    return null;
+  }
+  
+  return hours;
+}
 
-// Submit Quick Log form
-document.getElementById('submitQuickLog')?.addEventListener('click', async function() {
-  if (!quickLogContext) return;
-  
-  const hours = parseFloat(document.getElementById('quick-log-hours').value);
-  const notes = document.getElementById('quick-log-notes').value.trim();
-  
-  // Validation - simplified to match working timesheet modal
-  if (!hours || hours <= 0) {
-    showToast('Please enter a valid number of hours', 'error');
+// Submit Quick Log
+async function submitQuickLog() {
+  if (!quickLogContext) {
+    console.error('No quick log context');
     return;
   }
   
+  // Validate input
+  const hours = validateQuickLogInput();
+  if (hours === null) return; // Validation failed
+  
+  const notes = document.getElementById('quickLogNotes').value.trim();
+  
+  // Get submit button and show loading state
+  const submitBtn = document.getElementById('submitQuickLog');
+  const originalHTML = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = `
+    <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    <span>Logging...</span>
+  `;
+  
   try {
-    const endpoint = quickLogContext.itemType === 'issue' 
-      ? `/api/issues/${quickLogContext.itemId}/log-time`
-      : `/api/action-items/${quickLogContext.itemId}/log-time`;
+    // Normalize item type for API
+    const apiItemType = normalizeItemTypeForAPI(quickLogContext.itemType);
     
-    const response = await axios.post(
-      endpoint,
-      {
-        projectId: quickLogContext.projectId,
-        hours: hours,
-        notes: notes || null
+    // Make API call
+    const response = await fetch(`/api/${apiItemType}/${quickLogContext.itemId}/log-time`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
       },
-      { withCredentials: true }
-    );
+      credentials: 'include',
+      body: JSON.stringify({
+        hours: hours,  // Send as number, not string
+        notes: notes || null
+      })
+    });
     
-    if (response.data.success) {
-      // Check if status was auto-changed
-      const statusChanged = response.data.data.statusChanged;
-      const newStatus = response.data.data.newStatus;
-      
-      if (statusChanged) {
-        showToast(`✅ Logged ${hours}h successfully! Item automatically moved to "${newStatus}"`, 'success');
-      } else {
-        showToast(`✅ Logged ${hours}h successfully!`, 'success');
-      }
-      
-      closeQuickLogModal();
-      
-      // Update the item in local data
-      const allItems = quickLogContext.itemType === 'issue' ? issues : actionItems;
-      const item = allItems.find(i => i.id === quickLogContext.itemId);
-      if (item) {
-        item.actual_effort_hours = response.data.data.totalHours;
-        item.completion_percentage = response.data.data.completionPercentage;
-        item.time_log_count = (item.time_log_count || 0) + 1;
-        
-        // Update status if it changed
-        if (statusChanged) {
-          item.status = newStatus;
-        }
-      }
-      
-      // Re-render the kanban board to show updated values
-      renderKanbanBoard();
+    const data = await response.json();
+    
+    // Check if request failed
+    if (!response.ok) {
+      const errorMessage = data.error || data.message || 'Failed to log time';
+      throw new Error(errorMessage);
     }
+    
+    // Success!
+    AuthManager.showNotification(`✅ Successfully logged ${hours}h!`, 'success');
+    
+    // Close modal
+    closeQuickLogModal();
+    
+    // Refresh the project data to show updated hours on cards
+    if (typeof currentProject !== 'undefined' && currentProject && currentProject.id) {
+      if (typeof loadProjectData === 'function') {
+        await loadProjectData(currentProject.id);
+      } else if (typeof renderKanbanBoard === 'function') {
+        renderKanbanBoard();
+      }
+    }
+    
   } catch (error) {
     console.error('Error logging time:', error);
-    showToast(error.response?.data?.message || 'Failed to log time', 'error');
+    
+    // Show error message from server or generic message
+    const errorMsg = error.message || 'Failed to log time. Please try again.';
+    AuthManager.showNotification(errorMsg, 'error');
+    
+  } finally {
+    // Re-enable button and restore original text
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalHTML;
+  }
+}
+
+// Event Listeners for Quick Log Modal
+document.getElementById('closeQuickLogModal')?.addEventListener('click', closeQuickLogModal);
+document.getElementById('cancelQuickLog')?.addEventListener('click', closeQuickLogModal);
+document.getElementById('submitQuickLog')?.addEventListener('click', submitQuickLog);
+
+// Handle Enter key in hours input
+document.getElementById('quickLogHours')?.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    submitQuickLog();
   }
 });
 
@@ -9266,6 +9330,25 @@ document.addEventListener('keydown', function(e) {
     if (modal && !modal.classList.contains('hidden')) {
       closeQuickLogModal();
     }
+  }
+});
+
+// Close modal when clicking outside
+document.getElementById('quickLogModal')?.addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeQuickLogModal();
+  }
+});
+
+// Event delegation for Quick Log buttons on kanban cards
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('[data-action="quick-log"]');
+  if (btn) {
+    e.stopPropagation(); // Prevent card click event
+    const itemId = parseInt(btn.dataset.itemId);
+    const itemType = btn.dataset.itemType;
+    const itemTitle = btn.dataset.itemTitle;
+    openQuickLogModal(itemId, itemType, itemTitle);
   }
 });
 
