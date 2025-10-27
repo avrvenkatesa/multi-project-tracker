@@ -4,7 +4,7 @@ let currentTimesheetItemType = null;
 let currentTimesheetItemId = null;
 
 // Open timesheet modal
-async function openTimesheetModal(itemType, itemId, itemTitle) {
+async function openTimesheetModal(itemType, itemId, itemTitle, itemCreatedAt = null) {
   currentTimesheetItemType = itemType;
   currentTimesheetItemId = itemId;
   
@@ -15,6 +15,20 @@ async function openTimesheetModal(itemType, itemId, itemTitle) {
   // Clear form
   document.getElementById('quick-log-hours').value = '';
   document.getElementById('quick-log-notes').value = '';
+  
+  // Set up date field
+  const dateInput = document.getElementById('quick-log-date');
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Set default to today
+  dateInput.value = today;
+  
+  // Set min date (item creation date) and max date (today)
+  if (itemCreatedAt) {
+    const createdDate = new Date(itemCreatedAt).toISOString().split('T')[0];
+    dateInput.min = createdDate;
+  }
+  dateInput.max = today;
   
   // Load entries
   await loadTimesheetEntries();
@@ -55,8 +69,16 @@ async function loadTimesheetEntries() {
       data.entries.forEach(entry => {
         const row = document.createElement('tr');
         row.className = 'border-b hover:bg-gray-50';
+        
+        // Format work date
+        const workDate = entry.work_date ? new Date(entry.work_date).toLocaleDateString() : 'N/A';
+        const loggedAt = entry.logged_at ? new Date(entry.logged_at).toLocaleString() : 'N/A';
+        
         row.innerHTML = `
-          <td class="px-4 py-3">${new Date(entry.logged_at).toLocaleString()}</td>
+          <td class="px-4 py-3">
+            <div class="font-medium">${workDate}</div>
+            <div class="text-xs text-gray-500" title="Logged at">${loggedAt}</div>
+          </td>
           <td class="px-4 py-3">${entry.logged_by_name || entry.logged_by_username || 'Unknown'}</td>
           <td class="px-4 py-3 text-right font-medium">${parseFloat(entry.hours_logged).toFixed(2)}</td>
           <td class="px-4 py-3">${entry.notes || '<span class="text-gray-400">No notes</span>'}</td>
@@ -85,9 +107,15 @@ async function loadTimesheetEntries() {
 async function quickLogTimeFromModal() {
   const hours = parseFloat(document.getElementById('quick-log-hours').value);
   const notes = document.getElementById('quick-log-notes').value.trim();
+  const workDate = document.getElementById('quick-log-date').value;
   
   if (!hours || hours <= 0) {
     alert('Please enter a valid number of hours');
+    return;
+  }
+  
+  if (!workDate) {
+    alert('Please select a date');
     return;
   }
   
@@ -99,7 +127,7 @@ async function quickLogTimeFromModal() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
-      body: JSON.stringify({ hours, notes })
+      body: JSON.stringify({ hours, notes, work_date: workDate })
     });
     
     if (!response.ok) {
@@ -127,6 +155,8 @@ async function quickLogTimeFromModal() {
     // Clear form
     document.getElementById('quick-log-hours').value = '';
     document.getElementById('quick-log-notes').value = '';
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('quick-log-date').value = today;
     
     // Reload entries
     await loadTimesheetEntries();
@@ -290,7 +320,25 @@ document.addEventListener('DOMContentLoaded', function() {
         const itemTitle = document.getElementById(isIssue ? 'edit-issue-title' : 'edit-action-item-title').value;
         const itemType = isIssue ? 'issue' : 'action-item';
         
-        await openTimesheetModal(itemType, itemId, itemTitle);
+        // Fetch item data to get created_at for date validation
+        let itemCreatedAt = null;
+        try {
+          const itemTypeUrl = isIssue ? 'issues' : 'action-items';
+          const response = await fetch(`/api/${itemTypeUrl}/${itemId}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          if (response.ok) {
+            const itemData = await response.json();
+            itemCreatedAt = itemData.created_at;
+          }
+        } catch (error) {
+          console.error('Error fetching item data:', error);
+          // Continue without created_at - backend will still validate
+        }
+        
+        await openTimesheetModal(itemType, itemId, itemTitle, itemCreatedAt);
       });
     }
   });

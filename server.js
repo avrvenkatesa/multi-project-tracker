@@ -3796,7 +3796,7 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
 app.post('/api/:itemType/:id/log-time', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { itemType, id } = req.params;
-    const { hours, notes, completion_percentage } = req.body;
+    const { hours, notes, completion_percentage, work_date } = req.body;
     
     // Validate item type
     const type = itemType === 'issues' ? 'issue' : itemType === 'action-items' ? 'action-item' : null;
@@ -3809,7 +3809,7 @@ app.post('/api/:itemType/:id/log-time', authenticateToken, requireRole('Team Mem
       return res.status(400).json({ error: 'Hours must be greater than 0' });
     }
     
-    console.log(`Quick log time: ${hours}h for ${type} #${id}`);
+    console.log(`Quick log time: ${hours}h for ${type} #${id}${work_date ? ` (work date: ${work_date})` : ''}`);
     
     // Log the time
     const result = await quickLogTime(
@@ -3818,7 +3818,8 @@ app.post('/api/:itemType/:id/log-time', authenticateToken, requireRole('Team Mem
       parseFloat(hours),
       req.user.id,
       notes,
-      completion_percentage
+      completion_percentage,
+      work_date
     );
     
     console.log('Quick log result:', result);
@@ -3865,7 +3866,7 @@ app.get('/api/:itemType/:id/time-history', authenticateToken, async (req, res) =
 app.post('/api/:itemType/:id/time-entries', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { itemType, id } = req.params;
-    const { hours, notes } = req.body;
+    const { hours, notes, work_date } = req.body;
     
     // Validate item type
     const type = itemType === 'issues' ? 'issue' : itemType === 'action-items' ? 'action-item' : null;
@@ -3896,7 +3897,8 @@ app.post('/api/:itemType/:id/time-entries', authenticateToken, requireRole('Team
       projectId,
       hoursLogged: parseFloat(hours),
       loggedBy: req.user.id,
-      notes
+      notes,
+      workDate: work_date
     });
     
     // Log with status change info if applicable

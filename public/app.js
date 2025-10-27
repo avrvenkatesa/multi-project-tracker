@@ -9234,7 +9234,7 @@ function normalizeItemTypeForAPI(itemType) {
 function openQuickLogModal(itemId, itemType) {
   quickLogContext = { itemId, itemType };
   
-  // Find the item to get its title safely
+  // Find the item to get its title safely and creation date
   const allItems = [...issues, ...actionItems];
   const item = allItems.find(i => i.id === itemId && i.type === itemType);
   
@@ -9249,6 +9249,20 @@ function openQuickLogModal(itemId, itemType) {
   // Reset and clear form
   document.getElementById('quickLogHours').value = '';
   document.getElementById('quickLogNotes').value = '';
+  
+  // Set up date field
+  const dateInput = document.getElementById('quickLogDate');
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Set default to today
+  dateInput.value = today;
+  
+  // Set min date (item creation date) and max date (today)
+  if (item && item.created_at) {
+    const createdDate = new Date(item.created_at).toISOString().split('T')[0];
+    dateInput.min = createdDate;
+  }
+  dateInput.max = today;
   
   // Show modal
   document.getElementById('quickLogModal').classList.remove('hidden');
@@ -9266,6 +9280,7 @@ function closeQuickLogModal() {
   // Clear form inputs
   document.getElementById('quickLogHours').value = '';
   document.getElementById('quickLogNotes').value = '';
+  document.getElementById('quickLogDate').value = '';
   
   // Clear context
   quickLogContext = null;
@@ -9312,6 +9327,14 @@ async function submitQuickLog() {
   if (hours === null) return; // Validation failed
   
   const notes = document.getElementById('quickLogNotes').value.trim();
+  const workDate = document.getElementById('quickLogDate').value;
+  
+  // Validate date is selected
+  if (!workDate) {
+    AuthManager.showNotification('Please select a date', 'error');
+    document.getElementById('quickLogDate').focus();
+    return;
+  }
   
   // Get submit button and show loading state
   const submitBtn = document.getElementById('submitQuickLog');
@@ -9338,7 +9361,8 @@ async function submitQuickLog() {
       credentials: 'include',
       body: JSON.stringify({
         hours: hours,  // Send as number, not string
-        notes: notes || null
+        notes: notes || null,
+        work_date: workDate
       })
     });
     

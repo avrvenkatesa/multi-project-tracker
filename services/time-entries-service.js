@@ -9,10 +9,10 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 /**
  * Log time for an item (without status change)
- * @param {Object} params - { itemType, itemId, projectId, hoursLogged, loggedBy, notes }
+ * @param {Object} params - { itemType, itemId, projectId, hoursLogged, loggedBy, notes, workDate }
  * @returns {Object} Created time entry with updated totals
  */
-async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, notes = null }) {
+async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, notes = null, workDate = null }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -31,7 +31,7 @@ async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, not
     // Verify item exists and belongs to the project (prevents orphaned records)
     const tableName = itemType === 'issue' ? 'issues' : 'action_items';
     const itemCheckResult = await client.query(
-      `SELECT id, project_id, status FROM ${tableName} WHERE id = $1`,
+      `SELECT id, project_id, status, created_at FROM ${tableName} WHERE id = $1`,
       [itemId]
     );
     
@@ -40,6 +40,32 @@ async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, not
     }
     
     const checkedItem = itemCheckResult.rows[0];
+    
+    // Validate work_date (if provided)
+    let validatedWorkDate = workDate;
+    if (workDate) {
+      const workDateObj = new Date(workDate);
+      const itemCreatedDate = new Date(checkedItem.created_at);
+      const today = new Date();
+      
+      // Reset time components for date-only comparison
+      workDateObj.setHours(0, 0, 0, 0);
+      itemCreatedDate.setHours(0, 0, 0, 0);
+      today.setHours(23, 59, 59, 999); // End of today
+      
+      if (workDateObj < itemCreatedDate) {
+        throw new Error(`Work date cannot be before item creation date (${itemCreatedDate.toISOString().split('T')[0]})`);
+      }
+      
+      if (workDateObj > today) {
+        throw new Error('Work date cannot be in the future');
+      }
+      
+      validatedWorkDate = workDate;
+    } else {
+      // Default to today if not provided
+      validatedWorkDate = new Date().toISOString().split('T')[0];
+    }
     // Normalize to numbers for comparison (handles string vs number mismatch)
     if (Number(checkedItem.project_id) !== Number(projectId)) {
       throw new Error('Item does not belong to the specified project');
@@ -70,10 +96,10 @@ async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, not
     // Insert time entry
     const entryResult = await client.query(
       `INSERT INTO time_entries 
-       (item_type, item_id, project_id, hours_logged, logged_by, notes, logged_at)
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+       (item_type, item_id, project_id, hours_logged, logged_by, notes, logged_at, work_date)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, $7)
        RETURNING *`,
-      [itemType, itemId, projectId, hours, loggedBy, notes]
+      [itemType, itemId, projectId, hours, loggedBy, notes, validatedWorkDate]
     );
     
     const entry = entryResult.rows[0];
@@ -153,7 +179,7 @@ async function getTimeEntries(itemType, itemId) {
      FROM time_entries te
      LEFT JOIN users u ON te.logged_by = u.id
      WHERE te.item_type = $1 AND te.item_id = $2
-     ORDER BY te.logged_at DESC`,
+     ORDER BY te.work_date DESC, te.logged_at DESC`,
     [itemType, itemId]
   );
   

@@ -177,7 +177,7 @@ async function validateStatusChange(itemType, itemId, fromStatus, toStatus, hour
  * Quick log time without status change
  * This is the key enhancement for incremental time tracking
  */
-async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, completionPercent = null) {
+async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, completionPercent = null, workDate = null) {
   // CRITICAL: Coerce inputs to numbers to prevent string concatenation
   const hoursAddedNum = parseFloat(hoursAdded);
   const completionPercentNum = completionPercent !== undefined && completionPercent !== null 
@@ -205,6 +205,33 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
     const currentTimeLogCount = item.time_log_count || 0;
     const projectId = item.project_id;
     const currentStatus = item.status;
+    const itemCreatedAt = item.created_at;
+    
+    // Validate and set work_date
+    let validatedWorkDate = workDate;
+    if (workDate) {
+      const workDateObj = new Date(workDate);
+      const itemCreatedDate = new Date(itemCreatedAt);
+      const today = new Date();
+      
+      // Reset time components for date-only comparison
+      workDateObj.setHours(0, 0, 0, 0);
+      itemCreatedDate.setHours(0, 0, 0, 0);
+      today.setHours(23, 59, 59, 999);
+      
+      if (workDateObj < itemCreatedDate) {
+        throw new Error(`Work date cannot be before item creation date (${itemCreatedDate.toISOString().split('T')[0]})`);
+      }
+      
+      if (workDateObj > today) {
+        throw new Error('Work date cannot be in the future');
+      }
+      
+      validatedWorkDate = workDate;
+    } else {
+      // Default to today if not provided
+      validatedWorkDate = new Date().toISOString().split('T')[0];
+    }
     
     // Auto-move to "In Progress" on first time log if currently in "To Do"
     const isFirstTimeLog = currentTimeLogCount === 0;
@@ -245,15 +272,16 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
     // Insert into time_entries table (for timesheet display)
     await client.query(
       `INSERT INTO time_entries 
-       (item_type, item_id, project_id, hours_logged, logged_by, notes, logged_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+       (item_type, item_id, project_id, hours_logged, logged_by, notes, logged_at, created_at, work_date)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), $7)`,
       [
         itemType,
         itemId,
         projectId,
         hoursAddedNum,
         userId,
-        notes
+        notes,
+        validatedWorkDate
       ]
     );
     
