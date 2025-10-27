@@ -31,7 +31,7 @@ async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, not
     // Verify item exists and belongs to the project (prevents orphaned records)
     const tableName = itemType === 'issue' ? 'issues' : 'action_items';
     const itemCheckResult = await client.query(
-      `SELECT id, project_id FROM ${tableName} WHERE id = $1`,
+      `SELECT id, project_id, status FROM ${tableName} WHERE id = $1`,
       [itemId]
     );
     
@@ -43,6 +43,27 @@ async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, not
     // Normalize to numbers for comparison (handles string vs number mismatch)
     if (Number(checkedItem.project_id) !== Number(projectId)) {
       throw new Error('Item does not belong to the specified project');
+    }
+    
+    // AUTO-TRANSITION: If item is in "To Do" status, move to "In Progress"
+    let statusChanged = false;
+    let oldStatus = checkedItem.status;
+    let newStatus = checkedItem.status;
+    
+    if (checkedItem.status && checkedItem.status.toLowerCase() === 'to do') {
+      await client.query(
+        `UPDATE ${tableName} SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        ['In Progress', itemId]
+      );
+      statusChanged = true;
+      newStatus = 'In Progress';
+      
+      // Log status change to history
+      await client.query(
+        `INSERT INTO status_history (item_type, item_id, from_status, to_status, changed_by, changed_at, change_reason)
+         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6)`,
+        [itemType, itemId, oldStatus, newStatus, loggedBy, 'Auto-transitioned when time was logged']
+      );
     }
     
     // Insert time entry
@@ -104,7 +125,10 @@ async function logTime({ itemType, itemId, projectId, hoursLogged, loggedBy, not
     return {
       entry,
       totalHours,
-      completionPercentage
+      completionPercentage,
+      statusChanged,
+      oldStatus,
+      newStatus
     };
   } catch (error) {
     await client.query('ROLLBACK');
