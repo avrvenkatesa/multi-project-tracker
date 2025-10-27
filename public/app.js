@@ -9122,8 +9122,8 @@ document.getElementById('submitQuickLog')?.addEventListener('click', async funct
   
   try {
     const endpoint = quickLogContext.itemType === 'issue' 
-      ? `/api/issues/${quickLogContext.itemId}/time-entries`
-      : `/api/action-items/${quickLogContext.itemId}/time-entries`;
+      ? `/api/issues/${quickLogContext.itemId}/log-time`
+      : `/api/action-items/${quickLogContext.itemId}/log-time`;
     
     const response = await axios.post(
       endpoint,
