@@ -27,6 +27,7 @@ export const projects = pgTable('projects', {
   teamsWebhookUrl: text('teams_webhook_url'),
   teamsNotificationsEnabled: boolean('teams_notifications_enabled').default(true),
   checklistCompletionEnabled: boolean('checklist_completion_enabled').default(true),
+  requireAssigneeForScheduling: boolean('require_assignee_for_scheduling').default(false),
 });
 
 export const projectMembers = pgTable('project_members', {
