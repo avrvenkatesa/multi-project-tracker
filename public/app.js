@@ -8842,7 +8842,10 @@ function setupEstimateFormListeners() {
       const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
       const response = await axios.post(`/api/${endpoint}/${currentItemId}/estimate`, 
         { model: 'gpt-4o' },
-        { withCredentials: true }
+        { 
+          withCredentials: true,
+          timeout: 120000 // 120 seconds timeout for AI requests (they take time!)
+        }
       );
       
       showToast('AI estimate generated successfully!', 'success');
