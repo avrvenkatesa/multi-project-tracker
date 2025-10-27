@@ -3597,7 +3597,7 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
           client.release();
         }
       } else if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
-        // Planning source changed to AI or Hybrid - copy the selected estimate into planning estimate
+        // Planning source changed to AI or Hybrid - copy the selected estimate into planning estimate AND create version
         console.log('Planning source changed to:', planning_estimate_source);
         
         // Copy the selected estimate hours into estimated_effort_hours for calculations
@@ -3609,11 +3609,42 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
         }
         
         if (selectedEstimate !== null) {
-          await pool.query(
-            `UPDATE issues SET estimated_effort_hours = $1 WHERE id = $2`,
-            [selectedEstimate, parseInt(id)]
-          );
-          console.log(`Copied ${planning_estimate_source} estimate (${selectedEstimate}h) to planning estimate`);
+          // Create version history entry when switching to AI/Hybrid estimate
+          const client = await pool.connect();
+          try {
+            await client.query('BEGIN');
+            
+            // Read current version with row lock
+            const versionResult = await client.query(
+              `SELECT ai_estimate_version FROM issues WHERE id = $1 FOR UPDATE`,
+              [parseInt(id)]
+            );
+            const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
+            const newVersion = currentVersion + 1;
+            
+            // Update both estimated_effort_hours and version
+            await client.query(
+              `UPDATE issues SET estimated_effort_hours = $1, ai_estimate_version = $2 WHERE id = $3`,
+              [selectedEstimate, newVersion, parseInt(id)]
+            );
+            
+            // Create history entry with hybrid_selection source
+            await client.query(
+              `INSERT INTO effort_estimate_history 
+               (item_type, item_id, estimate_hours, version, source, created_by)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              ['issue', parseInt(id), selectedEstimate, newVersion, 'hybrid_selection', req.user.id]
+            );
+            
+            await client.query('COMMIT');
+            console.log(`Created version ${newVersion} for ${planning_estimate_source} estimate selection (${selectedEstimate}h)`);
+          } catch (err) {
+            await client.query('ROLLBACK');
+            console.error('Error creating version for planning source change:', err);
+            throw err;
+          } finally {
+            client.release();
+          }
         }
       }
     }
@@ -4479,7 +4510,7 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
           client.release();
         }
       } else if (planningSourceChanged && (planning_estimate_source === 'ai' || planning_estimate_source === 'hybrid')) {
-        // Planning source changed to AI or Hybrid - copy the selected estimate into planning estimate
+        // Planning source changed to AI or Hybrid - copy the selected estimate into planning estimate AND create version
         console.log('Planning source changed to:', planning_estimate_source);
         
         // Copy the selected estimate hours into estimated_effort_hours for calculations
@@ -4491,11 +4522,42 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
         }
         
         if (selectedEstimate !== null) {
-          await pool.query(
-            `UPDATE action_items SET estimated_effort_hours = $1 WHERE id = $2`,
-            [selectedEstimate, parseInt(id)]
-          );
-          console.log(`Copied ${planning_estimate_source} estimate (${selectedEstimate}h) to planning estimate`);
+          // Create version history entry when switching to AI/Hybrid estimate
+          const client = await pool.connect();
+          try {
+            await client.query('BEGIN');
+            
+            // Read current version with row lock
+            const versionResult = await client.query(
+              `SELECT ai_estimate_version FROM action_items WHERE id = $1 FOR UPDATE`,
+              [parseInt(id)]
+            );
+            const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
+            const newVersion = currentVersion + 1;
+            
+            // Update both estimated_effort_hours and version
+            await client.query(
+              `UPDATE action_items SET estimated_effort_hours = $1, ai_estimate_version = $2 WHERE id = $3`,
+              [selectedEstimate, newVersion, parseInt(id)]
+            );
+            
+            // Create history entry with hybrid_selection source
+            await client.query(
+              `INSERT INTO effort_estimate_history 
+               (item_type, item_id, estimate_hours, version, source, created_by)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              ['action-item', parseInt(id), selectedEstimate, newVersion, 'hybrid_selection', req.user.id]
+            );
+            
+            await client.query('COMMIT');
+            console.log(`Created version ${newVersion} for ${planning_estimate_source} estimate selection (${selectedEstimate}h)`);
+          } catch (err) {
+            await client.query('ROLLBACK');
+            console.error('Error creating version for planning source change:', err);
+            throw err;
+          } finally {
+            client.release();
+          }
         }
       }
     }
