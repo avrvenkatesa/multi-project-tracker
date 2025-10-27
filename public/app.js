@@ -7862,6 +7862,40 @@ document.getElementById('edit-issue-view-breakdown')?.addEventListener('click', 
 function renderBreakdownModal(breakdown, itemId, itemType) {
   const contentDiv = document.getElementById('breakdown-content');
   
+  // Check if breakdown has incomplete data (old estimate format)
+  const hasIncompleteData = !breakdown.confidence || !breakdown.tasks || breakdown.tasks.length === 0;
+  
+  if (hasIncompleteData) {
+    // Show message for old/incomplete estimates
+    contentDiv.innerHTML = `
+      <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6 mb-4">
+        <div class="flex items-start gap-3">
+          <div class="text-3xl">⚠️</div>
+          <div class="flex-1">
+            <h3 class="text-lg font-bold text-yellow-800 mb-2">Incomplete Estimate Data</h3>
+            <p class="text-sm text-gray-700 mb-3">
+              This estimate was created before the detailed breakdown feature was added. 
+              It shows <strong>${breakdown.totalHours} hours</strong> but doesn't include:
+            </p>
+            <ul class="list-disc list-inside text-sm text-gray-700 mb-4 space-y-1">
+              <li>Task breakdown with individual estimates</li>
+              <li>Confidence level</li>
+              <li>Ability to create hybrid estimates</li>
+            </ul>
+            <p class="text-sm text-gray-700 mb-4">
+              <strong>Solution:</strong> Regenerate the AI estimate to get the full breakdown with all features.
+            </p>
+            <button onclick="document.getElementById('estimateBreakdownModal').classList.add('hidden'); document.getElementById('edit-${itemType === 'issue' ? 'issue' : 'action-item'}-generate-estimate').click()" 
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              🔄 Regenerate AI Estimate
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  
   contentDiv.innerHTML = `
     <div class="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg mb-4">
       <div class="grid grid-cols-4 gap-4 text-center">
@@ -7874,7 +7908,7 @@ function renderBreakdownModal(breakdown, itemId, itemType) {
           <div class="text-2xl font-bold ${
             breakdown.confidence === 'high' ? 'text-green-600' :
             breakdown.confidence === 'low' ? 'text-red-600' : 'text-blue-600'
-          }">${breakdown.confidence}</div>
+          }">${breakdown.confidence || 'medium'}</div>
         </div>
         <div>
           <div class="text-sm text-gray-600">Selected</div>
