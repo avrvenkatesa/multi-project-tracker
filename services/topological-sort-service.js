@@ -1,5 +1,5 @@
-const { neon } = require('@neondatabase/serverless');
-const sql = neon(process.env.DATABASE_URL);
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 /**
  * Topological Sort Service
@@ -49,8 +49,8 @@ async function loadDependencies(items) {
       AND relationship_type IN ('blocks', 'blocked_by', 'depends_on')
   `;
 
-  const dependencies = await sql(query, [issueIds, actionItemIds]);
-  return dependencies;
+  const result = await pool.query(query, [issueIds, actionItemIds]);
+  return result.rows;
 }
 
 /**
