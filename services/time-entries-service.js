@@ -124,8 +124,7 @@ async function getTimeEntries(itemType, itemId) {
   const result = await pool.query(
     `SELECT 
       te.*,
-      u.username as logged_by_username,
-      u.full_name as logged_by_name
+      u.username as logged_by_name
      FROM time_entries te
      LEFT JOIN users u ON te.logged_by = u.id
      WHERE te.item_type = $1 AND te.item_id = $2
