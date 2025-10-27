@@ -1304,6 +1304,17 @@ async function renderKanbanBoard() {
                         ` : ''}
                         <div class="flex items-center justify-between gap-2">
                             <div class="checklist-badge-container flex-1">${generateChecklistBadge(checklistStatus)}</div>
+                            ${userRoleLevel >= roleHierarchy['Team Member'] ? `
+                                <button 
+                                    class="quick-log-btn text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1 flex-shrink-0"
+                                    data-action="quick-log"
+                                    data-item-id="${item.id}"
+                                    data-item-type="${item.type}"
+                                    title="Quick Log Time"
+                                >
+                                    ⏱️ Log
+                                </button>
+                            ` : ''}
                         </div>
                             </div>
                         </div>
@@ -9168,14 +9179,20 @@ function normalizeItemTypeForAPI(itemType) {
 }
 
 // Open Quick Log Modal
-function openQuickLogModal(itemId, itemType, itemTitle) {
+function openQuickLogModal(itemId, itemType) {
   quickLogContext = { itemId, itemType };
   
-  // Set title (truncate if too long)
-  const displayTitle = itemTitle.length > 60 
-    ? itemTitle.substring(0, 60) + '...' 
-    : itemTitle;
-  document.getElementById('quickLogItemTitle').textContent = displayTitle;
+  // Find the item to get its title safely
+  const allItems = [...issues, ...actionItems];
+  const item = allItems.find(i => i.id === itemId && i.type === itemType);
+  
+  if (item) {
+    // Set title using textContent (safe - no XSS)
+    const displayTitle = item.title.length > 60 
+      ? item.title.substring(0, 60) + '...' 
+      : item.title;
+    document.getElementById('quickLogItemTitle').textContent = displayTitle;
+  }
   
   // Reset and clear form
   document.getElementById('quickLogHours').value = '';
@@ -9347,8 +9364,7 @@ document.addEventListener('click', function(e) {
     e.stopPropagation(); // Prevent card click event
     const itemId = parseInt(btn.dataset.itemId);
     const itemType = btn.dataset.itemType;
-    const itemTitle = btn.dataset.itemTitle;
-    openQuickLogModal(itemId, itemType, itemTitle);
+    openQuickLogModal(itemId, itemType);
   }
 });
 
