@@ -9126,7 +9126,7 @@ document.getElementById('submitQuickLog')?.addEventListener('click', async funct
       endpoint,
       {
         projectId: quickLogContext.projectId,
-        hoursLogged: hours,
+        hours: hours,
         notes: notes || null
       },
       { withCredentials: true }
