@@ -7971,8 +7971,24 @@ function renderBreakdownModal(breakdown, itemId, itemType) {
     ` : ''}
     
     <div class="text-xs text-gray-500 mt-4 p-3 bg-gray-50 rounded">
-      <strong>Tip:</strong> Select tasks you want to include in your hybrid estimate. Edit hours if needed. Your selections auto-save.
+      <strong>Tip:</strong> Select tasks you want to include in your hybrid estimate. Edit hours if needed. Click Save Changes to apply.
       <br>Generated on ${new Date(breakdown.timestamp).toLocaleString()}
+    </div>
+    
+    <!-- Save/Cancel Buttons -->
+    <div class="flex gap-3 mt-6 pt-4 border-t">
+      <button id="save-hybrid-estimate" class="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 transition-all font-medium flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        Save Changes
+      </button>
+      <button id="cancel-hybrid-estimate" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+        Cancel
+      </button>
     </div>
   `;
   
@@ -7981,6 +7997,9 @@ function renderBreakdownModal(breakdown, itemId, itemType) {
 }
 
 function attachBreakdownEventListeners(itemId, itemType) {
+  // Store original state for Cancel functionality
+  const originalState = JSON.parse(JSON.stringify(hybridSelectionState));
+  
   // Select all button
   document.getElementById('select-all-tasks')?.addEventListener('click', function() {
     const allSelected = hybridSelectionState.selectedCount === hybridSelectionState.tasks.length;
@@ -7992,7 +8011,7 @@ function attachBreakdownEventListeners(itemId, itemType) {
     });
     
     recalculateHybridTotal();
-    saveHybridEstimate(itemId, itemType);
+    // REMOVED: auto-save - now only saves on "Save Changes" button click
     
     this.textContent = allSelected ? 'Select All' : 'Deselect All';
   });
@@ -8021,7 +8040,7 @@ function attachBreakdownEventListeners(itemId, itemType) {
       }
       
       recalculateHybridTotal();
-      saveHybridEstimate(itemId, itemType);
+      // REMOVED: auto-save - now only saves on "Save Changes" button click
     });
   });
   
@@ -8033,8 +8052,39 @@ function attachBreakdownEventListeners(itemId, itemType) {
       hybridSelectionState.tasks[idx].editedHours = newHours;
       
       recalculateHybridTotal();
-      saveHybridEstimate(itemId, itemType);
+      // REMOVED: auto-save - now only saves on "Save Changes" button click
     });
+  });
+  
+  // Save Changes button
+  document.getElementById('save-hybrid-estimate')?.addEventListener('click', async function() {
+    const btn = this;
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-pulse">Saving...</span>';
+    
+    try {
+      await saveHybridEstimate(itemId, itemType);
+      showToast('Hybrid estimate saved successfully!', 'success');
+      document.getElementById('estimateBreakdownModal').classList.add('hidden');
+    } catch (error) {
+      console.error('Error saving hybrid estimate:', error);
+      showToast('Failed to save hybrid estimate', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+  });
+  
+  // Cancel button
+  document.getElementById('cancel-hybrid-estimate')?.addEventListener('click', function() {
+    // Restore original state
+    hybridSelectionState.tasks = originalState.tasks;
+    hybridSelectionState.totalHours = originalState.totalHours;
+    hybridSelectionState.selectedCount = originalState.selectedCount;
+    
+    // Close modal without saving
+    document.getElementById('estimateBreakdownModal').classList.add('hidden');
   });
 }
 
@@ -8735,7 +8785,7 @@ async function loadEstimateForm() {
               <span class="flex-1">
                 <span class="text-xl mr-2">✏️</span>
                 <span class="font-medium">Manual Estimate:</span>
-                <span class="ml-2 font-bold">${manualHours || 0} hours</span>
+                <span id="detail-manual-hours-display" class="ml-2 font-bold">${manualHours || 0} hours</span>
               </span>
             </label>
             
@@ -8908,6 +8958,15 @@ function setupEstimateFormListeners() {
     const detailsTab = document.querySelector('[data-tab="details"]');
     if (detailsTab) {
       detailsTab.click();
+    }
+  });
+  
+  // Manual Estimate auto-update: when manual field changes, update the radio button display
+  document.getElementById('detail-manual-estimate')?.addEventListener('blur', function() {
+    const manualHours = parseFloat(this.value) || 0;
+    const displayElement = document.getElementById('detail-manual-hours-display');
+    if (displayElement) {
+      displayElement.textContent = `${manualHours} hours`;
     }
   });
   
