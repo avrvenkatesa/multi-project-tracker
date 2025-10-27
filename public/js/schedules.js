@@ -697,6 +697,12 @@ async function showEstimationModal(item) {
                       <i class="fas fa-sync mr-1"></i>Regenerate
                     </button>
                   </div>
+                  ${item.ai_reasoning ? `
+                    <div class="mt-3 pt-3 border-t border-blue-200">
+                      <p class="text-xs text-gray-600 mb-1">AI Reasoning:</p>
+                      <p class="text-sm text-gray-700">${escapeHtml(item.ai_reasoning)}</p>
+                    </div>
+                  ` : ''}
                 </div>
               ` : `
                 <button data-action="generate-ai" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
@@ -714,12 +720,20 @@ async function showEstimationModal(item) {
                 <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
                   <p class="text-2xl font-bold text-purple-900">${item.hybrid_estimate}h</p>
                   <p class="text-xs text-purple-600 mt-1">AI + Manual Adjustments</p>
+                  <button data-action="edit-hybrid" class="mt-2 text-sm text-purple-600 hover:text-purple-800">
+                    <i class="fas fa-edit mr-1"></i>Edit Selection
+                  </button>
+                </div>
+              ` : !item.ai_estimate ? `
+                <div class="text-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p class="text-sm text-gray-500">Generate AI estimate first, then adjust items to create a hybrid estimate</p>
                 </div>
               ` : `
-                <button data-action="generate-hybrid" class="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors" ${!item.ai_estimate ? 'disabled' : ''}>
-                  <i class="fas fa-layer-group mr-2"></i>Generate Hybrid Estimate
-                </button>
-                ${!item.ai_estimate ? '<p class="text-xs text-gray-500 mt-2">Generate AI estimate first</p>' : ''}
+                <div id="hybrid-workflow-container">
+                  <button data-action="start-hybrid" class="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                    <i class="fas fa-layer-group mr-2"></i>View Breakdown & Create Hybrid
+                  </button>
+                </div>
               `}
             </div>
           </div>
@@ -798,9 +812,19 @@ async function showEstimationModal(item) {
     generateAiBtn.addEventListener('click', () => handleGenerateAIEstimate(item));
   }
   
-  const generateHybridBtn = document.querySelector('[data-action="generate-hybrid"]');
-  if (generateHybridBtn) {
-    generateHybridBtn.addEventListener('click', () => handleGenerateHybridEstimate(item));
+  const regenerateAiBtn = document.querySelector('[data-action="regenerate-ai"]');
+  if (regenerateAiBtn) {
+    regenerateAiBtn.addEventListener('click', () => handleGenerateAIEstimate(item));
+  }
+  
+  const startHybridBtn = document.querySelector('[data-action="start-hybrid"]');
+  if (startHybridBtn) {
+    startHybridBtn.addEventListener('click', () => showHybridBreakdown(item));
+  }
+  
+  const editHybridBtn = document.querySelector('[data-action="edit-hybrid"]');
+  if (editHybridBtn) {
+    editHybridBtn.addEventListener('click', () => showHybridBreakdown(item));
   }
 }
 
@@ -813,9 +837,10 @@ function closeEstimationModal() {
 }
 
 async function handleGenerateAIEstimate(item) {
-  const btn = document.querySelector('[data-action="generate-ai"]');
+  const btn = document.querySelector('[data-action="generate-ai"]') || document.querySelector('[data-action="regenerate-ai"]');
   if (!btn) return;
   
+  const originalHtml = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
   
@@ -834,6 +859,7 @@ async function handleGenerateAIEstimate(item) {
     // Update item in memory
     item.ai_estimate = data.hours;
     item.ai_confidence = data.confidence;
+    item.ai_reasoning = data.reasoning;
     
     // Reload the modal
     closeEstimationModal();
@@ -843,40 +869,179 @@ async function handleGenerateAIEstimate(item) {
     console.error('Error generating AI estimate:', error);
     alert('Failed to generate AI estimate');
     btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Generate AI Estimate';
+    btn.innerHTML = originalHtml;
   }
 }
 
-async function handleGenerateHybridEstimate(item) {
-  const btn = document.querySelector('[data-action="generate-hybrid"]');
+function showHybridBreakdown(item) {
+  // Create a simple breakdown based on AI reasoning
+  const baseHours = item.ai_estimate || 0;
+  
+  // Create breakdown items (for now, simple breakdown by task type)
+  const breakdownItems = [
+    { label: 'Core Implementation', hours: Math.round(baseHours * 0.5 * 10) / 10, selected: true },
+    { label: 'Testing & Validation', hours: Math.round(baseHours * 0.2 * 10) / 10, selected: true },
+    { label: 'Documentation', hours: Math.round(baseHours * 0.15 * 10) / 10, selected: true },
+    { label: 'Review & Refinement', hours: Math.round(baseHours * 0.15 * 10) / 10, selected: true }
+  ];
+  
+  const breakdownHtml = `
+    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-sm font-semibold text-gray-700">AI Breakdown - Select & Adjust</p>
+        <button data-action="select-all-breakdown" class="text-xs text-purple-600 hover:text-purple-800">
+          <i class="fas fa-check-square mr-1"></i>Select All
+        </button>
+      </div>
+      ${breakdownItems.map((breakdown, idx) => `
+        <div class="flex items-center space-x-3 py-2">
+          <input 
+            type="checkbox" 
+            id="breakdown-${idx}" 
+            data-breakdown-idx="${idx}"
+            ${breakdown.selected ? 'checked' : ''}
+            class="w-4 h-4 text-purple-600 rounded"
+          >
+          <label for="breakdown-${idx}" class="flex-1 text-sm text-gray-700 cursor-pointer">
+            ${breakdown.label}
+          </label>
+          <input 
+            type="number" 
+            data-breakdown-hours="${idx}"
+            value="${breakdown.hours}" 
+            min="0" 
+            step="0.5"
+            class="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+          >
+          <span class="text-xs text-gray-500">h</span>
+        </div>
+      `).join('')}
+      <div class="pt-3 border-t border-purple-200 flex items-center justify-between">
+        <span class="text-sm font-semibold text-gray-700">Total Selected:</span>
+        <span id="hybrid-total" class="text-lg font-bold text-purple-900">${baseHours}h</span>
+      </div>
+      <button data-action="calculate-hybrid" class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+        <i class="fas fa-calculator mr-2"></i>Generate Hybrid Estimate
+      </button>
+    </div>
+  `;
+  
+  const container = document.getElementById('hybrid-workflow-container') || document.getElementById('hybrid-estimate-section');
+  if (container) {
+    container.innerHTML = breakdownHtml;
+    
+    // Store breakdown data
+    item.hybridBreakdown = breakdownItems;
+    
+    // Attach event listeners
+    const selectAllBtn = document.querySelector('[data-action="select-all-breakdown"]');
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener('click', () => toggleAllBreakdownItems(item));
+    }
+    
+    const calculateBtn = document.querySelector('[data-action="calculate-hybrid"]');
+    if (calculateBtn) {
+      calculateBtn.addEventListener('click', () => calculateHybridEstimate(item));
+    }
+    
+    // Listen for checkbox/input changes
+    document.querySelectorAll('[data-breakdown-idx]').forEach(checkbox => {
+      checkbox.addEventListener('change', () => updateHybridTotal(item));
+    });
+    
+    document.querySelectorAll('[data-breakdown-hours]').forEach(input => {
+      input.addEventListener('input', () => updateHybridTotal(item));
+    });
+  }
+}
+
+function toggleAllBreakdownItems(item) {
+  const checkboxes = document.querySelectorAll('[data-breakdown-idx]');
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+  
+  checkboxes.forEach(cb => {
+    cb.checked = !allChecked;
+  });
+  
+  const btn = document.querySelector('[data-action="select-all-breakdown"]');
+  if (btn) {
+    btn.innerHTML = allChecked 
+      ? '<i class="fas fa-check-square mr-1"></i>Select All'
+      : '<i class="fas fa-square mr-1"></i>Deselect All';
+  }
+  
+  updateHybridTotal(item);
+}
+
+function updateHybridTotal(item) {
+  let total = 0;
+  
+  document.querySelectorAll('[data-breakdown-idx]').forEach(checkbox => {
+    if (checkbox.checked) {
+      const idx = checkbox.dataset.breakdownIdx;
+      const hoursInput = document.querySelector(`[data-breakdown-hours="${idx}"]`);
+      if (hoursInput) {
+        total += parseFloat(hoursInput.value) || 0;
+      }
+    }
+  });
+  
+  const totalElement = document.getElementById('hybrid-total');
+  if (totalElement) {
+    totalElement.textContent = `${Math.round(total * 10) / 10}h`;
+  }
+}
+
+async function calculateHybridEstimate(item) {
+  const btn = document.querySelector('[data-action="calculate-hybrid"]');
   if (!btn) return;
   
   btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Calculating...';
   
   try {
-    const endpoint = item.type === 'issue' ? `/api/issues/${item.id}/hybrid-estimate` : `/api/action-items/${item.id}/hybrid-estimate`;
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+    // Calculate total from selected items
+    let total = 0;
+    const selectedItems = [];
+    
+    document.querySelectorAll('[data-breakdown-idx]').forEach(checkbox => {
+      if (checkbox.checked) {
+        const idx = checkbox.dataset.breakdownIdx;
+        const hoursInput = document.querySelector(`[data-breakdown-hours="${idx}"]`);
+        const hours = parseFloat(hoursInput.value) || 0;
+        total += hours;
+        selectedItems.push({
+          label: item.hybridBreakdown[idx].label,
+          hours: hours
+        });
+      }
     });
     
-    if (!response.ok) throw new Error('Failed to generate hybrid estimate');
-    
-    const data = await response.json();
-    
     // Update item in memory
-    item.hybrid_estimate = data.hours;
+    item.hybrid_estimate = Math.round(total * 10) / 10;
+    item.hybrid_selected_items = selectedItems;
+    
+    // Save to backend
+    const endpoint = item.type === 'issue' ? `/api/issues/${item.id}` : `/api/action-items/${item.id}`;
+    const response = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        hybrid_effort_estimate_hours: item.hybrid_estimate
+      })
+    });
+    
+    if (!response.ok) throw new Error('Failed to save hybrid estimate');
     
     // Reload the modal
     closeEstimationModal();
     await showEstimationModal(item);
     
   } catch (error) {
-    console.error('Error generating hybrid estimate:', error);
-    alert('Failed to generate hybrid estimate');
+    console.error('Error calculating hybrid estimate:', error);
+    alert('Failed to calculate hybrid estimate');
     btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-layer-group mr-2"></i>Generate Hybrid Estimate';
+    btn.innerHTML = '<i class="fas fa-calculator mr-2"></i>Generate Hybrid Estimate';
   }
 }
 
