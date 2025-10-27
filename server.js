@@ -3201,7 +3201,7 @@ app.get('/api/issues/:id', authenticateToken, async (req, res) => {
         FROM effort_estimate_history
         WHERE item_id = i.id 
           AND item_type = 'issue'
-          AND source = 'hybrid_selection'
+          AND source = 'hybrid'
         ORDER BY created_at DESC
         LIMIT 1
       ) eeh ON true
@@ -3714,12 +3714,12 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
               [selectedEstimate, newVersion, parseInt(id)]
             );
             
-            // Create history entry with hybrid_selection source
+            // Create history entry with hybrid source
             await client.query(
               `INSERT INTO effort_estimate_history 
                (item_type, item_id, estimate_hours, version, source, created_by)
                VALUES ($1, $2, $3, $4, $5, $6)`,
-              ['issue', parseInt(id), selectedEstimate, newVersion, 'hybrid_selection', req.user.id]
+              ['issue', parseInt(id), selectedEstimate, newVersion, 'hybrid', req.user.id]
             );
             
             await client.query('COMMIT');
@@ -4249,7 +4249,7 @@ app.get('/api/action-items/:id', authenticateToken, async (req, res) => {
         FROM effort_estimate_history
         WHERE item_id = a.id 
           AND item_type = 'action-item'
-          AND source = 'hybrid_selection'
+          AND source = 'hybrid'
         ORDER BY created_at DESC
         LIMIT 1
       ) eeh ON true
@@ -4738,12 +4738,12 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
               [selectedEstimate, newVersion, parseInt(id)]
             );
             
-            // Create history entry with hybrid_selection source
+            // Create history entry with hybrid source
             await client.query(
               `INSERT INTO effort_estimate_history 
                (item_type, item_id, estimate_hours, version, source, created_by)
                VALUES ($1, $2, $3, $4, $5, $6)`,
-              ['action-item', parseInt(id), selectedEstimate, newVersion, 'hybrid_selection', req.user.id]
+              ['action-item', parseInt(id), selectedEstimate, newVersion, 'hybrid', req.user.id]
             );
             
             await client.query('COMMIT');
@@ -12626,7 +12626,7 @@ app.post('/api/:itemType/:id/estimate/hybrid', authenticateToken, async (req, re
         totalHours,
         newVersion, // Increment version for hybrid selection
         JSON.stringify(hybridData),
-        'hybrid_selection',
+        'hybrid',
         req.user.id
       ]);
 
@@ -12743,18 +12743,13 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
     const items = [];
     for (const item of selectedItems) {
       const tableName = item.type === 'issue' ? 'issues' : 'action_items';
+      const userSelectedSource = item.estimateSource || 'planning'; // Use user's selection or default to planning
+      
       const result = await pool.query(
         `SELECT id, title, assignee, 
-         COALESCE(
-           CASE planning_estimate_source
-             WHEN 'manual' THEN estimated_effort_hours
-             WHEN 'ai' THEN ai_effort_estimate_hours
-             WHEN 'hybrid_selection' THEN hybrid_effort_estimate_hours
-             ELSE estimated_effort_hours
-           END,
-           ai_effort_estimate_hours,
-           estimated_effort_hours
-         ) as estimate,
+         estimated_effort_hours,
+         ai_effort_estimate_hours,
+         hybrid_effort_estimate_hours,
          planning_estimate_source,
          due_date
          FROM ${tableName}
@@ -12764,13 +12759,30 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
 
       if (result.rows.length > 0) {
         const row = result.rows[0];
+        
+        // Determine which estimate to use based on user's selection
+        let selectedEstimate = 0;
+        if (userSelectedSource === 'planning') {
+          // Use the planning estimate source
+          selectedEstimate = row.planning_estimate_source === 'manual' ? row.estimated_effort_hours :
+                            row.planning_estimate_source === 'ai' ? row.ai_effort_estimate_hours :
+                            row.planning_estimate_source === 'hybrid' ? row.hybrid_effort_estimate_hours :
+                            row.estimated_effort_hours;
+        } else if (userSelectedSource === 'ai') {
+          selectedEstimate = row.ai_effort_estimate_hours;
+        } else if (userSelectedSource === 'manual') {
+          selectedEstimate = row.estimated_effort_hours;
+        } else if (userSelectedSource === 'hybrid') {
+          selectedEstimate = row.hybrid_effort_estimate_hours;
+        }
+        
         items.push({
           type: item.type,
           id: item.id,
           title: row.title,
           assignee: row.assignee,
-          estimate: parseFloat(row.estimate) || 0,
-          estimateSource: row.planning_estimate_source || 'unknown',
+          estimate: parseFloat(selectedEstimate) || 0,
+          estimateSource: userSelectedSource,
           dueDate: row.due_date
         });
       }

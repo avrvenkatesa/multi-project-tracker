@@ -1253,6 +1253,210 @@ function getEstimateForItem(item) {
 }
 
 // ============================================
+// ESTIMATE SELECTION REVIEW
+// ============================================
+
+function showEstimateSelectionModal() {
+  // Gather selected items with their estimates
+  const selectedTasks = [];
+  selectedItemIds.forEach(key => {
+    const [type, id] = key.split(':');
+    const item = allItems.find(i => i.type === type && i.id === parseInt(id));
+    if (item) {
+      selectedTasks.push({
+        ...item,
+        key
+      });
+    }
+  });
+
+  // Build task rows
+  const taskRows = selectedTasks.map((task, index) => {
+    const estimates = {
+      planning: task.planning_estimate_source === 'manual' ? task.estimated_effort_hours :
+                task.planning_estimate_source === 'ai' ? task.ai_effort_estimate_hours :
+                task.planning_estimate_source === 'hybrid' ? task.hybrid_effort_estimate_hours : null,
+      ai: task.ai_effort_estimate_hours,
+      manual: task.estimated_effort_hours,
+      hybrid: task.hybrid_effort_estimate_hours
+    };
+
+    const planningLabel = task.planning_estimate_source || 'none';
+    const planningValue = estimates.planning;
+
+    return `
+      <tr class="border-b border-gray-200 hover:bg-gray-50" data-task-key="${task.key}">
+        <td class="py-3 px-4">
+          <div class="flex flex-col">
+            <span class="font-medium text-gray-900 text-sm">${escapeHtml(task.title)}</span>
+            <span class="text-xs text-gray-500">${task.type === 'issue' ? 'Issue' : 'Action Item'} #${task.id}</span>
+          </div>
+        </td>
+        <td class="py-3 px-4">
+          <select class="estimate-selector w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" data-task-key="${task.key}">
+            <option value="planning" selected>${planningLabel.toUpperCase()} (${planningValue || 0}h)</option>
+            ${estimates.ai ? `<option value="ai">AI (${estimates.ai}h)</option>` : ''}
+            ${estimates.manual ? `<option value="manual">Manual (${estimates.manual}h)</option>` : ''}
+            ${estimates.hybrid ? `<option value="hybrid">Hybrid (${estimates.hybrid}h)</option>` : ''}
+          </select>
+        </td>
+        <td class="py-3 px-4 text-right">
+          <span class="estimate-hours font-semibold text-gray-900">${planningValue || 0}h</span>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  const totalHours = selectedTasks.reduce((sum, task) => {
+    return sum + (getEstimate(task) || 0);
+  }, 0);
+
+  const modalHtml = `
+    <div id="estimate-selection-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="p-6 border-b border-gray-200">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-2xl font-bold text-gray-900">Review & Select Estimates</h3>
+              <p class="text-sm text-gray-600 mt-1">Choose which estimate to use for each task in this schedule scenario</p>
+            </div>
+            <button data-action="close-estimate-selection" class="text-gray-400 hover:text-gray-600">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6">
+          <!-- Bulk Actions -->
+          <div class="mb-4 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <span class="text-sm font-medium text-gray-700">Quick Actions:</span>
+            <div class="flex space-x-2">
+              <button data-action="use-all-planning" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm">
+                <i class="fas fa-star mr-1"></i>Use Planning Source
+              </button>
+              <button data-action="use-all-ai" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm">
+                <i class="fas fa-robot mr-1"></i>Use All AI
+              </button>
+              <button data-action="use-all-manual" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm">
+                <i class="fas fa-user mr-1"></i>Use All Manual
+              </button>
+              <button data-action="use-all-hybrid" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm">
+                <i class="fas fa-balance-scale mr-1"></i>Use All Hybrid
+              </button>
+            </div>
+          </div>
+
+          <!-- Tasks Table -->
+          <div class="border border-gray-200 rounded-lg overflow-hidden">
+            <table class="w-full">
+              <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Task</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Estimate Source</th>
+                  <th class="text-right py-3 px-4 text-sm font-semibold text-gray-700">Hours</th>
+                </tr>
+              </thead>
+              <tbody id="estimate-selection-tbody">
+                ${taskRows}
+              </tbody>
+              <tfoot class="bg-gray-50 border-t-2 border-gray-300">
+                <tr>
+                  <td colspan="2" class="py-3 px-4 text-right font-bold text-gray-900">Total Estimated Hours:</td>
+                  <td class="py-3 px-4 text-right">
+                    <span id="total-estimate-hours" class="text-xl font-bold text-blue-600">${totalHours}h</span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="p-6 border-t border-gray-200 bg-gray-50 flex justify-end space-x-3">
+          <button
+            data-action="cancel-estimate-selection"
+            class="px-6 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+          >
+            <i class="fas fa-times mr-2"></i>Cancel
+          </button>
+          <button
+            data-action="confirm-estimate-selection"
+            class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            <i class="fas fa-check mr-2"></i>Create Schedule
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  // Attach event listeners
+  document.querySelector('[data-action="close-estimate-selection"]').addEventListener('click', closeEstimateSelectionModal);
+  document.querySelector('[data-action="cancel-estimate-selection"]').addEventListener('click', closeEstimateSelectionModal);
+  document.querySelector('[data-action="confirm-estimate-selection"]').addEventListener('click', handleConfirmEstimateSelection);
+  
+  // Bulk actions
+  document.querySelector('[data-action="use-all-planning"]').addEventListener('click', () => applyBulkEstimateSource('planning'));
+  document.querySelector('[data-action="use-all-ai"]').addEventListener('click', () => applyBulkEstimateSource('ai'));
+  document.querySelector('[data-action="use-all-manual"]').addEventListener('click', () => applyBulkEstimateSource('manual'));
+  document.querySelector('[data-action="use-all-hybrid"]').addEventListener('click', () => applyBulkEstimateSource('hybrid'));
+
+  // Change listeners for dropdowns
+  document.querySelectorAll('.estimate-selector').forEach(select => {
+    select.addEventListener('change', updateEstimateDisplay);
+  });
+}
+
+function closeEstimateSelectionModal() {
+  const modal = document.getElementById('estimate-selection-modal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+function applyBulkEstimateSource(source) {
+  document.querySelectorAll('.estimate-selector').forEach(select => {
+    const option = Array.from(select.options).find(opt => opt.value === source);
+    if (option) {
+      select.value = source;
+      updateEstimateDisplay({ target: select });
+    }
+  });
+}
+
+function updateEstimateDisplay(e) {
+  const select = e.target;
+  const row = select.closest('tr');
+  const hoursDisplay = row.querySelector('.estimate-hours');
+  const selectedOption = select.options[select.selectedIndex];
+  const hours = selectedOption.text.match(/\((\d+(?:\.\d+)?)h\)/)?.[1] || '0';
+  
+  hoursDisplay.textContent = `${hours}h`;
+  
+  // Update total
+  let total = 0;
+  document.querySelectorAll('.estimate-hours').forEach(el => {
+    const value = parseFloat(el.textContent) || 0;
+    total += value;
+  });
+  
+  document.getElementById('total-estimate-hours').textContent = `${total}h`;
+}
+
+async function handleConfirmEstimateSelection() {
+  const estimateSelections = {};
+  
+  document.querySelectorAll('.estimate-selector').forEach(select => {
+    const taskKey = select.getAttribute('data-task-key');
+    estimateSelections[taskKey] = select.value;
+  });
+  
+  closeEstimateSelectionModal();
+  await submitScheduleWithEstimates(estimateSelections);
+}
+
+// ============================================
 // SCHEDULE CREATION
 // ============================================
 
@@ -1282,6 +1486,11 @@ async function handleCreateSchedule(e) {
     }
   }
 
+  // Show estimate selection review modal
+  showEstimateSelectionModal();
+}
+
+async function submitScheduleWithEstimates(estimateSelections) {
   const submitBtn = document.getElementById('create-submit');
   submitBtn.disabled = true;
   submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating Schedule...';
@@ -1295,7 +1504,11 @@ async function handleCreateSchedule(e) {
       notes: document.getElementById('schedule-notes').value.trim() || undefined,
       selectedItems: Array.from(selectedItemIds).map(key => {
         const [type, id] = key.split(':');
-        return { type, id: parseInt(id) };
+        return { 
+          type, 
+          id: parseInt(id),
+          estimateSource: estimateSelections[`${type}:${id}`] || 'planning'
+        };
       })
     };
 
