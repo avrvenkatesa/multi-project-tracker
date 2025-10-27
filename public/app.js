@@ -1278,10 +1278,13 @@ async function renderKanbanBoard() {
                         <h5 class="font-medium text-sm mb-1">${item.title}</h5>
                         <p class="text-xs text-gray-600 mb-2">${(item.description || "").substring(0, 80)}...</p>
                         ${
-                            item.progress !== undefined
-                                ? `<div class="w-full bg-gray-200 rounded-full h-1 mb-2">
-                                <div class="bg-blue-600 h-1 rounded-full" style="width: ${item.progress}%"></div>
-                            </div>`
+                            item.completion_percentage !== undefined && item.completion_percentage !== null
+                                ? `<div class="mb-2">
+                                    <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                        <div class="bg-blue-600 h-1.5 rounded-full transition-all" style="width: ${item.completion_percentage}%"></div>
+                                    </div>
+                                    <div class="text-xs text-gray-600 mt-0.5">${item.completion_percentage}%</div>
+                                </div>`
                                 : ""
                         }
                         <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
@@ -1299,7 +1302,18 @@ async function renderKanbanBoard() {
                                 `).join('')}
                             </div>
                         ` : ''}
-                        <div class="checklist-badge-container">${generateChecklistBadge(checklistStatus)}</div>
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="checklist-badge-container flex-1">${generateChecklistBadge(checklistStatus)}</div>
+                            ${canEdit ? `
+                                <button class="quick-log-btn px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                        data-item-id="${item.id}"
+                                        data-item-type="${item.type || 'issue'}"
+                                        data-project-id="${currentProject.id}"
+                                        title="Quick Log Time">
+                                    ⏱️ Log
+                                </button>
+                            ` : ''}
+                        </div>
                             </div>
                         </div>
                     </div>
