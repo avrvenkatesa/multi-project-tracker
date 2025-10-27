@@ -4780,8 +4780,8 @@ document.getElementById('edit-issue-open-estimates').addEventListener('click', a
     // Open Detail modal and wait for it to fully load
     await openItemDetailModal(issueId, 'issue');
     
-    // Now safely switch to Effort Estimates tab
-    const estimatesTab = document.querySelector('[data-tab="estimates"]');
+    // Now safely switch to Effort Estimates tab (note: tab name is "effort-estimates")
+    const estimatesTab = document.querySelector('[data-tab="effort-estimates"]');
     if (estimatesTab) {
       estimatesTab.click();
     } else {
@@ -4800,8 +4800,8 @@ document.getElementById('edit-action-item-open-estimates').addEventListener('cli
     // Open Detail modal and wait for it to fully load
     await openItemDetailModal(actionItemId, 'action-item');
     
-    // Now safely switch to Effort Estimates tab
-    const estimatesTab = document.querySelector('[data-tab="estimates"]');
+    // Now safely switch to Effort Estimates tab (note: tab name is "effort-estimates")
+    const estimatesTab = document.querySelector('[data-tab="effort-estimates"]');
     if (estimatesTab) {
       estimatesTab.click();
     } else {
