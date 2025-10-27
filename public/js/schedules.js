@@ -200,8 +200,8 @@ function getEstimate(item) {
     return parseFloat(item.manual_estimated_hours) || 0;
   } else if (item.planning_estimate_source === 'ai') {
     return parseFloat(item.ai_effort_estimate_hours) || 0;
-  } else if (item.planning_estimate_source === 'hybrid_selection') {
-    return parseFloat(item.hybrid_selected_hours) || 0;
+  } else if (item.planning_estimate_source === 'hybrid') {
+    return parseFloat(item.hybrid_effort_estimate_hours) || 0;
   }
   // Fallback order
   return parseFloat(item.ai_effort_estimate_hours || item.manual_estimated_hours) || 0;
@@ -257,7 +257,7 @@ function renderItems() {
     const estimateSourceLabel = {
       'manual': 'Manual',
       'ai': 'AI',
-      'hybrid_selection': 'Hybrid',
+      'hybrid': 'Hybrid',
       'unknown': 'N/A'
     }[item.estimateSource] || 'N/A';
 
@@ -771,7 +771,7 @@ async function showEstimationModal(item) {
                 <span class="text-sm">AI Estimate</span>
               </label>
               <label class="flex items-center cursor-pointer">
-                <input type="radio" name="planning-source" value="hybrid_selection" class="mr-3" ${item.planning_estimate_source === 'hybrid_selection' ? 'checked' : ''}>
+                <input type="radio" name="planning-source" value="hybrid" class="mr-3" ${item.planning_estimate_source === 'hybrid' ? 'checked' : ''}>
                 <span class="text-sm">Hybrid Estimate</span>
               </label>
             </div>
@@ -1137,7 +1137,7 @@ function getEstimateForItem(item) {
     return item.estimated_effort_hours;
   } else if (item.planning_estimate_source === 'ai' && item.ai_effort_estimate_hours) {
     return item.ai_effort_estimate_hours;
-  } else if (item.planning_estimate_source === 'hybrid_selection' && item.hybrid_effort_estimate_hours) {
+  } else if (item.planning_estimate_source === 'hybrid' && item.hybrid_effort_estimate_hours) {
     return item.hybrid_effort_estimate_hours;
   }
   return item.ai_effort_estimate_hours || item.estimated_effort_hours || 0;
