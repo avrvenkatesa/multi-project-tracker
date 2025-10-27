@@ -4286,6 +4286,7 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-issue-due-date').value = item.due_date ? item.due_date.split('T')[0] : '';
       document.getElementById('edit-issue-priority').value = item.priority || 'medium';
       document.getElementById('edit-issue-status').value = item.status || 'To Do';
+      document.getElementById('edit-issue-progress').value = item.completion_percentage || item.progress || 0;
       
       // Populate category dropdown options
       const categorySelect = document.getElementById('edit-issue-category');
@@ -4302,6 +4303,9 @@ async function openEditModal(itemId, itemType) {
       
       // Load attachments
       await loadEditAttachments(item.id, 'issue');
+      
+      // Load effort estimates and actual hours
+      await loadActualHoursForEdit(item.id, 'issue');
       
       // Set item ID for "Open Effort Estimates" button
       document.getElementById('edit-issue-open-estimates').setAttribute('data-issue-id', item.id);
@@ -4328,6 +4332,9 @@ async function openEditModal(itemId, itemType) {
       
       // Load attachments
       await loadEditAttachments(item.id, 'action-item');
+      
+      // Load effort estimates and actual hours
+      await loadActualHoursForEdit(item.id, 'action-item');
       
       // Set item ID for "Open Effort Estimates" button
       document.getElementById('edit-action-item-open-estimates').setAttribute('data-action-item-id', item.id);
@@ -4572,6 +4579,51 @@ async function loadEditAttachments(itemId, itemType) {
     const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
     document.getElementById(`${prefix}-attachments-list`).innerHTML = 
       '<p class="text-sm text-red-500">Failed to load attachments</p>';
+  }
+}
+
+// Load actual hours and entry count for edit modals
+async function loadActualHoursForEdit(itemId, itemType) {
+  try {
+    const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
+    const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
+    
+    // Fetch item data and time entries
+    const [itemResponse, timeEntriesResponse] = await Promise.all([
+      axios.get(`/api/${endpoint}/${itemId}`, { withCredentials: true }),
+      axios.get(`/api/${endpoint}/${itemId}/time-entries`, { withCredentials: true })
+    ]);
+    
+    const item = itemResponse.data;
+    const timeData = timeEntriesResponse.data;
+    
+    // Populate actual hours field
+    const actualHoursField = document.getElementById(`${prefix}-actual-hours`);
+    if (actualHoursField) {
+      actualHoursField.value = item.actual_effort_hours || item.actual_hours || 0;
+    }
+    
+    // Populate entry count badge
+    const timeCountBadge = document.getElementById(`${prefix}-time-count`);
+    if (timeCountBadge) {
+      const entriesCount = timeData.entries.length;
+      timeCountBadge.textContent = `${entriesCount} ${entriesCount === 1 ? 'entry' : 'entries'}`;
+    }
+    
+  } catch (error) {
+    console.error('Error loading actual hours:', error);
+    const prefix = itemType === 'issue' ? 'edit-issue' : 'edit-action-item';
+    
+    // Set defaults on error
+    const actualHoursField = document.getElementById(`${prefix}-actual-hours`);
+    if (actualHoursField) {
+      actualHoursField.value = 0;
+    }
+    
+    const timeCountBadge = document.getElementById(`${prefix}-time-count`);
+    if (timeCountBadge) {
+      timeCountBadge.textContent = '0 entries';
+    }
   }
 }
 

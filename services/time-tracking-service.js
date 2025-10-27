@@ -204,6 +204,14 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
     const currentActualHours = parseFloat(item.actual_effort_hours) || 0;
     const currentTimeLogCount = item.time_log_count || 0;
     const projectId = item.project_id;
+    const currentStatus = item.status;
+    
+    // Auto-move to "In Progress" on first time log if currently in "To Do"
+    const isFirstTimeLog = currentTimeLogCount === 0;
+    let newStatus = currentStatus;
+    if (isFirstTimeLog && currentStatus.toLowerCase() === 'to do') {
+      newStatus = 'In Progress';
+    }
     
     // Calculate new values - using properly coerced numbers
     const newActualHours = currentActualHours + hoursAddedNum;
@@ -220,7 +228,7 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
       newCompletionPercent = item.completion_percentage || 0;
     }
     
-    // Update item
+    // Update item (including status change if needed)
     const table = itemType === 'issue' ? 'issues' : 'action_items';
     await client.query(
       `UPDATE ${table} 
@@ -228,9 +236,10 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
            completion_percentage = $2,
            last_time_logged_at = NOW(),
            time_log_count = $3,
+           status = $4,
            updated_at = NOW()
-       WHERE id = $4`,
-      [newActualHours, newCompletionPercent, currentTimeLogCount + 1, itemId]
+       WHERE id = $5`,
+      [newActualHours, newCompletionPercent, currentTimeLogCount + 1, newStatus, itemId]
     );
     
     // Insert into time_entries table (for timesheet display)
@@ -281,7 +290,10 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
       isExceeding,
       variance,
       variancePercent,
-      warning: isExceeding ? `Task has exceeded estimate by ${variance.toFixed(1)} hours (${variancePercent}% over)` : null
+      warning: isExceeding ? `Task has exceeded estimate by ${variance.toFixed(1)} hours (${variancePercent}% over)` : null,
+      statusChanged: newStatus !== currentStatus,
+      newStatus: newStatus,
+      oldStatus: currentStatus
     };
     
   } catch (error) {
