@@ -12131,7 +12131,16 @@ app.post('/api/:itemType/:id/estimate', authenticateToken, async (req, res) => {
     res.json(response);
   } catch (error) {
     console.error('Error generating estimate:', error);
-    res.status(500).json({ error: 'Failed to generate estimate' });
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      code: error.code
+    });
+    res.status(500).json({ 
+      error: 'Failed to generate estimate',
+      details: error.message 
+    });
   }
 });
 
