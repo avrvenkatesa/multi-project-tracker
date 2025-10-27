@@ -3856,13 +3856,23 @@ app.post('/api/:itemType/:id/time-entries', authenticateToken, requireRole('Team
       notes
     });
     
-    console.log(`✅ Logged ${hours}h for ${type} #${id}. Total: ${result.totalHours}h (${result.completionPercentage}%)`);
+    // Log with status change info if applicable
+    if (result.statusChanged) {
+      console.log(`✅ Logged ${hours}h for ${type} #${id}. Total: ${result.totalHours}h (${result.completionPercentage}%). Status: ${result.oldStatus} → ${result.newStatus}`);
+    } else {
+      console.log(`✅ Logged ${hours}h for ${type} #${id}. Total: ${result.totalHours}h (${result.completionPercentage}%)`);
+    }
     
     res.json({
       success: true,
-      entry: result.entry,
-      totalHours: result.totalHours,
-      completionPercentage: result.completionPercentage
+      data: {
+        entry: result.entry,
+        totalHours: result.totalHours,
+        completionPercentage: result.completionPercentage,
+        statusChanged: result.statusChanged || false,
+        oldStatus: result.oldStatus,
+        newStatus: result.newStatus
+      }
     });
     
   } catch (error) {
