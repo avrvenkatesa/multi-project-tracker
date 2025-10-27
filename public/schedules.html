@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Schedules - Multi-Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .tab-button {
+      @apply px-6 py-3 font-medium text-gray-600 border-b-2 border-transparent hover:border-gray-300 transition-colors;
+    }
+    .tab-button.active {
+      @apply text-blue-600 border-blue-600;
+    }
+    .critical-path-badge {
+      @apply inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800;
+    }
+    .risk-badge {
+      @apply inline-flex items-center px-2 py-1 text-xs rounded-full;
+    }
+    .risk-high {
+      @apply bg-red-100 text-red-800;
+    }
+    .risk-medium {
+      @apply bg-yellow-100 text-yellow-800;
+    }
+    .risk-low {
+      @apply bg-green-100 text-green-800;
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <!-- Navigation Bar -->
+  <nav class="bg-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center space-x-4">
+          <a href="/dashboard.html" class="text-xl font-bold">Multi-Project Tracker</a>
+          <span class="text-blue-200">/</span>
+          <span id="project-name" class="text-white">Loading...</span>
+          <span class="text-blue-200">/</span>
+          <span class="text-white">Schedules</span>
+        </div>
+        <div class="flex items-center space-x-4">
+          <span id="user-display" class="text-sm"></span>
+          <button id="logout-btn" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded transition-colors">
+            Logout
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-6">
+      <h1 class="text-3xl font-bold text-gray-900">Project Schedules</h1>
+      <p class="text-gray-600 mt-2">Create and manage project timelines with dependency-based scheduling</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white rounded-lg shadow-md">
+      <div class="border-b border-gray-200">
+        <nav class="flex space-x-8 px-6">
+          <button class="tab-button active" data-tab="create">
+            <i class="fas fa-plus-circle mr-2"></i>Create Schedule
+          </button>
+          <button class="tab-button" data-tab="view">
+            <i class="fas fa-calendar-alt mr-2"></i>View Schedules
+          </button>
+        </nav>
+      </div>
+
+      <!-- Create Schedule Tab -->
+      <div id="create-tab" class="tab-content p-6">
+        <form id="create-schedule-form" class="space-y-6">
+          <!-- Schedule Name -->
+          <div>
+            <label for="schedule-name" class="block text-sm font-medium text-gray-700 mb-2">
+              Schedule Name <span class="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              id="schedule-name"
+              required
+              placeholder="e.g., Optimistic Timeline, Realistic Plan, MVP Launch"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <!-- Start Date -->
+          <div>
+            <label for="start-date" class="block text-sm font-medium text-gray-700 mb-2">
+              Start Date <span class="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              id="start-date"
+              required
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <!-- Configuration -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label for="hours-per-day" class="block text-sm font-medium text-gray-700 mb-2">
+                Hours Per Day <span class="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                id="hours-per-day"
+                min="1"
+                max="24"
+                value="8"
+                required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Work Days
+              </label>
+              <div class="flex items-center space-x-4 mt-3">
+                <label class="inline-flex items-center">
+                  <input type="radio" name="work-days" value="business" checked class="form-radio text-blue-600">
+                  <span class="ml-2">Business Days Only (Mon-Fri)</span>
+                </label>
+                <label class="inline-flex items-center">
+                  <input type="radio" name="work-days" value="all" class="form-radio text-blue-600">
+                  <span class="ml-2">All Days (7 days/week)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div>
+            <label for="schedule-notes" class="block text-sm font-medium text-gray-700 mb-2">
+              Notes (Optional)
+            </label>
+            <textarea
+              id="schedule-notes"
+              rows="3"
+              placeholder="Add any notes or assumptions for this schedule..."
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            ></textarea>
+          </div>
+
+          <!-- Item Selection -->
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <label class="block text-sm font-medium text-gray-700">
+                Select Items to Schedule <span class="text-red-500">*</span>
+              </label>
+              <div class="flex items-center space-x-4">
+                <button type="button" id="select-all-items" class="text-sm text-blue-600 hover:text-blue-800">
+                  Select All
+                </button>
+                <button type="button" id="deselect-all-items" class="text-sm text-blue-600 hover:text-blue-800">
+                  Deselect All
+                </button>
+                <span id="selected-count" class="text-sm text-gray-600">0 items selected</span>
+              </div>
+            </div>
+
+            <!-- Filter and Search -->
+            <div class="mb-4 flex items-center space-x-4">
+              <input
+                type="text"
+                id="item-search"
+                placeholder="Search items..."
+                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <select id="item-type-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="all">All Types</option>
+                <option value="issue">Issues Only</option>
+                <option value="action-item">Action Items Only</option>
+              </select>
+              <select id="item-status-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="all">All Statuses</option>
+                <option value="To Do">To Do</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Done">Done</option>
+              </select>
+            </div>
+
+            <!-- Items List -->
+            <div id="items-loading" class="text-center py-8 text-gray-500">
+              <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+              <p>Loading project items...</p>
+            </div>
+            <div id="items-container" class="hidden max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
+              <!-- Items will be populated here -->
+            </div>
+            <p id="no-items-message" class="hidden text-center py-8 text-gray-500">
+              No items found matching your criteria.
+            </p>
+          </div>
+
+          <!-- Submit -->
+          <div class="flex justify-end space-x-4 pt-6 border-t">
+            <button
+              type="button"
+              id="cancel-create"
+              class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              id="create-submit"
+              class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <i class="fas fa-calendar-plus mr-2"></i>Create Schedule
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- View Schedules Tab -->
+      <div id="view-tab" class="tab-content p-6 hidden">
+        <div id="schedules-loading" class="text-center py-8 text-gray-500">
+          <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+          <p>Loading schedules...</p>
+        </div>
+        <div id="schedules-container" class="hidden space-y-4">
+          <!-- Schedules will be populated here -->
+        </div>
+        <p id="no-schedules-message" class="hidden text-center py-12 text-gray-500">
+          <i class="fas fa-calendar-times text-4xl mb-4"></i>
+          <br>
+          No schedules created yet. Create your first schedule to get started!
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Schedule Detail Modal -->
+  <div id="schedule-detail-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-screen overflow-y-auto">
+        <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+          <h2 id="modal-schedule-name" class="text-2xl font-bold text-gray-900"></h2>
+          <button id="close-detail-modal" class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times text-2xl"></i>
+          </button>
+        </div>
+        <div id="schedule-detail-content" class="p-6">
+          <!-- Content will be populated dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/schedules.js?v=1"></script>
+</body>
+</html>
