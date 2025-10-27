@@ -109,8 +109,20 @@ async function quickLogTimeFromModal() {
     
     const result = await response.json();
     
-    // Show success message
-    console.log(`✅ Logged ${hours}h. Total: ${result.totalHours}h (${result.completionPercentage}%)`);
+    // Check if status was auto-changed
+    const statusChanged = result.data?.statusChanged;
+    const newStatus = result.data?.newStatus;
+    
+    // Show success message with status change notification
+    if (statusChanged) {
+      if (typeof showToast === 'function') {
+        showToast(`✅ Logged ${hours}h successfully! Item automatically moved to "${newStatus}"`, 'success');
+      } else {
+        alert(`✅ Logged ${hours}h. Total: ${result.data.totalHours}h (${result.data.completionPercentage}%)\n\n🔄 Item automatically moved to "${newStatus}"`);
+      }
+    } else {
+      console.log(`✅ Logged ${hours}h. Total: ${result.data.totalHours}h (${result.data.completionPercentage}%)`);
+    }
     
     // Clear form
     document.getElementById('quick-log-hours').value = '';
@@ -122,13 +134,18 @@ async function quickLogTimeFromModal() {
     // Update the Edit modal if open
     const actualHoursField = document.getElementById(`edit-${currentTimesheetItemType === 'issue' ? 'issue' : 'action-item'}-actual-hours`);
     const progressField = document.getElementById(`edit-${currentTimesheetItemType === 'issue' ? 'issue' : 'action-item'}-progress`);
+    const statusField = document.getElementById(`edit-${currentTimesheetItemType === 'issue' ? 'issue' : 'action-item'}-status`);
     const timeCountBadge = document.getElementById(`edit-${currentTimesheetItemType === 'issue' ? 'issue' : 'action-item'}-time-count`);
     
     if (actualHoursField) {
-      actualHoursField.value = parseFloat(result.totalHours).toFixed(2);
+      actualHoursField.value = parseFloat(result.data.totalHours).toFixed(2);
     }
     if (progressField) {
-      progressField.value = result.completionPercentage || 0;
+      progressField.value = result.data.completionPercentage || 0;
+    }
+    // Update status field if it changed
+    if (statusChanged && statusField) {
+      statusField.value = newStatus;
     }
     if (timeCountBadge) {
       // Update count from the entries length

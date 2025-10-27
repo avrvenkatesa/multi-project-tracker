@@ -9099,7 +9099,16 @@ document.getElementById('submitQuickLog')?.addEventListener('click', async funct
     );
     
     if (response.data.success) {
-      showToast(`✅ Logged ${hours}h successfully!`, 'success');
+      // Check if status was auto-changed
+      const statusChanged = response.data.data.statusChanged;
+      const newStatus = response.data.data.newStatus;
+      
+      if (statusChanged) {
+        showToast(`✅ Logged ${hours}h successfully! Item automatically moved to "${newStatus}"`, 'success');
+      } else {
+        showToast(`✅ Logged ${hours}h successfully!`, 'success');
+      }
+      
       closeQuickLogModal();
       
       // Update the item in local data
@@ -9109,6 +9118,11 @@ document.getElementById('submitQuickLog')?.addEventListener('click', async funct
         item.actual_effort_hours = response.data.data.totalHours;
         item.completion_percentage = response.data.data.completionPercentage;
         item.time_log_count = (item.time_log_count || 0) + 1;
+        
+        // Update status if it changed
+        if (statusChanged) {
+          item.status = newStatus;
+        }
       }
       
       // Re-render the kanban board to show updated values
