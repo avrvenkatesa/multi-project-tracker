@@ -12533,13 +12533,13 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
         `SELECT id, title, assignee, 
          COALESCE(
            CASE planning_estimate_source
-             WHEN 'manual' THEN manual_estimated_hours
+             WHEN 'manual' THEN estimated_effort_hours
              WHEN 'ai' THEN ai_effort_estimate_hours
-             WHEN 'hybrid_selection' THEN hybrid_selected_hours
-             ELSE manual_estimated_hours
+             WHEN 'hybrid_selection' THEN hybrid_effort_estimate_hours
+             ELSE estimated_effort_hours
            END,
            ai_effort_estimate_hours,
-           manual_estimated_hours
+           estimated_effort_hours
          ) as estimate,
          planning_estimate_source,
          due_date
