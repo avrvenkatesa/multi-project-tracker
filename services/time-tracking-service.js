@@ -203,6 +203,7 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
     const planningEstimate = parseFloat(item.estimated_effort_hours) || 0;
     const currentActualHours = parseFloat(item.actual_effort_hours) || 0;
     const currentTimeLogCount = item.time_log_count || 0;
+    const projectId = item.project_id;
     
     // Calculate new values - using properly coerced numbers
     const newActualHours = currentActualHours + hoursAddedNum;
@@ -232,7 +233,22 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
       [newActualHours, newCompletionPercent, currentTimeLogCount + 1, itemId]
     );
     
-    // Log to history
+    // Insert into time_entries table (for timesheet display)
+    await client.query(
+      `INSERT INTO time_entries 
+       (item_type, item_id, project_id, hours_logged, logged_by, notes, logged_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+      [
+        itemType,
+        itemId,
+        projectId,
+        hoursAddedNum,
+        userId,
+        notes
+      ]
+    );
+    
+    // Log to history (for audit trail)
     await client.query(
       `INSERT INTO time_tracking_history 
        (item_type, item_id, hours_added, total_hours_after, completion_percentage_after, 
