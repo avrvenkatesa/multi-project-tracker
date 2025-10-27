@@ -4638,9 +4638,7 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     due_date: document.getElementById('edit-issue-due-date').value,
     priority: document.getElementById('edit-issue-priority').value,
     status: document.getElementById('edit-issue-status').value,
-    category: document.getElementById('edit-issue-category').value,
-    estimated_hours: document.getElementById('edit-issue-estimated-hours').value || null,
-    actual_hours: document.getElementById('edit-issue-actual-hours').value || null
+    category: document.getElementById('edit-issue-category').value
   };
   
   // Get selected tag IDs

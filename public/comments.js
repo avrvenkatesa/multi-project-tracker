@@ -1229,14 +1229,12 @@ async function handleDeleteItemFromModal(e) {
     
     AuthManager.showNotification('Item deleted successfully', 'success');
     
-    // Close modal
+    // Close modal first
     closeItemDetailModal();
     
-    // Reload the board (this function should exist in app.js)
-    if (typeof loadKanbanBoard === 'function') {
-      loadKanbanBoard();
-    } else if (typeof loadActionItems === 'function') {
-      loadActionItems();
+    // Reload project data and refresh Kanban board immediately
+    if (typeof currentProject !== 'undefined' && currentProject && typeof loadProjectData === 'function') {
+      await loadProjectData(currentProject.id);
     }
     
   } catch (error) {
