@@ -2488,6 +2488,44 @@
             </div>
         </div>
 
+        <!-- Quick Log Time Modal -->
+        <div id="quickLogModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-full max-w-md">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="quickLogModalTitle" class="text-xl font-bold">⏱️ Quick Log Time</h2>
+                    <button id="closeQuickLogModal" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-1">Hours Logged <span class="text-red-500">*</span></label>
+                    <input type="number" 
+                           id="quick-log-hours" 
+                           step="0.25" 
+                           min="0.25" 
+                           max="999" 
+                           placeholder="e.g., 2.5"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-1">Notes (optional)</label>
+                    <textarea id="quick-log-notes" 
+                              rows="3" 
+                              placeholder="What did you work on?"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button id="cancelQuickLog" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button id="submitQuickLog" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        ⏱️ Log Time
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <script src="comments.js?v=3"></script>
         <script src="js/checklist-completion-warning.js"></script>
         <script src="js/timesheet.js"></script>
