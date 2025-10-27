@@ -9112,7 +9112,7 @@ document.getElementById('submitQuickLog')?.addEventListener('click', async funct
   const notes = document.getElementById('quick-log-notes').value.trim();
   
   // Validation
-  if (!hours || hours <= 0 || hours > 999) {
+  if (!hours || isNaN(hours) || hours < 0.25 || hours > 999) {
     showToast('Please enter valid hours (0.25 - 999)', 'error');
     return;
   }
