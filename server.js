@@ -12689,8 +12689,7 @@ app.get('/api/projects/:projectId/schedules', authenticateToken, async (req, res
     // Get all schedules
     const schedules = await pool.query(
       `SELECT ps.*,
-        u.username as created_by_username,
-        u.name as created_by_name
+        u.username as created_by_username
        FROM project_schedules ps
        LEFT JOIN users u ON ps.created_by = u.id
        WHERE ps.project_id = $1
@@ -12717,7 +12716,7 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
 
     // Get schedule with access check
     const scheduleResult = await pool.query(
-      `SELECT ps.*, u.username as created_by_username, u.name as created_by_name
+      `SELECT ps.*, u.username as created_by_username
        FROM project_schedules ps
        LEFT JOIN users u ON ps.created_by = u.id
        LEFT JOIN projects p ON ps.project_id = p.id
