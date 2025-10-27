@@ -159,11 +159,11 @@ async function loadProjectItems() {
     document.getElementById('items-container').classList.add('hidden');
 
     // Load issues
-    const issuesResponse = await fetch(`/api/projects/${currentProjectId}/issues`);
+    const issuesResponse = await fetch(`/api/issues?projectId=${currentProjectId}`);
     const issues = issuesResponse.ok ? await issuesResponse.json() : [];
 
     // Load action items
-    const actionItemsResponse = await fetch(`/api/projects/${currentProjectId}/action-items`);
+    const actionItemsResponse = await fetch(`/api/action-items?projectId=${currentProjectId}`);
     const actionItems = actionItemsResponse.ok ? await actionItemsResponse.json() : [];
 
     // Combine and format
