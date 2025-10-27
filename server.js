@@ -258,8 +258,17 @@ app.use(express.urlencoded({ extended: true }));
 const cookieParser = require("cookie-parser");
 app.use(cookieParser());
 
-// Serve static files
-app.use(express.static(path.join(__dirname, "public")));
+// Serve static files with no-cache for JS files to prevent browser caching issues
+app.use(express.static(path.join(__dirname, "public"), {
+  setHeaders: (res, filePath) => {
+    // Force no-cache on JavaScript files
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 // Role hierarchy (higher number = more permissions)
 const ROLE_HIERARCHY = {
