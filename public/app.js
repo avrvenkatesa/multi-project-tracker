@@ -4292,8 +4292,8 @@ async function openEditModal(itemId, itemType) {
       // Load attachments
       await loadEditAttachments(item.id, 'issue');
       
-      // Load effort estimate data
-      await loadEffortEstimate(item.id, 'issue');
+      // Set item ID for "Open Effort Estimates" button
+      document.getElementById('edit-issue-open-estimates').setAttribute('data-issue-id', item.id);
       
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
@@ -4318,8 +4318,8 @@ async function openEditModal(itemId, itemType) {
       // Load attachments
       await loadEditAttachments(item.id, 'action-item');
       
-      // Load effort estimate data
-      await loadEffortEstimate(item.id, 'action-item');
+      // Set item ID for "Open Effort Estimates" button
+      document.getElementById('edit-action-item-open-estimates').setAttribute('data-action-item-id', item.id);
       
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
@@ -4769,6 +4769,46 @@ document.getElementById('closeEditIssueModal').addEventListener('click', closeEd
 document.getElementById('cancelEditIssue').addEventListener('click', closeEditIssueModalHandler);
 document.getElementById('closeEditActionItemModal').addEventListener('click', closeEditActionItemModalHandler);
 document.getElementById('cancelEditActionItem').addEventListener('click', closeEditActionItemModalHandler);
+
+// Open Effort Estimates from Edit Issue modal
+document.getElementById('edit-issue-open-estimates').addEventListener('click', async function() {
+  const issueId = parseInt(this.getAttribute('data-issue-id'));
+  if (issueId) {
+    // Close Edit modal
+    closeEditIssueModalHandler();
+    
+    // Open Detail modal and wait for it to fully load
+    await openItemDetailModal(issueId, 'issue');
+    
+    // Now safely switch to Effort Estimates tab
+    const estimatesTab = document.querySelector('[data-tab="estimates"]');
+    if (estimatesTab) {
+      estimatesTab.click();
+    } else {
+      console.warn('Effort Estimates tab not found after opening detail modal');
+    }
+  }
+});
+
+// Open Effort Estimates from Edit Action Item modal
+document.getElementById('edit-action-item-open-estimates').addEventListener('click', async function() {
+  const actionItemId = parseInt(this.getAttribute('data-action-item-id'));
+  if (actionItemId) {
+    // Close Edit modal
+    closeEditActionItemModalHandler();
+    
+    // Open Detail modal and wait for it to fully load
+    await openItemDetailModal(actionItemId, 'action-item');
+    
+    // Now safely switch to Effort Estimates tab
+    const estimatesTab = document.querySelector('[data-tab="estimates"]');
+    if (estimatesTab) {
+      estimatesTab.click();
+    } else {
+      console.warn('Effort Estimates tab not found after opening detail modal');
+    }
+  }
+});
 
 // Confirm and delete item
 async function confirmDeleteItem(itemId, itemType) {

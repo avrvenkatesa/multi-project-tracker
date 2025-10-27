@@ -1847,97 +1847,21 @@
                         <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
                     </div>
                     
-                    <!-- Effort Estimation Section (Phase 1 Enhanced) -->
+                    <!-- Effort Estimation Link -->
                     <div class="mb-6 border-t pt-4">
-                        <h3 class="text-lg font-semibold mb-3">⏱️ Effort Estimation</h3>
-                        
-                        <!-- Manual Estimate Input -->
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Manual Estimate (hours)</label>
-                            <input type="number" id="edit-issue-estimated-hours" step="0.5" min="0" max="999"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                   placeholder="e.g., 50">
-                        </div>
-                        
-                        <!-- AI Estimate (shown after generation) -->
-                        <div id="edit-issue-ai-estimate-section" class="hidden mb-4">
-                            <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <div>
-                                    <span class="text-sm font-medium text-gray-700">AI Estimate:</span>
-                                    <span id="edit-issue-ai-hours" class="text-lg font-bold text-blue-600 ml-2">--</span>
-                                    <span class="text-sm text-gray-600">hours</span>
-                                    <span id="edit-issue-ai-confidence" class="ml-2 text-xs px-2 py-1 rounded bg-blue-200">--</span>
-                                </div>
-                                <button type="button" id="edit-issue-view-breakdown" class="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
-                                    View Breakdown ↗
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Hybrid Estimate (shown after selection) -->
-                        <div id="edit-issue-hybrid-estimate-section" class="hidden mb-4">
-                            <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                                <div>
-                                    <span class="text-sm font-medium text-gray-700">Hybrid Estimate:</span>
-                                    <span id="edit-issue-hybrid-hours" class="text-lg font-bold text-green-600 ml-2">--</span>
-                                    <span class="text-sm text-gray-600">hours</span>
-                                    <span id="edit-issue-hybrid-count" class="ml-2 text-xs px-2 py-1 rounded bg-green-200">--</span>
-                                </div>
-                                <button type="button" id="edit-issue-view-hybrid-breakdown" class="text-xs px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700">
-                                    View Breakdown ↗
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Three-Way Estimate Selector (shown when AI or Hybrid exists) -->
-                        <div id="edit-issue-estimate-selector" class="hidden mb-4 p-4 bg-gray-50 rounded-lg border">
-                            <h4 class="text-sm font-semibold mb-3">Select Estimate for Planning:</h4>
-                            <div class="space-y-2">
-                                <label class="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-white transition-colors" id="planning-manual-label">
-                                    <input type="radio" name="planning-estimate" value="manual" id="planning-manual" class="w-4 h-4 mr-3">
-                                    <div class="flex-1">
-                                        <span class="font-medium">⏱️ Manual Estimate:</span>
-                                        <span id="planning-manual-hours" class="ml-2 font-bold">-- hours</span>
-                                    </div>
-                                </label>
-                                
-                                <label class="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-white transition-colors hidden" id="planning-ai-label">
-                                    <input type="radio" name="planning-estimate" value="ai" id="planning-ai" class="w-4 h-4 mr-3">
-                                    <div class="flex-1">
-                                        <span class="font-medium">🤖 AI Estimate:</span>
-                                        <span id="planning-ai-hours" class="ml-2 font-bold">-- hours</span>
-                                        <span id="planning-ai-confidence" class="ml-2 text-xs px-2 py-1 rounded bg-blue-200">--</span>
-                                    </div>
-                                </label>
-                                
-                                <label class="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-white transition-colors hidden" id="planning-hybrid-label">
-                                    <input type="radio" name="planning-estimate" value="hybrid" id="planning-hybrid" class="w-4 h-4 mr-3">
-                                    <div class="flex-1">
-                                        <span class="font-medium">⚡ Hybrid Estimate:</span>
-                                        <span id="planning-hybrid-hours" class="ml-2 font-bold">-- hours</span>
-                                        <span id="planning-hybrid-tasks" class="ml-2 text-xs px-2 py-1 rounded bg-green-200">--</span>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Generate AI Estimate Button -->
-                        <button type="button" id="edit-issue-generate-estimate" 
-                                class="w-full py-2 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 text-sm">
-                            🤖 Generate AI Estimate
+                        <button type="button" 
+                                id="edit-issue-open-estimates" 
+                                data-issue-id=""
+                                class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg hover:from-blue-100 hover:to-indigo-100 hover:border-blue-400 transition-all text-blue-700 font-medium">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            📊 Open Effort Estimates
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
                         </button>
-                        
-                        <!-- Actual Hours (below all estimate options) -->
-                        <div class="mt-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Actual Hours <span class="text-xs text-gray-500">(when done)</span></label>
-                            <input type="number" id="edit-issue-actual-hours" step="0.5" min="0" max="999"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                   placeholder="e.g., 10">
-                        </div>
-                        
-                        <div id="edit-issue-estimate-warning" class="hidden mt-2 text-xs text-amber-600">
-                            ⚠️ <span id="edit-issue-rate-limit-msg">Loading rate limit...</span>
-                        </div>
+                        <p class="mt-2 text-xs text-gray-500 text-center">Manage estimates, view AI breakdowns, and track version history</p>
                     </div>
                     
                     <div class="mb-6">
@@ -2073,89 +1997,21 @@
                         <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
                     </div>
                     
-                    <!-- Effort Estimation Section (Phase 1 Enhanced) -->
+                    <!-- Effort Estimation Link -->
                     <div class="mb-6 border-t pt-4">
-                        <h3 class="text-lg font-semibold mb-3">⏱️ Effort Estimation</h3>
-                        
-                        <!-- Manual Estimate Input -->
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Manual Estimate (hours)</label>
-                            <input type="number" id="edit-action-item-estimated-hours" step="0.5" min="0" max="999"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                   placeholder="e.g., 50">
-                        </div>
-                        
-                        <!-- AI Estimate (shown after generation) -->
-                        <div id="edit-action-item-ai-estimate-section" class="hidden mb-4">
-                            <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <div>
-                                    <span class="text-sm font-medium text-gray-700">AI Estimate:</span>
-                                    <span id="edit-action-item-ai-hours" class="text-lg font-bold text-blue-600 ml-2">--</span>
-                                    <span class="text-sm text-gray-600">hours</span>
-                                    <span id="edit-action-item-ai-confidence" class="ml-2 text-xs px-2 py-1 rounded bg-blue-200">--</span>
-                                </div>
-                                <button type="button" id="edit-action-item-view-breakdown" class="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
-                                    View Breakdown ↗
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Hybrid Estimate (shown after selection) -->
-                        <div id="edit-action-item-hybrid-estimate-section" class="hidden mb-4">
-                            <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                                <div>
-                                    <span class="text-sm font-medium text-gray-700">Hybrid Estimate:</span>
-                                    <span id="edit-action-item-hybrid-hours" class="text-lg font-bold text-green-600 ml-2">--</span>
-                                    <span class="text-sm text-gray-600">hours</span>
-                                    <span id="edit-action-item-hybrid-count" class="ml-2 text-xs px-2 py-1 rounded bg-green-200">--</span>
-                                </div>
-                                <button type="button" id="edit-action-item-view-hybrid-breakdown" class="text-xs px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700">
-                                    View Breakdown ↗
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Three-Way Estimate Selector (shown when AI or Hybrid exists) -->
-                        <div id="edit-action-item-estimate-selector" class="hidden mb-4 p-4 bg-gray-50 rounded-lg border">
-                            <h4 class="text-sm font-semibold mb-3">Select Estimate for Planning:</h4>
-                            <div class="space-y-2">
-                                <label class="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-white transition-colors" id="action-planning-manual-label">
-                                    <input type="radio" name="action-planning-estimate" value="manual" id="action-planning-manual" class="w-4 h-4 mr-3">
-                                    <div class="flex-1">
-                                        <span class="font-medium">⏱️ Manual Estimate:</span>
-                                        <span id="action-planning-manual-hours" class="ml-2 font-bold">-- hours</span>
-                                    </div>
-                                </label>
-                                
-                                <label class="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-white transition-colors hidden" id="action-planning-ai-label">
-                                    <input type="radio" name="action-planning-estimate" value="ai" id="action-planning-ai" class="w-4 h-4 mr-3">
-                                    <div class="flex-1">
-                                        <span class="font-medium">🤖 AI Estimate:</span>
-                                        <span id="action-planning-ai-hours" class="ml-2 font-bold">-- hours</span>
-                                        <span id="action-planning-ai-confidence" class="ml-2 text-xs px-2 py-1 rounded bg-blue-200">--</span>
-                                    </div>
-                                </label>
-                                
-                                <label class="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-white transition-colors hidden" id="action-planning-hybrid-label">
-                                    <input type="radio" name="action-planning-estimate" value="hybrid" id="action-planning-hybrid" class="w-4 h-4 mr-3">
-                                    <div class="flex-1">
-                                        <span class="font-medium">⚡ Hybrid Estimate:</span>
-                                        <span id="action-planning-hybrid-hours" class="ml-2 font-bold">-- hours</span>
-                                        <span id="action-planning-hybrid-tasks" class="ml-2 text-xs px-2 py-1 rounded bg-green-200">--</span>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Generate AI Estimate Button -->
-                        <button type="button" id="edit-action-item-generate-estimate" 
-                                class="w-full py-2 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 text-sm">
-                            🤖 Generate AI Estimate
+                        <button type="button" 
+                                id="edit-action-item-open-estimates" 
+                                data-action-item-id=""
+                                class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg hover:from-blue-100 hover:to-indigo-100 hover:border-blue-400 transition-all text-blue-700 font-medium">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            📊 Open Effort Estimates
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
                         </button>
-                        
-                        <div id="edit-action-item-estimate-warning" class="hidden mt-2 text-xs text-amber-600">
-                            ⚠️ <span id="edit-action-item-rate-limit-msg">Loading rate limit...</span>
-                        </div>
+                        <p class="mt-2 text-xs text-gray-500 text-center">Manage estimates, view AI breakdowns, and track version history</p>
                     </div>
                     
                     <div class="mb-6">
@@ -2529,7 +2385,7 @@
         <script src="comments.js?v=3"></script>
         <script src="js/checklist-completion-warning.js"></script>
         <script src="js/timesheet.js"></script>
-        <script src="app.js?v=39"></script>
+        <script src="app.js?v=41"></script>
         <script src="js/project-management.js"></script>
     </body>
 </html>
