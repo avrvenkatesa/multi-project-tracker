@@ -652,6 +652,115 @@ async function handleStartEstimationWorkflow() {
   await showEstimationModal(selectedItems[0]);
 }
 
+// ============================================
+// RESOURCE ASSIGNMENT VALIDATION
+// ============================================
+
+function getItemsWithoutAssignees() {
+  const itemsWithoutAssignees = [];
+  
+  selectedItemIds.forEach(key => {
+    const [type, id] = key.split(':');
+    const item = allItems.find(i => i.type === type && i.id === parseInt(id));
+    
+    if (item && (!item.assignee || item.assignee === 'Unassigned' || item.assignee.trim() === '')) {
+      itemsWithoutAssignees.push(item);
+    }
+  });
+  
+  return itemsWithoutAssignees;
+}
+
+function showMissingAssigneesModal(items) {
+  const count = items.length;
+  const itemsList = items.map(item => 
+    `<li class="flex items-start space-x-3 py-2 px-2 rounded border-b border-gray-200 last:border-0">
+      <div class="flex-1">
+        <p class="text-sm font-medium text-gray-900">${escapeHtml(item.title)}</p>
+        <p class="text-xs text-gray-500">${item.type === 'issue' ? 'Issue' : 'Action Item'} #${item.id}</p>
+      </div>
+      <span class="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">No Assignee</span>
+    </li>`
+  ).join('');
+  
+  const modalHtml = `
+    <div id="missing-assignees-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-gray-900">
+              <i class="fas fa-exclamation-triangle text-red-500 mr-2"></i>
+              Missing Resource Assignments
+            </h3>
+          </div>
+          
+          <div class="mb-6">
+            <p class="text-gray-700 mb-4">
+              <strong>${count}</strong> ${count === 1 ? 'item has' : 'items have'} no assignee. 
+              In <strong>Strict Mode</strong>, all tasks must have assigned resources for accurate workload calculations.
+            </p>
+            
+            <p class="text-sm text-gray-600 mb-4">
+              You have two options:
+            </p>
+            
+            <ul class="bg-gray-50 p-3 rounded border border-gray-200 max-h-64 overflow-y-auto mb-4">
+              ${itemsList}
+            </ul>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p class="text-sm text-blue-900">
+                <i class="fas fa-lightbulb mr-2"></i>
+                <strong>Tip:</strong> You can assign resources from the main project board, or disable Strict Mode to proceed with unassigned tasks (they'll be flagged as risks).
+              </p>
+            </div>
+          </div>
+          
+          <div class="flex justify-end space-x-3">
+            <button
+              data-action="cancel-schedule"
+              class="px-6 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+            >
+              <i class="fas fa-arrow-left mr-2"></i>Go Back and Assign
+            </button>
+            <button
+              data-action="disable-strict-mode"
+              class="px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
+            >
+              <i class="fas fa-toggle-off mr-2"></i>Disable Strict Mode
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  // Attach event listeners
+  document.querySelector('[data-action="cancel-schedule"]').addEventListener('click', closeMissingAssigneesModal);
+  document.querySelector('[data-action="disable-strict-mode"]').addEventListener('click', handleDisableStrictMode);
+}
+
+function closeMissingAssigneesModal() {
+  const modal = document.getElementById('missing-assignees-modal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+function handleDisableStrictMode() {
+  document.getElementById('require-assignee').checked = false;
+  closeMissingAssigneesModal();
+  
+  // Automatically proceed with schedule creation
+  document.getElementById('create-schedule-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
+// ============================================
+// ESTIMATION WORKFLOW
+// ============================================
+
 async function showEstimationModal(item) {
   const queueIndex = window.estimationQueueIndex + 1;
   const queueTotal = window.estimationQueue.length;
@@ -1160,6 +1269,17 @@ async function handleCreateSchedule(e) {
   if (itemsWithoutEstimates.length > 0) {
     showMissingEstimatesModal(itemsWithoutEstimates);
     return;
+  }
+
+  // Check if strict resource requirement is enabled
+  const requireAssignee = document.getElementById('require-assignee').checked;
+  if (requireAssignee) {
+    const itemsWithoutAssignees = getItemsWithoutAssignees();
+    if (itemsWithoutAssignees.length > 0) {
+      console.log('Strict mode: Blocking schedule creation due to unassigned tasks:', itemsWithoutAssignees.length);
+      showMissingAssigneesModal(itemsWithoutAssignees);
+      return; // Stop schedule creation - strict mode requires all tasks have assignees
+    }
   }
 
   const submitBtn = document.getElementById('create-submit');
