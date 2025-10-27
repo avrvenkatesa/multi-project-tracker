@@ -197,14 +197,14 @@ async function loadProjectItems() {
 function getEstimate(item) {
   // Use planning estimate source to get the right estimate
   if (item.planning_estimate_source === 'manual') {
-    return parseFloat(item.manual_estimated_hours) || 0;
+    return parseFloat(item.estimated_effort_hours) || 0;
   } else if (item.planning_estimate_source === 'ai') {
     return parseFloat(item.ai_effort_estimate_hours) || 0;
   } else if (item.planning_estimate_source === 'hybrid') {
     return parseFloat(item.hybrid_effort_estimate_hours) || 0;
   }
   // Fallback order
-  return parseFloat(item.ai_effort_estimate_hours || item.manual_estimated_hours) || 0;
+  return parseFloat(item.ai_effort_estimate_hours || item.estimated_effort_hours) || 0;
 }
 
 async function loadSchedules() {
