@@ -197,16 +197,24 @@ async function calculateProjectSchedule(config) {
     await sortItemsByDependencies(items);
 
   if (hasCycle) {
+    // Build a lookup map from task keys to titles
+    const titleMap = new Map();
+    items.forEach(item => {
+      const key = `${item.type}:${item.id}`;
+      titleMap.set(key, item.title || 'Untitled');
+    });
+    
     // Build detailed error message with actionable information
     let errorMessage = 'Circular dependency detected:\n\n';
     
     if (cycleInfo && cycleInfo.cycle) {
-      // Show the cycle path
-      errorMessage += 'Dependency cycle: ';
+      // Show the cycle path with titles
+      errorMessage += 'Dependency cycle:\n';
       const cyclePath = cycleInfo.cycle.map(key => {
         const [type, id] = key.split(':');
-        return `${type}#${id}`;
-      }).join(' → ');
+        const title = titleMap.get(key) || 'Unknown';
+        return `${type}#${id}: ${title}`;
+      }).join('\n → ');
       errorMessage += cyclePath + '\n\n';
       
       // List the specific dependencies that form the cycle
@@ -214,7 +222,9 @@ async function calculateProjectSchedule(config) {
       cycleInfo.dependencies.forEach((dep, index) => {
         const [fromType, fromId] = dep.from.split(':');
         const [toType, toId] = dep.to.split(':');
-        errorMessage += `${index + 1}. ${fromType}#${fromId} depends on ${toType}#${toId}\n`;
+        const fromTitle = titleMap.get(dep.from) || 'Unknown';
+        const toTitle = titleMap.get(dep.to) || 'Unknown';
+        errorMessage += `${index + 1}. ${fromType}#${fromId} (${fromTitle}) depends on ${toType}#${toId} (${toTitle})\n`;
       });
     } else {
       // Fallback to basic error message
