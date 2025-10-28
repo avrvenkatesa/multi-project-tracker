@@ -90,6 +90,12 @@ function setupEventListeners() {
     checkbox.addEventListener('change', filterItems);
   });
 
+  // AI Dependency Suggestion
+  document.getElementById('suggest-dependencies-btn').addEventListener('click', suggestDependencies);
+  document.getElementById('close-dependencies-modal').addEventListener('click', closeDependenciesModal);
+  document.getElementById('reject-all-dependencies').addEventListener('click', rejectAllDependencies);
+  document.getElementById('apply-dependencies').addEventListener('click', applyDependencies);
+
   // Item checkboxes (event delegation)
   document.getElementById('items-container').addEventListener('change', (e) => {
     if (e.target.classList.contains('item-checkbox')) {
@@ -442,6 +448,18 @@ function updateSelectedCount() {
   
   const submitBtn = document.getElementById('create-submit');
   submitBtn.disabled = count === 0;
+
+  // Show/hide AI dependency suggestion button
+  const suggestionSection = document.getElementById('dependency-suggestion-section');
+  const suggestionBtn = document.getElementById('suggest-dependencies-btn');
+  
+  if (count >= 2) {
+    suggestionSection.classList.remove('hidden');
+    suggestionBtn.disabled = false;
+  } else {
+    suggestionSection.classList.add('hidden');
+    suggestionBtn.disabled = true;
+  }
 }
 
 function populateTagFilter() {
@@ -509,6 +527,226 @@ function filterItems() {
   });
 
   renderItems();
+}
+
+// ============================================
+// AI DEPENDENCY SUGGESTION
+// ============================================
+
+let suggestedDependencies = [];
+let selectedDependencies = new Set();
+
+async function suggestDependencies() {
+  try {
+    const btn = document.getElementById('suggest-dependencies-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing tasks...';
+
+    // Get selected task IDs
+    const taskIds = [];
+    selectedItemIds.forEach(key => {
+      const [type, id] = key.split(':');
+      taskIds.push({
+        type: type,
+        id: parseInt(id)
+      });
+    });
+
+    const response = await fetch('/api/schedules/suggest-dependencies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        projectId: currentProjectId,
+        taskIds: taskIds 
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get AI suggestions');
+    }
+
+    const result = await response.json();
+    
+    if (result.success) {
+      suggestedDependencies = result.dependencies || [];
+      selectedDependencies = new Set(suggestedDependencies.map((_, index) => index));
+      displayDependencySuggestions(result);
+    } else {
+      throw new Error(result.message || 'Failed to generate suggestions');
+    }
+
+  } catch (error) {
+    console.error('Error suggesting dependencies:', error);
+    alert('Failed to generate dependency suggestions: ' + error.message);
+  } finally {
+    const btn = document.getElementById('suggest-dependencies-btn');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Suggest Task Dependencies with AI';
+  }
+}
+
+function displayDependencySuggestions(result) {
+  const modal = document.getElementById('dependencies-modal');
+  const content = document.getElementById('dependencies-modal-content');
+
+  const { dependencies, overall_analysis, parallel_opportunities } = result;
+
+  if (!dependencies || dependencies.length === 0) {
+    content.innerHTML = `
+      <div class="text-center py-8">
+        <i class="fas fa-info-circle text-blue-500 text-4xl mb-4"></i>
+        <p class="text-lg font-semibold text-gray-900">No Dependencies Suggested</p>
+        <p class="text-gray-600 mt-2">AI determined that your selected tasks can all run in parallel without dependencies.</p>
+        ${parallel_opportunities ? `<p class="text-sm text-gray-500 mt-4 italic">${escapeHtml(parallel_opportunities)}</p>` : ''}
+      </div>
+    `;
+  } else {
+    content.innerHTML = `
+      <div class="space-y-6">
+        <!-- Overall Analysis -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 class="font-semibold text-blue-900 mb-2">
+            <i class="fas fa-lightbulb mr-2"></i>AI Analysis
+          </h3>
+          <p class="text-sm text-blue-800">${escapeHtml(overall_analysis)}</p>
+          ${parallel_opportunities ? `
+            <p class="text-sm text-blue-700 mt-2">
+              <i class="fas fa-check-circle mr-2"></i>${escapeHtml(parallel_opportunities)}
+            </p>
+          ` : ''}
+        </div>
+
+        <!-- Suggested Dependencies -->
+        <div>
+          <h3 class="font-semibold text-gray-900 mb-4">
+            ${dependencies.length} Suggested ${dependencies.length === 1 ? 'Dependency' : 'Dependencies'}
+          </h3>
+          <div class="space-y-3">
+            ${dependencies.map((dep, index) => {
+              const dependentTask = allItems.find(i => 
+                i.type === dep.dependent_item_type && i.id === dep.dependent_item_id
+              );
+              const prerequisiteTask = allItems.find(i => 
+                i.type === dep.prerequisite_item_type && i.id === dep.prerequisite_item_id
+              );
+
+              const typeColors = {
+                'technical': 'bg-purple-100 text-purple-800',
+                'workflow': 'bg-blue-100 text-blue-800',
+                'prerequisite': 'bg-green-100 text-green-800',
+                'risk-mitigation': 'bg-yellow-100 text-yellow-800'
+              };
+
+              return `
+                <div class="border border-gray-200 rounded-lg p-4 ${selectedDependencies.has(index) ? 'bg-green-50 border-green-300' : 'bg-white'}">
+                  <div class="flex items-start">
+                    <input
+                      type="checkbox"
+                      class="dependency-checkbox mt-1 mr-3 h-5 w-5 text-green-600 rounded"
+                      data-dependency-index="${index}"
+                      ${selectedDependencies.has(index) ? 'checked' : ''}
+                    />
+                    <div class="flex-1">
+                      <div class="flex items-center space-x-2 mb-2">
+                        <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded ${typeColors[dep.dependency_type] || 'bg-gray-100 text-gray-800'}">
+                          ${dep.dependency_type.replace('-', ' ').toUpperCase()}
+                        </span>
+                      </div>
+                      <div class="space-y-2">
+                        <div>
+                          <p class="text-sm font-semibold text-gray-900">
+                            <i class="fas fa-arrow-right text-gray-400 mr-2"></i>${escapeHtml(dependentTask?.title || 'Unknown Task')}
+                          </p>
+                          <p class="text-xs text-gray-500 ml-6">depends on</p>
+                        </div>
+                        <div class="ml-6">
+                          <p class="text-sm font-semibold text-green-700">
+                            <i class="fas fa-check text-green-500 mr-2"></i>${escapeHtml(prerequisiteTask?.title || 'Unknown Task')}
+                          </p>
+                        </div>
+                      </div>
+                      <p class="text-sm text-gray-700 mt-3">
+                        <i class="fas fa-comment-dots text-gray-400 mr-2"></i>${escapeHtml(dep.reasoning)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Attach checkbox event listeners
+    content.querySelectorAll('.dependency-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const index = parseInt(e.target.dataset.dependencyIndex);
+        if (e.target.checked) {
+          selectedDependencies.add(index);
+        } else {
+          selectedDependencies.delete(index);
+        }
+        // Refresh display to update visual state
+        displayDependencySuggestions(result);
+      });
+    });
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeDependenciesModal() {
+  document.getElementById('dependencies-modal').classList.add('hidden');
+}
+
+function rejectAllDependencies() {
+  if (confirm('Are you sure you want to reject all AI suggestions?')) {
+    closeDependenciesModal();
+    suggestedDependencies = [];
+    selectedDependencies.clear();
+  }
+}
+
+async function applyDependencies() {
+  try {
+    const selectedDeps = Array.from(selectedDependencies).map(index => suggestedDependencies[index]);
+
+    if (selectedDeps.length === 0) {
+      alert('Please select at least one dependency to apply.');
+      return;
+    }
+
+    const applyBtn = document.getElementById('apply-dependencies');
+    applyBtn.disabled = true;
+    applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Applying...';
+
+    const response = await fetch('/api/schedules/save-dependencies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        projectId: currentProjectId,
+        dependencies: selectedDeps 
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to save dependencies');
+    }
+
+    const result = await response.json();
+
+    closeDependenciesModal();
+    alert(`Success! ${result.saved} dependencies applied. Now create your schedule to see the sequencing.`);
+
+  } catch (error) {
+    console.error('Error applying dependencies:', error);
+    alert('Failed to apply dependencies: ' + error.message);
+  } finally {
+    const applyBtn = document.getElementById('apply-dependencies');
+    applyBtn.disabled = false;
+    applyBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Apply Selected Dependencies';
+  }
 }
 
 // ============================================

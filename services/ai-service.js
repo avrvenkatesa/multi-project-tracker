@@ -850,10 +850,149 @@ Generate the checklists now with ALL items populated:`;
   }
 }
 
+/**
+ * Suggest task dependencies using AI analysis
+ * Analyzes task titles and descriptions to suggest logical sequencing
+ * @param {Array} tasks - Array of tasks with {id, type, title, description}
+ * @returns {Promise<Object>} - {success: boolean, suggestions: Array, reasoning: string}
+ */
+async function suggestTaskDependencies(tasks) {
+  try {
+    if (!tasks || tasks.length === 0) {
+      return {
+        success: false,
+        error: 'No tasks provided for analysis'
+      };
+    }
+
+    // Format tasks for AI analysis
+    const taskList = tasks.map((task, index) => {
+      return `Task ${index + 1} [${task.type}#${task.id}]:
+Title: ${task.title}
+Description: ${task.description || 'No description provided'}
+Current Status: ${task.status || 'Unknown'}
+Assignee: ${task.assignee || 'Unassigned'}
+`;
+    }).join('\n---\n');
+
+    const prompt = `You are a project management expert analyzing tasks to suggest logical dependencies and sequencing.
+
+TASKS TO ANALYZE:
+${taskList}
+
+INSTRUCTIONS:
+Analyze these tasks and suggest dependencies based on:
+1. **Natural workflow patterns** (planning → design → development → testing → deployment)
+2. **Technical dependencies** (infrastructure before applications, backend before frontend)
+3. **Logical prerequisites** (data migration before production cutover, preparation before execution)
+4. **Risk mitigation** (proof of concepts before full implementations, backups before migrations)
+
+For each suggested dependency, provide:
+- Which task depends on which (using task numbers)
+- The type of dependency (technical, workflow, prerequisite, risk-mitigation)
+- Clear reasoning why this dependency makes sense
+
+IMPORTANT RULES:
+- Only suggest dependencies that make logical sense
+- Avoid circular dependencies (A depends on B, B depends on A)
+- Keep it simple - don't over-complicate with too many dependencies
+- If tasks can run in parallel, don't force sequential dependencies
+- Consider that some tasks may have no dependencies
+
+Respond in JSON format:
+{
+  "dependencies": [
+    {
+      "dependent_task": <task_number>,
+      "prerequisite_task": <task_number>,
+      "dependency_type": "<technical|workflow|prerequisite|risk-mitigation>",
+      "reasoning": "<why this dependency makes sense>"
+    }
+  ],
+  "overall_analysis": "<brief summary of the suggested workflow sequence>",
+  "parallel_opportunities": "<which tasks can run in parallel>"
+}`;
+
+    let response;
+    if (AI_PROVIDER === 'openai') {
+      response = await aiClient.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        response_format: { type: "json_object" }
+      });
+      
+      const result = JSON.parse(response.choices[0].message.content);
+      
+      // Map task numbers back to actual task IDs and types
+      const mappedDependencies = result.dependencies.map(dep => {
+        const dependentTask = tasks[dep.dependent_task - 1];
+        const prerequisiteTask = tasks[dep.prerequisite_task - 1];
+        
+        return {
+          dependent_item_type: dependentTask.type,
+          dependent_item_id: dependentTask.id,
+          prerequisite_item_type: prerequisiteTask.type,
+          prerequisite_item_id: prerequisiteTask.id,
+          dependency_type: dep.dependency_type,
+          reasoning: dep.reasoning
+        };
+      });
+
+      return {
+        success: true,
+        dependencies: mappedDependencies,
+        overall_analysis: result.overall_analysis,
+        parallel_opportunities: result.parallel_opportunities
+      };
+      
+    } else if (AI_PROVIDER === 'anthropic') {
+      response = await aiClient.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 4000,
+        temperature: 0.3,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const result = JSON.parse(response.content[0].text);
+      
+      // Map task numbers back to actual task IDs and types
+      const mappedDependencies = result.dependencies.map(dep => {
+        const dependentTask = tasks[dep.dependent_task - 1];
+        const prerequisiteTask = tasks[dep.prerequisite_task - 1];
+        
+        return {
+          dependent_item_type: dependentTask.type,
+          dependent_item_id: dependentTask.id,
+          prerequisite_item_type: prerequisiteTask.type,
+          prerequisite_item_id: prerequisiteTask.id,
+          dependency_type: dep.dependency_type,
+          reasoning: dep.reasoning
+        };
+      });
+
+      return {
+        success: true,
+        dependencies: mappedDependencies,
+        overall_analysis: result.overall_analysis,
+        parallel_opportunities: result.parallel_opportunities
+      };
+    }
+
+  } catch (error) {
+    console.error('Error suggesting task dependencies:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 module.exports = {
   generateChecklistFromIssue,
   generateChecklistFromActionItem,
   generateMultipleChecklists,
   generateChecklistFromDocument,
-  checkRateLimit
+  checkRateLimit,
+  suggestTaskDependencies
 };

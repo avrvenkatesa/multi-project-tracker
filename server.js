@@ -12707,6 +12707,221 @@ app.get('/api/ai-usage/rate-limit', authenticateToken, async (req, res) => {
 // ============================================
 
 /**
+ * Suggest dependencies for selected tasks using AI
+ * POST /api/schedules/suggest-dependencies
+ * Body: { tasks: [{id, type, title, description, status, assignee}] }
+ */
+app.post('/api/schedules/suggest-dependencies', authenticateToken, async (req, res) => {
+  try {
+    const { projectId, taskIds } = req.body;
+    const userId = req.user.id;
+
+    if (!projectId || !taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({ error: 'projectId and taskIds array are required' });
+    }
+
+    // Check project access - user must be a project member
+    const projectCheck = await pool.query(
+      `SELECT p.id FROM projects p
+       INNER JOIN project_members pm ON p.id = pm.project_id
+       WHERE p.id = $1 AND pm.user_id = $2`,
+      [projectId, userId]
+    );
+
+    if (projectCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied - you are not a member of this project' });
+    }
+
+    // Load tasks from database with project validation
+    const tasks = [];
+    for (const taskId of taskIds) {
+      const tableName = taskId.type === 'issue' ? 'issues' : 'action_items';
+      const result = await pool.query(
+        `SELECT id, title, description, status, project_id, assigned_to as assignee
+         FROM ${tableName}
+         WHERE id = $1 AND project_id = $2`,
+        [taskId.id, projectId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(403).json({ 
+          error: 'Access denied', 
+          message: `Task ${taskId.type}#${taskId.id} not found or does not belong to this project`
+        });
+      }
+
+      tasks.push({
+        id: result.rows[0].id,
+        type: taskId.type,
+        title: result.rows[0].title,
+        description: result.rows[0].description || '',
+        status: result.rows[0].status,
+        assignee: result.rows[0].assignee || 'Unassigned',
+        project_id: result.rows[0].project_id
+      });
+    }
+
+    // Check rate limits
+    const { checkRateLimit } = require('./middleware/ai-rate-limiter');
+    const rateLimitStatus = await checkRateLimit(pool, userId, projectId, 'dependency_suggestion');
+
+    if (!rateLimitStatus.allowed) {
+      return res.status(429).json({
+        error: 'rate_limit_exceeded',
+        message: rateLimitStatus.message,
+        limits: rateLimitStatus.limits
+      });
+    }
+
+    // Call AI service to suggest dependencies
+    const { suggestTaskDependencies } = require('./services/ai-service');
+    const result = await suggestTaskDependencies(tasks);
+
+    if (!result.success) {
+      return res.status(500).json({ 
+        error: 'Failed to generate dependency suggestions',
+        message: result.error
+      });
+    }
+
+    // Track AI usage
+    await pool.query(
+      `INSERT INTO ai_usage_tracking 
+       (user_id, project_id, feature, operation_type, model, tokens_used, cost_usd)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [userId, projectId, 'dependency_suggestion', 'suggest_dependencies', 'gpt-4o', 0, 0]
+    );
+
+    res.json({
+      success: true,
+      dependencies: result.dependencies,
+      overall_analysis: result.overall_analysis,
+      parallel_opportunities: result.parallel_opportunities
+    });
+
+  } catch (error) {
+    console.error('Error suggesting dependencies:', error);
+    res.status(500).json({ 
+      error: 'Failed to suggest dependencies',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Save approved dependencies to database
+ * POST /api/schedules/save-dependencies
+ * Body: { dependencies: [{dependent_item_type, dependent_item_id, prerequisite_item_type, prerequisite_item_id}] }
+ */
+app.post('/api/schedules/save-dependencies', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { projectId, dependencies } = req.body;
+    const userId = req.user.id;
+
+    if (!projectId || !dependencies || !Array.isArray(dependencies)) {
+      return res.status(400).json({ error: 'projectId and dependencies array are required' });
+    }
+
+    // Check project access
+    const projectCheck = await client.query(
+      `SELECT p.id FROM projects p
+       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
+       WHERE p.id = $2`,
+      [userId, projectId]
+    );
+
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    // Begin transaction
+    await client.query('BEGIN');
+
+    const savedDependencies = [];
+    
+    for (const dep of dependencies) {
+      const { dependent_item_type, dependent_item_id, prerequisite_item_type, prerequisite_item_id } = dep;
+      
+      // Validate both dependent and prerequisite belong to the project
+      const dependentTable = dependent_item_type === 'issue' ? 'issues' : 'action_items';
+      const prerequisiteTable = prerequisite_item_type === 'issue' ? 'issues' : 'action_items';
+      
+      const dependentCheck = await client.query(
+        `SELECT project_id FROM ${dependentTable} WHERE id = $1`,
+        [dependent_item_id]
+      );
+      
+      const prerequisiteCheck = await client.query(
+        `SELECT project_id FROM ${prerequisiteTable} WHERE id = $1`,
+        [prerequisite_item_id]
+      );
+
+      if (dependentCheck.rows.length === 0 || prerequisiteCheck.rows[0].project_id !== parseInt(projectId)) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ 
+          error: 'Access denied',
+          message: `Dependent task ${dependent_item_type}#${dependent_item_id} does not belong to this project`
+        });
+      }
+
+      if (prerequisiteCheck.rows.length === 0 || prerequisiteCheck.rows[0].project_id !== parseInt(projectId)) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ 
+          error: 'Access denied',
+          message: `Prerequisite task ${prerequisite_item_type}#${prerequisite_item_id} does not belong to this project`
+        });
+      }
+      
+      // Determine which table to use based on dependent item type
+      const tableName = dependent_item_type === 'issue' ? 'issue_dependencies' : 'action_item_dependencies';
+      const dependentColumn = dependent_item_type === 'issue' ? 'issue_id' : 'action_item_id';
+      
+      // Check if dependency already exists
+      const existingCheck = await client.query(
+        `SELECT id FROM ${tableName} 
+         WHERE ${dependentColumn} = $1 
+         AND prerequisite_item_type = $2 
+         AND prerequisite_item_id = $3`,
+        [dependent_item_id, prerequisite_item_type, prerequisite_item_id]
+      );
+
+      if (existingCheck.rows.length === 0) {
+        // Insert new dependency
+        const result = await client.query(
+          `INSERT INTO ${tableName} 
+           (${dependentColumn}, prerequisite_item_type, prerequisite_item_id)
+           VALUES ($1, $2, $3)
+           RETURNING *`,
+          [dependent_item_id, prerequisite_item_type, prerequisite_item_id]
+        );
+        
+        savedDependencies.push(result.rows[0]);
+      }
+    }
+
+    // Commit transaction
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      saved: savedDependencies.length,
+      message: `${savedDependencies.length} dependencies saved successfully`
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error saving dependencies:', error);
+    res.status(500).json({ 
+      error: 'Failed to save dependencies',
+      message: error.message
+    });
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * Create new project schedule
  * POST /api/projects/:projectId/schedules
  * Body: { name, startDate, hoursPerDay, includeWeekends, selectedItems, notes }
@@ -12900,16 +13115,16 @@ app.get('/api/projects/:projectId/schedules', authenticateToken, async (req, res
     const { projectId } = req.params;
     const userId = req.user.id;
 
-    // Check project access
+    // Check project access - user must be a project member
     const projectCheck = await pool.query(
       `SELECT p.id FROM projects p
-       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
-       WHERE p.id = $2`,
-      [userId, projectId]
+       INNER JOIN project_members pm ON p.id = pm.project_id
+       WHERE p.id = $1 AND pm.user_id = $2`,
+      [projectId, userId]
     );
 
     if (projectCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Project not found or access denied' });
+      return res.status(403).json({ error: 'Access denied - you are not a member of this project' });
     }
 
     // Get all schedules
