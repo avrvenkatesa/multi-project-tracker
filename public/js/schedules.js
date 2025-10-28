@@ -6,6 +6,7 @@ let currentUser = null;
 let allItems = [];
 let filteredItems = [];
 let selectedItemIds = new Set();
+let projectTeamMembers = [];
 
 // ============================================
 // INITIALIZATION
@@ -39,6 +40,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load project details
   await loadProjectDetails();
+  
+  // Load project team members
+  await loadProjectTeam();
 
   // Set default start date to today
   const today = new Date().toISOString().split('T')[0];
@@ -154,6 +158,18 @@ async function loadProjectDetails() {
   } catch (error) {
     console.error('Error loading project:', error);
     alert('Failed to load project details');
+  }
+}
+
+async function loadProjectTeam() {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/team`);
+    if (!response.ok) throw new Error('Failed to load team members');
+    projectTeamMembers = await response.json();
+    console.log('Loaded team members:', projectTeamMembers);
+  } catch (error) {
+    console.error('Error loading team members:', error);
+    projectTeamMembers = [];
   }
 }
 
@@ -686,19 +702,44 @@ function getItemsWithoutAssignees() {
 
 function showMissingAssigneesModal(items) {
   const count = items.length;
-  const itemsList = items.map(item => 
-    `<li class="flex items-start space-x-3 py-2 px-2 rounded border-b border-gray-200 last:border-0">
+  
+  // Build assignee dropdown options
+  const assigneeOptions = projectTeamMembers.map(member => 
+    `<option value="${escapeHtml(member.name)}">${escapeHtml(member.name)}</option>`
+  ).join('');
+  
+  const itemsList = items.map((item, index) => 
+    `<li class="flex items-center space-x-3 py-3 px-2 rounded border-b border-gray-200 last:border-0" data-item-key="${item.type}:${item.id}">
       <div class="flex-1">
         <p class="text-sm font-medium text-gray-900">${escapeHtml(item.title)}</p>
         <p class="text-xs text-gray-500">${item.type === 'issue' ? 'Issue' : 'Action Item'} #${item.id}</p>
       </div>
-      <span class="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">No Assignee</span>
+      <div class="flex items-center space-x-2">
+        <select 
+          class="assignee-dropdown px-3 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          data-item-type="${item.type}"
+          data-item-id="${item.id}"
+          data-index="${index}"
+        >
+          <option value="">Select assignee...</option>
+          ${assigneeOptions}
+        </select>
+        <button
+          class="assign-btn px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          data-item-type="${item.type}"
+          data-item-id="${item.id}"
+          data-index="${index}"
+          disabled
+        >
+          <i class="fas fa-check mr-1"></i>Assign
+        </button>
+      </div>
     </li>`
   ).join('');
   
   const modalHtml = `
     <div id="missing-assignees-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div class="p-6">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-xl font-bold text-gray-900">
@@ -713,35 +754,43 @@ function showMissingAssigneesModal(items) {
               In <strong>Strict Mode</strong>, all tasks must have assigned resources for accurate workload calculations.
             </p>
             
-            <p class="text-sm text-gray-600 mb-4">
-              You have two options:
+            <p class="text-sm text-gray-600 mb-3">
+              <strong>Assign resources directly below:</strong>
             </p>
             
-            <ul class="bg-gray-50 p-3 rounded border border-gray-200 max-h-64 overflow-y-auto mb-4">
+            <ul id="assignee-list" class="bg-gray-50 p-3 rounded border border-gray-200 max-h-96 overflow-y-auto mb-4">
               ${itemsList}
             </ul>
             
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p class="text-sm text-blue-900">
                 <i class="fas fa-lightbulb mr-2"></i>
-                <strong>Tip:</strong> You can assign resources from the main project board, or disable Strict Mode to proceed with unassigned tasks (they'll be flagged as risks).
+                <strong>Tip:</strong> Select an assignee for each task and click "Assign", or disable Strict Mode to proceed with unassigned tasks (they'll be flagged as risks).
               </p>
             </div>
           </div>
           
-          <div class="flex justify-end space-x-3">
+          <div class="flex justify-between items-center">
             <button
-              data-action="cancel-schedule"
-              class="px-6 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+              data-action="retry-validation"
+              class="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
             >
-              <i class="fas fa-arrow-left mr-2"></i>Go Back and Assign
+              <i class="fas fa-sync mr-2"></i>Continue with Assigned Tasks
             </button>
-            <button
-              data-action="disable-strict-mode"
-              class="px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
-            >
-              <i class="fas fa-toggle-off mr-2"></i>Disable Strict Mode
-            </button>
+            <div class="flex space-x-3">
+              <button
+                data-action="cancel-schedule"
+                class="px-6 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+              >
+                <i class="fas fa-times mr-2"></i>Cancel
+              </button>
+              <button
+                data-action="disable-strict-mode"
+                class="px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
+              >
+                <i class="fas fa-toggle-off mr-2"></i>Disable Strict Mode
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -750,9 +799,34 @@ function showMissingAssigneesModal(items) {
   
   document.body.insertAdjacentHTML('beforeend', modalHtml);
   
-  // Attach event listeners
+  // Attach event listeners for modal buttons
   document.querySelector('[data-action="cancel-schedule"]').addEventListener('click', closeMissingAssigneesModal);
   document.querySelector('[data-action="disable-strict-mode"]').addEventListener('click', handleDisableStrictMode);
+  document.querySelector('[data-action="retry-validation"]').addEventListener('click', handleRetryValidation);
+  
+  // Attach event listeners for dropdown changes (enable/disable assign button)
+  document.querySelectorAll('.assignee-dropdown').forEach(dropdown => {
+    dropdown.addEventListener('change', (e) => {
+      const index = e.target.dataset.index;
+      const assignBtn = document.querySelector(`.assign-btn[data-index="${index}"]`);
+      assignBtn.disabled = !e.target.value;
+    });
+  });
+  
+  // Attach event listeners for assign buttons
+  document.querySelectorAll('.assign-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const itemType = e.currentTarget.dataset.itemType;
+      const itemId = e.currentTarget.dataset.itemId;
+      const index = e.currentTarget.dataset.index;
+      const dropdown = document.querySelector(`.assignee-dropdown[data-index="${index}"]`);
+      const assignee = dropdown.value;
+      
+      if (assignee) {
+        await assignResourceToItem(itemType, itemId, assignee, e.currentTarget, dropdown);
+      }
+    });
+  });
 }
 
 function closeMissingAssigneesModal() {
@@ -767,6 +841,62 @@ function handleDisableStrictMode() {
   closeMissingAssigneesModal();
   
   // Automatically proceed with schedule creation
+  document.getElementById('create-schedule-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
+async function assignResourceToItem(itemType, itemId, assignee, button, dropdown) {
+  const originalBtnHtml = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Assigning...';
+  dropdown.disabled = true;
+  
+  try {
+    const endpoint = itemType === 'issue' ? `/api/issues/${itemId}` : `/api/action-items/${itemId}`;
+    const response = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignee })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to assign resource');
+    }
+    
+    // Update the item in allItems array
+    const item = allItems.find(i => i.type === itemType && i.id === parseInt(itemId));
+    if (item) {
+      item.assignee = assignee;
+    }
+    
+    // Update UI to show success
+    button.innerHTML = '<i class="fas fa-check-circle text-green-600 mr-1"></i>Assigned';
+    button.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+    button.classList.add('bg-green-100', 'text-green-800');
+    dropdown.classList.add('bg-green-50');
+    
+    // Remove the item from the list after a brief delay
+    setTimeout(() => {
+      const listItem = document.querySelector(`li[data-item-key="${itemType}:${itemId}"]`);
+      if (listItem) {
+        listItem.style.opacity = '0';
+        listItem.style.transition = 'opacity 0.3s';
+        setTimeout(() => listItem.remove(), 300);
+      }
+    }, 500);
+    
+  } catch (error) {
+    console.error('Error assigning resource:', error);
+    alert(`Failed to assign resource: ${error.message}`);
+    button.disabled = false;
+    button.innerHTML = originalBtnHtml;
+    dropdown.disabled = false;
+  }
+}
+
+function handleRetryValidation() {
+  closeMissingAssigneesModal();
+  // Re-trigger validation
   document.getElementById('create-schedule-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 }
 
