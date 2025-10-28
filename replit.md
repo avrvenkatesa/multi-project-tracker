@@ -40,9 +40,11 @@ Project scheduling involves `project_schedules` (versioning), `schedule_items`, 
 
 ### AI Features
 -   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection with a persistent review queue.
--   **AI Checklist Generation**: Generates comprehensive checklists from issue/action descriptions and uploaded documents using OpenAI and Anthropic models, supporting multi-checklist generation and batch preview.
--   **Workstream Detection**: AI-powered document analysis to identify 3-10 distinct workstreams, extract key requirements, and generate focused checklists using OpenAI GPT-4o and Anthropic Claude 3.5 Sonnet.
+-   **AI Checklist Generation**: Generates comprehensive checklists from issue/action descriptions and uploaded documents using OpenAI GPT-4o, supporting multi-checklist generation and batch preview.
+-   **Workstream Detection**: AI-powered document analysis to identify 3-10 distinct workstreams, extract key requirements, and generate focused checklists using OpenAI GPT-4o.
 -   **Intelligent Issue Matching**: AI-powered semantic matching of generated checklists to existing issues with confidence scoring and automatic new issue suggestions for unmatched checklists.
+-   **AI Dependency Suggestion**: GPT-4o analyzes selected tasks and suggests logical dependencies based on workflow patterns, technical prerequisites, and risk mitigation, with automatic circular dependency detection and filtering.
+-   **Comprehensive Cycle Detection**: Multi-layer circular dependency validation prevents invalid dependency graphs at all entry points (AI suggestions, user approval, and schedule creation) with detailed, actionable error messages showing exact cycle paths and remediation steps.
 -   **Checklist Validation**: Provides quality scoring, required field validation, and consistency checks.
 
 ### Reporting & Export
@@ -73,8 +75,7 @@ Project scheduling involves `project_schedules` (versioning), `schedule_items`, 
 -   file-type
 
 ### AI Integration
--   OpenAI (GPT-3.5-Turbo, GPT-4o)
--   Anthropic (Claude 3.5 Sonnet)
+-   OpenAI (GPT-3.5-Turbo, GPT-4o) - Exclusive AI provider for consistent validation and reliability
 
 ### Database & ORM
 -   @neondatabase/serverless
