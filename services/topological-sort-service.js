@@ -24,9 +24,42 @@ async function loadDependencies(items) {
     return [];
   }
 
-  // Query issue_relationships table for dependencies
-  // We need to find relationships where both source and target are in our item set
-  const query = `
+  const dependencies = [];
+
+  // Load from issue_dependencies table
+  if (issueIds.length > 0) {
+    const issueDepsQuery = `
+      SELECT 
+        'issue' as source_type,
+        issue_id as source_id,
+        prerequisite_item_type as target_type,
+        prerequisite_item_id as target_id,
+        'depends_on' as relationship_type
+      FROM issue_dependencies
+      WHERE issue_id = ANY($1::int[])
+    `;
+    const issueDepsResult = await pool.query(issueDepsQuery, [issueIds]);
+    dependencies.push(...issueDepsResult.rows);
+  }
+
+  // Load from action_item_dependencies table
+  if (actionItemIds.length > 0) {
+    const actionDepsQuery = `
+      SELECT 
+        'action-item' as source_type,
+        action_item_id as source_id,
+        prerequisite_item_type as target_type,
+        prerequisite_item_id as target_id,
+        'depends_on' as relationship_type
+      FROM action_item_dependencies
+      WHERE action_item_id = ANY($1::int[])
+    `;
+    const actionDepsResult = await pool.query(actionDepsQuery, [actionItemIds]);
+    dependencies.push(...actionDepsResult.rows);
+  }
+
+  // Also load from issue_relationships table for backwards compatibility
+  const relationshipsQuery = `
     SELECT 
       source_type,
       source_id,
@@ -49,8 +82,10 @@ async function loadDependencies(items) {
       AND relationship_type IN ('blocks', 'blocked_by', 'depends_on')
   `;
 
-  const result = await pool.query(query, [issueIds, actionItemIds]);
-  return result.rows;
+  const relationshipsResult = await pool.query(relationshipsQuery, [issueIds, actionItemIds]);
+  dependencies.push(...relationshipsResult.rows);
+
+  return dependencies;
 }
 
 /**
