@@ -129,6 +129,18 @@ function setupEventListeners() {
     if (e.target.id === 'schedule-detail-modal') {
       closeDetailModal();
     }
+
+    // Handle export buttons
+    const pdfBtn = e.target.closest('[data-action="export-schedule-pdf"]');
+    const csvBtn = e.target.closest('[data-action="export-schedule-csv"]');
+
+    if (pdfBtn) {
+      const scheduleId = pdfBtn.getAttribute('data-schedule-id');
+      exportSchedulePDF(scheduleId);
+    } else if (csvBtn) {
+      const scheduleId = csvBtn.getAttribute('data-schedule-id');
+      exportScheduleCSV(scheduleId);
+    }
   });
 }
 
@@ -2035,13 +2047,15 @@ function renderScheduleDetail(data) {
           <h3 class="text-lg font-semibold">Schedule Summary</h3>
           <div class="flex space-x-2">
             <button 
-              onclick="exportSchedulePDF(${schedule.id})" 
+              data-action="export-schedule-pdf"
+              data-schedule-id="${schedule.id}"
               class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center text-sm"
             >
               <i class="fas fa-file-pdf mr-2"></i>Export PDF
             </button>
             <button 
-              onclick="exportScheduleCSV(${schedule.id})" 
+              data-action="export-schedule-csv"
+              data-schedule-id="${schedule.id}"
               class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center text-sm"
             >
               <i class="fas fa-file-csv mr-2"></i>Export CSV
