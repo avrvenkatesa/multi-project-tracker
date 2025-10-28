@@ -2228,13 +2228,26 @@ function renderGanttChart(tasks, schedule) {
       language: 'en',
       custom_popup_html: function(task) {
         const taskData = tasks.find(t => `${t.item_type}-${t.item_id}` === task.id);
+        
+        // Calculate duration in days
+        const start = new Date(task._start);
+        const end = new Date(task._end);
+        const durationMs = end - start;
+        const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
+        
+        // Get status text
+        const statusText = task.progress === 100 ? 'Done' : 
+                          task.progress === 50 ? 'In Progress' : 
+                          'To Do';
+        
         return `
           <div class="details-container">
             <h5>${task.name}</h5>
-            <p><strong>Duration:</strong> ${task.progress}% complete</p>
+            <p><strong>Duration:</strong> ${durationDays} day${durationDays !== 1 ? 's' : ''}</p>
+            <p><strong>Status:</strong> ${statusText} (${task.progress}%)</p>
             <p><strong>Dates:</strong> ${formatDate(task._start)} - ${formatDate(task._end)}</p>
-            ${taskData.assignee ? `<p><strong>Assignee:</strong> ${taskData.assignee}</p>` : ''}
-            ${taskData.is_critical_path ? '<p class="text-red-600"><strong>Critical Path</strong></p>' : ''}
+            ${taskData.assignee ? `<p><strong>Assignee:</strong> ${taskData.assignee}</p>` : '<p><strong>Assignee:</strong> Unassigned</p>'}
+            ${taskData.is_critical_path ? '<p style="background: #fee2e2 !important; color: #991b1b !important; font-weight: 600 !important;"><strong>⚠️ Critical Path</strong></p>' : ''}
           </div>
         `;
       }
