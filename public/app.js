@@ -1399,7 +1399,7 @@ async function renderKanbanBoard() {
                 card.addEventListener('dragend', handleDragEnd);
                 
                 // Add click handler to open item detail modal
-                card.addEventListener('click', function(e) {
+                card.addEventListener('click', async function(e) {
                     // Don't open modal if we just finished dragging
                     if (isDragging) return;
                     
@@ -1408,7 +1408,15 @@ async function renderKanbanBoard() {
                         e.stopPropagation();
                         const itemType = e.target.dataset.itemType;
                         const itemId = e.target.dataset.itemId;
-                        openItemDetailModal(itemId, itemType, 'relationships');
+                        
+                        // First open the detail modal to set currentDetailItem
+                        await openItemDetailModal(itemId, itemType);
+                        
+                        // Then immediately open the Dependencies modal
+                        setTimeout(() => {
+                            showScheduleDependencies();
+                        }, 100);
+                        
                         return;
                     }
                     
@@ -9585,11 +9593,14 @@ async function loadScheduleDependencies() {
     // Render dependencies
     let html = '';
     
+    // Get the current item name
+    const itemName = currentDetailItem?.title || 'This task';
+    
     // Outgoing dependencies (this task depends on...)
     if (outgoing && outgoing.length > 0) {
       html += `
         <div class="border-b pb-4">
-          <h3 class="text-lg font-semibold text-gray-900 mb-3">This task depends on:</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">${escapeHtml(itemName)} depends on:</h3>
           <div class="space-y-2">
             ${outgoing.map(dep => `
               <div class="flex justify-between items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -9615,7 +9626,7 @@ async function loadScheduleDependencies() {
     } else {
       html += `
         <div class="border-b pb-4">
-          <h3 class="text-lg font-semibold text-gray-900 mb-3">This task depends on:</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">${escapeHtml(itemName)} depends on:</h3>
           <p class="text-gray-500 italic">No dependencies</p>
         </div>
       `;
@@ -9625,7 +9636,7 @@ async function loadScheduleDependencies() {
     if (incoming && incoming.length > 0) {
       html += `
         <div class="mt-4">
-          <h3 class="text-lg font-semibold text-gray-900 mb-3">Tasks that depend on this:</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">Tasks that depend on ${escapeHtml(itemName)}:</h3>
           <div class="space-y-2">
             ${incoming.map(dep => `
               <div class="flex justify-between items-center p-3 bg-purple-50 border border-purple-200 rounded-lg">
@@ -9651,7 +9662,7 @@ async function loadScheduleDependencies() {
     } else {
       html += `
         <div class="mt-4">
-          <h3 class="text-lg font-semibold text-gray-900 mb-3">Tasks that depend on this:</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">Tasks that depend on ${escapeHtml(itemName)}:</h3>
           <p class="text-gray-500 italic">No dependent tasks</p>
         </div>
       `;
