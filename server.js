@@ -12737,7 +12737,7 @@ app.post('/api/schedules/suggest-dependencies', authenticateToken, async (req, r
     for (const taskId of taskIds) {
       const tableName = taskId.type === 'issue' ? 'issues' : 'action_items';
       const result = await pool.query(
-        `SELECT id, title, description, status, project_id, assigned_to as assignee
+        `SELECT id, title, description, status, project_id, assignee
          FROM ${tableName}
          WHERE id = $1 AND project_id = $2`,
         [taskId.id, projectId]
