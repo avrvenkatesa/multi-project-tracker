@@ -23,6 +23,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Set the Back to Projects link with the correct project ID
+  const backLink = document.getElementById('back-to-projects-link');
+  if (backLink) {
+    backLink.href = `/dashboard.html?projectId=${currentProjectId}`;
+  }
+
   // Check authentication
   try {
     const response = await fetch('/api/auth/me');
