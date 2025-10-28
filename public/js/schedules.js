@@ -186,8 +186,8 @@ async function loadProjectItems() {
       }))
     ];
 
-    filteredItems = [...allItems];
-    renderItems();
+    // Apply initial filter based on default checkbox state
+    filterItems();
 
     document.getElementById('items-loading').classList.add('hidden');
     document.getElementById('items-container').classList.remove('hidden');
@@ -442,8 +442,9 @@ function filterItems() {
     // Type filter
     const matchesType = typeFilter === 'all' || item.type === typeFilter;
 
-    // Status filter - only show items with selected statuses (excludes Done)
-    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(item.status);
+    // Status filter - always exclude Done items, only show if status is selected
+    // If no checkboxes are selected, show nothing
+    const matchesStatus = selectedStatuses.length > 0 && selectedStatuses.includes(item.status);
 
     return matchesSearch && matchesType && matchesStatus;
   });
