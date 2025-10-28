@@ -198,12 +198,17 @@
                 <option value="issue">Issues Only</option>
                 <option value="action-item">Action Items Only</option>
               </select>
-              <select id="item-status-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                <option value="all">All Statuses</option>
-                <option value="To Do">To Do</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Done">Done</option>
-              </select>
+              <div class="px-4 py-2 border border-gray-300 rounded-lg bg-white">
+                <label class="text-sm font-medium text-gray-700 mr-4">Status:</label>
+                <label class="inline-flex items-center mr-3">
+                  <input type="checkbox" id="status-todo" class="status-filter-checkbox form-checkbox text-blue-600 rounded" checked>
+                  <span class="ml-2 text-sm">To Do</span>
+                </label>
+                <label class="inline-flex items-center">
+                  <input type="checkbox" id="status-in-progress" class="status-filter-checkbox form-checkbox text-blue-600 rounded" checked>
+                  <span class="ml-2 text-sm">In Progress</span>
+                </label>
+              </div>
             </div>
 
             <!-- Items List -->

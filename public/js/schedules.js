@@ -79,7 +79,11 @@ function setupEventListeners() {
   document.getElementById('deselect-all-items').addEventListener('click', deselectAllItems);
   document.getElementById('item-search').addEventListener('input', filterItems);
   document.getElementById('item-type-filter').addEventListener('change', filterItems);
-  document.getElementById('item-status-filter').addEventListener('change', filterItems);
+  
+  // Status filter checkboxes
+  document.querySelectorAll('.status-filter-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', filterItems);
+  });
 
   // Item checkboxes (event delegation)
   document.getElementById('items-container').addEventListener('change', (e) => {
@@ -421,7 +425,15 @@ function updateSelectedCount() {
 function filterItems() {
   const searchTerm = document.getElementById('item-search').value.toLowerCase();
   const typeFilter = document.getElementById('item-type-filter').value;
-  const statusFilter = document.getElementById('item-status-filter').value;
+  
+  // Get selected statuses from checkboxes
+  const selectedStatuses = [];
+  if (document.getElementById('status-todo')?.checked) {
+    selectedStatuses.push('To Do');
+  }
+  if (document.getElementById('status-in-progress')?.checked) {
+    selectedStatuses.push('In Progress');
+  }
 
   filteredItems = allItems.filter(item => {
     // Search filter
@@ -430,8 +442,8 @@ function filterItems() {
     // Type filter
     const matchesType = typeFilter === 'all' || item.type === typeFilter;
 
-    // Status filter
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+    // Status filter - only show items with selected statuses (excludes Done)
+    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(item.status);
 
     return matchesSearch && matchesType && matchesStatus;
   });
@@ -1662,10 +1674,13 @@ function renderTaskCard(task) {
             </span>
           </div>
           <p class="text-sm font-semibold text-gray-900 mb-2">${escapeHtml(task.title)}</p>
-          <div class="flex flex-wrap gap-2 text-xs text-gray-600">
+          <div class="flex flex-wrap gap-2 text-xs text-gray-600 mb-1">
             <span><i class="fas fa-clock mr-1"></i>${task.estimated_hours}h (${duration} ${duration === 1 ? 'day' : 'days'})</span>
             <span><i class="fas fa-calendar mr-1"></i>${formatDate(task.scheduled_start)} - ${formatDate(task.scheduled_end)}</span>
             ${task.due_date ? `<span class="${task.days_late && task.days_late > 0 ? 'text-red-600 font-semibold' : ''}"><i class="fas fa-flag mr-1"></i>Due: ${formatDate(task.due_date)}${task.days_late > 0 ? ` (${task.days_late} days late)` : ''}</span>` : ''}
+          </div>
+          <div class="text-xs ${task.assignee ? 'text-gray-600' : 'text-gray-400 italic'}">
+            <i class="fas fa-user mr-1"></i>Assignee: ${task.assignee ? escapeHtml(task.assignee) : 'Unassigned'}
           </div>
           ${task.dependencies && task.dependencies.length > 0 ? `
             <div class="mt-2 text-xs text-gray-500">
