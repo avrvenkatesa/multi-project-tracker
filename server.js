@@ -12787,9 +12787,9 @@ app.post('/api/schedules/suggest-dependencies', authenticateToken, async (req, r
     // Track AI usage
     await pool.query(
       `INSERT INTO ai_usage_tracking 
-       (user_id, project_id, feature, operation_type, model, tokens_used, cost_usd)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, projectId, 'dependency_suggestion', 'suggest_dependencies', 'gpt-4o', 0, 0]
+       (user_id, project_id, feature, operation_type, tokens_used, cost_usd)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, projectId, 'dependency_suggestion', 'suggest_dependencies', 0, 0]
     );
 
     res.json({
