@@ -11,6 +11,7 @@ let currentFilters = {
   search: '',
   type: '',
   status: '',
+  hasCircularDependency: false,
   priority: '',
   assignee: '',
   category: '',
@@ -1135,6 +1136,38 @@ function createDueDateBadge(dueDate, status, completedAt) {
   </div>`;
 }
 
+/**
+ * Create circular dependency badge for Kanban cards
+ */
+function createCircularDependencyBadge(item, cycleWith) {
+  if (!cycleWith || cycleWith.length === 0) return '';
+  
+  // Get the first item in the cycle for display
+  const firstDep = cycleWith[0];
+  const depDisplay = cycleWith.length > 1 
+    ? `${firstDep.title.substring(0, 30)}... +${cycleWith.length - 1} more`
+    : firstDep.title.substring(0, 40);
+  
+  return `<div class="mb-2 p-2 bg-red-50 border border-red-300 rounded-lg">
+    <div class="flex items-center gap-2">
+      <svg class="w-4 h-4 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <div class="flex-1 text-xs">
+        <div class="font-semibold text-red-800">Circular Dependency</div>
+        <div class="text-red-700">
+          Cycle with: 
+          <button class="cycle-dep-link font-medium underline hover:text-red-900" 
+                  data-item-type="${firstDep.type}" 
+                  data-item-id="${firstDep.id}">
+            ${escapeHtml(depDisplay)}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 // Render Kanban board
 async function renderKanbanBoard() {
     // Filter by type if selected
@@ -1159,13 +1192,24 @@ async function renderKanbanBoard() {
     let relationshipCounts = {};
     let commentCounts = {};
     let checklistStatuses = {};
+    let circularDependencies = {};
     
     if (currentProject && currentProject.id) {
         try {
-            const metadataResponse = await axios.get(
-                `/api/projects/${currentProject.id}/items-metadata`,
-                { withCredentials: true }
-            );
+            // Load metadata and circular dependencies in parallel
+            const [metadataResponse, circularDepsResponse] = await Promise.all([
+                axios.get(
+                    `/api/projects/${currentProject.id}/items-metadata`,
+                    { withCredentials: true }
+                ),
+                axios.get(
+                    `/api/projects/${currentProject.id}/circular-dependencies`,
+                    { withCredentials: true }
+                ).catch(err => {
+                    console.warn('Failed to load circular dependencies:', err);
+                    return { data: { circularDependencies: [] } };
+                })
+            ]);
             
             const metadata = metadataResponse.data;
             
@@ -1187,6 +1231,23 @@ async function renderKanbanBoard() {
                     };
                 }
             });
+            
+            // Build circular dependencies map
+            if (circularDepsResponse.data.circularDependencies) {
+                circularDepsResponse.data.circularDependencies.forEach(cd => {
+                    circularDependencies[`${cd.item_type}-${cd.item_id}`] = cd.cycle_with;
+                });
+            }
+            
+            // Apply circular dependency filter after loading the data
+            if (currentFilters.hasCircularDependency) {
+                const filteredItems = allItems.filter(item => {
+                    const key = `${item.type}-${item.id}`;
+                    return circularDependencies && circularDependencies[key];
+                });
+                // Update allItems reference for rendering
+                itemsToDisplay.splice(0, itemsToDisplay.length, ...filteredItems);
+            }
         } catch (error) {
             console.error('Error loading bulk metadata:', error);
             // Fallback: initialize with empty values
@@ -1240,6 +1301,7 @@ async function renderKanbanBoard() {
                         const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
                         const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
                         const planningBadge = createPlanningEstimateBadge(item);
+                        const circularDeps = circularDependencies[`${item.type}-${item.id}`] || null;
                         
                         // Check permissions for edit/delete
                         const currentUser = AuthManager.currentUser;
@@ -1298,6 +1360,7 @@ async function renderKanbanBoard() {
                         ${createDueDateBadge(item.due_date, item.status, item.completed_at)}
                         ${createEffortEstimateBadge(item)}
                         ${planningBadge ? `<div class="mb-2">${planningBadge}</div>` : ''}
+                        ${circularDeps ? createCircularDependencyBadge(item, circularDeps) : ''}
                         ${item.tags && item.tags.length > 0 ? `
                             <div class="flex flex-wrap gap-1 mb-2">
                                 ${item.tags.map(tag => `
@@ -1339,6 +1402,15 @@ async function renderKanbanBoard() {
                 card.addEventListener('click', function(e) {
                     // Don't open modal if we just finished dragging
                     if (isDragging) return;
+                    
+                    // Check if clicked on circular dependency link
+                    if (e.target.classList.contains('cycle-dep-link')) {
+                        e.stopPropagation();
+                        const itemType = e.target.dataset.itemType;
+                        const itemId = e.target.dataset.itemId;
+                        openItemDetailModal(itemId, itemType);
+                        return;
+                    }
                     
                     // Only open modal if not clicking on the checkbox
                     if (!e.target.classList.contains('item-checkbox')) {
@@ -2534,6 +2606,17 @@ function initializeFilters() {
     });
   }
   
+  // Circular dependency filter
+  const hasCircularDepFilter = document.getElementById('has-circular-dependency-filter');
+  if (hasCircularDepFilter) {
+    hasCircularDepFilter.addEventListener('change', (e) => {
+      currentFilters.hasCircularDependency = e.target.checked;
+      displayActiveFilters();
+      applyFilters();
+      updateURL();
+    });
+  }
+  
   // Clear filters button
   const clearBtn = document.getElementById('clear-filters-btn');
   if (clearBtn) {
@@ -2605,7 +2688,8 @@ function clearAllFilters() {
     assignee: '',
     category: '',
     tag: '',
-    hasPlanning: false
+    hasPlanning: false,
+    hasCircularDependency: false
   };
   
   // Reset form inputs
@@ -2616,6 +2700,7 @@ function clearAllFilters() {
   const assigneeFilter = document.getElementById('assignee-filter');
   const tagFilter = document.getElementById('tag-filter');
   const hasPlanningFilter = document.getElementById('has-planning-filter');
+  const hasCircularDepFilter = document.getElementById('has-circular-dependency-filter');
   
   if (searchInput) searchInput.value = '';
   if (typeFilter) typeFilter.value = '';
@@ -2624,6 +2709,7 @@ function clearAllFilters() {
   if (assigneeFilter) assigneeFilter.value = '';
   if (tagFilter) tagFilter.value = '';
   if (hasPlanningFilter) hasPlanningFilter.checked = false;
+  if (hasCircularDepFilter) hasCircularDepFilter.checked = false;
   
   // Hide filter restored indicator if present
   closeFilterIndicator();
@@ -2685,6 +2771,9 @@ function displayActiveFilters() {
   if (currentFilters.hasPlanning) {
     activeFilters.push({ key: 'hasPlanning', label: '📊 Has Planning Estimate' });
   }
+  if (currentFilters.hasCircularDependency) {
+    activeFilters.push({ key: 'hasCircularDependency', label: '⚠️ Circular Dependency' });
+  }
   
   if (activeFilters.length === 0) {
     container.classList.add('hidden');
@@ -2719,6 +2808,10 @@ async function removeFilter(filterKey) {
   if (filterKey === 'hasPlanning') {
     currentFilters[filterKey] = false;
     const checkbox = document.getElementById('has-planning-filter');
+    if (checkbox) checkbox.checked = false;
+  } else if (filterKey === 'hasCircularDependency') {
+    currentFilters[filterKey] = false;
+    const checkbox = document.getElementById('has-circular-dependency-filter');
     if (checkbox) checkbox.checked = false;
   } else {
     currentFilters[filterKey] = '';
@@ -2841,6 +2934,7 @@ function updateURL(additionalParams = {}) {
   if (currentFilters.category) params.set('category', currentFilters.category);
   if (currentFilters.tag) params.set('tag', currentFilters.tag);
   if (currentFilters.hasPlanning) params.set('hasPlanning', 'true');
+  if (currentFilters.hasCircularDependency) params.set('hasCircularDependency', 'true');
   
   // Preserve view parameter if present
   const currentParams = new URLSearchParams(window.location.search);
@@ -2868,11 +2962,16 @@ function loadFiltersFromURL() {
   currentFilters.category = params.get('category') || '';
   currentFilters.tag = params.get('tag') || '';
   currentFilters.hasPlanning = params.get('hasPlanning') === 'true';
+  currentFilters.hasCircularDependency = params.get('hasCircularDependency') === 'true';
   
-  // Update UI for checkbox
+  // Update UI for checkboxes
   const hasPlanningFilter = document.getElementById('has-planning-filter');
   if (hasPlanningFilter) {
     hasPlanningFilter.checked = currentFilters.hasPlanning;
+  }
+  const hasCircularDepFilter = document.getElementById('has-circular-dependency-filter');
+  if (hasCircularDepFilter) {
+    hasCircularDepFilter.checked = currentFilters.hasCircularDependency;
   }
   
   // Check if any filters were restored
@@ -2884,7 +2983,8 @@ function loadFiltersFromURL() {
     currentFilters.assignee ||
     currentFilters.category ||
     currentFilters.tag ||
-    currentFilters.hasPlanning
+    currentFilters.hasPlanning ||
+    currentFilters.hasCircularDependency
   );
   
   // Show indicator if filters were restored from URL
