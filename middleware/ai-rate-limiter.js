@@ -12,8 +12,8 @@ const { Pool } = require('@neondatabase/serverless');
 
 // Rate limit configuration
 const RATE_LIMITS = {
-  PER_USER_PER_HOUR: 10,
-  PER_PROJECT_PER_DAY: 100,
+  PER_USER_PER_HOUR: 50,
+  PER_PROJECT_PER_DAY: 500,
   WARNING_THRESHOLD: 0.8 // Warn at 80% of limit
 };
 
