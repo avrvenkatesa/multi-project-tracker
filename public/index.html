@@ -983,6 +983,15 @@
                                 </svg>
                                 <span>📄 Generate from Document</span>
                             </button>
+                            <button 
+                                id="item-detail-dependencies-btn"
+                                class="px-3 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors flex items-center gap-1.5 text-sm"
+                                title="View Schedule Dependencies">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                </svg>
+                                <span>Dependencies</span>
+                            </button>
                             <button id="close-item-detail-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                         </div>
                     </div>
@@ -2454,6 +2463,28 @@
                     </button>
                 </div>
             </div>
+        </div>
+
+        <!-- Schedule Dependencies Modal -->
+        <div id="schedule-dependencies-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+          <div class="min-h-screen px-4 flex items-center justify-center">
+            <div class="bg-white rounded-lg max-w-3xl w-full p-6">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-900">Schedule Dependencies</h2>
+                <button id="close-schedule-deps-modal" class="text-gray-400 hover:text-gray-600">
+                  <svg class="w-6 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
+              
+              <div id="schedule-deps-content" class="space-y-4">
+                <div class="flex justify-center py-8">
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <script src="comments.js?v=3"></script>

@@ -9450,3 +9450,162 @@ document.addEventListener('click', function(e) {
 });
 
 
+
+// ===== SCHEDULE DEPENDENCIES MANAGEMENT =====
+
+/**
+ * View and manage schedule dependencies for current item
+ */
+async function showScheduleDependencies() {
+  if (!currentDetailItem) return;
+  
+  const modal = document.getElementById('schedule-dependencies-modal');
+  modal.classList.remove('hidden');
+  
+  await loadScheduleDependencies();
+}
+
+/**
+ * Load schedule dependencies for current item
+ */
+async function loadScheduleDependencies() {
+  if (!currentDetailItem) return;
+  
+  const content = document.getElementById('schedule-deps-content');
+  content.innerHTML = '<div class="flex justify-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>';
+  
+  try {
+    const response = await axios.get(
+      `/api/schedules/dependencies/${currentDetailItem.type}/${currentDetailItem.id}`,
+      { withCredentials: true }
+    );
+    
+    const { item, outgoing, incoming } = response.data;
+    
+    // Render dependencies
+    let html = '';
+    
+    // Outgoing dependencies (this task depends on...)
+    if (outgoing && outgoing.length > 0) {
+      html += `
+        <div class="border-b pb-4">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">This task depends on:</h3>
+          <div class="space-y-2">
+            ${outgoing.map(dep => `
+              <div class="flex justify-between items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div class="flex-1">
+                  <p class="font-medium text-gray-900">${escapeHtml(dep.prerequisite_title || 'Unknown')}</p>
+                  <p class="text-sm text-gray-600">${dep.prerequisite_item_type}#${dep.prerequisite_item_id}</p>
+                  <span class="text-xs px-2 py-1 rounded ${dep.prerequisite_status === 'done' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                    ${dep.prerequisite_status || 'unknown'}
+                  </span>
+                </div>
+                <button 
+                  onclick="deleteScheduleDependency('${currentDetailItem.type}', ${dep.dependency_id})"
+                  class="ml-4 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="border-b pb-4">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">This task depends on:</h3>
+          <p class="text-gray-500 italic">No dependencies</p>
+        </div>
+      `;
+    }
+    
+    // Incoming dependencies (other tasks depend on this one)
+    if (incoming && incoming.length > 0) {
+      html += `
+        <div class="mt-4">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">Tasks that depend on this:</h3>
+          <div class="space-y-2">
+            ${incoming.map(dep => `
+              <div class="flex justify-between items-center p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <div class="flex-1">
+                  <p class="font-medium text-gray-900">${escapeHtml(dep.dependent_title || 'Unknown')}</p>
+                  <p class="text-sm text-gray-600">${dep.dependent_item_type}#${dep.dependent_item_id}</p>
+                  <span class="text-xs px-2 py-1 rounded ${dep.dependent_status === 'done' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                    ${dep.dependent_status || 'unknown'}
+                  </span>
+                </div>
+                <button 
+                  onclick="deleteScheduleDependency('${dep.dependent_item_type}', ${dep.dependency_id})"
+                  class="ml-4 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="mt-4">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">Tasks that depend on this:</h3>
+          <p class="text-gray-500 italic">No dependent tasks</p>
+        </div>
+      `;
+    }
+    
+    content.innerHTML = html;
+    
+  } catch (error) {
+    console.error('Error loading dependencies:', error);
+    content.innerHTML = `
+      <div class="text-center py-8">
+        <p class="text-red-600">${error.response?.data?.error || 'Failed to load dependencies'}</p>
+      </div>
+    `;
+  }
+}
+
+/**
+ * Delete a schedule dependency
+ */
+async function deleteScheduleDependency(itemType, dependencyId) {
+  if (!confirm('Remove this dependency? This cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    await axios.delete(
+      `/api/schedules/dependencies/${itemType}/${dependencyId}`,
+      { withCredentials: true }
+    );
+    
+    showToast('Dependency removed successfully', 'success');
+    await loadScheduleDependencies();
+    
+  } catch (error) {
+    console.error('Error deleting dependency:', error);
+    showToast(error.response?.data?.error || 'Failed to delete dependency', 'error');
+  }
+}
+
+// Close modal handler
+document.addEventListener('DOMContentLoaded', function() {
+  const closeBtn = document.getElementById('close-schedule-deps-modal');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function() {
+      document.getElementById('schedule-dependencies-modal').classList.add('hidden');
+    });
+  }
+  
+  // Dependencies button handler
+  const depsBtn = document.getElementById('item-detail-dependencies-btn');
+  if (depsBtn) {
+    depsBtn.addEventListener('click', showScheduleDependencies);
+  }
+});
+
+// Make functions globally accessible
+window.showScheduleDependencies = showScheduleDependencies;
+window.deleteScheduleDependency = deleteScheduleDependency;

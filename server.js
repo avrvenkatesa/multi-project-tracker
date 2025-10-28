@@ -13018,6 +13018,177 @@ app.post('/api/schedules/save-dependencies', authenticateToken, async (req, res)
 });
 
 /**
+ * Get schedule dependencies for a specific task (issue or action-item)
+ * GET /api/schedules/dependencies/:itemType/:itemId
+ */
+app.get('/api/schedules/dependencies/:itemType/:itemId', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, itemId } = req.params;
+    const userId = req.user.id;
+
+    // Validate item type
+    if (itemType !== 'issue' && itemType !== 'action-item') {
+      return res.status(400).json({ error: 'Item type must be "issue" or "action-item"' });
+    }
+
+    // Get the item and verify project access
+    const tableName = itemType === 'issue' ? 'issues' : 'action_items';
+    const itemResult = await pool.query(
+      `SELECT ${tableName}.id, ${tableName}.project_id, ${tableName}.title
+       FROM ${tableName}
+       INNER JOIN project_members pm ON ${tableName}.project_id = pm.project_id
+       WHERE ${tableName}.id = $1 AND pm.user_id = $2`,
+      [itemId, userId]
+    );
+
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found or access denied' });
+    }
+
+    // Get outgoing dependencies (this task depends on...)
+    // SECURITY: Use INNER JOIN with project_members to ensure user has access to prerequisite items
+    const depTableName = itemType === 'issue' ? 'issue_dependencies' : 'action_item_dependencies';
+    const depIdColumn = itemType === 'issue' ? 'issue_id' : 'action_item_id';
+    
+    const outgoingResult = await pool.query(
+      `SELECT 
+        d.id as dependency_id,
+        d.prerequisite_item_type,
+        d.prerequisite_item_id,
+        CASE 
+          WHEN d.prerequisite_item_type = 'issue' THEN i.title
+          WHEN d.prerequisite_item_type = 'action-item' THEN ai.title
+        END as prerequisite_title,
+        CASE 
+          WHEN d.prerequisite_item_type = 'issue' THEN i.status
+          WHEN d.prerequisite_item_type = 'action-item' THEN ai.status
+        END as prerequisite_status
+       FROM ${depTableName} d
+       LEFT JOIN issues i ON d.prerequisite_item_type = 'issue' AND d.prerequisite_item_id = i.id
+       LEFT JOIN action_items ai ON d.prerequisite_item_type = 'action-item' AND d.prerequisite_item_id = ai.id
+       LEFT JOIN project_members pm_i ON d.prerequisite_item_type = 'issue' AND i.project_id = pm_i.project_id AND pm_i.user_id = $2
+       LEFT JOIN project_members pm_ai ON d.prerequisite_item_type = 'action-item' AND ai.project_id = pm_ai.project_id AND pm_ai.user_id = $2
+       WHERE d.${depIdColumn} = $1
+       AND (
+         (d.prerequisite_item_type = 'issue' AND pm_i.user_id IS NOT NULL)
+         OR (d.prerequisite_item_type = 'action-item' AND pm_ai.user_id IS NOT NULL)
+       )`,
+      [itemId, userId]
+    );
+
+    // Get incoming dependencies (other tasks depend on this one)
+    // SECURITY: Use INNER JOIN with project_members to ensure user has access to dependent items
+    const incomingIssues = await pool.query(
+      `SELECT 
+        d.id as dependency_id,
+        'issue' as dependent_item_type,
+        i.id as dependent_item_id,
+        i.title as dependent_title,
+        i.status as dependent_status
+       FROM issue_dependencies d
+       INNER JOIN issues i ON d.issue_id = i.id
+       INNER JOIN project_members pm ON i.project_id = pm.project_id
+       WHERE d.prerequisite_item_type = $1 AND d.prerequisite_item_id = $2 AND pm.user_id = $3`,
+      [itemType, itemId, userId]
+    );
+
+    const incomingActionItems = await pool.query(
+      `SELECT 
+        d.id as dependency_id,
+        'action-item' as dependent_item_type,
+        ai.id as dependent_item_id,
+        ai.title as dependent_title,
+        ai.status as dependent_status
+       FROM action_item_dependencies d
+       INNER JOIN action_items ai ON d.action_item_id = ai.id
+       INNER JOIN project_members pm ON ai.project_id = pm.project_id
+       WHERE d.prerequisite_item_type = $1 AND d.prerequisite_item_id = $2 AND pm.user_id = $3`,
+      [itemType, itemId, userId]
+    );
+
+    res.json({
+      item: itemResult.rows[0],
+      outgoing: outgoingResult.rows,
+      incoming: [...incomingIssues.rows, ...incomingActionItems.rows]
+    });
+
+  } catch (error) {
+    console.error('Error fetching dependencies:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch dependencies',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Delete a schedule dependency
+ * DELETE /api/schedules/dependencies/:itemType/:dependencyId
+ */
+app.delete('/api/schedules/dependencies/:itemType/:dependencyId', authenticateToken, async (req, res) => {
+  try {
+    const { itemType, dependencyId } = req.params;
+    const userId = req.user.id;
+
+    // Validate item type
+    if (itemType !== 'issue' && itemType !== 'action-item') {
+      return res.status(400).json({ error: 'Item type must be "issue" or "action-item"' });
+    }
+
+    const depTableName = itemType === 'issue' ? 'issue_dependencies' : 'action_item_dependencies';
+    const depIdColumn = itemType === 'issue' ? 'issue_id' : 'action_item_id';
+    const itemTableName = itemType === 'issue' ? 'issues' : 'action_items';
+
+    // SECURITY: Verify project access for BOTH the dependent item AND prerequisite item before deleting
+    // User must have access to the project containing the dependent task
+    const accessCheck = await pool.query(
+      `SELECT d.id, d.prerequisite_item_type, d.prerequisite_item_id
+       FROM ${depTableName} d
+       INNER JOIN ${itemTableName} item ON d.${depIdColumn} = item.id
+       INNER JOIN project_members pm ON item.project_id = pm.project_id
+       WHERE d.id = $1 AND pm.user_id = $2`,
+      [dependencyId, userId]
+    );
+
+    if (accessCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Dependency not found or access denied' });
+    }
+
+    // SECURITY: Also verify user has access to prerequisite item's project
+    const prerequisiteType = accessCheck.rows[0].prerequisite_item_type;
+    const prerequisiteId = accessCheck.rows[0].prerequisite_item_id;
+    const prerequisiteTable = prerequisiteType === 'issue' ? 'issues' : 'action_items';
+    
+    const prerequisiteAccess = await pool.query(
+      `SELECT ${prerequisiteTable}.id
+       FROM ${prerequisiteTable}
+       INNER JOIN project_members pm ON ${prerequisiteTable}.project_id = pm.project_id
+       WHERE ${prerequisiteTable}.id = $1 AND pm.user_id = $2`,
+      [prerequisiteId, userId]
+    );
+
+    if (prerequisiteAccess.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied - you do not have permission to modify this dependency' });
+    }
+
+    // Delete the dependency
+    await pool.query(
+      `DELETE FROM ${depTableName} WHERE id = $1`,
+      [dependencyId]
+    );
+
+    res.json({ success: true, message: 'Dependency deleted successfully' });
+
+  } catch (error) {
+    console.error('Error deleting dependency:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete dependency',
+      message: error.message
+    });
+  }
+});
+
+/**
  * Create new project schedule
  * POST /api/projects/:projectId/schedules
  * Body: { name, startDate, hoursPerDay, includeWeekends, selectedItems, notes }
