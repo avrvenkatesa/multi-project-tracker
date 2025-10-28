@@ -13018,6 +13018,143 @@ app.post('/api/schedules/save-dependencies', authenticateToken, async (req, res)
 });
 
 /**
+ * Detect circular dependencies for all items in a project
+ * GET /api/projects/:projectId/circular-dependencies
+ */
+app.get('/api/projects/:projectId/circular-dependencies', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const userId = req.user.id;
+
+    // Verify project access
+    const projectCheck = await pool.query(
+      `SELECT p.id FROM projects p
+       INNER JOIN project_members pm ON p.id = pm.project_id
+       WHERE p.id = $1 AND pm.user_id = $2`,
+      [projectId, userId]
+    );
+
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    // Get all issues and action items in the project
+    const issuesResult = await pool.query(
+      `SELECT id, title FROM issues WHERE project_id = $1`,
+      [projectId]
+    );
+    const actionItemsResult = await pool.query(
+      `SELECT id, title FROM action_items WHERE project_id = $1`,
+      [projectId]
+    );
+
+    // Build a map of all dependencies
+    const issueDepsResult = await pool.query(
+      `SELECT id.issue_id, id.prerequisite_item_type, id.prerequisite_item_id
+       FROM issue_dependencies id
+       INNER JOIN issues i ON id.issue_id = i.id
+       WHERE i.project_id = $1`,
+      [projectId]
+    );
+    const actionDepsResult = await pool.query(
+      `SELECT aid.action_item_id, aid.prerequisite_item_type, aid.prerequisite_item_id
+       FROM action_item_dependencies aid
+       INNER JOIN action_items ai ON aid.action_item_id = ai.id
+       WHERE ai.project_id = $1`,
+      [projectId]
+    );
+
+    // Detect cycles using DFS
+    const circularDeps = [];
+    const allItems = [
+      ...issuesResult.rows.map(i => ({ id: i.id, type: 'issue', title: i.title })),
+      ...actionItemsResult.rows.map(a => ({ id: a.id, type: 'action-item', title: a.title }))
+    ];
+
+    // Build adjacency list
+    const graph = new Map();
+    for (const item of allItems) {
+      graph.set(`${item.type}:${item.id}`, []);
+    }
+
+    for (const dep of issueDepsResult.rows) {
+      const from = `issue:${dep.issue_id}`;
+      const to = `${dep.prerequisite_item_type}:${dep.prerequisite_item_id}`;
+      if (!graph.has(from)) graph.set(from, []);
+      graph.get(from).push(to);
+    }
+
+    for (const dep of actionDepsResult.rows) {
+      const from = `action-item:${dep.action_item_id}`;
+      const to = `${dep.prerequisite_item_type}:${dep.prerequisite_item_id}`;
+      if (!graph.has(from)) graph.set(from, []);
+      graph.get(from).push(to);
+    }
+
+    // DFS to detect cycles
+    function detectCycle(node, visited, recStack, path) {
+      visited.add(node);
+      recStack.add(node);
+      path.push(node);
+
+      const neighbors = graph.get(node) || [];
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          if (detectCycle(neighbor, visited, recStack, path)) {
+            return true;
+          }
+        } else if (recStack.has(neighbor)) {
+          // Found a cycle - record it
+          const cycleStart = path.indexOf(neighbor);
+          const cycle = path.slice(cycleStart);
+          
+          // Parse the cycle nodes
+          const cycleItems = cycle.map(nodeKey => {
+            const [type, id] = nodeKey.split(':');
+            const item = allItems.find(i => i.type === type && i.id === parseInt(id));
+            return { type, id: parseInt(id), title: item?.title || 'Unknown' };
+          });
+
+          // Add each item in the cycle to the result
+          for (const item of cycleItems) {
+            const existing = circularDeps.find(cd => cd.item_type === item.type && cd.item_id === item.id);
+            if (!existing) {
+              circularDeps.push({
+                item_type: item.type,
+                item_id: item.id,
+                item_title: item.title,
+                cycle_with: cycleItems.filter(ci => !(ci.type === item.type && ci.id === item.id))
+              });
+            }
+          }
+          return true;
+        }
+      }
+
+      path.pop();
+      recStack.delete(node);
+      return false;
+    }
+
+    const visited = new Set();
+    for (const [node] of graph) {
+      if (!visited.has(node)) {
+        detectCycle(node, visited, new Set(), []);
+      }
+    }
+
+    res.json({ circularDependencies: circularDeps });
+
+  } catch (error) {
+    console.error('Error detecting circular dependencies:', error);
+    res.status(500).json({ 
+      error: 'Failed to detect circular dependencies',
+      message: error.message
+    });
+  }
+});
+
+/**
  * Get schedule dependencies for a specific task (issue or action-item)
  * GET /api/schedules/dependencies/:itemType/:itemId
  */
