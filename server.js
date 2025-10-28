@@ -12835,6 +12835,102 @@ app.post('/api/schedules/save-dependencies', authenticateToken, async (req, res)
       return res.status(404).json({ error: 'Project not found or access denied' });
     }
 
+    // Load all existing dependencies for this project to validate cycles
+    const existingDepsResult = await client.query(
+      `SELECT 
+        'issue' as dependent_item_type,
+        issue_id as dependent_item_id,
+        prerequisite_item_type,
+        prerequisite_item_id
+       FROM issue_dependencies id
+       INNER JOIN issues i ON id.issue_id = i.id
+       WHERE i.project_id = $1
+       UNION ALL
+       SELECT 
+        'action-item' as dependent_item_type,
+        action_item_id as dependent_item_id,
+        prerequisite_item_type,
+        prerequisite_item_id
+       FROM action_item_dependencies aid
+       INNER JOIN action_items ai ON aid.action_item_id = ai.id
+       WHERE ai.project_id = $1`,
+      [projectId]
+    );
+
+    // Combine existing dependencies with new ones for cycle detection
+    const allDependencies = [...existingDepsResult.rows, ...dependencies];
+
+    // Build a set of all unique tasks involved
+    const taskSet = new Set();
+    allDependencies.forEach(dep => {
+      taskSet.add(`${dep.dependent_item_type}:${dep.dependent_item_id}`);
+      taskSet.add(`${dep.prerequisite_item_type}:${dep.prerequisite_item_id}`);
+    });
+
+    const tasks = Array.from(taskSet).map(key => {
+      const [type, id] = key.split(':');
+      return { type, id: parseInt(id) };
+    });
+
+    // Build dependency graph for cycle detection
+    const { buildDependencyGraph, topologicalSort } = require('./services/topological-sort-service');
+    
+    // Convert dependencies to the format expected by buildDependencyGraph
+    const formattedDeps = allDependencies.map(dep => ({
+      source_type: dep.dependent_item_type,
+      source_id: dep.dependent_item_id,
+      target_type: dep.prerequisite_item_type,
+      target_id: dep.prerequisite_item_id,
+      relationship_type: 'depends_on'
+    }));
+
+    const graph = buildDependencyGraph(tasks, formattedDeps);
+    const { hasCycle, cycleInfo } = topologicalSort(graph);
+
+    if (hasCycle) {
+      // Load task titles for better error messages
+      const taskTitles = new Map();
+      for (const task of tasks) {
+        const tableName = task.type === 'issue' ? 'issues' : 'action_items';
+        const titleResult = await client.query(
+          `SELECT id, title FROM ${tableName} WHERE id = $1`,
+          [task.id]
+        );
+        if (titleResult.rows.length > 0) {
+          const key = `${task.type}:${task.id}`;
+          taskTitles.set(key, titleResult.rows[0].title);
+        }
+      }
+
+      // Build detailed error message
+      let errorMessage = 'Cannot save dependencies - circular dependency detected:\n\n';
+      
+      if (cycleInfo && cycleInfo.cycle) {
+        errorMessage += 'Cycle:\n';
+        errorMessage += cycleInfo.cycle.map(key => {
+          const [type, id] = key.split(':');
+          const title = taskTitles.get(key) || 'Unknown';
+          return `${type}#${id}: ${title}`;
+        }).join('\n → ');
+        errorMessage += '\n\n';
+        errorMessage += 'To fix this, remove one of these dependencies from your selection:\n';
+        cycleInfo.dependencies.forEach((dep, index) => {
+          const [fromType, fromId] = dep.from.split(':');
+          const [toType, toId] = dep.to.split(':');
+          const fromTitle = taskTitles.get(dep.from) || 'Unknown';
+          const toTitle = taskTitles.get(dep.to) || 'Unknown';
+          errorMessage += `${index + 1}. ${fromType}#${fromId} (${fromTitle}) depends on ${toType}#${toId} (${toTitle})\n`;
+        });
+      }
+
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: 'Circular dependency detected',
+        message: errorMessage,
+        cycleInfo: cycleInfo
+      });
+    }
+
     // Begin transaction
     await client.query('BEGIN');
 

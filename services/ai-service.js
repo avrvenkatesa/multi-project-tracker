@@ -1,23 +1,13 @@
 const OpenAI = require('openai');
-const Anthropic = require('@anthropic-ai/sdk');
 const { Pool } = require('@neondatabase/serverless');
 const { extractTextFromFile, truncateToTokenLimit } = require('./file-processor');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const AI_PROVIDER = process.env.AI_PROVIDER || 'openai';
-
-// Initialize AI client
-let aiClient;
-if (AI_PROVIDER === 'openai') {
-  aiClient = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-  });
-} else if (AI_PROVIDER === 'anthropic') {
-  aiClient = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY
-  });
-}
+// Initialize OpenAI client
+const aiClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 /**
  * Lookup template ID by name (no hardcoding)
@@ -398,7 +388,7 @@ ${hasAttachments ? `
  */
 async function callAI(prompt, sourceType) {
   try {
-    console.log(`[AI] Starting generation request (provider: ${AI_PROVIDER})`);
+    console.log(`[AI] Starting generation request (provider: OpenAI GPT-4o)`);
     let response;
     
     // Create a timeout promise
@@ -406,38 +396,21 @@ async function callAI(prompt, sourceType) {
       setTimeout(() => reject(new Error('AI request timeout after 90 seconds')), 90000);
     });
     
-    if (AI_PROVIDER === 'openai') {
-      const completionPromise = aiClient.chat.completions.create({
-        model: process.env.AI_MODEL || 'gpt-4o',
-        messages: [
-          { 
-            role: 'system', 
-            content: 'You are a technical project expert who creates EXHAUSTIVELY DETAILED checklists with 100-200+ items for large documents. Break every complex task into 5-15 atomic substeps. NEVER summarize - always extract every single detail mentioned. Generate MORE items rather than fewer. Your checklists should be so detailed that someone could execute them without reading source documents. You MUST generate at least 100 items when attachments are provided. Respond with valid JSON only, no markdown formatting, no code blocks.' 
-          },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 16384
-      });
-      
-      const completion = await Promise.race([completionPromise, timeout]);
-      response = completion.choices[0].message.content;
-      
-    } else if (AI_PROVIDER === 'anthropic') {
-      const messagePromise = aiClient.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 8000,
-        messages: [
-          { 
-            role: 'user', 
-            content: `${prompt}\n\nIMPORTANT: Respond with ONLY valid JSON. No markdown code blocks, no explanations before or after.` 
-          }
-        ]
-      });
-      
-      const message = await Promise.race([messagePromise, timeout]);
-      response = message.content[0].text;
-    }
+    const completionPromise = aiClient.chat.completions.create({
+      model: process.env.AI_MODEL || 'gpt-4o',
+      messages: [
+        { 
+          role: 'system', 
+          content: 'You are a technical project expert who creates EXHAUSTIVELY DETAILED checklists with 100-200+ items for large documents. Break every complex task into 5-15 atomic substeps. NEVER summarize - always extract every single detail mentioned. Generate MORE items rather than fewer. Your checklists should be so detailed that someone could execute them without reading source documents. You MUST generate at least 100 items when attachments are provided. Respond with valid JSON only, no markdown formatting, no code blocks.' 
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 16384
+    });
+    
+    const completion = await Promise.race([completionPromise, timeout]);
+    response = completion.choices[0].message.content;
     
     console.log(`[AI] Generation complete, parsing response...`);
     
@@ -660,45 +633,28 @@ function checkRateLimit(userId, requestCount = 1) {
  */
 async function callAIForDocument(prompt) {
   try {
-    console.log(`[AI] Starting document analysis (provider: ${AI_PROVIDER})`);
+    console.log(`[AI] Starting document analysis (provider: OpenAI GPT-4o)`);
     let response;
     
     const timeout = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('AI request timeout after 90 seconds')), 90000);
     });
     
-    if (AI_PROVIDER === 'openai') {
-      const completionPromise = aiClient.chat.completions.create({
-        model: process.env.AI_MODEL || 'gpt-4o',
-        messages: [
-          { 
-            role: 'system', 
-            content: 'You are an expert project manager who generates comprehensive, actionable checklists from documents. Create detailed, well-organized checklists with clear sections and specific action items. Respond with valid JSON only, no markdown formatting, no code blocks.' 
-          },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 16384
-      });
-      
-      const completion = await Promise.race([completionPromise, timeout]);
-      response = completion.choices[0].message.content;
-      
-    } else if (AI_PROVIDER === 'anthropic') {
-      const messagePromise = aiClient.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 8000,
-        messages: [
-          { 
-            role: 'user', 
-            content: `${prompt}\n\nIMPORTANT: Respond with ONLY valid JSON. No markdown code blocks, no explanations before or after.` 
-          }
-        ]
-      });
-      
-      const message = await Promise.race([messagePromise, timeout]);
-      response = message.content[0].text;
-    }
+    const completionPromise = aiClient.chat.completions.create({
+      model: process.env.AI_MODEL || 'gpt-4o',
+      messages: [
+        { 
+          role: 'system', 
+          content: 'You are an expert project manager who generates comprehensive, actionable checklists from documents. Create detailed, well-organized checklists with clear sections and specific action items. Respond with valid JSON only, no markdown formatting, no code blocks.' 
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: parseInt(process.env.AI_MAX_TOKENS) || 16384
+    });
+    
+    const completion = await Promise.race([completionPromise, timeout]);
+    response = completion.choices[0].message.content;
     
     console.log(`[AI] Document analysis complete, parsing response...`);
     
@@ -991,16 +947,14 @@ Respond in JSON format:
   "parallel_opportunities": "<which tasks can run in parallel>"
 }`;
 
-    let response;
-    if (AI_PROVIDER === 'openai') {
-      response = await aiClient.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        response_format: { type: "json_object" }
-      });
-      
-      const result = JSON.parse(response.choices[0].message.content);
+    const response = await aiClient.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    });
+    
+    const result = JSON.parse(response.choices[0].message.content);
       
       // Map task numbers back to actual task IDs and types
       const mappedDependencies = result.dependencies.map(dep => {
@@ -1040,45 +994,12 @@ Respond in JSON format:
         };
       }
 
-      return {
-        success: true,
-        dependencies: mappedDependencies,
-        overall_analysis: result.overall_analysis,
-        parallel_opportunities: result.parallel_opportunities
-      };
-      
-    } else if (AI_PROVIDER === 'anthropic') {
-      response = await aiClient.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 4000,
-        temperature: 0.3,
-        messages: [{ role: 'user', content: prompt }]
-      });
-
-      const result = JSON.parse(response.content[0].text);
-      
-      // Map task numbers back to actual task IDs and types
-      const mappedDependencies = result.dependencies.map(dep => {
-        const dependentTask = tasks[dep.dependent_task - 1];
-        const prerequisiteTask = tasks[dep.prerequisite_task - 1];
-        
-        return {
-          dependent_item_type: dependentTask.type,
-          dependent_item_id: dependentTask.id,
-          prerequisite_item_type: prerequisiteTask.type,
-          prerequisite_item_id: prerequisiteTask.id,
-          dependency_type: dep.dependency_type,
-          reasoning: dep.reasoning
-        };
-      });
-
-      return {
-        success: true,
-        dependencies: mappedDependencies,
-        overall_analysis: result.overall_analysis,
-        parallel_opportunities: result.parallel_opportunities
-      };
-    }
+    return {
+      success: true,
+      dependencies: mappedDependencies,
+      overall_analysis: result.overall_analysis,
+      parallel_opportunities: result.parallel_opportunities
+    };
 
   } catch (error) {
     console.error('Error suggesting task dependencies:', error);

@@ -737,7 +737,18 @@ async function applyDependencies() {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to save dependencies');
+      const errorData = await response.json();
+      
+      // Handle circular dependency errors with detailed message
+      if (errorData.error === 'Circular dependency detected') {
+        alert('❌ ' + errorData.message + '\n\nPlease deselect some of the suggested dependencies and try again.');
+      } else {
+        throw new Error(errorData.message || 'Failed to save dependencies');
+      }
+      
+      applyBtn.disabled = false;
+      applyBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Apply Dependencies';
+      return;
     }
 
     const result = await response.json();
