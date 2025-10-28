@@ -23,8 +23,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Set the Back to Projects link with the correct project ID
-  const backLink = document.getElementById('back-to-projects-link');
+  // Set the Back to Dashboard link with the correct project ID
+  const backLink = document.getElementById('back-to-dashboard-link');
   if (backLink) {
     backLink.href = `/dashboard.html?projectId=${currentProjectId}`;
   }
