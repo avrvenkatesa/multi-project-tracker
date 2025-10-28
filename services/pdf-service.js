@@ -523,6 +523,346 @@ function formatResponseValue(value, fieldType) {
   return value;
 }
 
+/**
+ * Generate PDF report for project schedule
+ * Includes timeline, Gantt visualization, and resources
+ */
+async function generateSchedulePDF(scheduleData) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const { schedule, tasks, resources } = scheduleData;
+      
+      const doc = new PDFDocument({ 
+        size: 'A4', 
+        margin: 40,
+        info: {
+          Title: `Schedule: ${schedule.name}`,
+          Author: 'Multi-Project Tracker System',
+          Subject: `Project Schedule Report`,
+          Keywords: 'schedule, timeline, gantt, resources, project',
+          Creator: 'Multi-Project Tracker v1.0',
+          Producer: 'PDFKit Library',
+          CreationDate: new Date(),
+          ModDate: new Date()
+        }
+      });
+      
+      const chunks = [];
+      
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+      
+      // Title page
+      doc.fontSize(24).font('Helvetica-Bold').fillColor('#1e40af')
+        .text('Project Schedule Report', { align: 'center' });
+      
+      doc.moveDown(0.5);
+      doc.fontSize(18).fillColor('#1f2937')
+        .text(schedule.name, { align: 'center' });
+      
+      doc.moveDown(1);
+      
+      // Schedule Summary
+      addScheduleSummary(doc, schedule);
+      
+      doc.addPage();
+      
+      // Timeline section
+      addTimelineSection(doc, tasks);
+      
+      doc.addPage();
+      
+      // Gantt visualization
+      addGanttVisualization(doc, tasks, schedule);
+      
+      doc.addPage();
+      
+      // Resources section
+      addResourcesSection(doc, resources, schedule);
+      
+      // Add page numbers
+      const range = doc.bufferedPageRange();
+      const pageCount = range.count;
+      
+      for (let i = 0; i < pageCount; i++) {
+        doc.switchToPage(range.start + i);
+        doc.fontSize(9).fillColor('#666666').font('Helvetica').text(
+          `Page ${range.start + i + 1} of ${range.start + pageCount}`,
+          40,
+          doc.page.height - 40,
+          { align: 'center' }
+        );
+      }
+      
+      doc.end();
+      
+    } catch (error) {
+      console.error('Schedule PDF generation error:', error);
+      reject(new Error(`Failed to generate schedule PDF: ${error.message}`));
+    }
+  });
+}
+
+function addScheduleSummary(doc, schedule) {
+  doc.fontSize(16).font('Helvetica-Bold').fillColor('#1f2937')
+    .text('Schedule Summary', 40, doc.y);
+  
+  doc.moveDown(0.5);
+  
+  const summaryY = doc.y;
+  const boxHeight = 120;
+  
+  // Draw background boxes
+  doc.rect(40, summaryY, 250, boxHeight).fillAndStroke('#f3f4f6', '#d1d5db');
+  doc.rect(300, summaryY, 250, boxHeight).fillAndStroke('#f3f4f6', '#d1d5db');
+  
+  // Left column
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#4b5563')
+    .text('DURATION', 50, summaryY + 10);
+  doc.fontSize(18).font('Helvetica-Bold').fillColor('#1f2937')
+    .text(`${schedule.total_days || 0} days`, 50, summaryY + 30);
+  const startDate = new Date(schedule.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const endDate = new Date(schedule.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  doc.fontSize(9).fillColor('#6b7280')
+    .text(`${startDate} - ${endDate}`, 50, summaryY + 55);
+  
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#4b5563')
+    .text('TOTAL TASKS', 50, summaryY + 75);
+  doc.fontSize(18).font('Helvetica-Bold').fillColor('#1f2937')
+    .text(`${schedule.total_tasks || 0}`, 50, summaryY + 95);
+  
+  // Right column
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#4b5563')
+    .text('CRITICAL PATH', 310, summaryY + 10);
+  doc.fontSize(18).font('Helvetica-Bold').fillColor('#dc2626')
+    .text(`${schedule.critical_path_tasks || 0} tasks`, 310, summaryY + 30);
+  doc.fontSize(9).fillColor('#6b7280')
+    .text(`${schedule.critical_path_hours || 0} hours`, 310, summaryY + 55);
+  
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#4b5563')
+    .text('RISKS', 310, summaryY + 75);
+  const riskColor = (schedule.risks_count || 0) > 0 ? '#dc2626' : '#059669';
+  doc.fontSize(18).font('Helvetica-Bold').fillColor(riskColor)
+    .text(`${schedule.risks_count || 0}`, 310, summaryY + 95);
+  
+  doc.y = summaryY + boxHeight + 15;
+  
+  // Work schedule info
+  doc.fontSize(10).font('Helvetica').fillColor('#374151')
+    .text(`Work Schedule: ${schedule.hours_per_day} hours/day, ${schedule.include_weekends ? '7 days/week (including weekends)' : 'Monday-Friday (business days only)'}`, 40, doc.y);
+  
+  if (schedule.notes) {
+    doc.moveDown(0.5);
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#4b5563')
+      .text('Notes:', 40, doc.y);
+    doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
+      .text(schedule.notes, 40, doc.y + 15, { width: 510 });
+  }
+}
+
+function addTimelineSection(doc, tasks) {
+  doc.fontSize(16).font('Helvetica-Bold').fillColor('#1f2937')
+    .text('Timeline', 40, 40);
+  
+  doc.moveDown(1);
+  
+  const tableTop = doc.y;
+  const col1X = 40;
+  const col2X = 200;
+  const col3X = 300;
+  const col4X = 400;
+  const col5X = 480;
+  const rowHeight = 20;
+  
+  // Table header
+  doc.rect(col1X, tableTop, 515, rowHeight).fillAndStroke('#1e40af', '#1e40af');
+  doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff')
+    .text('Task', col1X + 5, tableTop + 6)
+    .text('Start', col2X + 5, tableTop + 6)
+    .text('End', col3X + 5, tableTop + 6)
+    .text('Duration', col4X + 5, tableTop + 6)
+    .text('Status', col5X + 5, tableTop + 6);
+  
+  let currentY = tableTop + rowHeight;
+  
+  // Table rows
+  tasks.forEach((task, index) => {
+    const bgColor = task.is_critical_path ? '#fee2e2' : (index % 2 === 0 ? '#ffffff' : '#f9fafb');
+    doc.rect(col1X, currentY, 515, rowHeight).fillAndStroke(bgColor, '#e5e7eb');
+    
+    const startDate = new Date(task.scheduled_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const endDate = new Date(task.scheduled_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const duration = Math.ceil((new Date(task.scheduled_end) - new Date(task.scheduled_start)) / (1000 * 60 * 60 * 24));
+    
+    const titleColor = task.is_critical_path ? '#991b1b' : '#1f2937';
+    doc.fontSize(8).font('Helvetica').fillColor(titleColor)
+      .text(task.title.substring(0, 30) + (task.title.length > 30 ? '...' : ''), col1X + 5, currentY + 6, { width: 150 })
+      .text(startDate, col2X + 5, currentY + 6)
+      .text(endDate, col3X + 5, currentY + 6)
+      .text(`${duration}d`, col4X + 5, currentY + 6)
+      .text(task.status || 'To Do', col5X + 5, currentY + 6);
+    
+    currentY += rowHeight;
+    
+    // Add new page if needed
+    if (currentY > doc.page.height - 80) {
+      doc.addPage();
+      currentY = 60;
+    }
+  });
+}
+
+function addGanttVisualization(doc, tasks, schedule) {
+  doc.fontSize(16).font('Helvetica-Bold').fillColor('#1f2937')
+    .text('Gantt Chart', 40, 40);
+  
+  doc.moveDown(1);
+  
+  const chartTop = doc.y;
+  const chartLeft = 40;
+  const taskNameWidth = 180;
+  const timelineWidth = 350;
+  const rowHeight = 25;
+  
+  // Calculate date range
+  const startDate = new Date(schedule.start_date);
+  const endDate = new Date(schedule.end_date);
+  const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+  
+  // Draw timeline header with dates
+  doc.fontSize(8).font('Helvetica-Bold').fillColor('#4b5563');
+  const headerIntervals = Math.min(10, totalDays);
+  for (let i = 0; i <= headerIntervals; i++) {
+    const intervalDate = new Date(startDate);
+    intervalDate.setDate(startDate.getDate() + Math.floor((totalDays / headerIntervals) * i));
+    const dateStr = intervalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    doc.text(dateStr, chartLeft + taskNameWidth + (timelineWidth / headerIntervals) * i, chartTop - 5, { width: 50, align: 'center' });
+  }
+  
+  let currentY = chartTop + 10;
+  
+  // Draw tasks
+  tasks.forEach((task, index) => {
+    // Task name
+    const textColor = task.is_critical_path ? '#991b1b' : '#1f2937';
+    doc.fontSize(8).font('Helvetica').fillColor(textColor)
+      .text(task.title.substring(0, 30) + (task.title.length > 30 ? '...' : ''), chartLeft, currentY + 8, { width: taskNameWidth - 10 });
+    
+    // Calculate bar position and width
+    const taskStart = new Date(task.scheduled_start);
+    const taskEnd = new Date(task.scheduled_end);
+    const daysFromStart = Math.floor((taskStart - startDate) / (1000 * 60 * 60 * 24));
+    const taskDuration = Math.ceil((taskEnd - taskStart) / (1000 * 60 * 60 * 24));
+    
+    const barX = chartLeft + taskNameWidth + (daysFromStart / totalDays) * timelineWidth;
+    const barWidth = Math.max((taskDuration / totalDays) * timelineWidth, 3);
+    
+    // Draw bar
+    const barColor = task.is_critical_path ? '#dc2626' : '#6b9bd1';
+    doc.rect(barX, currentY + 5, barWidth, 15).fillAndStroke(barColor, barColor);
+    
+    // Add assignee if available
+    if (task.assignee) {
+      doc.fontSize(7).fillColor('#6b7280')
+        .text(task.assignee.substring(0, 15), barX, currentY + 5, { width: barWidth, align: 'center' });
+    }
+    
+    currentY += rowHeight;
+    
+    // Add new page if needed
+    if (currentY > doc.page.height - 80) {
+      doc.addPage();
+      currentY = 60;
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#1f2937')
+        .text('Gantt Chart (continued)', 40, currentY);
+      currentY += 30;
+    }
+  });
+  
+  // Legend
+  doc.moveDown(2);
+  const legendY = currentY + 20;
+  doc.rect(chartLeft, legendY, 10, 10).fillAndStroke('#6b9bd1', '#6b9bd1');
+  doc.fontSize(9).font('Helvetica').fillColor('#1f2937')
+    .text('Regular Task', chartLeft + 15, legendY + 1);
+  
+  doc.rect(chartLeft + 120, legendY, 10, 10).fillAndStroke('#dc2626', '#dc2626');
+  doc.text('Critical Path', chartLeft + 135, legendY + 1);
+}
+
+function addResourcesSection(doc, resources, schedule) {
+  doc.fontSize(16).font('Helvetica-Bold').fillColor('#1f2937')
+    .text('Resource Workload Analysis', 40, 40);
+  
+  doc.moveDown(1);
+  
+  if (!resources || resources.length === 0) {
+    doc.fontSize(10).font('Helvetica').fillColor('#6b7280')
+      .text('No resource assignments found.', 40, doc.y);
+    return;
+  }
+  
+  const hoursPerDay = schedule.hours_per_day || 8;
+  
+  resources.forEach((resource, index) => {
+    const boxY = doc.y;
+    const boxHeight = 90;
+    
+    // Resource box
+    const bgColor = resource.isOverloaded ? '#fee2e2' : '#f3f4f6';
+    const borderColor = resource.isOverloaded ? '#dc2626' : '#d1d5db';
+    doc.rect(40, boxY, 510, boxHeight).fillAndStroke(bgColor, borderColor);
+    
+    // Resource name
+    doc.fontSize(12).font('Helvetica-Bold').fillColor('#1f2937')
+      .text(resource.name, 50, boxY + 10);
+    
+    if (resource.isOverloaded) {
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#dc2626')
+        .text('⚠ OVERLOADED', 450, boxY + 12);
+    }
+    
+    // Metrics
+    const metricsY = boxY + 35;
+    doc.fontSize(9).font('Helvetica-Bold').fillColor('#4b5563')
+      .text('Tasks', 50, metricsY)
+      .text('Total Hours', 150, metricsY)
+      .text('Peak Daily', 250, metricsY)
+      .text('Utilization', 350, metricsY)
+      .text('Overloaded Days', 450, metricsY);
+    
+    doc.fontSize(14).font('Helvetica-Bold').fillColor('#1f2937')
+      .text(resource.taskCount.toString(), 50, metricsY + 15)
+      .text(`${resource.totalHours.toFixed(1)}h`, 150, metricsY + 15)
+      .text(`${resource.maxDailyHours.toFixed(1)}h`, 250, metricsY + 15);
+    
+    const utilizationColor = resource.utilizationPercent > 100 ? '#dc2626' : '#1f2937';
+    doc.fillColor(utilizationColor)
+      .text(`${resource.utilizationPercent}%`, 350, metricsY + 15);
+    
+    const overloadColor = resource.overloadedDays > 0 ? '#dc2626' : '#059669';
+    doc.fillColor(overloadColor)
+      .text(resource.overloadedDays.toString(), 450, metricsY + 15);
+    
+    // Warning message
+    if (resource.isOverloaded) {
+      doc.fontSize(8).font('Helvetica').fillColor('#991b1b')
+        .text(`This resource exceeds ${hoursPerDay}h/day capacity on ${resource.overloadedDays} day${resource.overloadedDays !== 1 ? 's' : ''}.`, 
+          50, boxY + 70, { width: 500 });
+    }
+    
+    doc.y = boxY + boxHeight + 15;
+    
+    // Add new page if needed
+    if (doc.y > doc.page.height - 120) {
+      doc.addPage();
+      doc.y = 60;
+    }
+  });
+}
+
 module.exports = {
-  generateChecklistPDF
+  generateChecklistPDF,
+  generateSchedulePDF
 };

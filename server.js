@@ -53,7 +53,7 @@ const { rateLimitMiddleware, getUsageStats } = require('./middleware/ai-rate-lim
 const { analyzeDocumentForWorkstreams } = require('./services/document-analyzer');
 const { extractTextFromFile } = require('./services/file-processor');
 const { initializeDailyJobs } = require('./jobs/dailyNotifications');
-const { generateChecklistPDF } = require('./services/pdf-service');
+const { generateChecklistPDF, generateSchedulePDF } = require('./services/pdf-service');
 const { validateChecklist, getValidationStatus } = require('./services/validation-service');
 const dependencyService = require('./services/dependency-service');
 const documentService = require('./services/document-service');
@@ -13633,6 +13633,127 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching schedule:', error);
     res.status(500).json({ error: 'Failed to fetch schedule' });
+  }
+});
+
+/**
+ * Export schedule as PDF
+ * GET /api/schedules/:scheduleId/pdf
+ */
+app.get('/api/schedules/:scheduleId/pdf', authenticateToken, async (req, res) => {
+  try {
+    const { scheduleId } = req.params;
+    const userId = req.user.id;
+
+    // Verify access
+    const scheduleResult = await pool.query(
+      `SELECT ps.*
+       FROM project_schedules ps
+       INNER JOIN projects p ON ps.project_id = p.id
+       INNER JOIN project_members pm ON p.id = pm.project_id
+       WHERE ps.id = $1 AND pm.user_id = $2`,
+      [scheduleId, userId]
+    );
+
+    if (scheduleResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Schedule not found or access denied' });
+    }
+
+    const schedule = scheduleResult.rows[0];
+
+    // Get tasks with dependencies
+    const tasks = await pool.query(
+      `SELECT 
+        ts.*,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.title
+          ELSE ai.title
+        END as title,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.status
+          ELSE ai.status
+        END as status,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.assignee
+          ELSE ai.assignee
+        END as assignee
+       FROM task_schedules ts
+       LEFT JOIN issues i ON ts.item_type = 'issue' AND ts.item_id = i.id
+       LEFT JOIN action_items ai ON ts.item_type = 'action-item' AND ts.item_id = ai.id
+       WHERE ts.schedule_id = $1
+       ORDER BY ts.scheduled_start`,
+      [scheduleId]
+    );
+
+    // Calculate resource workload
+    const workload = {};
+    const hoursPerDay = schedule.hours_per_day || 8;
+    
+    tasks.rows.forEach(task => {
+      const assignee = task.assignee || 'Unassigned';
+      if (!workload[assignee]) {
+        workload[assignee] = {
+          name: assignee,
+          taskCount: 0,
+          totalHours: 0,
+          dailyHours: {},
+          maxDailyHours: 0,
+          overloadedDays: 0
+        };
+      }
+
+      workload[assignee].taskCount++;
+      workload[assignee].totalHours += parseFloat(task.estimated_hours) || 0;
+
+      // Calculate daily hours
+      const start = new Date(task.scheduled_start);
+      const end = new Date(task.scheduled_end);
+      const taskDays = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+      const dailyHours = (parseFloat(task.estimated_hours) || 0) / taskDays;
+
+      let currentDate = new Date(start);
+      while (currentDate <= end) {
+        const dateKey = currentDate.toISOString().split('T')[0];
+        
+        // Skip weekends if not included
+        if (!schedule.include_weekends && (currentDate.getDay() === 0 || currentDate.getDay() === 6)) {
+          currentDate.setDate(currentDate.getDate() + 1);
+          continue;
+        }
+
+        workload[assignee].dailyHours[dateKey] = (workload[assignee].dailyHours[dateKey] || 0) + dailyHours;
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+
+    // Calculate metrics
+    const resources = Object.values(workload).map(resource => {
+      const dailyHoursArray = Object.values(resource.dailyHours);
+      resource.maxDailyHours = Math.max(...dailyHoursArray, 0);
+      resource.overloadedDays = dailyHoursArray.filter(h => h > hoursPerDay).length;
+      resource.utilizationPercent = Math.round((resource.maxDailyHours / hoursPerDay) * 100);
+      resource.isOverloaded = resource.maxDailyHours > hoursPerDay;
+      return resource;
+    });
+
+    // Generate PDF
+    const pdfBuffer = await generateSchedulePDF({
+      schedule,
+      tasks: tasks.rows,
+      resources
+    });
+
+    // Set response headers
+    const filename = `schedule-${schedule.name.replace(/[^a-z0-9]/gi, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('Error generating schedule PDF:', error);
+    res.status(500).json({ error: 'Failed to generate PDF' });
   }
 });
 

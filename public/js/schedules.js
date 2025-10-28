@@ -2033,12 +2033,20 @@ function renderScheduleDetail(data) {
       <div class="bg-gray-50 rounded-lg p-6">
         <div class="flex justify-between items-start mb-4">
           <h3 class="text-lg font-semibold">Schedule Summary</h3>
-          <button 
-            onclick="exportScheduleCSV(${schedule.id})" 
-            class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center text-sm"
-          >
-            <i class="fas fa-file-csv mr-2"></i>Export CSV
-          </button>
+          <div class="flex space-x-2">
+            <button 
+              onclick="exportSchedulePDF(${schedule.id})" 
+              class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center text-sm"
+            >
+              <i class="fas fa-file-pdf mr-2"></i>Export PDF
+            </button>
+            <button 
+              onclick="exportScheduleCSV(${schedule.id})" 
+              class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center text-sm"
+            >
+              <i class="fas fa-file-csv mr-2"></i>Export CSV
+            </button>
+          </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
@@ -2416,6 +2424,11 @@ function renderResourceWorkload(workload, hoursPerDay) {
 }
 
 function exportScheduleCSV(scheduleId) {
+  if (!window.currentScheduleData) {
+    alert('Please open a schedule first before exporting');
+    return;
+  }
+  
   const { schedule, tasks } = window.currentScheduleData;
   
   if (!tasks || tasks.length === 0) {
@@ -2477,6 +2490,42 @@ function exportScheduleCSV(scheduleId) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+async function exportSchedulePDF(scheduleId) {
+  try {
+    const response = await fetch(`/api/schedules/${scheduleId}/pdf`, {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to generate PDF');
+    }
+
+    // Get filename from Content-Disposition header
+    const contentDisposition = response.headers.get('Content-Disposition');
+    const filename = contentDisposition 
+      ? contentDisposition.split('filename=')[1].replace(/"/g, '')
+      : `schedule-${scheduleId}.pdf`;
+
+    // Download the PDF
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    console.log('PDF exported successfully');
+  } catch (error) {
+    console.error('Error exporting PDF:', error);
+    alert('Failed to export PDF. Please try again.');
+  }
 }
 
 // ============================================
