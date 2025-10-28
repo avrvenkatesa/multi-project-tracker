@@ -9501,8 +9501,9 @@ async function loadScheduleDependencies() {
                   </span>
                 </div>
                 <button 
-                  onclick="deleteScheduleDependency('${currentDetailItem.type}', ${dep.dependency_id})"
-                  class="ml-4 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm transition-colors"
+                  class="remove-dependency-btn ml-4 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm transition-colors"
+                  data-item-type="${currentDetailItem.type}"
+                  data-dependency-id="${dep.dependency_id}"
                 >
                   Remove
                 </button>
@@ -9536,8 +9537,9 @@ async function loadScheduleDependencies() {
                   </span>
                 </div>
                 <button 
-                  onclick="deleteScheduleDependency('${dep.dependent_item_type}', ${dep.dependency_id})"
-                  class="ml-4 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm transition-colors"
+                  class="remove-dependency-btn ml-4 px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm transition-colors"
+                  data-item-type="${dep.dependent_item_type}"
+                  data-dependency-id="${dep.dependency_id}"
                 >
                   Remove
                 </button>
@@ -9603,6 +9605,19 @@ document.addEventListener('DOMContentLoaded', function() {
   const depsBtn = document.getElementById('item-detail-dependencies-btn');
   if (depsBtn) {
     depsBtn.addEventListener('click', showScheduleDependencies);
+  }
+  
+  // Event delegation for remove dependency buttons (CSP-compliant)
+  const depsContent = document.getElementById('schedule-deps-content');
+  if (depsContent) {
+    depsContent.addEventListener('click', function(e) {
+      const removeBtn = e.target.closest('.remove-dependency-btn');
+      if (removeBtn) {
+        const itemType = removeBtn.dataset.itemType;
+        const dependencyId = removeBtn.dataset.dependencyId;
+        deleteScheduleDependency(itemType, dependencyId);
+      }
+    });
   }
 });
 
