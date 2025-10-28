@@ -1922,7 +1922,7 @@ function renderGanttChart(tasks, schedule) {
 
   // Create Gantt chart
   try {
-    const gantt = new Frappe.Gantt(ganttContainer, ganttTasks, {
+    const gantt = new Gantt(ganttContainer, ganttTasks, {
       view_mode: 'Day',
       bar_height: 30,
       padding: 18,

@@ -20,6 +20,9 @@ Key UI features include:
 -   **Strict Resource Assignment Mode**: Optional project-level setting to require all scheduled tasks have assignees. When enabled, prevents schedule creation if any selected items lack resource assignments, ensuring accurate workload calculations and preventing oversight of unassigned work. Users can disable strict mode on-the-fly if needed.
 -   **Task-Level Estimate Selection for What-If Analysis**: Pre-schedule review modal allows users to choose which estimate type (Planning Source, AI, Manual, or Hybrid) to use for each individual task. Includes bulk actions ("Use All AI", "Use All Manual", "Use Planning Source", "Use All Hybrid") and real-time total hours calculation. Enables flexible scenario planning and comparison of different estimate approaches within the same schedule.
 -   **Enhanced Schedule Visualization**: Schedule detail view displays assignee information under each task, clearly indicating "Unassigned" for tasks without resource assignments. Tasks are grouped by assignee for better workload visibility.
+-   **Inline Resource Assignment**: Missing Resource Assignments modal now includes dropdown selection and quick assign functionality, allowing users to assign resources directly in the validation modal without returning to the main board. Features visual feedback and automatic revalidation.
+-   **Professional Schedule Outputs**: Schedule detail view features a tabbed interface with Timeline, Gantt Chart, and Resources views, plus one-click CSV export. Gantt chart powered by Frappe Gantt library with interactive timeline visualization, dependency arrows, critical path highlighting, and adjustable view modes (Quarter Day, Half Day, Day, Week, Month).
+-   **Resource Workload Analysis**: Dedicated Resources tab calculates daily workload per team member, detects overloading (>configured hours/day), and displays peak daily load, utilization percentage, and overloaded days count. Visual warnings highlight overallocated resources with actionable recommendations.
 
 ### Technical Implementations
 The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations, atomic transactions, project-level authorization, and logging.
@@ -44,7 +47,7 @@ Project scheduling involves `project_schedules` (versioning), `schedule_items`, 
 
 ### Reporting & Export
 -   **PDF Export**: Generates professional PDF reports for checklists.
--   **CSV Export**: Provides CSV file generation for data export.
+-   **CSV Export**: Provides CSV file generation for checklists and project schedules, including task details, dates, assignees, dependencies, and risk indicators.
 
 ## External Dependencies
 
@@ -89,3 +92,4 @@ Project scheduling involves `project_schedules` (versioning), `schedule_items`, 
 
 ### CDN Services
 -   Chart.js
+-   Frappe Gantt (v0.6.1)
