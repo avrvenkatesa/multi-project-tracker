@@ -85,6 +85,22 @@ export const actionItems = pgTable('action_items', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+export const issueDependencies = pgTable('issue_dependencies', {
+  id: serial('id').primaryKey(),
+  issueId: integer('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  prerequisiteItemType: varchar('prerequisite_item_type', { length: 20 }).notNull(),
+  prerequisiteItemId: integer('prerequisite_item_id').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const actionItemDependencies = pgTable('action_item_dependencies', {
+  id: serial('id').primaryKey(),
+  actionItemId: integer('action_item_id').notNull().references(() => actionItems.id, { onDelete: 'cascade' }),
+  prerequisiteItemType: varchar('prerequisite_item_type', { length: 20 }).notNull(),
+  prerequisiteItemId: integer('prerequisite_item_id').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export const statusHistory = pgTable('status_history', {
   id: serial('id').primaryKey(),
   itemType: varchar('item_type', { length: 50 }).notNull(),
