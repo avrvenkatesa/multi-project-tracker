@@ -156,7 +156,7 @@ function buildDependencyGraph(items, dependencies) {
 /**
  * Perform topological sort using Kahn's algorithm
  * @param {Object} graph - Dependency graph
- * @returns {Object} - {sorted: Array, hasCycle: boolean, unreachable: Array}
+ * @returns {Object} - {sorted: Array, hasCycle: boolean, unreachable: Array, cycleInfo: Object}
  */
 function topologicalSort(graph) {
   const sorted = [];
@@ -189,6 +189,7 @@ function topologicalSort(graph) {
   // Check for cycles
   const hasCycle = sorted.length < graph.nodes.size;
   const unreachable = [];
+  let cycleInfo = null;
   
   if (hasCycle) {
     // Find nodes that couldn't be sorted (part of cycle or unreachable)
@@ -197,9 +198,72 @@ function topologicalSort(graph) {
         unreachable.push(key);
       }
     }
+    
+    // Find the actual cycle path using DFS
+    cycleInfo = findCyclePath(graph, unreachable);
   }
 
-  return { sorted, hasCycle, unreachable };
+  return { sorted, hasCycle, unreachable, cycleInfo };
+}
+
+/**
+ * Find the actual cycle path in the graph using DFS
+ * @param {Object} graph - Dependency graph
+ * @param {Array} unreachableNodes - Nodes involved in the cycle
+ * @returns {Object} - {cycle: Array, dependencies: Array} describing the cycle
+ */
+function findCyclePath(graph, unreachableNodes) {
+  const visited = new Set();
+  const recursionStack = new Set();
+  
+  function dfs(node, path = []) {
+    if (recursionStack.has(node)) {
+      // Found a cycle - extract the cycle path
+      const cycleStart = path.indexOf(node);
+      const cyclePath = path.slice(cycleStart).concat([node]);
+      
+      // Build dependency information
+      const dependencies = [];
+      for (let i = 0; i < cyclePath.length - 1; i++) {
+        const from = cyclePath[i];
+        const to = cyclePath[i + 1];
+        dependencies.push({ from, to });
+      }
+      
+      return { cycle: cyclePath, dependencies };
+    }
+    
+    if (visited.has(node)) {
+      return null;
+    }
+    
+    visited.add(node);
+    recursionStack.add(node);
+    path.push(node);
+    
+    const edges = graph.edges.get(node) || [];
+    for (const neighbor of edges) {
+      const result = dfs(neighbor, [...path]);
+      if (result) {
+        return result;
+      }
+    }
+    
+    recursionStack.delete(node);
+    return null;
+  }
+  
+  // Try DFS from each unreachable node
+  for (const node of unreachableNodes) {
+    if (!visited.has(node)) {
+      const result = dfs(node);
+      if (result) {
+        return result;
+      }
+    }
+  }
+  
+  return null;
 }
 
 /**
@@ -286,7 +350,7 @@ async function sortItemsByDependencies(items) {
   const graph = buildDependencyGraph(items, dependencies);
 
   // Perform topological sort
-  const { sorted, hasCycle, unreachable } = topologicalSort(graph);
+  const { sorted, hasCycle, unreachable, cycleInfo } = topologicalSort(graph);
 
   // Build estimates map
   const estimatesMap = new Map();
@@ -332,6 +396,7 @@ async function sortItemsByDependencies(items) {
       const [type, id] = key.split(':');
       return { type, id: parseInt(id) };
     }),
+    cycleInfo,
     criticalPath,
     criticalPathHours
   };

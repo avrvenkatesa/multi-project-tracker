@@ -193,11 +193,35 @@ async function calculateProjectSchedule(config) {
   }
 
   // Sort items by dependencies
-  const { sorted, hasCycle, unreachable, criticalPath, criticalPathHours } = 
+  const { sorted, hasCycle, unreachable, cycleInfo, criticalPath, criticalPathHours } = 
     await sortItemsByDependencies(items);
 
   if (hasCycle) {
-    throw new Error(`Circular dependency detected involving: ${unreachable.map(u => `${u.type}#${u.id}`).join(', ')}`);
+    // Build detailed error message with actionable information
+    let errorMessage = 'Circular dependency detected:\n\n';
+    
+    if (cycleInfo && cycleInfo.cycle) {
+      // Show the cycle path
+      errorMessage += 'Dependency cycle: ';
+      const cyclePath = cycleInfo.cycle.map(key => {
+        const [type, id] = key.split(':');
+        return `${type}#${id}`;
+      }).join(' → ');
+      errorMessage += cyclePath + '\n\n';
+      
+      // List the specific dependencies that form the cycle
+      errorMessage += 'To fix this, remove one of these dependencies:\n';
+      cycleInfo.dependencies.forEach((dep, index) => {
+        const [fromType, fromId] = dep.from.split(':');
+        const [toType, toId] = dep.to.split(':');
+        errorMessage += `${index + 1}. ${fromType}#${fromId} depends on ${toType}#${toId}\n`;
+      });
+    } else {
+      // Fallback to basic error message
+      errorMessage += `Tasks involved: ${unreachable.map(u => `${u.type}#${u.id}`).join(', ')}`;
+    }
+    
+    throw new Error(errorMessage);
   }
 
   // Track when each task finishes (for dependency calculation)
