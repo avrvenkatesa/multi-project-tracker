@@ -1726,11 +1726,22 @@ function renderScheduleDetail(data) {
     tasksByAssignee[assignee].push(task);
   });
 
+  // Calculate resource workload
+  const resourceWorkload = calculateResourceWorkload(tasks, schedule);
+
   const content = `
-    <div class="space-y-6">
+    <div class="space-y-4">
       <!-- Schedule Summary -->
       <div class="bg-gray-50 rounded-lg p-6">
-        <h3 class="text-lg font-semibold mb-4">Schedule Summary</h3>
+        <div class="flex justify-between items-start mb-4">
+          <h3 class="text-lg font-semibold">Schedule Summary</h3>
+          <button 
+            onclick="exportScheduleCSV(${schedule.id})" 
+            class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center text-sm"
+          >
+            <i class="fas fa-file-csv mr-2"></i>Export CSV
+          </button>
+        </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <p class="text-xs text-gray-500 uppercase">Duration</p>
@@ -1762,9 +1773,23 @@ function renderScheduleDetail(data) {
         </div>
       </div>
 
-      <!-- Task Timeline by Assignee -->
-      <div>
-        <h3 class="text-lg font-semibold mb-4">Task Timeline</h3>
+      <!-- Tabs -->
+      <div class="border-b border-gray-200">
+        <nav class="flex space-x-4">
+          <button class="detail-tab-button active" data-detail-tab="timeline">
+            <i class="fas fa-list mr-2"></i>Timeline
+          </button>
+          <button class="detail-tab-button" data-detail-tab="gantt">
+            <i class="fas fa-chart-bar mr-2"></i>Gantt Chart
+          </button>
+          <button class="detail-tab-button" data-detail-tab="resources">
+            <i class="fas fa-users mr-2"></i>Resources
+          </button>
+        </nav>
+      </div>
+
+      <!-- Timeline Tab -->
+      <div id="timeline-tab" class="detail-tab-content active">
         <div class="space-y-6">
           ${Object.entries(tasksByAssignee).map(([assignee, assigneeTasks]) => `
             <div>
@@ -1779,10 +1804,33 @@ function renderScheduleDetail(data) {
           `).join('')}
         </div>
       </div>
+
+      <!-- Gantt Chart Tab -->
+      <div id="gantt-tab" class="detail-tab-content">
+        <div class="bg-white rounded-lg border border-gray-200 p-4">
+          <div id="gantt-container" class="gantt-container"></div>
+        </div>
+      </div>
+
+      <!-- Resources Tab -->
+      <div id="resources-tab" class="detail-tab-content">
+        ${renderResourceWorkload(resourceWorkload, schedule.hours_per_day)}
+      </div>
     </div>
   `;
 
   document.getElementById('schedule-detail-content').innerHTML = content;
+
+  // Attach tab click handlers
+  document.querySelectorAll('.detail-tab-button').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const tabName = e.currentTarget.dataset.detailTab;
+      switchDetailTab(tabName, tasks, schedule);
+    });
+  });
+
+  // Store schedule data for later use
+  window.currentScheduleData = { schedule, tasks };
 }
 
 function renderTaskCard(task) {
@@ -1827,6 +1875,297 @@ function renderTaskCard(task) {
 
 function closeDetailModal() {
   document.getElementById('schedule-detail-modal').classList.add('hidden');
+}
+
+function switchDetailTab(tabName, tasks, schedule) {
+  // Update tab buttons
+  document.querySelectorAll('.detail-tab-button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.querySelector(`[data-detail-tab="${tabName}"]`).classList.add('active');
+
+  // Update tab content
+  document.querySelectorAll('.detail-tab-content').forEach(content => {
+    content.classList.remove('active');
+  });
+  document.getElementById(`${tabName}-tab`).classList.add('active');
+
+  // If switching to Gantt tab, render the Gantt chart
+  if (tabName === 'gantt') {
+    renderGanttChart(tasks, schedule);
+  }
+}
+
+function renderGanttChart(tasks, schedule) {
+  const ganttContainer = document.getElementById('gantt-container');
+  ganttContainer.innerHTML = ''; // Clear previous chart
+
+  // Prepare Gantt data
+  const ganttTasks = tasks.map(task => {
+    return {
+      id: `${task.item_type}-${task.item_id}`,
+      name: task.title,
+      start: task.scheduled_start,
+      end: task.scheduled_end,
+      progress: task.status === 'Done' ? 100 : task.status === 'In Progress' ? 50 : 0,
+      dependencies: task.dependencies && task.dependencies.length > 0 
+        ? task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(',') 
+        : '',
+      custom_class: task.is_critical_path ? 'bar-critical' : ''
+    };
+  });
+
+  if (ganttTasks.length === 0) {
+    ganttContainer.innerHTML = '<p class="text-gray-500 text-center py-8">No tasks to display</p>';
+    return;
+  }
+
+  // Create Gantt chart
+  try {
+    const gantt = new Frappe.Gantt(ganttContainer, ganttTasks, {
+      view_mode: 'Day',
+      bar_height: 30,
+      padding: 18,
+      date_format: 'YYYY-MM-DD',
+      language: 'en',
+      custom_popup_html: function(task) {
+        const taskData = tasks.find(t => `${t.item_type}-${t.item_id}` === task.id);
+        return `
+          <div class="details-container">
+            <h5>${task.name}</h5>
+            <p><strong>Duration:</strong> ${task.progress}% complete</p>
+            <p><strong>Dates:</strong> ${formatDate(task._start)} - ${formatDate(task._end)}</p>
+            ${taskData.assignee ? `<p><strong>Assignee:</strong> ${taskData.assignee}</p>` : ''}
+            ${taskData.is_critical_path ? '<p class="text-red-600"><strong>Critical Path</strong></p>' : ''}
+          </div>
+        `;
+      }
+    });
+
+    // Add view mode buttons
+    const viewModesHtml = `
+      <div class="flex space-x-2 mt-4 justify-center">
+        <button onclick="changeGanttView('Quarter Day')" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Quarter Day</button>
+        <button onclick="changeGanttView('Half Day')" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Half Day</button>
+        <button onclick="changeGanttView('Day')" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Day</button>
+        <button onclick="changeGanttView('Week')" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Week</button>
+        <button onclick="changeGanttView('Month')" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Month</button>
+      </div>
+    `;
+    ganttContainer.insertAdjacentHTML('afterend', viewModesHtml);
+
+    // Store gantt instance
+    window.currentGanttInstance = gantt;
+
+  } catch (error) {
+    console.error('Error rendering Gantt chart:', error);
+    ganttContainer.innerHTML = '<p class="text-red-500 text-center py-8">Error rendering Gantt chart</p>';
+  }
+}
+
+function changeGanttView(viewMode) {
+  if (window.currentGanttInstance) {
+    window.currentGanttInstance.change_view_mode(viewMode);
+  }
+}
+
+function calculateResourceWorkload(tasks, schedule) {
+  const workload = {};
+  const hoursPerDay = schedule.hours_per_day || 8;
+
+  tasks.forEach(task => {
+    const assignee = task.assignee || 'Unassigned';
+    if (!workload[assignee]) {
+      workload[assignee] = {
+        totalHours: 0,
+        tasks: [],
+        dailyLoad: {},
+        maxDailyHours: 0
+      };
+    }
+
+    workload[assignee].totalHours += parseFloat(task.estimated_hours) || 0;
+    workload[assignee].tasks.push(task);
+
+    // Calculate daily workload
+    const start = new Date(task.scheduled_start);
+    const end = new Date(task.scheduled_end);
+    const duration = calculateDuration(task.scheduled_start, task.scheduled_end) + 1;
+    const hoursPerTaskDay = (parseFloat(task.estimated_hours) || 0) / duration;
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateKey = d.toISOString().split('T')[0];
+      if (!workload[assignee].dailyLoad[dateKey]) {
+        workload[assignee].dailyLoad[dateKey] = 0;
+      }
+      workload[assignee].dailyLoad[dateKey] += hoursPerTaskDay;
+      workload[assignee].maxDailyHours = Math.max(
+        workload[assignee].maxDailyHours,
+        workload[assignee].dailyLoad[dateKey]
+      );
+    }
+  });
+
+  // Calculate overloading
+  Object.keys(workload).forEach(assignee => {
+    const resource = workload[assignee];
+    resource.isOverloaded = resource.maxDailyHours > hoursPerDay;
+    resource.overloadedDays = Object.entries(resource.dailyLoad)
+      .filter(([date, hours]) => hours > hoursPerDay)
+      .length;
+    resource.utilizationPercent = Math.round((resource.maxDailyHours / hoursPerDay) * 100);
+  });
+
+  return workload;
+}
+
+function renderResourceWorkload(workload, hoursPerDay) {
+  const sortedResources = Object.entries(workload).sort((a, b) => {
+    // Sort overloaded resources first
+    if (a[1].isOverloaded && !b[1].isOverloaded) return -1;
+    if (!a[1].isOverloaded && b[1].isOverloaded) return 1;
+    return b[1].totalHours - a[1].totalHours;
+  });
+
+  return `
+    <div class="space-y-4">
+      ${Object.keys(workload).some(k => workload[k].isOverloaded) ? `
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+            <span class="font-semibold text-red-900">Resource Overloading Detected!</span>
+          </div>
+          <p class="text-sm text-red-700 mt-2">
+            Some team members are assigned more than ${hoursPerDay} hours per day. Consider redistributing tasks or extending the timeline.
+          </p>
+        </div>
+      ` : `
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div class="flex items-center">
+            <i class="fas fa-check-circle text-green-600 mr-2"></i>
+            <span class="font-semibold text-green-900">No Resource Overloading</span>
+          </div>
+          <p class="text-sm text-green-700 mt-2">
+            All team members have workloads within the ${hoursPerDay} hours/day limit.
+          </p>
+        </div>
+      `}
+
+      <div class="grid gap-4">
+        ${sortedResources.map(([assignee, resource]) => `
+          <div class="border ${resource.isOverloaded ? 'border-red-300 overloaded' : 'border-gray-200'} rounded-lg p-4">
+            <div class="flex justify-between items-start mb-3">
+              <div>
+                <h4 class="text-lg font-semibold ${resource.isOverloaded ? 'text-red-900' : 'text-gray-900'}">
+                  <i class="fas fa-user mr-2"></i>${escapeHtml(assignee)}
+                  ${resource.isOverloaded ? '<i class="fas fa-exclamation-triangle text-red-600 ml-2"></i>' : ''}
+                </h4>
+                <p class="text-sm text-gray-600 mt-1">${resource.tasks.length} task${resource.tasks.length !== 1 ? 's' : ''} assigned</p>
+              </div>
+              <div class="text-right">
+                <p class="text-2xl font-bold ${resource.isOverloaded ? 'text-red-600' : 'text-gray-900'}">
+                  ${resource.totalHours.toFixed(1)}h
+                </p>
+                <p class="text-xs text-gray-500">Total hours</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4 mb-3 p-3 bg-gray-50 rounded">
+              <div>
+                <p class="text-xs text-gray-500 uppercase">Peak Daily Load</p>
+                <p class="text-lg font-bold ${resource.maxDailyHours > hoursPerDay ? 'text-red-600' : 'text-gray-900'}">
+                  ${resource.maxDailyHours.toFixed(1)}h
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 uppercase">Utilization</p>
+                <p class="text-lg font-bold ${resource.utilizationPercent > 100 ? 'text-red-600' : 'text-gray-900'}">
+                  ${resource.utilizationPercent}%
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 uppercase">Overloaded Days</p>
+                <p class="text-lg font-bold ${resource.overloadedDays > 0 ? 'text-red-600' : 'text-green-600'}">
+                  ${resource.overloadedDays}
+                </p>
+              </div>
+            </div>
+
+            ${resource.isOverloaded ? `
+              <div class="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700">
+                <i class="fas fa-exclamation-circle mr-1"></i>
+                <strong>Warning:</strong> This resource exceeds ${hoursPerDay}h/day capacity on ${resource.overloadedDays} day${resource.overloadedDays !== 1 ? 's' : ''}.
+              </div>
+            ` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function exportScheduleCSV(scheduleId) {
+  const { schedule, tasks } = window.currentScheduleData;
+  
+  if (!tasks || tasks.length === 0) {
+    alert('No tasks to export');
+    return;
+  }
+
+  // Prepare CSV headers
+  const headers = [
+    'Task ID',
+    'Type',
+    'Title',
+    'Status',
+    'Assignee',
+    'Estimated Hours',
+    'Scheduled Start',
+    'Scheduled End',
+    'Due Date',
+    'Days Late',
+    'Critical Path',
+    'Dependencies',
+    'Risk Reasons'
+  ];
+
+  // Prepare CSV rows
+  const rows = tasks.map(task => [
+    `${task.item_type}-${task.item_id}`,
+    task.item_type === 'issue' ? 'Issue' : 'Action Item',
+    `"${(task.title || '').replace(/"/g, '""')}"`, // Escape quotes
+    task.status || '',
+    task.assignee || 'Unassigned',
+    task.estimated_hours || 0,
+    formatDate(task.scheduled_start),
+    formatDate(task.scheduled_end),
+    task.due_date ? formatDate(task.due_date) : '',
+    task.days_late || 0,
+    task.is_critical_path ? 'Yes' : 'No',
+    task.dependencies && task.dependencies.length > 0 
+      ? task.dependencies.map(d => `${d.item_type}-${d.item_id}`).join('; ')
+      : '',
+    task.risk_reason ? `"${task.risk_reason.replace(/"/g, '""')}"` : ''
+  ]);
+
+  // Build CSV content
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.join(','))
+  ].join('\n');
+
+  // Download CSV
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', `schedule-${schedule.name.replace(/[^a-z0-9]/gi, '-')}-${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // ============================================

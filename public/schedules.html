@@ -6,6 +6,9 @@
   <title>Project Schedules - Multi-Project Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Frappe Gantt -->
+  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.css">
   <style>
     .tab-button {
       @apply px-6 py-3 font-medium text-gray-600 border-b-2 border-transparent hover:border-gray-300 transition-colors;
@@ -27,6 +30,25 @@
     }
     .risk-low {
       @apply bg-green-100 text-green-800;
+    }
+    .detail-tab-button {
+      @apply px-4 py-2 font-medium text-gray-600 border-b-2 border-transparent hover:border-gray-300 transition-colors cursor-pointer;
+    }
+    .detail-tab-button.active {
+      @apply text-blue-600 border-blue-600;
+    }
+    .detail-tab-content {
+      @apply hidden;
+    }
+    .detail-tab-content.active {
+      @apply block;
+    }
+    .gantt-container {
+      overflow-x: auto;
+      background: white;
+    }
+    .overloaded {
+      @apply bg-red-50 border-red-200;
     }
   </style>
 </head>
