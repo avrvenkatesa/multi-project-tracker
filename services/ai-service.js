@@ -856,6 +856,79 @@ Generate the checklists now with ALL items populated:`;
  * @param {Array} tasks - Array of tasks with {id, type, title, description}
  * @returns {Promise<Object>} - {success: boolean, suggestions: Array, reasoning: string}
  */
+/**
+ * Validate that dependencies don't contain cycles using DFS
+ * @param {Array} tasks - List of tasks
+ * @param {Array} dependencies - List of dependencies
+ * @returns {Object} - {isValid: boolean, cycles: Array}
+ */
+function validateNoCycles(tasks, dependencies) {
+  // Build adjacency list
+  const graph = new Map();
+  const taskKeys = new Set();
+  
+  tasks.forEach(task => {
+    const key = `${task.type}:${task.id}`;
+    graph.set(key, []);
+    taskKeys.add(key);
+  });
+  
+  dependencies.forEach(dep => {
+    const depKey = `${dep.dependent_item_type}:${dep.dependent_item_id}`;
+    const prereqKey = `${dep.prerequisite_item_type}:${dep.prerequisite_item_id}`;
+    
+    if (taskKeys.has(depKey) && taskKeys.has(prereqKey)) {
+      // Dependent waits for prerequisite, so edge goes prerequisite -> dependent
+      if (!graph.has(prereqKey)) graph.set(prereqKey, []);
+      graph.get(prereqKey).push(depKey);
+    }
+  });
+  
+  // DFS to detect cycles
+  const visited = new Set();
+  const recursionStack = new Set();
+  const cycles = [];
+  
+  function hasCycleDFS(node, path = []) {
+    if (recursionStack.has(node)) {
+      // Found a cycle
+      const cycleStart = path.indexOf(node);
+      cycles.push(path.slice(cycleStart).concat([node]));
+      return true;
+    }
+    
+    if (visited.has(node)) {
+      return false;
+    }
+    
+    visited.add(node);
+    recursionStack.add(node);
+    path.push(node);
+    
+    const neighbors = graph.get(node) || [];
+    for (const neighbor of neighbors) {
+      if (hasCycleDFS(neighbor, [...path])) {
+        // Continue checking to find all cycles
+      }
+    }
+    
+    recursionStack.delete(node);
+    return false;
+  }
+  
+  // Check each node
+  for (const node of taskKeys) {
+    if (!visited.has(node)) {
+      hasCycleDFS(node, []);
+    }
+  }
+  
+  return {
+    isValid: cycles.length === 0,
+    cycles: cycles
+  };
+}
+
 async function suggestTaskDependencies(tasks) {
   try {
     if (!tasks || tasks.length === 0) {
@@ -892,12 +965,17 @@ For each suggested dependency, provide:
 - The type of dependency (technical, workflow, prerequisite, risk-mitigation)
 - Clear reasoning why this dependency makes sense
 
-IMPORTANT RULES:
-- Only suggest dependencies that make logical sense
-- Avoid circular dependencies (A depends on B, B depends on A)
-- Keep it simple - don't over-complicate with too many dependencies
-- If tasks can run in parallel, don't force sequential dependencies
-- Consider that some tasks may have no dependencies
+CRITICAL RULES - MUST FOLLOW:
+1. **NEVER create circular dependencies** - If Task A depends on Task B, then Task B CANNOT depend on Task A (directly or indirectly)
+2. **Dependencies must form a DAG** (Directed Acyclic Graph) - there should be no cycles in the dependency chain
+3. **Validate your output** - Before returning, mentally verify that following all dependencies in order would not create a loop
+4. **Prefer parallel execution** - Only add dependencies when truly necessary; allow independent tasks to run in parallel
+5. **Keep it simple** - Avoid creating complex dependency chains; 1-3 dependencies per task maximum
+
+Examples of INVALID circular dependencies (DO NOT CREATE THESE):
+- Task 1 depends on Task 2, Task 2 depends on Task 1 ❌
+- Task 1 depends on Task 2, Task 2 depends on Task 3, Task 3 depends on Task 1 ❌
+- Task A depends on Task B and Task C, Task B depends on Task C, Task C depends on Task A ❌
 
 Respond in JSON format:
 {
@@ -938,6 +1016,29 @@ Respond in JSON format:
           reasoning: dep.reasoning
         };
       });
+
+      // Validate for circular dependencies using cycle detection
+      const validationResult = validateNoCycles(tasks, mappedDependencies);
+      if (!validationResult.isValid) {
+        console.warn('AI generated circular dependencies, filtering them out:', validationResult.cycles);
+        
+        // Remove dependencies that create cycles
+        const filteredDependencies = mappedDependencies.filter(dep => {
+          const depKey = `${dep.dependent_item_type}:${dep.dependent_item_id}`;
+          const prereqKey = `${dep.prerequisite_item_type}:${dep.prerequisite_item_id}`;
+          return !validationResult.cycles.some(cycle => 
+            cycle.includes(depKey) && cycle.includes(prereqKey)
+          );
+        });
+
+        return {
+          success: true,
+          dependencies: filteredDependencies,
+          overall_analysis: result.overall_analysis + '\n\n⚠️ Note: Some circular dependencies were automatically removed to ensure a valid schedule.',
+          parallel_opportunities: result.parallel_opportunities,
+          warning: 'Circular dependencies were detected and removed'
+        };
+      }
 
       return {
         success: true,
