@@ -38,10 +38,11 @@
       @apply text-blue-600 border-blue-600;
     }
     .detail-tab-content {
-      @apply hidden;
+      display: none;
     }
     .detail-tab-content.active {
-      @apply block;
+      display: block;
+      padding-top: 1.5rem;
     }
     .gantt-container {
       overflow-x: auto;
@@ -301,6 +302,6 @@
     </div>
   </div>
 
-  <script src="/js/schedules.js?v=5"></script>
+  <script src="/js/schedules.js?v=6"></script>
 </body>
 </html>
