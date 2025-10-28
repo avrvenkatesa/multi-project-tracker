@@ -3714,12 +3714,12 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
               [selectedEstimate, newVersion, parseInt(id)]
             );
             
-            // Create history entry with hybrid source
+            // Create history entry with the selected planning source
             await client.query(
               `INSERT INTO effort_estimate_history 
                (item_type, item_id, estimate_hours, version, source, created_by)
                VALUES ($1, $2, $3, $4, $5, $6)`,
-              ['issue', parseInt(id), selectedEstimate, newVersion, 'hybrid', req.user.id]
+              ['issue', parseInt(id), selectedEstimate, newVersion, planning_estimate_source, req.user.id]
             );
             
             await client.query('COMMIT');
@@ -4738,12 +4738,12 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
               [selectedEstimate, newVersion, parseInt(id)]
             );
             
-            // Create history entry with hybrid source
+            // Create history entry with the selected planning source
             await client.query(
               `INSERT INTO effort_estimate_history 
                (item_type, item_id, estimate_hours, version, source, created_by)
                VALUES ($1, $2, $3, $4, $5, $6)`,
-              ['action-item', parseInt(id), selectedEstimate, newVersion, 'hybrid', req.user.id]
+              ['action-item', parseInt(id), selectedEstimate, newVersion, planning_estimate_source, req.user.id]
             );
             
             await client.query('COMMIT');
