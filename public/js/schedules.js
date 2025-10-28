@@ -1878,32 +1878,17 @@ function closeDetailModal() {
 }
 
 function switchDetailTab(tabName, tasks, schedule) {
-  console.log('Switching to tab:', tabName);
-  
   // Update tab buttons
   document.querySelectorAll('.detail-tab-button').forEach(btn => {
     btn.classList.remove('active');
   });
-  
-  const tabButton = document.querySelector(`[data-detail-tab="${tabName}"]`);
-  if (tabButton) {
-    tabButton.classList.add('active');
-  } else {
-    console.error('Tab button not found for:', tabName);
-  }
+  document.querySelector(`[data-detail-tab="${tabName}"]`).classList.add('active');
 
   // Update tab content
   document.querySelectorAll('.detail-tab-content').forEach(content => {
     content.classList.remove('active');
   });
-  
-  const tabContent = document.getElementById(`${tabName}-tab`);
-  if (tabContent) {
-    tabContent.classList.add('active');
-    console.log('Activated tab content:', tabName);
-  } else {
-    console.error('Tab content not found for:', tabName);
-  }
+  document.getElementById(`${tabName}-tab`).classList.add('active');
 
   // If switching to Gantt tab, render the Gantt chart
   if (tabName === 'gantt') {
