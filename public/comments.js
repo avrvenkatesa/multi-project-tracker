@@ -561,7 +561,7 @@ function createDueDateBadge(dueDate) {
   </div>`;
 }
 
-async function openItemDetailModal(itemId, itemType) {
+async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
   try {
     currentItemId = itemId;
     currentItemType = itemType;
@@ -610,8 +610,8 @@ async function openItemDetailModal(itemId, itemType) {
     
     modal.classList.remove('hidden');
     
-    // Reset to details tab
-    switchItemDetailTab('details');
+    // Switch to initial tab (defaults to details, but can be set to relationships for circular dependencies)
+    switchItemDetailTab(initialTab);
     
     // Setup tabs
     setupItemDetailTabs();

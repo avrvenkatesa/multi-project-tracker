@@ -1408,7 +1408,7 @@ async function renderKanbanBoard() {
                         e.stopPropagation();
                         const itemType = e.target.dataset.itemType;
                         const itemId = e.target.dataset.itemId;
-                        openItemDetailModal(itemId, itemType);
+                        openItemDetailModal(itemId, itemType, 'relationships');
                         return;
                     }
                     
