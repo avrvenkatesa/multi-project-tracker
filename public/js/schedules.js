@@ -83,6 +83,7 @@ function setupEventListeners() {
   document.getElementById('deselect-all-items').addEventListener('click', deselectAllItems);
   document.getElementById('item-search').addEventListener('input', filterItems);
   document.getElementById('item-type-filter').addEventListener('change', filterItems);
+  document.getElementById('tag-filter').addEventListener('change', filterItems);
   
   // Status filter checkboxes
   document.querySelectorAll('.status-filter-checkbox').forEach(checkbox => {
@@ -192,15 +193,20 @@ async function loadProjectItems() {
         ...i,
         type: 'issue',
         estimate: getEstimate(i),
-        estimateSource: i.planning_estimate_source || 'unknown'
+        estimateSource: i.planning_estimate_source || 'unknown',
+        tags: i.tags || []
       })),
       ...actionItems.map(a => ({
         ...a,
         type: 'action-item',
         estimate: getEstimate(a),
-        estimateSource: a.planning_estimate_source || 'unknown'
+        estimateSource: a.planning_estimate_source || 'unknown',
+        tags: a.tags || []
       }))
     ];
+
+    // Populate tag filter
+    populateTagFilter();
 
     // Apply initial filter based on default checkbox state
     filterItems();
@@ -438,9 +444,42 @@ function updateSelectedCount() {
   submitBtn.disabled = count === 0;
 }
 
+function populateTagFilter() {
+  const tagFilter = document.getElementById('tag-filter');
+  
+  // Collect all unique tags from all items
+  const tagsMap = new Map();
+  allItems.forEach(item => {
+    if (item.tags && Array.isArray(item.tags)) {
+      item.tags.forEach(tag => {
+        if (!tagsMap.has(tag.id)) {
+          tagsMap.set(tag.id, tag);
+        }
+      });
+    }
+  });
+
+  // Clear existing options except "All Tags"
+  tagFilter.innerHTML = '<option value="all">All Tags</option>';
+
+  // Sort tags by name and add to dropdown
+  const sortedTags = Array.from(tagsMap.values()).sort((a, b) => 
+    a.name.localeCompare(b.name)
+  );
+
+  sortedTags.forEach(tag => {
+    const option = document.createElement('option');
+    option.value = tag.id;
+    option.textContent = tag.name;
+    option.style.color = tag.color || '#000';
+    tagFilter.appendChild(option);
+  });
+}
+
 function filterItems() {
   const searchTerm = document.getElementById('item-search').value.toLowerCase();
   const typeFilter = document.getElementById('item-type-filter').value;
+  const tagFilter = document.getElementById('tag-filter').value;
   
   // Get selected statuses from checkboxes
   const selectedStatuses = [];
@@ -458,11 +497,15 @@ function filterItems() {
     // Type filter
     const matchesType = typeFilter === 'all' || item.type === typeFilter;
 
+    // Tag filter
+    const matchesTag = tagFilter === 'all' || 
+      (item.tags && item.tags.some(tag => tag.id === parseInt(tagFilter)));
+
     // Status filter - always exclude Done items, only show if status is selected
     // If no checkboxes are selected, show nothing
     const matchesStatus = selectedStatuses.length > 0 && selectedStatuses.includes(item.status);
 
-    return matchesSearch && matchesType && matchesStatus;
+    return matchesSearch && matchesType && matchesTag && matchesStatus;
   });
 
   renderItems();
