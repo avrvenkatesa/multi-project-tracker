@@ -12857,7 +12857,7 @@ app.post('/api/schedules/save-dependencies', authenticateToken, async (req, res)
         [prerequisite_item_id]
       );
 
-      if (dependentCheck.rows.length === 0 || prerequisiteCheck.rows[0].project_id !== parseInt(projectId)) {
+      if (dependentCheck.rows.length === 0 || dependentCheck.rows[0].project_id !== parseInt(projectId)) {
         await client.query('ROLLBACK');
         return res.status(403).json({ 
           error: 'Access denied',
