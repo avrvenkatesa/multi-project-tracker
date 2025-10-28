@@ -12954,7 +12954,7 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
       return res.status(404).json({ error: 'Project not found or access denied' });
     }
 
-    // Load item details with estimates
+    // Load item details with estimates and dependencies
     const items = [];
     for (const item of selectedItems) {
       const tableName = item.type === 'issue' ? 'issues' : 'action_items';
@@ -12991,6 +12991,21 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
           selectedEstimate = row.hybrid_effort_estimate_hours;
         }
         
+        // Load dependencies for this item
+        const dependencyTable = item.type === 'issue' ? 'issue_dependencies' : 'action_item_dependencies';
+        const dependencyColumn = item.type === 'issue' ? 'issue_id' : 'action_item_id';
+        
+        const depsResult = await pool.query(
+          `SELECT prerequisite_item_type, prerequisite_item_id
+           FROM ${dependencyTable}
+           WHERE ${dependencyColumn} = $1`,
+          [item.id]
+        );
+        
+        const dependencies = depsResult.rows.map(dep => 
+          `${dep.prerequisite_item_type}:${dep.prerequisite_item_id}`
+        );
+        
         items.push({
           type: item.type,
           id: item.id,
@@ -12998,7 +13013,8 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
           assignee: row.assignee,
           estimate: parseFloat(selectedEstimate) || 0,
           estimateSource: userSelectedSource,
-          dueDate: row.due_date
+          dueDate: row.due_date,
+          dependencies: dependencies
         });
       }
     }
