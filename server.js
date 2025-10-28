@@ -13026,11 +13026,23 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
     }
 
     // Calculate schedule
+    console.log('Items being scheduled:', items.map(i => ({ 
+      key: `${i.type}:${i.id}`, 
+      title: i.title, 
+      deps: i.dependencies 
+    })));
+    
     const scheduleResult = await calculateProjectSchedule({
       items,
       startDate,
       hoursPerDay,
       includeWeekends
+    });
+    
+    console.log('Schedule calculation result:', {
+      totalTasks: scheduleResult.summary.totalTasks,
+      hasCycle: scheduleResult.hasCycle,
+      unreachable: scheduleResult.unreachable
     });
 
     // Start transaction
