@@ -13006,6 +13006,8 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
           `${dep.prerequisite_item_type}:${dep.prerequisite_item_id}`
         );
         
+        console.log(`Loading ${item.type}#${item.id} - Dependencies:`, dependencies);
+        
         items.push({
           type: item.type,
           id: item.id,
