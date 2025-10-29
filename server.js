@@ -13822,7 +13822,17 @@ app.get('/api/schedules/:scheduleId/pdf', authenticateToken, async (req, res) =>
 
   } catch (error) {
     console.error('Error generating schedule PDF:', error);
-    res.status(500).json({ error: 'Failed to generate PDF' });
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      scheduleId,
+      userId
+    });
+    res.status(500).json({ 
+      error: 'Failed to generate PDF',
+      details: process.env.NODE_ENV === 'production' ? undefined : error.message
+    });
   }
 });
 
