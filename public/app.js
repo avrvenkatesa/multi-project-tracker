@@ -8905,6 +8905,23 @@ async function loadEstimateForm() {
     const aiConfidence = item.ai_estimate_confidence || 'medium';
     const planningSource = item.planning_estimate_source || 'manual';
     
+    // Fetch AI reasoning from latest estimate history
+    let aiReasoning = '';
+    if (aiHours > 0) {
+      try {
+        const historyResponse = await axios.get(`/api/${endpoint}/${currentItemId}/estimate/history`, { withCredentials: true });
+        if (historyResponse.data && historyResponse.data.history && historyResponse.data.history.length > 0) {
+          // Find the most recent AI estimate
+          const latestAIEstimate = historyResponse.data.history.find(h => h.source === 'ai');
+          if (latestAIEstimate && latestAIEstimate.reasoning) {
+            aiReasoning = latestAIEstimate.reasoning;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch AI reasoning:', err);
+      }
+    }
+    
     // Parse hybrid task count
     let hybridTaskInfo = '';
     let hybridSelectedCount = 0;
@@ -8962,6 +8979,12 @@ async function loadEstimateForm() {
               View Breakdown ↗
             </button>
           </div>
+          ${aiReasoning ? `
+          <div class="mt-3 pt-3 border-t border-purple-200">
+            <p class="text-xs text-gray-600 mb-1">AI Reasoning:</p>
+            <p class="text-sm text-gray-700">${aiReasoning.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+          </div>
+          ` : ''}
         </div>
         ` : ''}
         
@@ -9095,7 +9118,7 @@ function setupEstimateFormListeners() {
     
     try {
       const endpoint = currentItemType === 'issue' ? 'issues' : 'action-items';
-      const response = await axios.post(`/api/${endpoint}/${currentItemId}/estimate`, 
+      const response = await axios.post(`/api/${endpoint}/${currentItemId}/effort-estimate`, 
         { model: 'gpt-4o' },
         { 
           withCredentials: true,
@@ -9105,7 +9128,7 @@ function setupEstimateFormListeners() {
       
       showToast('AI estimate generated successfully!', 'success');
       
-      // Reload both history and form
+      // Reload both history and form to show the new reasoning
       await Promise.all([
         loadEstimateHistory(),
         loadEstimateForm()
