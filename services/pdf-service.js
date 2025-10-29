@@ -789,6 +789,97 @@ function addGanttVisualization(doc, tasks, schedule) {
   
   doc.rect(chartLeft + 120, legendY, 10, 10).fillAndStroke('#dc2626', '#dc2626');
   doc.text('Critical Path', chartLeft + 135, legendY + 1);
+  
+  // Add task details table
+  doc.addPage();
+  addTaskDetailsTable(doc, tasks, schedule);
+}
+
+function addTaskDetailsTable(doc, tasks, schedule) {
+  doc.fontSize(16).font('Helvetica-Bold').fillColor('#1f2937')
+    .text('Task Details', 40, 40);
+  
+  doc.moveDown(1);
+  
+  const tableTop = doc.y;
+  const rowHeight = 18;
+  const fontSize = 7;
+  
+  // Column positions
+  const cols = {
+    task: 40,
+    assignee: 140,
+    duration: 200,
+    status: 240,
+    start: 300,
+    end: 360,
+    hours: 420,
+    critical: 480
+  };
+  
+  // Table header
+  doc.rect(cols.task, tableTop, 515, rowHeight).fillAndStroke('#1e40af', '#1e40af');
+  doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
+    .text('Task', cols.task + 3, tableTop + 5)
+    .text('Assignee', cols.assignee + 3, tableTop + 5)
+    .text('Duration', cols.duration + 3, tableTop + 5)
+    .text('Status', cols.status + 3, tableTop + 5)
+    .text('Start Date', cols.start + 3, tableTop + 5)
+    .text('End Date', cols.end + 3, tableTop + 5)
+    .text('Hours', cols.hours + 3, tableTop + 5)
+    .text('Critical', cols.critical + 3, tableTop + 5);
+  
+  let currentY = tableTop + rowHeight;
+  
+  // Table rows
+  tasks.forEach((task, index) => {
+    // Check if we need a new page
+    if (currentY > doc.page.height - 80) {
+      doc.addPage();
+      currentY = 60;
+      
+      // Redraw header on new page
+      doc.rect(cols.task, currentY, 515, rowHeight).fillAndStroke('#1e40af', '#1e40af');
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff')
+        .text('Task', cols.task + 3, currentY + 5)
+        .text('Assignee', cols.assignee + 3, currentY + 5)
+        .text('Duration', cols.duration + 3, currentY + 5)
+        .text('Status', cols.status + 3, currentY + 5)
+        .text('Start Date', cols.start + 3, currentY + 5)
+        .text('End Date', cols.end + 3, currentY + 5)
+        .text('Hours', cols.hours + 3, currentY + 5)
+        .text('Critical', cols.critical + 3, currentY + 5);
+      currentY += rowHeight;
+    }
+    
+    const bgColor = task.is_critical_path ? '#fee2e2' : (index % 2 === 0 ? '#ffffff' : '#f9fafb');
+    doc.rect(cols.task, currentY, 515, rowHeight).fillAndStroke(bgColor, '#e5e7eb');
+    
+    const startDate = new Date(task.scheduled_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const endDate = new Date(task.scheduled_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const duration = Math.ceil((new Date(task.scheduled_end) - new Date(task.scheduled_start)) / (1000 * 60 * 60 * 24));
+    
+    const textColor = task.is_critical_path ? '#991b1b' : '#1f2937';
+    
+    doc.fontSize(fontSize).font('Helvetica').fillColor(textColor)
+      .text(task.title.substring(0, 22) + (task.title.length > 22 ? '...' : ''), cols.task + 3, currentY + 5, { width: 95 })
+      .text(task.assignee ? task.assignee.substring(0, 12) : 'Unassigned', cols.assignee + 3, currentY + 5, { width: 55 })
+      .text(`${duration}d`, cols.duration + 3, currentY + 5)
+      .text(task.status || 'To Do', cols.status + 3, currentY + 5, { width: 55 })
+      .text(startDate, cols.start + 3, currentY + 5)
+      .text(endDate, cols.end + 3, currentY + 5)
+      .text(`${task.estimated_hours || 0}h`, cols.hours + 3, currentY + 5);
+    
+    if (task.is_critical_path) {
+      doc.fontSize(fontSize).font('Helvetica-Bold').fillColor('#dc2626')
+        .text('⚠ Yes', cols.critical + 3, currentY + 5);
+    } else {
+      doc.fillColor('#9ca3af')
+        .text('No', cols.critical + 3, currentY + 5);
+    }
+    
+    currentY += rowHeight;
+  });
 }
 
 function addResourcesSection(doc, resources, schedule) {

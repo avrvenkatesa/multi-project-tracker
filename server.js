@@ -13736,9 +13736,28 @@ app.get('/api/schedules/:scheduleId/pdf', authenticateToken, async (req, res) =>
       return resource;
     });
 
+    // Calculate schedule metrics
+    const startDate = new Date(schedule.start_date);
+    const endDate = new Date(schedule.end_date);
+    const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1; // Include both start and end days
+    
+    const criticalPathTasks = tasks.rows.filter(t => t.is_critical_path);
+    const criticalPathHours = criticalPathTasks.reduce((sum, t) => sum + (parseFloat(t.estimated_hours) || 0), 0);
+    const risksCount = tasks.rows.filter(t => t.risk_reasons && t.risk_reasons.length > 0).length;
+
+    // Enhance schedule object with calculated metrics
+    const enhancedSchedule = {
+      ...schedule,
+      total_days: totalDays,
+      total_tasks: tasks.rows.length,
+      critical_path_tasks: criticalPathTasks.length,
+      critical_path_hours: criticalPathHours.toFixed(2),
+      risks_count: risksCount
+    };
+
     // Generate PDF
     const pdfBuffer = await generateSchedulePDF({
-      schedule,
+      schedule: enhancedSchedule,
       tasks: tasks.rows,
       resources
     });
