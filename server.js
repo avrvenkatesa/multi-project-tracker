@@ -12522,7 +12522,7 @@ app.get('/api/:itemType/:id/estimate/history', authenticateToken, async (req, re
 
     const history = await getEstimateHistory(pool, actualItemType, id);
 
-    res.json(history);
+    res.json({ history });
   } catch (error) {
     console.error('Error fetching history:', error);
     res.status(500).json({ error: 'Failed to fetch history' });
