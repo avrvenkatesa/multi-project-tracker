@@ -2278,17 +2278,87 @@ function renderGanttChart(tasks, schedule) {
     // Add view mode buttons
     const viewModesHtml = `
       <div class="flex space-x-2 mt-4 justify-center">
-        <button onclick="changeGanttView('Quarter Day')" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Quarter Day</button>
-        <button onclick="changeGanttView('Half Day')" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Half Day</button>
-        <button onclick="changeGanttView('Day')" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Day</button>
-        <button onclick="changeGanttView('Week')" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Week</button>
-        <button onclick="changeGanttView('Month')" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Month</button>
+        <button data-action="gantt-view" data-view-mode="Quarter Day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Quarter Day</button>
+        <button data-action="gantt-view" data-view-mode="Half Day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Half Day</button>
+        <button data-action="gantt-view" data-view-mode="Day" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Day</button>
+        <button data-action="gantt-view" data-view-mode="Week" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Week</button>
+        <button data-action="gantt-view" data-view-mode="Month" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Month</button>
       </div>
     `;
     ganttContainer.insertAdjacentHTML('afterend', viewModesHtml);
 
+    // Add task details table
+    const taskTableHtml = `
+      <div class="mt-6">
+        <h4 class="text-lg font-semibold mb-3">Task Details</h4>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 border border-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Task</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assignee</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated Hours</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Critical Path</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              ${tasks.map(task => {
+                const start = new Date(task.scheduled_start);
+                const end = new Date(task.scheduled_end);
+                const durationMs = end - start;
+                const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
+                
+                return `
+                  <tr class="${task.is_critical_path ? 'bg-red-50' : ''}">
+                    <td class="px-4 py-3 text-sm text-gray-900">${task.title}</td>
+                    <td class="px-4 py-3 text-sm text-gray-700">${task.assignee || '<span class="text-gray-400">Unassigned</span>'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-700">${durationDays} day${durationDays !== 1 ? 's' : ''}</td>
+                    <td class="px-4 py-3 text-sm">
+                      <span class="px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(task.status)}">
+                        ${task.status}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-700">${formatDate(task.scheduled_start)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-700">${formatDate(task.scheduled_end)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-700">${task.estimated_hours || 0} hrs</td>
+                    <td class="px-4 py-3 text-sm">
+                      ${task.is_critical_path ? '<span class="text-red-600 font-semibold">⚠️ Yes</span>' : '<span class="text-gray-400">No</span>'}
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    
+    // Insert table after view mode buttons
+    const viewModeButtons = ganttContainer.nextElementSibling;
+    viewModeButtons.insertAdjacentHTML('afterend', taskTableHtml);
+
     // Store gantt instance
     window.currentGanttInstance = gantt;
+    
+    // Add event listener for view mode buttons
+    document.querySelectorAll('[data-action="gantt-view"]').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const viewMode = e.target.getAttribute('data-view-mode');
+        changeGanttView(viewMode);
+        
+        // Update active button styling
+        document.querySelectorAll('[data-action="gantt-view"]').forEach(btn => {
+          btn.classList.remove('bg-blue-600', 'text-white');
+          btn.classList.add('bg-gray-200');
+        });
+        e.target.classList.remove('bg-gray-200');
+        e.target.classList.add('bg-blue-600', 'text-white');
+      });
+    });
 
   } catch (error) {
     console.error('Error rendering Gantt chart:', error);
@@ -2581,10 +2651,13 @@ function formatDate(dateString) {
 }
 
 function calculateDuration(startDate, endDate) {
+  if (!startDate || !endDate) return 0;
   const start = new Date(startDate);
   const end = new Date(endDate);
   const diffTime = Math.abs(end - start);
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  // Include both start and end days
+  return days > 0 ? days : 1;
 }
 
 function getStatusColor(status) {
