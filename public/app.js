@@ -946,7 +946,9 @@ async function loadProjectData(projectId) {
 // Load team members for the current project
 async function loadTeamMembers(projectId) {
     try {
-        const response = await axios.get(`/api/projects/${projectId}/team`);
+        const response = await axios.get(`/api/projects/${projectId}/team`, {
+            withCredentials: true
+        });
         teamMembers = response.data;
     } catch (error) {
         console.error("Error loading team members:", error);
