@@ -8984,6 +8984,10 @@ async function loadEstimateForm() {
             <p class="text-xs text-gray-600 mb-1">AI Reasoning:</p>
             <p class="text-sm text-gray-700">${aiReasoning.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
           </div>
+          ` : aiHours > 0 ? `
+          <div class="mt-3 pt-3 border-t border-purple-200">
+            <p class="text-xs text-gray-500 italic">ℹ️ This estimate was created before AI reasoning was available. Generate a new AI estimate to see the detailed explanation.</p>
+          </div>
           ` : ''}
         </div>
         ` : ''}
@@ -9266,7 +9270,11 @@ function setupEstimateFormListeners() {
       
     } catch (error) {
       console.error('Error loading AI breakdown:', error);
-      showToast('Failed to load AI breakdown', 'error');
+      if (error.response?.status === 404) {
+        showToast('This estimate was created before detailed breakdowns were available. Generate a new AI estimate to see the task breakdown.', 'info');
+      } else {
+        showToast('Failed to load AI breakdown', 'error');
+      }
     }
   });
   
