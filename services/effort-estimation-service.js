@@ -438,7 +438,7 @@ async function getEstimateBreakdown(pool, itemType, itemId, version = null) {
 async function getEstimateHistory(pool, itemType, itemId) {
   try {
     const result = await pool.query(
-      `SELECT version, estimate_hours, confidence, source, created_at, created_by
+      `SELECT version, estimate_hours, confidence, reasoning, source, created_at, created_by
        FROM effort_estimate_history 
        WHERE item_type = $1 AND item_id = $2 
        ORDER BY version DESC`,
@@ -449,6 +449,7 @@ async function getEstimateHistory(pool, itemType, itemId) {
       version: row.version,
       estimateHours: parseFloat(row.estimate_hours),
       confidence: row.confidence,
+      reasoning: row.reasoning,
       source: row.source,
       createdAt: row.created_at,
       createdBy: row.created_by
