@@ -3280,48 +3280,72 @@ app.post('/api/issues/:id/effort-estimate', authenticateToken, async (req, res) 
     
     const issue = issueResult.rows[0];
     
-    const prompt = `Analyze this task and provide an effort estimate in hours:
-
-Title: ${issue.title}
-Description: ${issue.description || 'No description provided'}
-Type: ${issue.type || 'Not specified'}
-Category: ${issue.category || 'Not specified'}
-
-Provide:
-1. Total estimated hours (be realistic, consider complexity)
-2. Confidence level (low/medium/high)
-3. Brief reasoning for the estimate
-
-Response format (JSON):
-{
-  "hours": <number>,
-  "confidence": "<low|medium|high>",
-  "reasoning": "<brief explanation>"
-}`;
-
-    const response = await openai.chat.completions.create({
-      model: model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      response_format: { type: "json_object" }
-    });
+    // Use the proper effort estimation service
+    const estimate = await generateEffortEstimate({
+      title: issue.title,
+      description: issue.description || '',
+      itemType: 'issue',
+      itemId: issue.id
+    }, model);
     
-    const result = JSON.parse(response.choices[0].message.content);
-    
-    await pool.query(
-      `UPDATE issues 
-       SET ai_effort_estimate_hours = $1,
-           ai_estimate_confidence = $2,
-           ai_estimate_last_updated = CURRENT_TIMESTAMP
-       WHERE id = $3`,
-      [result.hours, result.confidence, parseInt(id)]
-    );
-    
-    res.json({
-      hours: result.hours,
-      confidence: result.confidence,
-      reasoning: result.reasoning
-    });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Get current version
+      const versionResult = await client.query(
+        'SELECT ai_estimate_version FROM issues WHERE id = $1',
+        [parseInt(id)]
+      );
+      const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
+      const newVersion = currentVersion + 1;
+      
+      // Update issue with new estimate
+      await client.query(
+        `UPDATE issues 
+         SET ai_effort_estimate_hours = $1,
+             ai_estimate_confidence = $2,
+             ai_estimate_version = $3,
+             ai_estimate_last_updated = CURRENT_TIMESTAMP
+         WHERE id = $4`,
+        [estimate.totalHours, estimate.confidence, newVersion, parseInt(id)]
+      );
+      
+      // Save to history table
+      await client.query(
+        `INSERT INTO effort_estimate_history 
+         (item_type, item_id, estimate_hours, version, confidence, breakdown, reasoning, source, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          'issue',
+          parseInt(id),
+          estimate.totalHours,
+          newVersion,
+          estimate.confidence,
+          JSON.stringify({
+            tasks: estimate.breakdown,
+            assumptions: estimate.assumptions || []
+          }),
+          estimate.confidenceReasoning || '',
+          'ai',
+          req.user.id
+        ]
+      );
+      
+      await client.query('COMMIT');
+      
+      res.json({
+        hours: estimate.totalHours,
+        confidence: estimate.confidence,
+        reasoning: estimate.confidenceReasoning
+      });
+      
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
     
   } catch (error) {
     console.error('Error generating AI effort estimate:', error);
@@ -4328,46 +4352,72 @@ app.post('/api/action-items/:id/effort-estimate', authenticateToken, async (req,
     
     const actionItem = actionItemResult.rows[0];
     
-    const prompt = `Analyze this task and provide an effort estimate in hours:
-
-Title: ${actionItem.title}
-Description: ${actionItem.description || 'No description provided'}
-
-Provide:
-1. Total estimated hours (be realistic, consider complexity)
-2. Confidence level (low/medium/high)
-3. Brief reasoning for the estimate
-
-Response format (JSON):
-{
-  "hours": <number>,
-  "confidence": "<low|medium|high>",
-  "reasoning": "<brief explanation>"
-}`;
-
-    const response = await openai.chat.completions.create({
-      model: model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      response_format: { type: "json_object" }
-    });
+    // Use the proper effort estimation service
+    const estimate = await generateEffortEstimate({
+      title: actionItem.title,
+      description: actionItem.description || '',
+      itemType: 'action-item',
+      itemId: actionItem.id
+    }, model);
     
-    const result = JSON.parse(response.choices[0].message.content);
-    
-    await pool.query(
-      `UPDATE action_items 
-       SET ai_effort_estimate_hours = $1,
-           ai_estimate_confidence = $2,
-           ai_estimate_last_updated = CURRENT_TIMESTAMP
-       WHERE id = $3`,
-      [result.hours, result.confidence, parseInt(id)]
-    );
-    
-    res.json({
-      hours: result.hours,
-      confidence: result.confidence,
-      reasoning: result.reasoning
-    });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Get current version
+      const versionResult = await client.query(
+        'SELECT ai_estimate_version FROM action_items WHERE id = $1',
+        [parseInt(id)]
+      );
+      const currentVersion = versionResult.rows[0]?.ai_estimate_version || 0;
+      const newVersion = currentVersion + 1;
+      
+      // Update action item with new estimate
+      await client.query(
+        `UPDATE action_items 
+         SET ai_effort_estimate_hours = $1,
+             ai_estimate_confidence = $2,
+             ai_estimate_version = $3,
+             ai_estimate_last_updated = CURRENT_TIMESTAMP
+         WHERE id = $4`,
+        [estimate.totalHours, estimate.confidence, newVersion, parseInt(id)]
+      );
+      
+      // Save to history table
+      await client.query(
+        `INSERT INTO effort_estimate_history 
+         (item_type, item_id, estimate_hours, version, confidence, breakdown, reasoning, source, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          'action-item',
+          parseInt(id),
+          estimate.totalHours,
+          newVersion,
+          estimate.confidence,
+          JSON.stringify({
+            tasks: estimate.breakdown,
+            assumptions: estimate.assumptions || []
+          }),
+          estimate.confidenceReasoning || '',
+          'ai',
+          req.user.id
+        ]
+      );
+      
+      await client.query('COMMIT');
+      
+      res.json({
+        hours: estimate.totalHours,
+        confidence: estimate.confidence,
+        reasoning: estimate.confidenceReasoning
+      });
+      
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
     
   } catch (error) {
     console.error('Error generating AI effort estimate:', error);
