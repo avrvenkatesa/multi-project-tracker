@@ -1,0 +1,53 @@
+auth.js?v=10:49   GET https://multi-project-tracker-avrvenkatesa.replit.app/api/auth/me 401 (Unauthorized)
+checkAuthStatus @ auth.js?v=10:49
+init @ auth.js?v=10:29
+(anonymous) @ app.js?v=47:490
+auth.js?v=10:62 User not authenticated
+auth.js?v=10:315 Updating UI, isAuthenticated: false
+xhr.js:198   GET https://multi-project-tracker-avrvenkatesa.replit.app/api/projects 401 (Unauthorized)
+(anonymous) @ xhr.js:198
+xhr @ xhr.js:15
+jt @ dispatchRequest.js:51
+value @ Axios.js:185
+(anonymous) @ Axios.js:40
+p @ axios.min.js:2
+(anonymous) @ axios.min.js:2
+(anonymous) @ axios.min.js:2
+p @ axios.min.js:2
+a @ axios.min.js:2
+(anonymous) @ axios.min.js:2
+(anonymous) @ axios.min.js:2
+(anonymous) @ Axios.js:63
+(anonymous) @ Axios.js:211
+(anonymous) @ bind.js:12
+loadProjects @ app.js?v=47:744
+(anonymous) @ app.js?v=47:491
+app.js?v=47:752  Error loading projects: he {message: 'Request failed with status code 401', name: 'AxiosError', code: 'ERR_BAD_REQUEST', config: {…}, request: XMLHttpRequest, …}
+loadProjects @ app.js?v=47:752
+await in loadProjects
+(anonymous) @ app.js?v=47:491
+app.js?v=47:1873  Failed to load projects
+showErrorMessage @ app.js?v=47:1873
+loadProjects @ app.js?v=47:753
+await in loadProjects
+(anonymous) @ app.js?v=47:491
+xhr.js:198   GET https://multi-project-tracker-avrvenkatesa.replit.app/api/templates?sort=name 401 (Unauthorized)
+(anonymous) @ xhr.js:198
+xhr @ xhr.js:15
+jt @ dispatchRequest.js:51
+value @ Axios.js:185
+(anonymous) @ Axios.js:40
+p @ axios.min.js:2
+(anonymous) @ axios.min.js:2
+(anonymous) @ axios.min.js:2
+p @ axios.min.js:2
+a @ axios.min.js:2
+(anonymous) @ axios.min.js:2
+(anonymous) @ axios.min.js:2
+(anonymous) @ Axios.js:63
+(anonymous) @ Axios.js:211
+(anonymous) @ bind.js:12
+loadTemplatesForBulk @ app.js?v=47:6537
+initBulkActions @ app.js?v=47:6424
+(anonymous) @ app.js?v=47:507
+app.js?v=47:6552  Error loading templates: he {message: 'Request failed with status code 401', name: 'AxiosError', code: 'ERR_BAD_REQUEST', config: {…}, request: XMLHttpRequest, …}
