@@ -219,19 +219,25 @@ app.use(
   }),
 );
 
-const allowedOrigins = new Set([
-  'http://localhost:5000',
-  'http://127.0.0.1:5000',
-  process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : null
-].filter(Boolean));
-
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.has(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) {
+      return callback(null, true);
     }
+    
+    // Allow localhost for development
+    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+      return callback(null, true);
+    }
+    
+    // Allow all Replit domains (*.replit.app, *.repl.co, etc.)
+    if (origin.includes('.replit.app') || origin.includes('.repl.co')) {
+      return callback(null, true);
+    }
+    
+    // Reject all other origins
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 }));
