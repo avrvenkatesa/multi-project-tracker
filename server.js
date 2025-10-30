@@ -13871,17 +13871,18 @@ app.get('/api/schedules/:scheduleId/pdf', authenticateToken, async (req, res) =>
     res.send(pdfBuffer);
 
   } catch (error) {
-    console.error('Error generating schedule PDF:', error);
-    console.error('Error stack:', error.stack);
-    console.error('Error details:', {
+    console.error('[PDF EXPORT ERROR] Full error:', error);
+    console.error('[PDF EXPORT ERROR] Stack:', error.stack);
+    console.error('[PDF EXPORT ERROR] Details:', {
       message: error.message,
       name: error.name,
-      scheduleId,
-      userId
+      scheduleId: req.params.scheduleId,
+      userId,
+      errorString: JSON.stringify(error, Object.getOwnPropertyNames(error))
     });
     res.status(500).json({ 
       error: 'Failed to generate PDF',
-      details: process.env.NODE_ENV === 'production' ? undefined : error.message
+      details: error.message // Always send error message for debugging
     });
   }
 });
