@@ -622,28 +622,41 @@ app.post("/api/auth/register", async (req, res) => {
 // Login
 app.post("/api/auth/login", async (req, res) => {
   try {
+    console.log('[LOGIN] Attempt started for email:', req.body.email);
     const { email, password, invitationToken } = req.body;
 
     if (!email || !password) {
+      console.log('[LOGIN] Missing credentials');
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    console.log('[LOGIN] Querying database for user...');
     const [user] = await sql`SELECT * FROM users WHERE email = ${email}`;
+    console.log('[LOGIN] Database query completed. User found:', !!user);
+    
     if (!user) {
+      console.log('[LOGIN] User not found');
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    console.log('[LOGIN] Comparing passwords...');
     const isValidPassword = await bcrypt.compare(password, user.password);
+    console.log('[LOGIN] Password valid:', isValidPassword);
+    
     if (!isValidPassword) {
+      console.log('[LOGIN] Invalid password');
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    console.log('[LOGIN] Generating JWT token...');
     const token = jwt.sign(
       { id: user.id, email: user.email, username: user.username, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRY }
     );
+    console.log('[LOGIN] JWT token generated');
 
+    console.log('[LOGIN] Setting cookie...');
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -663,6 +676,7 @@ app.post("/api/auth/login", async (req, res) => {
       });
     }
 
+    console.log('[LOGIN] Success! Sending response...');
     res.json({
       message: 'Login successful',
       user: {
@@ -674,8 +688,11 @@ app.post("/api/auth/login", async (req, res) => {
       hasPendingInvitation: !!invitationToken
     });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Failed to login' });
+    console.error('[LOGIN] ERROR:', error);
+    console.error('[LOGIN] Error name:', error.name);
+    console.error('[LOGIN] Error message:', error.message);
+    console.error('[LOGIN] Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to login', details: process.env.NODE_ENV === 'production' ? undefined : error.message });
   }
 });
 
