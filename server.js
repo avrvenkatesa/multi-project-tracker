@@ -72,8 +72,35 @@ if (JWT_SECRET === "your-secret-key-change-in-production") {
   console.warn("⚠️  WARNING: Using default JWT secret. Set JWT_SECRET environment variable in production!");
 }
 
-// Database connection
-const sql = neon(process.env.DATABASE_URL);
+// Database connection with retry wrapper for Neon scale-to-zero
+const sqlBase = neon(process.env.DATABASE_URL);
+
+// Wrap SQL queries with retry logic for control plane errors
+async function sql(...args) {
+  const maxRetries = 3;
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await sqlBase(...args);
+    } catch (error) {
+      lastError = error;
+      
+      // Only retry on control plane errors
+      if (error.message && error.message.includes('Control plane request failed') && attempt < maxRetries) {
+        const delay = Math.min(500 * attempt, 2000); // 500ms, 1000ms, 2000ms
+        console.log(`[DB] Control plane error, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      throw error;
+    }
+  }
+  
+  throw lastError;
+}
+
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Initialize OpenAI with GPT-3.5-Turbo (cost-effective)
