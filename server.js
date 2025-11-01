@@ -13877,7 +13877,7 @@ app.get('/api/schedules/:scheduleId/pdf', authenticateToken, async (req, res) =>
       message: error.message,
       name: error.name,
       scheduleId: req.params.scheduleId,
-      userId,
+      userId: req.user?.id,
       errorString: JSON.stringify(error, Object.getOwnPropertyNames(error))
     });
     res.status(500).json({ 

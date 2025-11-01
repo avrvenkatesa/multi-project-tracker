@@ -725,19 +725,29 @@ function addGanttVisualization(doc, tasks, schedule) {
   const timelineWidth = 350;
   const rowHeight = 25;
   
-  // Calculate date range
+  // Calculate date range with validation
   const startDate = new Date(schedule.start_date);
   const endDate = new Date(schedule.end_date);
-  const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+  const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)));
+  
+  // Validate dates
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || totalDays <= 0) {
+    doc.fontSize(12).font('Helvetica').fillColor('#991b1b')
+      .text('Unable to generate Gantt chart: Invalid date range', chartLeft, chartTop);
+    return;
+  }
   
   // Draw timeline header with dates
   doc.fontSize(8).font('Helvetica-Bold').fillColor('#4b5563');
-  const headerIntervals = Math.min(10, totalDays);
+  const headerIntervals = Math.max(1, Math.min(10, totalDays));
   for (let i = 0; i <= headerIntervals; i++) {
     const intervalDate = new Date(startDate);
     intervalDate.setDate(startDate.getDate() + Math.floor((totalDays / headerIntervals) * i));
     const dateStr = intervalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    doc.text(dateStr, chartLeft + taskNameWidth + (timelineWidth / headerIntervals) * i, chartTop - 5, { width: 50, align: 'center' });
+    const xPos = chartLeft + taskNameWidth + (timelineWidth / headerIntervals) * i;
+    if (!isNaN(xPos) && isFinite(xPos)) {
+      doc.text(dateStr, xPos, chartTop - 5, { width: 50, align: 'center' });
+    }
   }
   
   let currentY = chartTop + 10;
@@ -749,23 +759,29 @@ function addGanttVisualization(doc, tasks, schedule) {
     doc.fontSize(8).font('Helvetica').fillColor(textColor)
       .text(task.title.substring(0, 30) + (task.title.length > 30 ? '...' : ''), chartLeft, currentY + 8, { width: taskNameWidth - 10 });
     
-    // Calculate bar position and width
+    // Calculate bar position and width with validation
     const taskStart = new Date(task.scheduled_start);
     const taskEnd = new Date(task.scheduled_end);
-    const daysFromStart = Math.floor((taskStart - startDate) / (1000 * 60 * 60 * 24));
-    const taskDuration = Math.ceil((taskEnd - taskStart) / (1000 * 60 * 60 * 24));
     
-    const barX = chartLeft + taskNameWidth + (daysFromStart / totalDays) * timelineWidth;
-    const barWidth = Math.max((taskDuration / totalDays) * timelineWidth, 3);
-    
-    // Draw bar
-    const barColor = task.is_critical_path ? '#dc2626' : '#6b9bd1';
-    doc.rect(barX, currentY + 5, barWidth, 15).fillAndStroke(barColor, barColor);
-    
-    // Add assignee if available
-    if (task.assignee) {
-      doc.fontSize(7).fillColor('#6b7280')
-        .text(task.assignee.substring(0, 15), barX, currentY + 5, { width: barWidth, align: 'center' });
+    if (!isNaN(taskStart.getTime()) && !isNaN(taskEnd.getTime())) {
+      const daysFromStart = Math.max(0, Math.floor((taskStart - startDate) / (1000 * 60 * 60 * 24)));
+      const taskDuration = Math.max(1, Math.ceil((taskEnd - taskStart) / (1000 * 60 * 60 * 24)));
+      
+      const barX = chartLeft + taskNameWidth + (daysFromStart / totalDays) * timelineWidth;
+      const barWidth = Math.max((taskDuration / totalDays) * timelineWidth, 3);
+      
+      // Only draw if values are valid
+      if (!isNaN(barX) && !isNaN(barWidth) && isFinite(barX) && isFinite(barWidth)) {
+        // Draw bar
+        const barColor = task.is_critical_path ? '#dc2626' : '#6b9bd1';
+        doc.rect(barX, currentY + 5, barWidth, 15).fillAndStroke(barColor, barColor);
+        
+        // Add assignee if available
+        if (task.assignee) {
+          doc.fontSize(7).fillColor('#6b7280')
+            .text(task.assignee.substring(0, 15), barX, currentY + 5, { width: barWidth, align: 'center' });
+        }
+      }
     }
     
     currentY += rowHeight;

@@ -1,0 +1,118 @@
+2025-11-01 04:02:20.24
+6c3897db
+User
+at PDFDocument._text (/home/runner/workspace/node_modules/pdfkit/js/pdfkit.js:3084:15)
+2025-11-01 04:02:20.24
+6c3897db
+User
+at PDFDocument.text (/home/runner/workspace/node_modules/pdfkit/js/pdfkit.js:3095:17)
+2025-11-01 04:02:20.24
+6c3897db
+User
+at addGanttVisualization (/home/runner/workspace/services/pdf-service.js:740:9)
+2025-11-01 04:02:20.24
+6c3897db
+User
+at /home/runner/workspace/services/pdf-service.js:577:7
+2025-11-01 04:02:20.24
+6c3897db
+User
+at new Promise ()
+2025-11-01 04:02:20.24
+6c3897db
+User
+at generateSchedulePDF (/home/runner/workspace/services/pdf-service.js:531:10)
+2025-11-01 04:02:20.24
+6c3897db
+User
+at /home/runner/workspace/server.js:13859:29
+2025-11-01 04:02:20.24
+6c3897db
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-01 04:02:20.24
+6c3897db
+User
+[PDF EXPORT ERROR] Full error: Error: Failed to generate schedule PDF: unsupported number: NaN
+2025-11-01 04:02:20.24
+6c3897db
+User
+at /home/runner/workspace/services/pdf-service.js:602:14
+2025-11-01 04:02:20.24
+6c3897db
+User
+at new Promise ()
+2025-11-01 04:02:20.24
+6c3897db
+User
+at generateSchedulePDF (/home/runner/workspace/services/pdf-service.js:531:10)
+2025-11-01 04:02:20.24
+6c3897db
+User
+at /home/runner/workspace/server.js:13859:29
+2025-11-01 04:02:20.24
+6c3897db
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-01 04:02:20.24
+6c3897db
+User
+[PDF EXPORT ERROR] Stack: Error: Failed to generate schedule PDF: unsupported number: NaN
+2025-11-01 04:02:20.24
+6c3897db
+User
+at /home/runner/workspace/services/pdf-service.js:602:14
+2025-11-01 04:02:20.24
+6c3897db
+User
+at new Promise ()
+2025-11-01 04:02:20.24
+6c3897db
+User
+at generateSchedulePDF (/home/runner/workspace/services/pdf-service.js:531:10)
+2025-11-01 04:02:20.24
+6c3897db
+User
+at /home/runner/workspace/server.js:13859:29
+2025-11-01 04:02:20.24
+6c3897db
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-01 04:02:20.24
+6c3897db
+User
+/home/runner/workspace/server.js:13880
+2025-11-01 04:02:20.24
+6c3897db
+User
+userId,
+2025-11-01 04:02:20.24
+6c3897db
+User
+^
+2025-11-01 04:02:20.24
+6c3897db
+User
+2025-11-01 04:02:20.24
+6c3897db
+User
+ReferenceError: userId is not defined
+2025-11-01 04:02:20.24
+6c3897db
+User
+at /home/runner/workspace/server.js:13880:7
+2025-11-01 04:02:20.24
+6c3897db
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-01 04:02:20.24
+6c3897db
+User
+2025-11-01 04:02:20.24
+6c3897db
+User
+Node.js v20.19.3
+2025-11-01 04:02:20.25
+6c3897db
+System
+command finished with error [node server.js]: exit status 1
