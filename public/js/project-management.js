@@ -130,30 +130,20 @@ async function archiveProject(projectId) {
       throw new Error(data.error || 'Failed to archive project');
     }
     
+    // Check if we're currently viewing the archived project
+    const currentProjectId = localStorage.getItem('currentProjectId');
+    const isViewingArchivedProject = currentProjectId === projectId.toString();
+    
+    // Clear localStorage for the archived project
+    if (isViewingArchivedProject) {
+      localStorage.removeItem('currentProjectId');
+    }
+    
     alert('Project archived successfully!');
     
-    // Clear the current project selection and hide project details
-    const currentProjectId = localStorage.getItem('currentProjectId');
-    if (currentProjectId === projectId.toString()) {
-      localStorage.removeItem('currentProjectId');
-      
-      // Hide project detail/kanban view if it exists
-      const projectView = document.getElementById('project-view');
-      if (projectView) {
-        projectView.classList.add('hidden');
-      }
-      
-      // Clear current project variable if it exists
-      if (typeof currentProject !== 'undefined') {
-        window.currentProject = null;
-      }
-    }
-    
-    if (typeof loadProjects === 'function') {
-      await loadProjects();
-    } else {
-      location.reload();
-    }
+    // Reload the page to refresh the project list and clear the view
+    // This ensures clean state and avoids any caching issues
+    window.location.href = '/index.html';
     
   } catch (error) {
     console.error('Error archiving project:', error);
