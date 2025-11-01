@@ -1139,11 +1139,16 @@ app.post("/api/projects", authenticateToken, requireRole('Project Manager'), asy
       return res.status(400).json({ error: 'Project name is required' });
     }
     
-    // Validate complexity_level if provided
+    // Validate complexity_level strictly - return 400 for invalid values
     const validComplexityLevels = ['standard', 'complex', 'enterprise'];
-    const finalComplexityLevel = complexity_level && validComplexityLevels.includes(complexity_level) 
-      ? complexity_level 
-      : 'standard';
+    if (complexity_level && !validComplexityLevels.includes(complexity_level)) {
+      return res.status(400).json({ 
+        error: 'Invalid complexity_level', 
+        details: `Must be one of: ${validComplexityLevels.join(', ')}`,
+        received: complexity_level
+      });
+    }
+    const finalComplexityLevel = complexity_level || 'standard';
 
     const [newProject] = await sql`
       INSERT INTO projects (name, description, template, complexity_level, created_by)
@@ -1198,9 +1203,16 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
     
-    // Validate complexity_level if provided
+    // Validate complexity_level strictly - return 400 for invalid values
     const validComplexityLevels = ['standard', 'complex', 'enterprise'];
-    const finalComplexityLevel = complexity_level !== undefined && validComplexityLevels.includes(complexity_level)
+    if (complexity_level !== undefined && !validComplexityLevels.includes(complexity_level)) {
+      return res.status(400).json({ 
+        error: 'Invalid complexity_level', 
+        details: `Must be one of: ${validComplexityLevels.join(', ')}`,
+        received: complexity_level
+      });
+    }
+    const finalComplexityLevel = complexity_level !== undefined 
       ? complexity_level
       : currentProject.complexity_level;
     

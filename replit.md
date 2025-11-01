@@ -12,6 +12,7 @@ Preferred communication style: Simple, everyday language.
 The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles. It includes a Project Dashboard with analytics and Chart.js visualizations, Kanban boards, tag displays, risk cards, and a comprehensive unified checklist system. The UI implements consistent navigation, responsive design, and prioritizes clarity and interactivity. CSP compliance is maintained through external JavaScript files and event delegation. A unified `checklists.html` page consolidates linked, standalone, and template checklists into a single tabbed view.
 
 Key UI features include:
+-   **Project Complexity Configuration**: Three-tier complexity system (Standard/Complex/Enterprise) determines maximum file upload limits (5/10/20 files) per project. Complexity level is configurable at project creation and can be updated later. Visual badges display complexity tier and file limit on project cards.
 -   **Checklist Completion Validation**: Warns users about incomplete checklists when moving items to "Done" status, with visual progress badges on Kanban cards. Allows project owners to toggle enforcement.
 -   **Checklist Feedback System**: Users can provide thumbs up/down feedback on completed checklists, which is persistently stored and displayed.
 -   **Effort Estimates Tab**: Dedicated tab in the detail modal for comprehensive estimate management, version history with visual source icons and confidence badges, version comparison, and CSV export. Includes a full estimation UI with AI/Hybrid options and permission-based controls.
@@ -35,6 +36,8 @@ API endpoints support advanced features like auto-creating checklists, status up
 
 ### System Design Choices
 The database schema includes Users, Projects, Issues, Action Items, and a comprehensive checklist system with templates, sections, items, responses, and signoffs. It supports AI-specific data, collaboration data, user preferences, risk management, and tag typing. Checklist templates include public/featured flags and auto-creation mappings. `checklist_item_dependencies` tracks dependencies with circular dependency prevention. Standalone checklists and user feedback for quality ratings are supported.
+
+Projects include a `complexity_level` field (standard/complex/enterprise) with automatic `max_file_uploads` calculation via database trigger. The trigger fires on any project INSERT or UPDATE to ensure max_file_uploads stays synchronized with complexity_level. Backend validation strictly enforces valid complexity values, returning 400 errors for invalid inputs.
 
 Project scheduling involves `project_schedules` (versioning), `schedule_items`, `task_schedules` (calculated dates, critical path, risk indicators), and `schedule_changes`. Schedules support multiple scenarios, topological sort-based task ordering, critical path identification, risk detection, and resource allocation analysis.
 

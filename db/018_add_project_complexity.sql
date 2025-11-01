@@ -32,10 +32,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger to automatically set max_file_uploads
+-- Fires on ANY update to projects table to ensure max_file_uploads is always in sync
 DROP TRIGGER IF EXISTS trigger_set_max_files_from_complexity ON projects;
 
 CREATE TRIGGER trigger_set_max_files_from_complexity
-  BEFORE INSERT OR UPDATE OF complexity_level ON projects
+  BEFORE INSERT OR UPDATE ON projects
   FOR EACH ROW
   EXECUTE FUNCTION set_max_files_from_complexity();
 
