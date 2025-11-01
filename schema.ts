@@ -28,6 +28,8 @@ export const projects = pgTable('projects', {
   teamsNotificationsEnabled: boolean('teams_notifications_enabled').default(true),
   checklistCompletionEnabled: boolean('checklist_completion_enabled').default(true),
   requireAssigneeForScheduling: boolean('require_assignee_for_scheduling').default(false),
+  complexityLevel: varchar('complexity_level', { length: 20 }).default('standard'),
+  maxFileUploads: integer('max_file_uploads').default(5),
 });
 
 export const projectMembers = pgTable('project_members', {
