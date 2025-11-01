@@ -34,6 +34,7 @@ async function openEditProjectModal(projectId) {
     document.getElementById('editProjectName').value = project.name || '';
     document.getElementById('editProjectDescription').value = project.description || '';
     document.getElementById('editProjectTemplate').value = project.template || 'generic';
+    document.getElementById('editProjectComplexity').value = project.complexity_level || 'standard';
     document.getElementById('editProjectStartDate').value = project.start_date ? project.start_date.split('T')[0] : '';
     document.getElementById('editProjectEndDate').value = project.end_date ? project.end_date.split('T')[0] : '';
     document.getElementById('editTeamsNotificationsEnabled').checked = project.teams_notifications_enabled || false;
@@ -56,6 +57,7 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
   const name = document.getElementById('editProjectName').value;
   const description = document.getElementById('editProjectDescription').value;
   const template = document.getElementById('editProjectTemplate').value;
+  const complexity_level = document.getElementById('editProjectComplexity').value;
   const start_date = document.getElementById('editProjectStartDate').value || null;
   const end_date = document.getElementById('editProjectEndDate').value || null;
   const teams_notifications_enabled = document.getElementById('editTeamsNotificationsEnabled').checked;
@@ -71,6 +73,7 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
         name, 
         description, 
         template, 
+        complexity_level,
         start_date, 
         end_date, 
         teams_notifications_enabled, 

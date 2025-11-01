@@ -811,10 +811,15 @@ function renderProjects() {
                         </button>
                     ` : ''}
                 </div>
-                <div class="flex items-center justify-between">
-                    <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
-                        ${project.template}
-                    </span>
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                    <div class="flex gap-2">
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                            ${project.template}
+                        </span>
+                        <span class="px-2 py-1 ${project.complexity_level === 'enterprise' ? 'bg-purple-100 text-purple-800' : project.complexity_level === 'complex' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'} rounded text-xs font-medium">
+                            ${project.complexity_level === 'enterprise' ? '⭐ Enterprise (20)' : project.complexity_level === 'complex' ? '📦 Complex (10)' : '📁 Standard (5)'}
+                        </span>
+                    </div>
                     <span class="text-xs text-gray-500">
                         ${new Date(project.created_at).toLocaleDateString()}
                     </span>
@@ -1817,6 +1822,15 @@ function showCreateProject() {
                     <option value="infrastructure">Infrastructure</option>
                 </select>
             </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Complexity Level</label>
+                <select id="project-complexity" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                    <option value="standard">Standard (5 file uploads)</option>
+                    <option value="complex">Complex (10 file uploads)</option>
+                    <option value="enterprise">Enterprise (20 file uploads)</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Determines maximum file attachments allowed per item</p>
+            </div>
             <div class="flex justify-end space-x-3">
                 <button type="button" id="cancel-btn" 
                         class="px-4 py-2 text-gray-600 border rounded hover:bg-gray-50">
@@ -1845,6 +1859,7 @@ async function createProject(event) {
         name: document.getElementById("project-name").value,
         description: document.getElementById("project-description").value,
         template: document.getElementById("project-template").value,
+        complexity_level: document.getElementById("project-complexity").value,
     };
 
     try {
