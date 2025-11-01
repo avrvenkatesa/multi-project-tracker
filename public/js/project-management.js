@@ -132,6 +132,23 @@ async function archiveProject(projectId) {
     
     alert('Project archived successfully!');
     
+    // Clear the current project selection and hide project details
+    const currentProjectId = localStorage.getItem('currentProjectId');
+    if (currentProjectId === projectId.toString()) {
+      localStorage.removeItem('currentProjectId');
+      
+      // Hide project detail/kanban view if it exists
+      const projectView = document.getElementById('project-view');
+      if (projectView) {
+        projectView.classList.add('hidden');
+      }
+      
+      // Clear current project variable if it exists
+      if (typeof currentProject !== 'undefined') {
+        window.currentProject = null;
+      }
+    }
+    
     if (typeof loadProjects === 'function') {
       await loadProjects();
     } else {
