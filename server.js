@@ -1133,18 +1133,25 @@ app.get("/api/projects/:id", authenticateToken, async (req, res) => {
 // Create project (PM or higher)
 app.post("/api/projects", authenticateToken, requireRole('Project Manager'), async (req, res) => {
   try {
-    const { name, description, template } = req.body;
+    const { name, description, template, complexity_level } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Project name is required' });
     }
+    
+    // Validate complexity_level if provided
+    const validComplexityLevels = ['standard', 'complex', 'enterprise'];
+    const finalComplexityLevel = complexity_level && validComplexityLevels.includes(complexity_level) 
+      ? complexity_level 
+      : 'standard';
 
     const [newProject] = await sql`
-      INSERT INTO projects (name, description, template, created_by)
+      INSERT INTO projects (name, description, template, complexity_level, created_by)
       VALUES (
         ${name}, 
         ${description || ''}, 
         ${template || 'generic'},
+        ${finalComplexityLevel},
         ${req.user.id.toString()}
       )
       RETURNING *
@@ -1166,7 +1173,7 @@ app.post("/api/projects", authenticateToken, requireRole('Project Manager'), asy
 app.put("/api/projects/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, template, start_date, end_date, teams_webhook_url, teams_notifications_enabled, checklist_completion_enabled } = req.body;
+    const { name, description, template, start_date, end_date, teams_webhook_url, teams_notifications_enabled, checklist_completion_enabled, complexity_level } = req.body;
     
     const [membership] = await sql`
       SELECT role FROM project_members 
@@ -1191,6 +1198,12 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
     
+    // Validate complexity_level if provided
+    const validComplexityLevels = ['standard', 'complex', 'enterprise'];
+    const finalComplexityLevel = complexity_level !== undefined && validComplexityLevels.includes(complexity_level)
+      ? complexity_level
+      : currentProject.complexity_level;
+    
     // Determine final values with proper handling
     const finalWebhookUrl = teams_webhook_url !== undefined ? teams_webhook_url : currentProject.teams_webhook_url;
     const finalNotificationsEnabled = teams_notifications_enabled !== undefined ? teams_notifications_enabled : (currentProject.teams_notifications_enabled !== undefined ? currentProject.teams_notifications_enabled : true);
@@ -1207,6 +1220,7 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
         teams_webhook_url = ${finalWebhookUrl || null},
         teams_notifications_enabled = ${finalNotificationsEnabled},
         checklist_completion_enabled = ${finalChecklistCompletionEnabled},
+        complexity_level = ${finalComplexityLevel},
         updated_by = ${req.user.id}
       WHERE id = ${id}
       RETURNING *
