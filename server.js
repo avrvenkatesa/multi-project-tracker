@@ -258,8 +258,13 @@ app.use(cors({
       return callback(null, true);
     }
     
-    // Allow all Replit domains (*.replit.app, *.repl.co, etc.)
-    if (origin.includes('.replit.app') || origin.includes('.repl.co')) {
+    // Allow all Replit domains (*.replit.app, *.repl.co, *.replit.dev, *.replitusercontent.com, etc.)
+    if (origin.includes('.replit') || origin.includes('.repl.co') || origin.includes('replitusercontent')) {
+      return callback(null, true);
+    }
+    
+    // In production on Replit, be more permissive to handle proxy/iframe scenarios
+    if (process.env.REPL_ID || process.env.REPLIT_DB_URL) {
       return callback(null, true);
     }
     
