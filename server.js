@@ -108,16 +108,20 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// Configure multer for transcript uploads
+// Configure multer for transcript uploads (supports .txt, .pdf, .docx)
 const transcriptUpload = multer({ 
   dest: 'uploads/',
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['text/plain'];
+    const allowedTypes = [
+      'text/plain',
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only .txt files allowed'));
+      cb(new Error('Invalid file type. Only .txt, .pdf, and .docx files allowed'));
     }
   }
 });
@@ -5911,19 +5915,19 @@ async function updateExistingItem(existingItem, newItem, itemType = 'action_item
   }
 }
 
-// Upload and analyze meeting transcript (with transcript storage)
+// Upload and analyze meeting transcript (with transcript storage) - supports multiple files
 app.post('/api/meetings/analyze', 
   authenticateToken, 
   requireRole('Team Member'),
-  transcriptUpload.single('transcript'), 
+  transcriptUpload.array('transcript', 20), // Support up to 20 files (max for enterprise)
   async (req, res) => {
     const startTime = Date.now();
     const analysisId = uuidv4();
     let transcriptId = null;
     
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
       }
 
       const { projectId, meetingDate, title, visibility } = req.body;
@@ -5934,21 +5938,59 @@ app.post('/api/meetings/analyze',
       // PERMISSION CHECK: Can user upload transcripts to this project?
       const canUpload = await canUploadTranscript(req.user.id, parseInt(projectId));
       if (!canUpload) {
-        await fs.unlink(req.file.path); // Clean up uploaded file
+        // Clean up all uploaded files
+        for (const file of req.files) {
+          await fs.unlink(file.path);
+        }
         return res.status(403).json({ 
           error: 'Insufficient permissions',
           message: 'Only Project Managers and System Administrators can upload transcripts and run AI analysis'
         });
       }
 
-      // Read uploaded file
-      const filePath = req.file.path;
-      const transcriptText = await fs.readFile(filePath, 'utf8');
+      // Extract text from all files (supports .txt, .pdf, .docx)
+      const documentService = require('./services/document-service.js');
+      let transcriptText = '';
+      const filenames = [];
+      let totalSize = 0;
+      
+      console.log(`📤 Processing ${req.files.length} file(s) for transcript analysis...`);
+      
+      for (const file of req.files) {
+        console.log(`   Processing: ${file.originalname} (${file.mimetype})`);
+        filenames.push(file.originalname);
+        totalSize += file.size;
+        
+        try {
+          if (file.mimetype === 'text/plain') {
+            // Read text file directly
+            const text = await fs.readFile(file.path, 'utf8');
+            transcriptText += `\n\n=== ${file.originalname} ===\n${text}`;
+          } else {
+            // Use document service for PDF/DOCX
+            const fileBuffer = await fs.readFile(file.path);
+            const extracted = await documentService.extractTextFromDocument(
+              fileBuffer,
+              file.mimetype,
+              file.originalname
+            );
+            transcriptText += `\n\n=== ${file.originalname} ===\n${extracted.text}`;
+          }
+          
+          // Clean up file
+          await fs.unlink(file.path);
+        } catch (extractError) {
+          console.error(`Error extracting text from ${file.originalname}:`, extractError);
+          await fs.unlink(file.path);
+          throw new Error(`Failed to extract text from ${file.originalname}`);
+        }
+      }
+      
+      transcriptText = transcriptText.trim();
 
       // Validate transcript length (GPT-3.5 has 16K context window)
       const estimatedTokens = Math.ceil(transcriptText.length / 4);
       if (estimatedTokens > 12000) {
-        await fs.unlink(filePath);
         return res.status(400).json({ 
           error: 'Transcript too long. Please limit to ~10,000 words (48,000 characters)' 
         });
@@ -5957,11 +5999,14 @@ app.post('/api/meetings/analyze',
       // Get project context for better AI results
       const project = await sql`SELECT * FROM projects WHERE id = ${parseInt(projectId)}`;
       if (!project || project.length === 0) {
-        await fs.unlink(filePath);
         return res.status(404).json({ error: 'Project not found' });
       }
 
       // STEP 1: Store transcript in database FIRST
+      const filenameStr = filenames.length === 1 
+        ? filenames[0] 
+        : `Multi-file (${filenames.length} files): ${filenames.join(', ')}`;
+      
       const transcriptResult = await pool.query(`
         INSERT INTO meeting_transcripts (
           project_id, title, meeting_date, uploaded_by,
@@ -5975,8 +6020,8 @@ app.post('/api/meetings/analyze',
         title || `Meeting ${new Date().toLocaleDateString()}`,
         meetingDate || new Date().toISOString().split('T')[0],
         req.user.id,
-        req.file.originalname,
-        req.file.size,
+        filenameStr,
+        totalSize,
         transcriptText,
         analysisId,
         visibility || 'project_managers' // Default: only managers can view
@@ -5987,12 +6032,10 @@ app.post('/api/meetings/analyze',
       // Audit the upload action
       await auditAIAction(transcriptId, req.user.id, 'upload', { 
         projectId: parseInt(projectId), 
-        filename: req.file.originalname,
+        filename: filenameStr,
+        fileCount: filenames.length,
         visibility: visibility || 'project_managers'
       });
-
-      // Clean up uploaded file
-      await fs.unlink(filePath);
 
       console.log(`Analyzing transcript (${estimatedTokens} tokens) with GPT-3.5-Turbo...`);
       
