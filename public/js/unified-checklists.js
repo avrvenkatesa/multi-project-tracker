@@ -127,6 +127,7 @@ function setupEventListeners() {
   document.getElementById('save-all-checklists-btn')?.addEventListener('click', saveStandaloneChecklists);
   document.getElementById('cancel-preview-btn')?.addEventListener('click', closeUploadModal);
   document.getElementById('documentFileInput')?.addEventListener('change', handleDocumentUpload);
+  document.getElementById('generate-checklists-btn')?.addEventListener('click', generateChecklistsFromDocuments);
   
   // Search and sort for standalone
   document.getElementById('standaloneSearch')?.addEventListener('input', filterStandaloneChecklists);
@@ -140,6 +141,15 @@ function setupEventListeners() {
   
   // Event delegation for template actions
   document.getElementById('templatesList')?.addEventListener('click', handleTemplateAction);
+  
+  // Event delegation for document file removal
+  document.getElementById('selectedDocumentFiles')?.addEventListener('click', function(event) {
+    const button = event.target.closest('[data-action="remove-document-file"]');
+    if (button) {
+      const index = parseInt(button.dataset.fileIndex);
+      removeDocumentFile(index);
+    }
+  });
 }
 
 function handleStandaloneAction(event) {
@@ -789,7 +799,8 @@ function updateDocumentFilesList() {
           <span class="text-gray-500 ml-2">(${fileSizeMB} MB)</span>
         </div>
         <button 
-          onclick="removeDocumentFile(${index})" 
+          data-action="remove-document-file"
+          data-file-index="${index}"
           class="text-red-600 hover:text-red-800 text-sm font-bold ml-2 px-2"
           title="Remove file"
         >
