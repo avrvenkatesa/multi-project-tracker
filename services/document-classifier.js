@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const aiCostTracker = require('./ai-cost-tracker');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -19,9 +20,11 @@ const BASE_CATEGORIES = [
  * Classify a document using hybrid AI approach
  * @param {string} text - Document text content
  * @param {string} filename - Document filename
+ * @param {number} projectId - Project ID (optional for cost tracking)
+ * @param {number} userId - User ID (optional for cost tracking)
  * @returns {Promise<{category: string, confidence: number, reasoning: string, is_custom_category: boolean, text_length: number}>}
  */
-async function classifyDocument(text, filename) {
+async function classifyDocument(text, filename, projectId = null, userId = null) {
   try {
     console.log(`\n🔍 Classifying document: ${filename}`);
     console.log(`   Text length: ${text.length} characters`);
@@ -77,6 +80,20 @@ ${truncatedText}`;
       max_tokens: 200,
       response_format: { type: 'json_object' }
     });
+
+    // Track AI cost
+    const usage = response.usage;
+    if (usage && projectId) {
+      await aiCostTracker.trackAIUsage({
+        userId,
+        projectId,
+        feature: 'classification',
+        model: 'gpt-4o',
+        promptTokens: usage.prompt_tokens,
+        completionTokens: usage.completion_tokens,
+        metadata: { filename, text_length: text.length }
+      });
+    }
 
     const result = JSON.parse(response.choices[0].message.content);
 

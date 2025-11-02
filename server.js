@@ -6000,7 +6000,9 @@ app.post('/api/meetings/analyze',
         try {
           const classification = await documentClassifier.classifyDocument(
             fileText,
-            file.originalname
+            file.originalname,
+            parseInt(projectId),
+            req.user.id
           );
           
           // Store classification in database
@@ -10906,7 +10908,9 @@ app.post('/api/projects/:projectId/upload-and-generate-standalone',
         try {
           const classification = await documentClassifier.classifyDocument(
             doc.text,
-            doc.filename
+            doc.filename,
+            parseInt(projectId),
+            userId
           );
           
           // Store classification in database
@@ -10969,6 +10973,7 @@ app.post('/api/projects/:projectId/upload-and-generate-standalone',
       const aiService = require('./services/ai-service.js');
       
       const context = {
+        userId,
         projectId: parseInt(projectId),
         documentFilename: extractedDocuments.length === 1 
           ? extractedDocuments[0].filename 
@@ -14792,6 +14797,68 @@ app.use((err, req, res, next) => {
     message: "Something went wrong!",
     error: process.env.NODE_ENV === "production" ? {} : err.message,
   });
+});
+
+/**
+ * Get AI cost breakdown for a project
+ * GET /api/projects/:projectId/ai-usage
+ */
+app.get('/api/projects/:projectId/ai-usage', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    // Verify user has access to project
+    const hasAccess = await checkProjectAccess(req.user.id, parseInt(projectId));
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+    
+    const aiCostTracker = require('./services/ai-cost-tracker');
+    const breakdown = await aiCostTracker.getProjectCostBreakdown(parseInt(projectId));
+    
+    res.json({
+      success: true,
+      projectId: parseInt(projectId),
+      ...breakdown
+    });
+    
+  } catch (error) {
+    console.error('Error getting AI usage:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Get AI cost breakdown for current user
+ * GET /api/users/me/ai-usage
+ */
+app.get('/api/users/me/ai-usage', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const aiCostTracker = require('./services/ai-cost-tracker');
+    const breakdown = await aiCostTracker.getUserCostBreakdown(userId);
+    
+    // Calculate total
+    const totalCost = breakdown.reduce((sum, row) => sum + parseFloat(row.total_cost_usd || 0), 0);
+    const totalTokens = breakdown.reduce((sum, row) => sum + parseInt(row.total_tokens || 0), 0);
+    const totalOperations = breakdown.reduce((sum, row) => sum + parseInt(row.operation_count || 0), 0);
+    
+    res.json({
+      success: true,
+      userId,
+      summary: {
+        total_cost_usd: totalCost,
+        total_tokens: totalTokens,
+        total_operations: totalOperations
+      },
+      breakdown
+    });
+    
+  } catch (error) {
+    console.error('Error getting user AI usage:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.listen(PORT, "0.0.0.0", () => {

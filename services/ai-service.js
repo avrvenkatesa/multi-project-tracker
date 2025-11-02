@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const { Pool } = require('@neondatabase/serverless');
 const { extractTextFromFile, truncateToTokenLimit } = require('./file-processor');
+const aiCostTracker = require('./ai-cost-tracker');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -386,7 +387,7 @@ ${hasAttachments ? `
 /**
  * Call AI with prompt and parse response
  */
-async function callAI(prompt, sourceType) {
+async function callAI(prompt, sourceType, userId = null, projectId = null) {
   try {
     console.log(`[AI] Starting generation request (provider: OpenAI GPT-4o)`);
     let response;
@@ -411,6 +412,19 @@ async function callAI(prompt, sourceType) {
     
     const completion = await Promise.race([completionPromise, timeout]);
     response = completion.choices[0].message.content;
+    
+    // Track AI cost
+    if (completion.usage && projectId) {
+      await aiCostTracker.trackAIUsage({
+        userId,
+        projectId,
+        feature: 'checklist_generation',
+        model: process.env.AI_MODEL || 'gpt-4o',
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        metadata: { source_type: sourceType }
+      });
+    }
     
     console.log(`[AI] Generation complete, parsing response...`);
     
@@ -631,7 +645,7 @@ function checkRateLimit(userId, requestCount = 1) {
 /**
  * Call AI for document analysis (returns multiple checklists)
  */
-async function callAIForDocument(prompt) {
+async function callAIForDocument(prompt, userId = null, projectId = null) {
   try {
     console.log(`[AI] Starting document analysis (provider: OpenAI GPT-4o)`);
     let response;
@@ -656,6 +670,19 @@ async function callAIForDocument(prompt) {
     const completion = await Promise.race([completionPromise, timeout]);
     response = completion.choices[0].message.content;
     
+    // Track AI cost
+    if (completion.usage && projectId) {
+      await aiCostTracker.trackAIUsage({
+        userId,
+        projectId,
+        feature: 'document_analysis',
+        model: process.env.AI_MODEL || 'gpt-4o',
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        metadata: { operation: 'multi_checklist_generation' }
+      });
+    }
+    
     console.log(`[AI] Document analysis complete, parsing response...`);
     
     // Clean response
@@ -677,6 +704,7 @@ async function callAIForDocument(prompt) {
  * For Phase 4 Mode 3: Standalone Document Processing
  */
 async function generateChecklistFromDocument(documentText, context = {}) {
+  const { userId = null, projectId = null } = context;
   console.log(`🤖 Generating standalone checklists from document (${documentText.length} chars)`);
   
   if (!documentText || documentText.trim().length === 0) {
@@ -747,7 +775,7 @@ IMPORTANT: Generate actual actionable items from the document content. Do NOT re
 Generate the checklists now with ALL items populated:`;
 
   try {
-    const result = await callAIForDocument(prompt);
+    const result = await callAIForDocument(prompt, userId, projectId);
     
     console.log('=== AI RESPONSE DEBUG ===');
     console.log('Result keys:', Object.keys(result));

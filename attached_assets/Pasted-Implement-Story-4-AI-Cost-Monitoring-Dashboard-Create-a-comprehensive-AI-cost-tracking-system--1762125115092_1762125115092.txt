@@ -1,0 +1,617 @@
+Implement Story 4: AI Cost Monitoring Dashboard
+
+  Create a comprehensive AI cost tracking system to monitor OpenAI API usage across all features (document classification,
+  checklist generation, timeline extraction, etc.). Provide a dashboard to visualize costs by project and feature.
+
+  ---
+
+  ## PART 1: Database Migration
+
+  **File: migrations/014_ai_cost_tracking.sql**
+
+  Create a new migration file:
+
+  ```sql
+  -- Story 4: AI Cost Monitoring Dashboard
+  -- Track AI API usage and costs across all features
+
+  CREATE TABLE IF NOT EXISTS ai_usage_tracking (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    feature VARCHAR(100) NOT NULL,  -- 'classification', 'checklist', 'timeline', etc.
+    model VARCHAR(50) NOT NULL,      -- 'gpt-4o', 'gpt-3.5-turbo', etc.
+    prompt_tokens INTEGER NOT NULL,
+    completion_tokens INTEGER NOT NULL,
+    total_tokens INTEGER NOT NULL,
+    cost_usd DECIMAL(10, 6) NOT NULL,  -- Cost in USD
+    metadata JSONB,                     -- Additional context (filename, operation details)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Indexes for efficient querying
+  CREATE INDEX idx_ai_usage_project ON ai_usage_tracking(project_id);
+  CREATE INDEX idx_ai_usage_user ON ai_usage_tracking(user_id);
+  CREATE INDEX idx_ai_usage_feature ON ai_usage_tracking(feature);
+  CREATE INDEX idx_ai_usage_created ON ai_usage_tracking(created_at);
+
+  -- View: Cost breakdown by project and feature
+  CREATE OR REPLACE VIEW ai_cost_by_project AS
+  SELECT
+    project_id,
+    feature,
+    model,
+    COUNT(*) as operation_count,
+    SUM(total_tokens) as total_tokens,
+    SUM(cost_usd) as total_cost_usd,
+    AVG(cost_usd) as avg_cost_usd,
+    MAX(created_at) as last_used
+  FROM ai_usage_tracking
+  GROUP BY project_id, feature, model
+  ORDER BY project_id, total_cost_usd DESC;
+
+  -- View: Cost breakdown by user
+  CREATE OR REPLACE VIEW ai_cost_by_user AS
+  SELECT
+    user_id,
+    feature,
+    COUNT(*) as operation_count,
+    SUM(total_tokens) as total_tokens,
+    SUM(cost_usd) as total_cost_usd,
+    MAX(created_at) as last_used
+  FROM ai_usage_tracking
+  GROUP BY user_id, feature
+  ORDER BY user_id, total_cost_usd DESC;
+
+  -- Comments
+  COMMENT ON TABLE ai_usage_tracking IS 'Tracks AI API usage and costs for monitoring and optimization';
+  COMMENT ON COLUMN ai_usage_tracking.feature IS 'Feature name: classification, checklist, timeline, dependencies, resources,
+  etc.';
+  COMMENT ON COLUMN ai_usage_tracking.metadata IS 'Additional context: filename, operation type, input length, etc.';
+
+  Run the migration:
+  psql $DATABASE_URL -f migrations/014_ai_cost_tracking.sql
+
+  ---
+  PART 2: AI Cost Tracker Service
+
+  File: services/ai-cost-tracker.js
+
+  Create a new service module:
+
+  const db = require('../db');
+
+  /**
+   * Pricing per 1M tokens (as of 2024)
+   * Update these if OpenAI changes pricing
+   */
+  const MODEL_PRICING = {
+    'gpt-4o': {
+      prompt: 2.50,      // $2.50 per 1M input tokens
+      completion: 10.00  // $10.00 per 1M output tokens
+    },
+    'gpt-4o-mini': {
+      prompt: 0.150,     // $0.15 per 1M input tokens
+      completion: 0.600  // $0.60 per 1M output tokens
+    },
+    'gpt-3.5-turbo': {
+      prompt: 0.50,      // $0.50 per 1M input tokens
+      completion: 1.50   // $1.50 per 1M output tokens
+    },
+    'gpt-4-turbo': {
+      prompt: 10.00,
+      completion: 30.00
+    }
+  };
+
+  /**
+   * Calculate cost based on token usage
+   * @param {string} model - Model name (e.g., 'gpt-4o')
+   * @param {number} promptTokens - Input tokens
+   * @param {number} completionTokens - Output tokens
+   * @returns {number} Cost in USD
+   */
+  function calculateCost(model, promptTokens, completionTokens) {
+    const pricing = MODEL_PRICING[model];
+
+    if (!pricing) {
+      console.warn(`⚠️  Unknown model pricing: ${model}, using gpt-4o pricing`);
+      return calculateCost('gpt-4o', promptTokens, completionTokens);
+    }
+
+    const promptCost = (promptTokens / 1_000_000) * pricing.prompt;
+    const completionCost = (completionTokens / 1_000_000) * pricing.completion;
+
+    return promptCost + completionCost;
+  }
+
+  /**
+   * Track AI API usage in database
+   * @param {Object} params - Usage parameters
+   * @param {number} params.userId - User ID
+   * @param {number} params.projectId - Project ID
+   * @param {string} params.feature - Feature name (classification, checklist, etc.)
+   * @param {string} params.model - Model name
+   * @param {number} params.promptTokens - Input tokens
+   * @param {number} params.completionTokens - Output tokens
+   * @param {Object} params.metadata - Additional context (optional)
+   * @returns {Promise<Object>} Tracking record with cost
+   */
+  async function trackAIUsage({
+    userId,
+    projectId,
+    feature,
+    model,
+    promptTokens,
+    completionTokens,
+    metadata = {}
+  }) {
+    try {
+      const totalTokens = promptTokens + completionTokens;
+      const costUsd = calculateCost(model, promptTokens, completionTokens);
+
+      console.log(`\n💰 AI Cost Tracking:`);
+      console.log(`   Feature: ${feature}`);
+      console.log(`   Model: ${model}`);
+      console.log(`   Tokens: ${totalTokens.toLocaleString()} (${promptTokens.toLocaleString()} in +
+  ${completionTokens.toLocaleString()} out)`);
+      console.log(`   Cost: $${costUsd.toFixed(6)}`);
+
+      const result = await db.query(
+        `INSERT INTO ai_usage_tracking
+         (user_id, project_id, feature, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [userId, projectId, feature, model, promptTokens, completionTokens, totalTokens, costUsd, JSON.stringify(metadata)]
+      );
+
+      return result.rows[0];
+    } catch (error) {
+      console.error('❌ Error tracking AI usage:', error);
+      // Don't throw - cost tracking failure shouldn't break features
+      return null;
+    }
+  }
+
+  /**
+   * Get AI cost breakdown for a project
+   * @param {number} projectId - Project ID
+   * @returns {Promise<Object>} Cost breakdown
+   */
+  async function getProjectCostBreakdown(projectId) {
+    try {
+      // Total cost for project
+      const totalResult = await db.query(
+        `SELECT
+          COUNT(*) as total_operations,
+          SUM(total_tokens) as total_tokens,
+          SUM(cost_usd) as total_cost_usd
+         FROM ai_usage_tracking
+         WHERE project_id = $1`,
+        [projectId]
+      );
+
+      // Cost by feature
+      const byFeatureResult = await db.query(
+        `SELECT
+          feature,
+          model,
+          COUNT(*) as operation_count,
+          SUM(total_tokens) as total_tokens,
+          SUM(cost_usd) as total_cost_usd,
+          AVG(cost_usd) as avg_cost_usd
+         FROM ai_usage_tracking
+         WHERE project_id = $1
+         GROUP BY feature, model
+         ORDER BY total_cost_usd DESC`,
+        [projectId]
+      );
+
+      // Recent operations
+      const recentResult = await db.query(
+        `SELECT
+          id,
+          feature,
+          model,
+          total_tokens,
+          cost_usd,
+          metadata,
+          created_at
+         FROM ai_usage_tracking
+         WHERE project_id = $1
+         ORDER BY created_at DESC
+         LIMIT 20`,
+        [projectId]
+      );
+
+      return {
+        summary: totalResult.rows[0],
+        byFeature: byFeatureResult.rows,
+        recentOperations: recentResult.rows
+      };
+    } catch (error) {
+      console.error('❌ Error getting cost breakdown:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get AI cost breakdown for a user across all projects
+   * @param {number} userId - User ID
+   * @returns {Promise<Object>} Cost breakdown
+   */
+  async function getUserCostBreakdown(userId) {
+    try {
+      const result = await db.query(
+        `SELECT
+          project_id,
+          feature,
+          COUNT(*) as operation_count,
+          SUM(total_tokens) as total_tokens,
+          SUM(cost_usd) as total_cost_usd
+         FROM ai_usage_tracking
+         WHERE user_id = $1
+         GROUP BY project_id, feature
+         ORDER BY total_cost_usd DESC`,
+        [userId]
+      );
+
+      return result.rows;
+    } catch (error) {
+      console.error('❌ Error getting user cost breakdown:', error);
+      throw error;
+    }
+  }
+
+  module.exports = {
+    trackAIUsage,
+    calculateCost,
+    getProjectCostBreakdown,
+    getUserCostBreakdown,
+    MODEL_PRICING
+  };
+
+  ---
+  PART 3: Integrate Cost Tracking into Existing Services
+
+  Update services/document-classifier.js
+
+  Add cost tracking after OpenAI API call:
+
+  // At the top, add import
+  const aiCostTracker = require('./ai-cost-tracker');
+
+  // Inside classifyDocument function, after OpenAI response:
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.3,
+    max_tokens: 200,
+    response_format: { type: 'json_object' }
+  });
+
+  // ADD THIS - Track AI usage
+  const usage = response.usage;
+  await aiCostTracker.trackAIUsage({
+    userId: null,  // Can be passed as parameter if available
+    projectId: null,  // Can be passed as parameter if available
+    feature: 'classification',
+    model: 'gpt-4o',
+    promptTokens: usage.prompt_tokens,
+    completionTokens: usage.completion_tokens,
+    metadata: {
+      filename: filename,
+      text_length: text.length
+    }
+  });
+
+  Note: You'll need to update the classifyDocument function signature to accept userId and projectId:
+  async function classifyDocument(text, filename, projectId = null, userId = null) {
+    // ... existing code ...
+
+    // Track cost with projectId and userId
+    await aiCostTracker.trackAIUsage({
+      userId,
+      projectId,
+      feature: 'classification',
+      model: 'gpt-4o',
+      promptTokens: usage.prompt_tokens,
+      completionTokens: usage.completion_tokens,
+      metadata: { filename, text_length: text.length }
+    });
+  }
+
+  Then update the call in server.js to pass projectId and userId.
+
+  ---
+  PART 4: Add API Endpoint
+
+  In server.js, add new endpoint:
+
+  // Get AI cost breakdown for a project
+  app.get('/api/projects/:projectId/ai-usage', authenticateToken, async (req, res) => {
+    try {
+      const { projectId } = req.params;
+
+      // Verify user has access to project
+      const projectResult = await pool.query(
+        'SELECT * FROM projects WHERE id = $1',
+        [projectId]
+      );
+
+      if (projectResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      const aiCostTracker = require('./services/ai-cost-tracker');
+      const breakdown = await aiCostTracker.getProjectCostBreakdown(projectId);
+
+      res.json({
+        success: true,
+        projectId: parseInt(projectId),
+        ...breakdown
+      });
+
+    } catch (error) {
+      console.error('Error getting AI usage:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get AI cost breakdown for current user
+  app.get('/api/users/me/ai-usage', authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user.id;
+
+      const aiCostTracker = require('./services/ai-cost-tracker');
+      const breakdown = await aiCostTracker.getUserCostBreakdown(userId);
+
+      res.json({
+        success: true,
+        userId,
+        breakdown
+      });
+
+    } catch (error) {
+      console.error('Error getting user AI usage:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  ---
+  PART 5: Frontend Dashboard (Optional for MVP)
+
+  File: public/ai-costs.html
+
+  Create a simple dashboard page:
+
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Cost Dashboard - Multi-Project Tracker</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <h1>💰 AI Cost Dashboard</h1>
+
+      <div class="cost-summary">
+        <div class="stat-card">
+          <h3>Total Cost</h3>
+          <p id="total-cost" class="cost-value">$0.00</p>
+        </div>
+        <div class="stat-card">
+          <h3>Total Operations</h3>
+          <p id="total-operations">0</p>
+        </div>
+        <div class="stat-card">
+          <h3>Total Tokens</h3>
+          <p id="total-tokens">0</p>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <h2>Cost by Feature</h2>
+        <canvas id="cost-by-feature-chart"></canvas>
+      </div>
+
+      <div class="recent-operations">
+        <h2>Recent AI Operations</h2>
+        <table id="recent-ops-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Feature</th>
+              <th>Model</th>
+              <th>Tokens</th>
+              <th>Cost</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script src="/js/ai-costs.js"></script>
+  </body>
+  </html>
+
+  File: public/js/ai-costs.js
+
+  // Get project ID from URL parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const projectId = urlParams.get('projectId');
+
+  if (!projectId) {
+    alert('No project ID specified');
+  }
+
+  async function loadAICosts() {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/projects/${projectId}/ai-usage`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const data = await response.json();
+
+      // Update summary
+      document.getElementById('total-cost').textContent =
+        `$${parseFloat(data.summary.total_cost_usd || 0).toFixed(4)}`;
+      document.getElementById('total-operations').textContent =
+        data.summary.total_operations || 0;
+      document.getElementById('total-tokens').textContent =
+        parseInt(data.summary.total_tokens || 0).toLocaleString();
+
+      // Create pie chart
+      const features = data.byFeature.map(f => f.feature);
+      const costs = data.byFeature.map(f => parseFloat(f.total_cost_usd));
+
+      new Chart(document.getElementById('cost-by-feature-chart'), {
+        type: 'pie',
+        data: {
+          labels: features,
+          datasets: [{
+            data: costs,
+            backgroundColor: [
+              '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: { display: true, text: 'AI Cost by Feature' },
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  return `${context.label}: $${context.parsed.toFixed(4)}`;
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Populate recent operations table
+      const tbody = document.querySelector('#recent-ops-table tbody');
+      data.recentOperations.forEach(op => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+          <td>${new Date(op.created_at).toLocaleString()}</td>
+          <td>${op.feature}</td>
+          <td>${op.model}</td>
+          <td>${parseInt(op.total_tokens).toLocaleString()}</td>
+          <td>$${parseFloat(op.cost_usd).toFixed(6)}</td>
+        `;
+      });
+
+    } catch (error) {
+      console.error('Error loading AI costs:', error);
+      alert('Failed to load AI cost data');
+    }
+  }
+
+  loadAICosts();
+
+  ---
+  PART 6: Testing
+
+  Test Case 1: Cost Tracking Works
+
+  1. Upload a document to trigger classification
+  2. Check console logs for cost tracking output
+  3. Query database:
+  SELECT * FROM ai_usage_tracking ORDER BY created_at DESC LIMIT 5;
+  4. Verify record exists with:
+    - feature = 'classification'
+    - model = 'gpt-4o'
+    - prompt_tokens, completion_tokens, total_tokens > 0
+    - cost_usd > 0
+
+  Test Case 2: API Endpoint Returns Data
+
+  # Get cost breakdown for project
+  curl -H "Authorization: Bearer YOUR_TOKEN" \
+    http://localhost:3000/api/projects/123/ai-usage
+
+  Expected response:
+  {
+    "success": true,
+    "projectId": 123,
+    "summary": {
+      "total_operations": "5",
+      "total_tokens": "2834",
+      "total_cost_usd": "0.012500"
+    },
+    "byFeature": [
+      {
+        "feature": "classification",
+        "model": "gpt-4o",
+        "operation_count": "5",
+        "total_tokens": "2834",
+        "total_cost_usd": "0.012500",
+        "avg_cost_usd": "0.002500"
+      }
+    ],
+    "recentOperations": [...]
+  }
+
+  Test Case 3: Cost Calculation Accuracy
+
+  // Manual test
+  const aiCostTracker = require('./services/ai-cost-tracker');
+
+  // GPT-4o: $2.50 per 1M input, $10 per 1M output
+  const cost = aiCostTracker.calculateCost('gpt-4o', 1000, 500);
+  // Expected: (1000/1M * 2.50) + (500/1M * 10) = 0.0025 + 0.005 = 0.0075
+  console.log('Cost:', cost);  // Should be 0.0075
+
+  Test Case 4: Dashboard Displays Data
+
+  1. Navigate to /ai-costs.html?projectId=123
+  2. Verify:
+    - Total cost displayed
+    - Pie chart shows cost by feature
+    - Recent operations table populated
+    - All numbers match database
+
+  ---
+  PART 7: Verification Checklist
+
+  After implementation, verify:
+
+  - Migration creates ai_usage_tracking table and views
+  - services/ai-cost-tracker.js exports all functions
+  - trackAIUsage function calculates costs correctly
+  - Document classifier integrates cost tracking
+  - API endpoint /api/projects/:id/ai-usage works
+  - Cost tracking doesn't break classification on failure
+  - Console logs show cost tracking details
+  - Database records inserted after AI operations
+  - Frontend dashboard displays costs (optional)
+  - Test with multiple classifications to see costs accumulate
+
+  ---
+  Expected Console Output
+
+  When classifying a document:
+
+  🔍 Classifying document: Requirements.pdf
+     Text length: 3200 characters
+     ✅ Classification: requirements
+     📊 Confidence: 0.92
+     🆕 Custom category: false
+     💭 Reasoning: Document contains user stories
+
+  💰 AI Cost Tracking:
+     Feature: classification
+     Model: gpt-4o
+     Tokens: 1,234 (1,000 in + 234 out)
+     Cost: $0.004840
