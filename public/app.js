@@ -3341,9 +3341,9 @@ function resetAnalysis() {
   currentAIAnalysis = null;
   
   // Update project complexity display
-  if (selectedProject) {
-    const complexityLevel = selectedProject.complexity_level || 'standard';
-    const maxFiles = selectedProject.max_file_uploads || 5;
+  if (currentProject) {
+    const complexityLevel = currentProject.complexity_level || 'standard';
+    const maxFiles = currentProject.max_file_uploads || 5;
     
     const badgeColors = {
       'standard': 'bg-green-100 text-green-800',
