@@ -4242,6 +4242,9 @@ function toggleAllIssues() {
 async function createAllItems() {
   if (!currentAIAnalysis || !currentProject) return;
   
+  const createBtn = document.getElementById('create-all-items-btn');
+  const originalText = createBtn.innerHTML;
+  
   // Get selected action items
   const selectedActionItems = [];
   const actionCheckboxes = document.querySelectorAll('#ai-action-items input[type="checkbox"]:checked');
@@ -4264,6 +4267,10 @@ async function createAllItems() {
   }
   
   try {
+    // Disable button and show loading state
+    createBtn.disabled = true;
+    createBtn.innerHTML = '⏳ Creating...';
+    
     const response = await axios.post('/api/meetings/create-items', {
       projectId: currentProject.id,
       transcriptId: currentAIAnalysis.transcriptId,
@@ -4272,7 +4279,14 @@ async function createAllItems() {
       issues: selectedIssues
     }, { withCredentials: true });
     
+    // Show success state briefly
+    createBtn.innerHTML = '✅ Created!';
+    
     alert(`Created ${response.data.actionItems.length} action items and ${response.data.issues.length} issues!`);
+    
+    // Reset button state before closing modal
+    createBtn.innerHTML = originalText;
+    createBtn.disabled = false;
     
     // Close modal and reload data
     closeAIAnalysisModal();
@@ -4281,6 +4295,10 @@ async function createAllItems() {
   } catch (error) {
     console.error('Error creating items:', error);
     const errorMessage = error.response?.data?.message || error.response?.data?.error;
+    
+    // Re-enable button on error
+    createBtn.disabled = false;
+    createBtn.innerHTML = originalText;
     
     if (error.response?.status === 403) {
       // Permission denied error
