@@ -912,16 +912,23 @@ function displayChecklistsPreview(checklists, sourceDocuments = []) {
             const conf = doc.classification;
             const confidencePercent = Math.round(conf.confidence * 100);
             const confidenceColor = conf.confidence >= 0.8 ? 'green' : conf.confidence >= 0.6 ? 'yellow' : 'gray';
+            
+            // Capitalize category name (e.g., "dependencies" -> "Dependencies")
+            const capitalizedCategory = conf.category
+              .split('-')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' ');
+            
             const categoryBadge = conf.is_custom 
-              ? `<span class="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded">Custom</span>`
-              : `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Base</span>`;
+              ? `<span class="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded">Category Type: Custom</span>`
+              : `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Category Type: Base</span>`;
             
             return `
               <div class="flex items-start justify-between bg-white rounded p-3 text-sm">
                 <div class="flex-1">
                   <div class="font-medium text-gray-900 mb-1">📄 ${escapeHtml(doc.filename)}</div>
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span class="px-2 py-1 bg-gray-100 text-gray-800 rounded font-medium">${escapeHtml(conf.category)}</span>
+                    <span class="px-2 py-1 bg-gray-100 text-gray-800 rounded font-medium">Document Category: ${escapeHtml(capitalizedCategory)}</span>
                     ${categoryBadge}
                     <span class="text-xs px-2 py-1 bg-${confidenceColor}-100 text-${confidenceColor}-800 rounded">
                       ${confidencePercent}% confident
