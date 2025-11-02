@@ -14785,20 +14785,6 @@ app.get('/api/admin/valid-usernames', authenticateToken, async (req, res) => {
   }
 });
 
-// Serve frontend
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// Error handling
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    message: "Something went wrong!",
-    error: process.env.NODE_ENV === "production" ? {} : err.message,
-  });
-});
-
 /**
  * Get AI cost breakdown for a project
  * GET /api/projects/:projectId/ai-usage
@@ -14859,6 +14845,20 @@ app.get('/api/users/me/ai-usage', authenticateToken, async (req, res) => {
     console.error('Error getting user AI usage:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// Serve frontend
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Error handling
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    message: "Something went wrong!",
+    error: process.env.NODE_ENV === "production" ? {} : err.message,
+  });
 });
 
 app.listen(PORT, "0.0.0.0", () => {
