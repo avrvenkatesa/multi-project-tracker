@@ -30,9 +30,9 @@ The backend is a RESTful API built with Express.js, utilizing a PostgreSQL datab
 
 Performance optimizations include a bulk metadata endpoint, debounced search, loading indicators, and non-blocking queue loading.
 
-Key service layers: Completion, Template, Dependency, Document, AI, Standalone Checklist, Workstream Detector, Checklist Matcher, Document Classifier, Topological Sort, and Schedule Calculation. These services manage various aspects from checklist operations and AI processing to dependency management, document classification, and project scheduling.
+Key service layers: Completion, Template, Dependency, Document, AI, Standalone Checklist, Workstream Detector, Checklist Matcher, Document Classifier, Topological Sort, Schedule Calculation, and AI Cost Tracker. These services manage various aspects from checklist operations and AI processing to dependency management, document classification, project scheduling, and AI cost monitoring.
 
-API endpoints support advanced features like auto-creating checklists, status updates based on checklist completion, bulk template application, comprehensive checklist dependency management, document upload for AI processing, standalone checklist lifecycle, checklist quality feedback, effort estimate version history, and project scheduling with critical path analysis.
+API endpoints support advanced features like auto-creating checklists, status updates based on checklist completion, bulk template application, comprehensive checklist dependency management, document upload for AI processing, standalone checklist lifecycle, checklist quality feedback, effort estimate version history, project scheduling with critical path analysis, and AI cost analytics (project and user breakdowns).
 
 ### System Design Choices
 The database schema includes Users, Projects, Issues, Action Items, and a comprehensive checklist system with templates, sections, items, responses, and signoffs. It supports AI-specific data, collaboration data, user preferences, risk management, and tag typing. Checklist templates include public/featured flags and auto-creation mappings. `checklist_item_dependencies` tracks dependencies with circular dependency prevention. Standalone checklists and user feedback for quality ratings are supported. `document_classifications` stores AI-generated document classifications with category, confidence, reasoning, and custom category flags for routing to specialized processors.
@@ -40,6 +40,8 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 Projects include a `complexity_level` field (standard/complex/enterprise) with automatic `max_file_uploads` calculation via database trigger. The trigger fires on any project INSERT or UPDATE to ensure max_file_uploads stays synchronized with complexity_level. Backend validation strictly enforces valid complexity values, returning 400 errors for invalid inputs.
 
 Project scheduling involves `project_schedules` (versioning), `schedule_items`, `task_schedules` (calculated dates, critical path, risk indicators), and `schedule_changes`. Schedules support multiple scenarios, topological sort-based task ordering, critical path identification, risk detection, and resource allocation analysis.
+
+AI cost tracking is managed through the `ai_usage_tracking` table with detailed columns: model, prompt_tokens, completion_tokens, total_tokens, total_cost_usd, feature (classification/checklist_generation/document_analysis), and metadata. Database views `project_ai_cost_breakdown` and `user_ai_cost_breakdown` provide pre-aggregated analytics for efficient querying.
 
 ### AI Features
 -   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection with a persistent review queue. Features automatic model fallback: starts with GPT-3.5-Turbo (16K context, cost-effective) and automatically switches to GPT-4o (128K context) if documents exceed the initial limit. Supports multi-file document upload (PDF, DOCX, TXT) with file accumulator interface and project-based complexity limits. Displays which AI model was used in analysis results.
@@ -50,6 +52,7 @@ Project scheduling involves `project_schedules` (versioning), `schedule_items`, 
 -   **AI Dependency Suggestion**: GPT-4o analyzes selected tasks and suggests logical dependencies based on workflow patterns, technical prerequisites, and risk mitigation, with automatic circular dependency detection and filtering.
 -   **Comprehensive Cycle Detection**: Multi-layer circular dependency validation prevents invalid dependency graphs at all entry points (AI suggestions, user approval, and schedule creation) with detailed, actionable error messages showing exact cycle paths and remediation steps.
 -   **Checklist Validation**: Provides quality scoring, required field validation, and consistency checks.
+-   **AI Cost Monitoring Dashboard**: Comprehensive cost tracking system monitors all OpenAI API usage across document classification, checklist generation, and document analysis. Features include: accurate pricing calculations for GPT-4o, GPT-4-turbo, GPT-3.5-Turbo models; detailed token usage tracking (prompt/completion/total); project-level and user-level cost breakdowns; operation-specific cost attribution; metadata capture for audit trails. API endpoints provide real-time cost analytics: `/api/projects/:projectId/ai-usage` for project costs, `/api/users/me/ai-usage` for user costs with summary totals. Cost tracking is asynchronous and non-blocking to preserve feature performance.
 
 ### Reporting & Export
 -   **PDF Export**: Generates professional PDF reports for checklists.
