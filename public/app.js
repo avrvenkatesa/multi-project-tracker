@@ -3334,30 +3334,58 @@ function resetAnalysis() {
   document.getElementById('upload-step').classList.remove('hidden');
   document.getElementById('review-step').classList.add('hidden');
   document.getElementById('transcript-file').value = '';
-  document.getElementById('file-name').classList.add('hidden');
+  document.getElementById('file-name-list')?.classList.add('hidden');
   document.getElementById('analyze-btn').disabled = true;
   document.getElementById('analysis-progress').classList.add('hidden');
   selectedFile = null;
   currentAIAnalysis = null;
+  
+  // Update project complexity display
+  if (selectedProject) {
+    const complexityLevel = selectedProject.complexity_level || 'standard';
+    const maxFiles = selectedProject.max_file_uploads || 5;
+    
+    const badgeColors = {
+      'standard': 'bg-green-100 text-green-800',
+      'complex': 'bg-yellow-100 text-yellow-800',
+      'enterprise': 'bg-purple-100 text-purple-800'
+    };
+    
+    const badge = document.getElementById('transcript-complexity-badge');
+    if (badge) {
+      badge.className = `px-2 py-1 rounded text-sm font-semibold ${badgeColors[complexityLevel] || badgeColors.standard}`;
+      badge.textContent = complexityLevel.charAt(0).toUpperCase() + complexityLevel.slice(1);
+    }
+    
+    const maxFilesDisplay = document.getElementById('transcript-max-files');
+    if (maxFilesDisplay) {
+      maxFilesDisplay.textContent = maxFiles;
+    }
+  }
 }
 
-// Handle file selection
+// Handle file selection (now supports multiple files)
 function handleFileSelect(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
 
-  selectedFile = file;
+  selectedFile = files; // Store FileList object
   
-  // Show file name and size
-  const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-  document.getElementById('file-name').textContent = `Selected: ${file.name} (${fileSizeMB} MB)`;
-  document.getElementById('file-name').classList.remove('hidden');
+  // Show all selected file names and sizes
+  const fileNamesContainer = document.getElementById('file-names');
+  const filesHTML = Array.from(files).map((file, index) => {
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    return `<div class="text-sm py-1">📄 ${index + 1}. ${file.name} (${fileSizeMB} MB)</div>`;
+  }).join('');
+  
+  fileNamesContainer.innerHTML = filesHTML;
+  document.getElementById('file-name-list').classList.remove('hidden');
   
   // Enable analyze button
   document.getElementById('analyze-btn').disabled = false;
 }
 
-// Analyze transcript with AI
+// Analyze transcript with AI (now supports multiple files)
 async function analyzeTranscript() {
   if (!selectedFile || !currentProject) return;
   
@@ -3371,7 +3399,18 @@ async function analyzeTranscript() {
     
     // Create FormData
     const formData = new FormData();
-    formData.append('transcript', selectedFile);
+    
+    // Handle both single file (backwards compatibility) and multiple files
+    if (selectedFile instanceof FileList) {
+      // Multiple files - append each one
+      Array.from(selectedFile).forEach(file => {
+        formData.append('transcript', file);
+      });
+    } else {
+      // Single file (old behavior)
+      formData.append('transcript', selectedFile);
+    }
+    
     formData.append('projectId', currentProject.id);
     
     // Call API

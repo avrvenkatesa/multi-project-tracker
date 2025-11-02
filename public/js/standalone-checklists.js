@@ -4,6 +4,7 @@
 
 let currentProjectId = 1;
 let currentProjectName = '';
+let currentProject = null;
 let allChecklists = [];
 let originalChecklists = [];
 let generatedChecklistsData = null;
@@ -88,9 +89,9 @@ async function loadProjectInfo() {
     });
     
     if (response.ok) {
-      const project = await response.json();
-      currentProjectName = project.name;
-      document.getElementById('projectNameHeader').textContent = project.name;
+      currentProject = await response.json();
+      currentProjectName = currentProject.name;
+      document.getElementById('projectNameHeader').textContent = currentProject.name;
     }
   } catch (error) {
     console.error('Error loading project info:', error);
@@ -235,7 +236,26 @@ function openUploadModal() {
   document.getElementById('processingView').classList.add('hidden');
   document.getElementById('previewView').classList.add('hidden');
   document.getElementById('documentFileInput').value = '';
+  document.getElementById('selectedFilesPreview').classList.add('hidden');
   generatedChecklistsData = null;
+  
+  // Display project complexity info
+  if (currentProject) {
+    const complexityLevel = currentProject.complexity_level || 'standard';
+    const maxFiles = currentProject.max_file_uploads || 5;
+    
+    const badgeColors = {
+      'standard': 'bg-green-100 text-green-800',
+      'complex': 'bg-yellow-100 text-yellow-800',
+      'enterprise': 'bg-purple-100 text-purple-800'
+    };
+    
+    document.getElementById('complexityBadge').className = 
+      `px-2 py-1 rounded text-sm font-semibold ${badgeColors[complexityLevel] || badgeColors.standard}`;
+    document.getElementById('complexityBadge').textContent = 
+      complexityLevel.charAt(0).toUpperCase() + complexityLevel.slice(1);
+    document.getElementById('maxFilesDisplay').textContent = maxFiles;
+  }
 }
 
 function closeUploadModal() {
@@ -244,18 +264,38 @@ function closeUploadModal() {
 
 async function handleDocumentUpload() {
   const fileInput = document.getElementById('documentFileInput');
-  const file = fileInput.files[0];
+  const files = fileInput.files;
   
-  if (!file) return;
+  if (!files || files.length === 0) return;
+  
+  // Show selected files
+  const filesList = document.getElementById('filesList');
+  const filesPreview = document.getElementById('selectedFilesPreview');
+  
+  const filesHTML = Array.from(files).map((file, index) => {
+    const sizeKB = (file.size / 1024).toFixed(1);
+    return `<div class="text-sm py-1">📄 ${index + 1}. ${file.name} (${sizeKB} KB)</div>`;
+  }).join('');
+  
+  filesList.innerHTML = filesHTML;
+  filesPreview.classList.remove('hidden');
+  
+  // Small delay to show files before processing
+  await new Promise(resolve => setTimeout(resolve, 500));
   
   // Show processing
   document.getElementById('uploadView').classList.add('hidden');
   document.getElementById('processingView').classList.remove('hidden');
-  document.getElementById('processingStatus').textContent = 'Extracting text from document...';
+  document.getElementById('processingStatus').textContent = 
+    `Extracting text from ${files.length} document${files.length > 1 ? 's' : ''}...`;
   
   try {
     const formData = new FormData();
-    formData.append('document', file);
+    
+    // Append all files with the field name 'documents'
+    Array.from(files).forEach(file => {
+      formData.append('documents', file);
+    });
     
     setTimeout(() => {
       document.getElementById('processingStatus').textContent = 'Analyzing with AI...';
@@ -288,8 +328,14 @@ function displayChecklistsPreview(preview) {
   document.getElementById('processingView').classList.add('hidden');
   document.getElementById('previewView').classList.remove('hidden');
   
+  // Handle both single and multiple files
+  const fileCount = preview.metadata?.fileCount || 1;
+  const sourceInfo = fileCount > 1 
+    ? `${fileCount} documents (${preview.sourceDocuments.map(d => d.filename).join(', ')})` 
+    : (preview.sourceDocuments?.[0]?.filename || preview.sourceDocument || 'Unknown');
+  
   document.getElementById('previewMetadata').textContent = 
-    `${preview.metadata.sectionCount} checklists, ${preview.metadata.itemCount} total items | Source: ${preview.sourceDocument}`;
+    `${preview.metadata.sectionCount} checklists, ${preview.metadata.itemCount} total items | Source: ${sourceInfo}`;
   
   const container = document.getElementById('checklistsPreview');
   
