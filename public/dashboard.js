@@ -5,7 +5,8 @@ let dashboardData = {
   stats: null,
   activity: null,
   teamMetrics: null,
-  trends: null
+  trends: null,
+  aiCost: null
 };
 let charts = {};
 
@@ -188,12 +189,19 @@ async function loadDashboard() {
     await loadProjectInfo();
     
     // Load all dashboard data in parallel
-    await Promise.all([
+    const loadPromises = [
       loadStats(),
       loadActivity(),
       loadTeamMetrics(),
       loadTrends()
-    ]);
+    ];
+    
+    // Only load AI cost data for System Administrator
+    if (currentUser && currentUser.role === 'System Administrator') {
+      loadPromises.push(loadAICostData());
+    }
+    
+    await Promise.all(loadPromises);
     
     // Render the dashboard
     renderDashboard();
@@ -284,6 +292,26 @@ async function loadTrends() {
   console.log('Trends loaded:', dashboardData.trends);
 }
 
+// Load AI cost data (System Administrator only)
+async function loadAICostData() {
+  try {
+    const response = await fetch(`/api/projects/${currentProjectId}/ai-usage`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to load AI cost data');
+    }
+    
+    dashboardData.aiCost = await response.json();
+    console.log('AI cost data loaded:', dashboardData.aiCost);
+  } catch (error) {
+    console.error('Error loading AI cost data:', error);
+    dashboardData.aiCost = null;
+  }
+}
+
 // Render complete dashboard
 function renderDashboard() {
   const container = document.getElementById('dashboardContent');
@@ -366,6 +394,8 @@ function renderDashboard() {
         </div>
       </div>
     </div>
+    
+    ${currentUser && currentUser.role === 'System Administrator' ? renderAICostAnalytics() : ''}
   `;
   
   // Setup report button handlers
@@ -590,9 +620,134 @@ function renderTeamMetrics() {
   
   return `
     <div class="bg-white rounded-lg shadow-md p-6">
-      <h3 class="text-lg font-semibold text-gray-800 mb-4">Team Metrics</h3>
+      <h3 class="text-lg font-semibent text-gray-800 mb-4">Team Metrics</h3>
       <div style="max-height: 500px; overflow-y: auto;">
         ${tableHtml}
+      </div>
+    </div>
+  `;
+}
+
+// Render AI Cost Analytics (System Administrator only)
+function renderAICostAnalytics() {
+  if (!dashboardData.aiCost) {
+    return '';
+  }
+  
+  const { summary, breakdown } = dashboardData.aiCost;
+  
+  // Calculate totals
+  const totalCost = summary?.total_cost_usd || 0;
+  const totalTokens = summary?.total_tokens || 0;
+  const totalOperations = summary?.total_operations || 0;
+  
+  // Group breakdown by feature
+  const featureBreakdown = breakdown || [];
+  
+  // Format currency
+  const formatCost = (cost) => {
+    return `$${parseFloat(cost || 0).toFixed(4)}`;
+  };
+  
+  // Format large numbers
+  const formatNumber = (num) => {
+    return parseInt(num || 0).toLocaleString();
+  };
+  
+  return `
+    <!-- AI Cost Analytics Section -->
+    <div class="mt-8 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg shadow-lg p-6 border border-indigo-200">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h3 class="text-xl font-bold text-gray-800 flex items-center">
+            <span class="mr-2">🤖</span> AI Cost Analytics
+            <span class="ml-3 text-xs bg-indigo-600 text-white px-2 py-1 rounded-full">Admin Only</span>
+          </h3>
+          <p class="text-sm text-gray-600 mt-1">OpenAI API usage and cost tracking for this project</p>
+        </div>
+      </div>
+      
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+          <p class="text-sm font-medium text-gray-600">Total AI Cost</p>
+          <p class="text-3xl font-bold text-green-600 mt-2">${formatCost(totalCost)}</p>
+          <p class="text-xs text-gray-500 mt-1">USD spent on AI features</p>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+          <p class="text-sm font-medium text-gray-600">Total Tokens</p>
+          <p class="text-3xl font-bold text-blue-600 mt-2">${formatNumber(totalTokens)}</p>
+          <p class="text-xs text-gray-500 mt-1">Tokens processed by AI</p>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
+          <p class="text-sm font-medium text-gray-600">AI Operations</p>
+          <p class="text-3xl font-bold text-purple-600 mt-2">${formatNumber(totalOperations)}</p>
+          <p class="text-xs text-gray-500 mt-1">Total API calls made</p>
+        </div>
+      </div>
+      
+      <!-- Breakdown by Feature -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Feature Breakdown Table -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h4 class="font-semibold text-gray-800 mb-4">Cost Breakdown by Feature</h4>
+          ${featureBreakdown.length > 0 ? `
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-gray-200">
+                    <th class="text-left py-2 px-2 text-gray-600 font-medium">Feature</th>
+                    <th class="text-right py-2 px-2 text-gray-600 font-medium">Cost</th>
+                    <th class="text-right py-2 px-2 text-gray-600 font-medium">Calls</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${featureBreakdown.map(item => `
+                    <tr class="border-b border-gray-100">
+                      <td class="py-3 px-2">
+                        <div class="flex items-center">
+                          ${item.feature === 'classification' ? '🏷️' : item.feature === 'checklist_generation' ? '✅' : '📄'}
+                          <span class="ml-2 capitalize">${(item.feature || 'unknown').replace(/_/g, ' ')}</span>
+                        </div>
+                      </td>
+                      <td class="text-right py-3 px-2 font-mono text-green-600 font-medium">${formatCost(item.total_cost_usd)}</td>
+                      <td class="text-right py-3 px-2 text-gray-600">${formatNumber(item.operation_count)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+                <tfoot>
+                  <tr class="border-t-2 border-gray-300 font-bold">
+                    <td class="py-3 px-2 text-gray-800">Total</td>
+                    <td class="text-right py-3 px-2 font-mono text-green-700">${formatCost(totalCost)}</td>
+                    <td class="text-right py-3 px-2 text-gray-800">${formatNumber(totalOperations)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ` : '<p class="text-gray-500 text-center py-8">No AI usage data yet</p>'}
+        </div>
+        
+        <!-- Feature Cost Chart -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h4 class="font-semibold text-gray-800 mb-4">Cost Distribution</h4>
+          ${featureBreakdown.length > 0 ? 
+            '<canvas id="aiCostChart" style="max-height: 250px;"></canvas>' : 
+            '<p class="text-gray-500 text-center py-8">No cost data to visualize</p>'
+          }
+        </div>
+      </div>
+      
+      <!-- Usage Info -->
+      <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex items-start">
+          <span class="text-blue-600 text-xl mr-3">ℹ️</span>
+          <div class="text-sm text-blue-800">
+            <p class="font-medium mb-1">About AI Cost Tracking</p>
+            <p>This dashboard tracks all OpenAI API usage including document classification, checklist generation, and document analysis. Costs are calculated based on actual token usage at current OpenAI pricing rates.</p>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -1108,6 +1263,58 @@ function initializeCharts() {
         }
       }
     });
+  }
+  
+  // AI Cost pie chart (System Administrator only)
+  if (currentUser && currentUser.role === 'System Administrator' && dashboardData.aiCost) {
+    const aiCostCtx = document.getElementById('aiCostChart');
+    if (aiCostCtx && dashboardData.aiCost.breakdown && dashboardData.aiCost.breakdown.length > 0) {
+      const breakdown = dashboardData.aiCost.breakdown;
+      const labels = breakdown.map(item => {
+        const featureName = (item.feature || 'unknown').replace(/_/g, ' ');
+        return featureName.charAt(0).toUpperCase() + featureName.slice(1);
+      });
+      const costs = breakdown.map(item => parseFloat(item.total_cost_usd || 0));
+      
+      charts.aiCost = new Chart(aiCostCtx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: costs,
+            backgroundColor: [
+              '#8B5CF6',
+              '#3B82F6',
+              '#10B981',
+              '#F59E0B',
+              '#EF4444'
+            ],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const label = context.label || '';
+                  const value = context.parsed || 0;
+                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                  const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                  return `${label}: $${value.toFixed(4)} (${percentage}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
   }
 }
 
