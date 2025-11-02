@@ -42,7 +42,7 @@ Projects include a `complexity_level` field (standard/complex/enterprise) with a
 Project scheduling involves `project_schedules` (versioning), `schedule_items`, `task_schedules` (calculated dates, critical path, risk indicators), and `schedule_changes`. Schedules support multiple scenarios, topological sort-based task ordering, critical path identification, risk detection, and resource allocation analysis.
 
 ### AI Features
--   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection with a persistent review queue.
+-   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection with a persistent review queue. Features automatic model fallback: starts with GPT-3.5-Turbo (16K context, cost-effective) and automatically switches to GPT-4o (128K context) if documents exceed the initial limit. Supports multi-file document upload (PDF, DOCX, TXT) with file accumulator interface and project-based complexity limits. Displays which AI model was used in analysis results.
 -   **AI Checklist Generation**: Generates comprehensive checklists from issue/action descriptions and uploaded documents using OpenAI GPT-4o, supporting multi-checklist generation and batch preview.
 -   **Workstream Detection**: AI-powered document analysis to identify 3-10 distinct workstreams, extract key requirements, and generate focused checklists using OpenAI GPT-4o.
 -   **Intelligent Issue Matching**: AI-powered semantic matching of generated checklists to existing issues with confidence scoring and automatic new issue suggestions for unmatched checklists.

@@ -5988,12 +5988,12 @@ app.post('/api/meetings/analyze',
       
       transcriptText = transcriptText.trim();
 
-      // Validate transcript length (GPT-3.5 has 16K context window)
+      // Calculate estimated tokens for logging
       const estimatedTokens = Math.ceil(transcriptText.length / 4);
+      
+      // Note: No hard limit enforced - system will auto-switch to GPT-4o if needed
       if (estimatedTokens > 12000) {
-        return res.status(400).json({ 
-          error: 'Transcript too long. Please limit to ~10,000 words (48,000 characters)' 
-        });
+        console.log(`⚠️ Large transcript detected (${estimatedTokens} tokens) - will likely use GPT-4o`);
       }
 
       // Get project context for better AI results
@@ -6037,15 +6037,22 @@ app.post('/api/meetings/analyze',
         visibility: visibility || 'project_managers'
       });
 
-      console.log(`Analyzing transcript (${estimatedTokens} tokens) with GPT-3.5-Turbo...`);
+      console.log(`Analyzing transcript (${estimatedTokens} estimated tokens)...`);
       
-      // STEP 2: Call AI for analysis
-      const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo-1106",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert AI assistant that analyzes meeting transcripts to:
+      // STEP 2: Call AI for analysis with automatic model fallback
+      // Try GPT-3.5-Turbo first (cheaper), fall back to GPT-4o if context too large
+      let completion;
+      let modelUsed = 'gpt-3.5-turbo-1106';
+      let attemptedModel = 'GPT-3.5-Turbo';
+      
+      try {
+        console.log(`Attempting analysis with GPT-3.5-Turbo (16K context limit)...`);
+        completion = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo-1106",
+          messages: [
+            {
+              role: "system",
+              content: `You are an expert AI assistant that analyzes meeting transcripts to:
 1. Extract NEW action items and issues
 2. Detect STATUS UPDATES for existing work
 
@@ -6260,17 +6267,261 @@ IMPORTANT: Extract ALL action items, issues, status updates, and relationships. 
         temperature: 0.3,
         response_format: { type: "json_object" },
         max_tokens: 3000
-      });
+        });
+        
+        console.log(`✅ Successfully analyzed with GPT-3.5-Turbo`);
+        
+      } catch (error) {
+        // Check if error is due to context length
+        if (error.message && (
+          error.message.includes('maximum context length') || 
+          error.message.includes('context_length_exceeded') ||
+          error.message.includes('too long')
+        )) {
+          console.log(`⚠️ GPT-3.5-Turbo context limit exceeded, falling back to GPT-4o (128K context)...`);
+          
+          // Retry with GPT-4o
+          modelUsed = 'gpt-4o';
+          attemptedModel = 'GPT-4o';
+          
+          completion = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+              {
+                role: "system",
+                content: `You are an expert AI assistant that analyzes meeting transcripts to:
+1. Extract NEW action items and issues
+2. Detect STATUS UPDATES for existing work
+
+# PHASE 1: NEW ITEM EXTRACTION
+
+ACTION ITEMS - Extract when you see:
+1. Direct assignments: "David, can you...", "Lisa will...", "James should..."
+2. Commitments: "I'll do X by Y date"
+3. Soft assignments: "Can you check...", "Would you mind..."
+4. Recurring tasks: "Send updates every Friday", "Weekly reports"
+5. Implied tasks from decisions: If someone says "we need X", extract as action item
+
+ISSUES/RISKS - Extract when you see:
+1. Problems mentioned: "we've identified an issue with..."
+2. Blockers: "this won't work because..."
+3. Risks: "I'm concerned about...", "potential problem with..."
+4. Technical debt: "legacy system", "deprecated", "end-of-life"
+5. Timeline concerns: "might delay", "at risk", "needs extension"
+
+ASSIGNEE EXTRACTION:
+- Direct: "David will do X" → David
+- Implied: "David, can you do X?" → David
+- Multiple: "Lisa and James will..." → "Lisa Martinez and James Wilson"
+- Unassigned: If no clear owner mentioned → null
+
+DUE DATE EXTRACTION:
+- Specific dates: "by October 15th" → 2025-10-15
+- Relative dates: "next Friday" → calculate based on meeting date
+- Vague dates: "next week", "soon" → null (let user assign)
+- Recurring: "every Friday" → extract as recurring pattern
+
+PRIORITY ASSESSMENT:
+- Critical: "critical", "urgent", "blocker", "must have", "non-negotiable"
+- High: "important", "high priority", "need soon", "before migration"
+- Medium: "should do", "would be good", "nice to have"
+- Low: "if time permits", "future consideration"
+
+CONFIDENCE SCORING:
+- 90-100%: Explicit assignment with specific due date
+- 80-89%: Clear assignment but vague due date, or specific date but unclear owner
+- 70-79%: Implied assignment or implied timeline
+- <70%: Ambiguous - flag for human review
+
+# PHASE 2: STATUS UPDATE DETECTION
+
+Scan the transcript for statements indicating work status changes:
+
+## COMPLETION INDICATORS:
+- "finished", "completed", "done", "wrapped up"
+- "I finished X", "X is complete", "completed the X"
+- Past tense: "I created", "I documented", "I analyzed"
+- Confirmation: "that task is done", "all set on X"
+
+## IN PROGRESS INDICATORS:
+- "working on", "in progress", "currently doing"
+- Percentage complete: "75% done", "about halfway through"
+- "I've started X", "making progress on X"
+- "almost done", "nearly finished"
+
+## BLOCKED INDICATORS:
+- "blocked by", "waiting on", "can't proceed until"
+- "stuck on", "need help with", "impediment"
+- "waiting for access", "pending approval"
+
+## EXTRACTION FORMAT:
+
+For each status update detected, provide:
+- **itemDescription**: Brief description of the work being referenced
+- **assignee**: Person who provided the update
+- **statusChange**: "Done" | "In Progress" | "Blocked"
+- **evidence**: Direct quote from transcript showing the status
+- **progressDetails**: Specific details if mentioned (e.g., "completed firewall review")
+- **confidence**: 0-100 based on clarity of status indicator
+
+## STATUS UPDATE RULES:
+
+1. Only detect status updates for work items, not general discussions
+2. Status must be explicitly stated or strongly implied
+3. Match assignee names carefully
+4. Include specific progress details when mentioned (percentages, sub-tasks completed)
+5. High confidence (90+) for explicit statements, lower for implied
+6. If work is mentioned but no status change indicated, don't include it
+
+# PHASE 3: RELATIONSHIP DETECTION
+
+Scan the transcript for statements indicating relationships between work items:
+
+## DEPENDENCY RELATIONSHIPS (BLOCKING):
+
+**Patterns to detect:**
+- "X is blocked by Y"
+- "can't start X until Y is done"
+- "X depends on Y"
+- "waiting for Y before X"
+- "Y needs to be completed before X"
+- "X is waiting on Y"
+
+**Example:**
+"We can't start the migration testing until the security audit is completed"
+→ Relationship: "Migration testing" BLOCKED_BY "Security audit"
+
+## PARENT-CHILD RELATIONSHIPS (HIERARCHY):
+
+**Patterns to detect:**
+- "X is part of Y"
+- "X is a subtask of Y"
+- "Y includes X"
+- "break down X into Y and Z"
+- "X consists of Y"
+- "Y is a component of X"
+
+**Example:**
+"The database migration is part of the overall Pathfinder migration project"
+→ Relationship: "Database migration" CHILD_OF "Pathfinder migration"
+
+## RELATED RELATIONSHIPS (ASSOCIATION):
+
+**Patterns to detect:**
+- "X and Y are related"
+- "X ties into Y"
+- "X affects Y"
+- "X and Y work together"
+
+**Example:**
+"The security review ties into the compliance audit"
+→ Relationship: "Security review" RELATES_TO "Compliance audit"
+
+# EXTRACTION GUIDELINES:
+
+For each relationship detected:
+- **sourceItem**: Description of the dependent/child/related item
+- **targetItem**: Description of the blocking/parent/related item
+- **relationshipType**: blocked_by | blocks | child_of | parent_of | relates_to | depends_on
+- **evidence**: Exact quote from transcript
+- **sourceAssignee**: Person working on source item (if mentioned)
+- **targetAssignee**: Person working on target item (if mentioned)
+- **confidence**: 0-100 based on clarity
+
+PROJECT CONTEXT:
+Project: ${project[0].name}
+Description: ${project[0].description || 'No description'}
+
+CURRENT MEETING DATE: ${meetingDate || new Date().toISOString().split('T')[0]}
+
+Respond with a JSON object in this exact format:
+{
+  "actionItems": [
+    {
+      "title": "Brief action (5-8 words)",
+      "description": "Detailed description including context",
+      "assignee": "Full Name or null",
+      "dueDate": "YYYY-MM-DD or null",
+      "priority": "critical|high|medium|low",
+      "confidence": 85
+    }
+  ],
+  "issues": [
+    {
+      "title": "Brief issue title (5-8 words)",
+      "description": "Detailed description of the problem",
+      "category": "Technical|Process|Risk|Communication|Resource|External Dependency",
+      "priority": "critical|high|medium|low",
+      "confidence": 90
+    }
+  ],
+  "statusUpdates": [
+    {
+      "itemDescription": "VM inventory creation",
+      "assignee": "David Thompson",
+      "statusChange": "Done",
+      "evidence": "I finished the VM inventory yesterday",
+      "progressDetails": "47 VMs documented with full configurations",
+      "confidence": 95
+    }
+  ],
+  "relationships": [
+    {
+      "sourceItem": "Migration testing",
+      "targetItem": "Security audit",
+      "relationshipType": "blocked_by",
+      "evidence": "We can't start the migration testing until the security audit is completed",
+      "sourceAssignee": "Michael Rodriguez",
+      "targetAssignee": "Lisa Martinez",
+      "confidence": 95
+    }
+  ]
+}
+
+RELATIONSHIP TYPES TO USE:
+- **blocked_by**: Source cannot proceed until target is complete
+- **blocks**: Source prevents target from proceeding (inverse of blocked_by)
+- **child_of**: Source is a subtask/component of target
+- **parent_of**: Source contains target as subtask (inverse of child_of)
+- **relates_to**: Source and target are associated/connected
+- **depends_on**: Source requires target (similar to blocked_by but softer)
+
+IMPORTANT: Extract ALL action items, issues, status updates, and relationships. Be comprehensive.`
+              },
+              {
+                role: "user",
+                content: `Analyze this meeting transcript:\n\n${transcriptText}`
+              }
+            ],
+            temperature: 0.3,
+            response_format: { type: "json_object" },
+            max_tokens: 4000  // GPT-4o can handle more output
+          });
+          
+          console.log(`✅ Successfully analyzed with GPT-4o (fallback model)`);
+        } else {
+          // Re-throw if it's a different error
+          throw error;
+        }
+      }
 
       const aiResponse = completion.choices[0].message.content;
       const parsedResponse = JSON.parse(aiResponse);
       const processingTime = Date.now() - startTime;
 
-      // Calculate costs
+      // Calculate costs based on model used
       const inputTokens = completion.usage.prompt_tokens;
       const outputTokens = completion.usage.completion_tokens;
       const totalTokens = completion.usage.total_tokens;
-      const estimatedCost = (inputTokens * 0.0005 / 1000) + (outputTokens * 0.0015 / 1000);
+      
+      // Pricing: GPT-3.5-Turbo: $0.0005/1K input, $0.0015/1K output
+      // GPT-4o: $0.0025/1K input, $0.010/1K output
+      let estimatedCost;
+      if (modelUsed === 'gpt-4o') {
+        estimatedCost = (inputTokens * 0.0025 / 1000) + (outputTokens * 0.010 / 1000);
+      } else {
+        estimatedCost = (inputTokens * 0.0005 / 1000) + (outputTokens * 0.0015 / 1000);
+      }
 
       // STEP 2.5: Process Status Updates
       let statusUpdateResults = null;
@@ -6321,7 +6572,7 @@ IMPORTANT: Extract ALL action items, issues, status updates, and relationships. 
       ]);
 
       console.log(`Analysis complete: ${parsedResponse.actionItems?.length || 0} action items, ${parsedResponse.issues?.length || 0} issues`);
-      console.log(`Tokens used: ${totalTokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
+      console.log(`Model used: ${attemptedModel}, Tokens: ${totalTokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
 
       // STEP 4: Return results with transcript ID, status updates, and relationships
       res.json({
@@ -6336,7 +6587,8 @@ IMPORTANT: Extract ALL action items, issues, status updates, and relationships. 
           analyzedAt: new Date().toISOString(),
           analyzedBy: req.user.id,
           transcriptLength: transcriptText.length,
-          model: "gpt-3.5-turbo-1106",
+          model: modelUsed,
+          modelName: attemptedModel,
           tokensUsed: {
             input: inputTokens,
             output: outputTokens,

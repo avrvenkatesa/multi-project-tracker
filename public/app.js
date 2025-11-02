@@ -3506,9 +3506,13 @@ function displayAIResults() {
     : 0;
   const assignedCount = actionItems.filter(item => item.assignee && item.assignee !== 'Unassigned').length;
   
-  // Update cost info
+  // Update cost info with model information
+  const modelInfo = metadata.modelName === 'GPT-4o' 
+    ? '🚀 GPT-4o (Large Context)' 
+    : '⚡ GPT-3.5-Turbo';
+  
   document.getElementById('analysis-cost').textContent = 
-    `Cost: ${metadata.estimatedCost} | Tokens: ${metadata.tokensUsed.total}`;
+    `${modelInfo} | Cost: ${metadata.estimatedCost} | Tokens: ${metadata.tokensUsed.total}`;
   
   // Display guidance and statistics
   const reviewStepContent = document.getElementById('review-step');
