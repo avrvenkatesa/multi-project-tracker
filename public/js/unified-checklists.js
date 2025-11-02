@@ -719,33 +719,116 @@ function quickLinkStandalone(checklistId) {
 // Upload Document Modal
 // ============================================
 
+let accumulatedDocuments = []; // Global array to store multiple documents
+
 function openUploadDocumentModal() {
   document.getElementById('uploadModal').classList.remove('hidden');
   document.getElementById('uploadView').classList.remove('hidden');
   document.getElementById('processingView').classList.add('hidden');
   document.getElementById('previewView').classList.add('hidden');
   document.getElementById('documentFileInput').value = '';
+  accumulatedDocuments = []; // Reset accumulated files
+  updateDocumentFilesList();
   generatedChecklistsData = null;
 }
 
 function closeUploadModal() {
   document.getElementById('uploadModal').classList.add('hidden');
+  accumulatedDocuments = [];
 }
 
-async function handleDocumentUpload() {
-  const fileInput = document.getElementById('documentFileInput');
-  const file = fileInput.files[0];
+// Handle file selection - accumulates files instead of replacing
+async function handleDocumentUpload(event) {
+  const newFiles = event.target.files;
+  if (!newFiles || newFiles.length === 0) return;
+
+  // Get project's max file limit (assuming we have this info)
+  const maxFiles = 5; // Default, could fetch from project data
   
-  if (!file) return;
+  // Add new files to accumulated list
+  Array.from(newFiles).forEach(file => {
+    // Check if we've reached the limit
+    if (accumulatedDocuments.length >= maxFiles) {
+      showNotification(`Maximum ${maxFiles} files allowed`, 'error');
+      return;
+    }
+    
+    // Check for duplicate filenames
+    const isDuplicate = accumulatedDocuments.some(f => f.name === file.name);
+    if (!isDuplicate) {
+      accumulatedDocuments.push(file);
+    }
+  });
+  
+  // Clear the file input so the same file can be selected again if needed
+  event.target.value = '';
+  
+  // Update the display
+  updateDocumentFilesList();
+}
+
+// Update the files list display
+function updateDocumentFilesList() {
+  const filesList = document.getElementById('selectedDocumentFiles');
+  const uploadButton = document.getElementById('generate-checklists-btn');
+  
+  if (!filesList) return;
+  
+  if (accumulatedDocuments.length === 0) {
+    filesList.innerHTML = '<p class="text-sm text-gray-500 italic">No files selected</p>';
+    if (uploadButton) uploadButton.disabled = true;
+    return;
+  }
+  
+  const filesHTML = accumulatedDocuments.map((file, index) => {
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    return `
+      <div class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded border-b last:border-b-0">
+        <div class="text-sm flex-1">
+          <span class="font-medium">📄 ${file.name}</span>
+          <span class="text-gray-500 ml-2">(${fileSizeMB} MB)</span>
+        </div>
+        <button 
+          onclick="removeDocumentFile(${index})" 
+          class="text-red-600 hover:text-red-800 text-sm font-bold ml-2 px-2"
+          title="Remove file"
+        >
+          ✕
+        </button>
+      </div>
+    `;
+  }).join('');
+  
+  filesList.innerHTML = `<div class="border rounded">${filesHTML}</div>`;
+  if (uploadButton) uploadButton.disabled = false;
+}
+
+// Remove a file from the accumulated list
+function removeDocumentFile(index) {
+  accumulatedDocuments.splice(index, 1);
+  updateDocumentFilesList();
+}
+
+// Generate checklists from accumulated files
+async function generateChecklistsFromDocuments() {
+  if (accumulatedDocuments.length === 0) {
+    showNotification('Please select at least one document', 'error');
+    return;
+  }
   
   // Show processing
   document.getElementById('uploadView').classList.add('hidden');
   document.getElementById('processingView').classList.remove('hidden');
-  document.getElementById('processingStatus').textContent = 'Extracting text from document...';
+  document.getElementById('processingStatus').textContent = 
+    `Extracting text from ${accumulatedDocuments.length} document${accumulatedDocuments.length > 1 ? 's' : ''}...`;
   
   try {
     const formData = new FormData();
-    formData.append('document', file);
+    
+    // Append all files with the correct field name 'documents'
+    accumulatedDocuments.forEach(file => {
+      formData.append('documents', file);
+    });
     
     setTimeout(() => {
       document.getElementById('processingStatus').textContent = 'Analyzing with AI...';
@@ -772,7 +855,9 @@ async function handleDocumentUpload() {
   } catch (error) {
     console.error('Upload error:', error);
     showNotification(`Failed to process document: ${error.message}`, 'error');
-    closeUploadModal();
+    // Reset to upload view
+    document.getElementById('processingView').classList.add('hidden');
+    document.getElementById('uploadView').classList.remove('hidden');
   }
 }
 
