@@ -10842,6 +10842,56 @@ app.post('/api/projects/:projectId/upload-and-generate-standalone',
       
       console.log(`✅ Total extracted: ${extractedDocuments.length} document(s)`);
       
+      // Classify each document using AI
+      const documentClassifier = require('./services/document-classifier');
+      console.log(`\n📋 Classifying ${extractedDocuments.length} document(s)...`);
+      
+      for (const doc of extractedDocuments) {
+        try {
+          const classification = await documentClassifier.classifyDocument(
+            doc.text,
+            doc.filename
+          );
+          
+          // Store classification in database
+          await pool.query(
+            `INSERT INTO document_classifications 
+             (project_id, filename, category, confidence, reasoning, is_custom_category, text_length)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id`,
+            [
+              projectId,
+              doc.filename,
+              classification.category,
+              classification.confidence,
+              classification.reasoning,
+              classification.is_custom_category,
+              classification.text_length
+            ]
+          );
+          
+          // Add classification to document object for response
+          doc.classification = {
+            category: classification.category,
+            confidence: classification.confidence,
+            is_custom: classification.is_custom_category,
+            reasoning: classification.reasoning
+          };
+        } catch (classificationError) {
+          console.error(`   ❌ Failed to classify ${doc.filename}:`, classificationError.message);
+          
+          // Use fallback classification to avoid breaking the entire batch
+          doc.classification = {
+            category: 'other',
+            confidence: 0.3,
+            is_custom: false,
+            reasoning: `Classification failed: ${classificationError.message}`
+          };
+        }
+      }
+      
+      console.log(`✅ Classification complete\n`);
+      
       // Generate combined text for AI processing (concatenate all documents)
       const combinedText = extractedDocuments.map((doc, index) => 
         `=== Document ${index + 1}: ${doc.filename} ===\n${doc.text}`
@@ -10917,7 +10967,8 @@ app.post('/api/projects/:projectId/upload-and-generate-standalone',
           sourceDocuments: extractedDocuments.map(doc => ({
             filename: doc.filename,
             size: doc.size,
-            textLength: doc.text.length
+            textLength: doc.text.length,
+            classification: doc.classification
           })),
           uploadId: uploadRecord.upload.id,
           metadata: {
