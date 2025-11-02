@@ -1,0 +1,128 @@
+  Enhance document upload to support multiple files with project-based limits:
+
+  FILE: server.js (lines ~147)
+
+  1. CREATE dynamic multer configuration function:
+  ```javascript
+  const getDocumentUploadMiddleware = async (req, res, next) => {
+    const projectId = req.params.projectId;
+
+    // Get project's file limit
+    const result = await pool.query(
+      'SELECT complexity_level, max_file_uploads FROM projects WHERE id = $1',
+      [projectId]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const maxFiles = result.rows[0].max_file_uploads || 5;
+    req.projectMaxFiles = maxFiles; // Store for later validation
+
+    const upload = multer({
+      storage: multer.memoryStorage(),
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+        files: maxFiles
+      },
+      fileFilter: (req, file, cb) => {
+        const allowedTypes = [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain'
+        ];
+        if (allowedTypes.includes(file.mimetype) ||
+            file.originalname.match(/\.(pdf|docx|txt)$/i)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Only PDF, DOCX, and TXT files allowed'));
+        }
+      }
+    });
+
+    upload.array('documents', maxFiles)(req, res, next);
+  };
+
+  2. UPDATE endpoint (line ~9694):
+  app.post('/api/projects/:projectId/upload-and-generate-standalone',
+    authenticateToken,
+    getDocumentUploadMiddleware,
+    async (req, res) => {
+      try {
+        const { projectId } = req.params;
+        const userId = req.user?.id || 1;
+        const maxFiles = req.projectMaxFiles;
+
+        if (!req.files || req.files.length === 0) {
+          return res.status(400).json({ error: 'No files uploaded' });
+        }
+
+        console.log(`📤 Multi-document upload for project ${projectId}:`);
+        console.log(`   ${req.files.length} files (max: ${maxFiles})`);
+
+        // Validate file count
+        if (req.files.length > maxFiles) {
+          return res.status(400).json({
+            error: `File limit exceeded: max ${maxFiles} files allowed`
+          });
+        }
+
+        // Extract text from each file
+        const documentService = require('./services/document-service');
+        const extractedDocuments = [];
+
+        for (const file of req.files) {
+          console.log(`   Processing: ${file.originalname} (${file.size} bytes)`);
+
+          const extracted = await documentService.extractTextFromDocument(
+            file.buffer,
+            file.mimetype,
+            file.originalname
+          );
+
+          extractedDocuments.push({
+            filename: file.originalname,
+            text: extracted.text,
+            size: file.size,
+            mimeType: file.mimetype
+          });
+        }
+
+        console.log(`✅ Extracted ${extractedDocuments.length} documents`);
+
+        // Store for now, will process in next stories
+        res.json({
+          success: true,
+          documentCount: extractedDocuments.length,
+          documents: extractedDocuments.map(d => ({
+            filename: d.filename,
+            textLength: d.text.length,
+            size: d.size
+          }))
+        });
+
+      } catch (error) {
+        console.error('Multi-document upload error:', error);
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
+
+  3. TEST manually with Postman or curl:
+  curl -X POST http://localhost:3000/api/projects/1/upload-and-generate-standalone \
+    -H "Authorization: Bearer YOUR_TOKEN" \
+    -F "documents=@path/to/doc1.pdf" \
+    -F "documents=@path/to/doc2.txt" \
+    -F "documents=@path/to/doc3.docx"
+
+  Expected response:
+  {
+    "success": true,
+    "documentCount": 3,
+    "documents": [
+      {"filename": "doc1.pdf", "textLength": 5000, "size": 50000},
+      {"filename": "doc2.txt", "textLength": 3000, "size": 3500},
+      {"filename": "doc3.docx", "textLength": 8000, "size": 12000}
+    ]
+  }

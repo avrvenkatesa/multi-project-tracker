@@ -199,6 +199,55 @@ const documentUpload = multer({
   }
 });
 
+// Dynamic multer middleware for multi-file uploads with project-based limits
+const getDocumentUploadMiddleware = async (req, res, next) => {
+  try {
+    const projectId = req.params.projectId;
+
+    // Get project's file limit based on complexity
+    const [project] = await sql`
+      SELECT complexity_level, max_file_uploads 
+      FROM projects 
+      WHERE id = ${projectId}
+    `;
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const maxFiles = project.max_file_uploads || 5;
+    req.projectMaxFiles = maxFiles; // Store for later validation
+    req.projectComplexity = project.complexity_level;
+
+    console.log(`📊 Project ${projectId} allows max ${maxFiles} files (${project.complexity_level} tier)`);
+
+    const upload = multer({
+      storage: multer.memoryStorage(),
+      limits: {
+        fileSize: MAX_FILE_SIZE,
+        files: maxFiles
+      },
+      fileFilter: (req, file, cb) => {
+        const allowedTypes = [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain'
+        ];
+        if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt)$/i)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Only PDF, DOCX, and TXT files allowed'));
+        }
+      }
+    });
+
+    upload.array('documents', maxFiles)(req, res, next);
+  } catch (error) {
+    console.error('Error in upload middleware:', error);
+    res.status(500).json({ error: 'Failed to configure upload', details: error.message });
+  }
+};
+
 // =====================================================
 // ATTACHMENT UTILITY FUNCTIONS
 // =====================================================
@@ -10442,42 +10491,77 @@ app.get('/api/projects/:projectId/standalone-checklists', authenticateToken, asy
 });
 
 /**
- * Upload document and generate standalone checklists
+ * Upload multiple documents and generate standalone checklists
  * POST /api/projects/:projectId/upload-and-generate-standalone
+ * Supports multiple files based on project complexity (5/10/20 files)
  */
 app.post('/api/projects/:projectId/upload-and-generate-standalone', 
   authenticateToken,
-  documentUpload.single('document'), 
+  getDocumentUploadMiddleware,
   async (req, res) => {
     try {
       const { projectId } = req.params;
       const userId = req.user?.id || 1;
+      const maxFiles = req.projectMaxFiles;
       
-      if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
       }
       
-      console.log(`📤 Standalone upload for project ${projectId}: ${req.file.originalname}`);
+      console.log(`📤 Multi-document upload for project ${projectId}:`);
+      console.log(`   ${req.files.length} file(s) uploaded (max: ${maxFiles}, complexity: ${req.projectComplexity})`);
       
-      // Extract text
-      documentService.validateDocumentFile(req.file);
+      // Validate file count doesn't exceed project limit
+      if (req.files.length > maxFiles) {
+        return res.status(400).json({
+          error: `File limit exceeded`,
+          details: `Project complexity '${req.projectComplexity}' allows maximum ${maxFiles} files. You uploaded ${req.files.length} files.`,
+          maxAllowed: maxFiles,
+          complexity: req.projectComplexity
+        });
+      }
       
-      const extracted = await documentService.extractTextFromDocument(
-        req.file.buffer,
-        req.file.mimetype,
-        req.file.originalname
-      );
+      // Extract text from all files
+      const extractedDocuments = [];
       
-      console.log(`✅ Text extracted: ${extracted.text.length} characters`);
+      for (const file of req.files) {
+        console.log(`   Processing: ${file.originalname} (${formatFileSize(file.size)})`);
+        
+        documentService.validateDocumentFile(file);
+        
+        const extracted = await documentService.extractTextFromDocument(
+          file.buffer,
+          file.mimetype,
+          file.originalname
+        );
+        
+        extractedDocuments.push({
+          filename: file.originalname,
+          text: extracted.text,
+          size: file.size,
+          mimeType: file.mimetype
+        });
+        
+        console.log(`   ✅ Extracted ${extracted.text.length} characters from ${file.originalname}`);
+      }
       
-      // Record upload
+      console.log(`✅ Total extracted: ${extractedDocuments.length} document(s)`);
+      
+      // Generate combined text for AI processing (concatenate all documents)
+      const combinedText = extractedDocuments.map((doc, index) => 
+        `=== Document ${index + 1}: ${doc.filename} ===\n${doc.text}`
+      ).join('\n\n');
+      
+      // Record upload (use first file as primary, note multi-file in metadata)
       const uploadRecord = await standaloneChecklistService.recordDocumentUpload({
         projectId: parseInt(projectId),
-        filename: req.file.originalname,
-        fileSize: req.file.size,
-        mimeType: req.file.mimetype,
+        filename: extractedDocuments.length === 1 
+          ? extractedDocuments[0].filename 
+          : `Multi-file upload (${extractedDocuments.length} files)`,
+        fileSize: extractedDocuments.reduce((sum, doc) => sum + doc.size, 0),
+        mimeType: 'multi-file',
         uploadedBy: userId,
-        extractedTextLength: extracted.text.length
+        extractedTextLength: combinedText.length
       });
       
       // Generate checklists with AI (project context, not issue-specific)
@@ -10485,12 +10569,16 @@ app.post('/api/projects/:projectId/upload-and-generate-standalone',
       
       const context = {
         projectId: parseInt(projectId),
-        documentFilename: req.file.originalname,
-        mode: 'standalone'
+        documentFilename: extractedDocuments.length === 1 
+          ? extractedDocuments[0].filename 
+          : `${extractedDocuments.length} files: ${extractedDocuments.map(d => d.filename).join(', ')}`,
+        mode: 'standalone',
+        multiFile: extractedDocuments.length > 1,
+        fileCount: extractedDocuments.length
       };
       
       const generatedChecklists = await aiService.generateChecklistFromDocument(
-        extracted.text,
+        combinedText,
         context
       );
       
@@ -10525,17 +10613,25 @@ app.post('/api/projects/:projectId/upload-and-generate-standalone',
         }
       );
       
-      console.log(`✅ Generated ${sectionCount} checklists with ${itemCount} items`);
+      console.log(`✅ Generated ${sectionCount} checklists with ${itemCount} items from ${extractedDocuments.length} document(s)`);
       
       res.json({
         success: true,
         preview: {
           checklists: generatedChecklists,
-          sourceDocument: req.file.originalname,
+          sourceDocuments: extractedDocuments.map(doc => ({
+            filename: doc.filename,
+            size: doc.size,
+            textLength: doc.text.length
+          })),
           uploadId: uploadRecord.upload.id,
           metadata: {
             sectionCount,
-            itemCount
+            itemCount,
+            fileCount: extractedDocuments.length,
+            totalSize: extractedDocuments.reduce((sum, doc) => sum + doc.size, 0),
+            complexity: req.projectComplexity,
+            maxFilesAllowed: maxFiles
           }
         }
       });
