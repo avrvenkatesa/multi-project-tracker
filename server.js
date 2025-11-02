@@ -11055,11 +11055,26 @@ app.post('/api/projects/:projectId/upload-and-generate-standalone',
 app.post('/api/projects/:projectId/save-standalone-checklists', authenticateToken, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { checklists, sourceDocument } = req.body;
+    const { checklists, sourceDocument, sourceDocuments } = req.body;
     const userId = req.user?.id || 1;
     
     if (!checklists || !Array.isArray(checklists)) {
       return res.status(400).json({ error: 'Invalid checklists data' });
+    }
+    
+    // Build document info string with classifications
+    let documentInfo = sourceDocument || 'AI-generated';
+    if (sourceDocuments && sourceDocuments.length > 0) {
+      // Create document summary with classifications
+      const docSummaries = sourceDocuments.map(doc => {
+        if (doc.classification) {
+          return `${doc.filename} [${doc.classification.category}]`;
+        }
+        return doc.filename;
+      });
+      documentInfo = sourceDocuments.length === 1 
+        ? docSummaries[0]
+        : `${sourceDocuments.length} files: ${docSummaries.join(', ')}`;
     }
     
     const createdChecklists = [];
@@ -11085,12 +11100,12 @@ app.post('/api/projects/:projectId/save-standalone-checklists', authenticateToke
         },
         parseInt(projectId),
         userId,
-        sourceDocument
+        documentInfo
       );
       createdChecklists.push(result.checklist);
     }
     
-    console.log(`✅ Saved ${createdChecklists.length} standalone checklists`);
+    console.log(`✅ Saved ${createdChecklists.length} standalone checklists with document info: ${documentInfo}`);
     
     res.json({
       success: true,

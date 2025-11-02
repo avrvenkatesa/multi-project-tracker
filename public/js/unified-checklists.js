@@ -12,6 +12,7 @@ let templates = [];
 let currentChecklistForLinking = null;
 let linkType = 'issue';
 let generatedChecklistsData = null;
+let generatedSourceDocuments = null;
 
 // ============================================
 // Page Initialization
@@ -861,6 +862,7 @@ async function generateChecklistsFromDocuments() {
     const checklists = data.preview?.checklists || data.preview || [];
     const sourceDocuments = data.preview?.sourceDocuments || [];
     generatedChecklistsData = checklists;
+    generatedSourceDocuments = sourceDocuments; // Store for later use when saving
     
     displayChecklistsPreview(checklists, sourceDocuments);
     
@@ -978,13 +980,21 @@ function displayChecklistsPreview(checklists, sourceDocuments = []) {
 async function saveStandaloneChecklists() {
   if (!generatedChecklistsData) return;
   
+  const saveButton = document.getElementById('save-all-checklists-btn');
+  const originalText = saveButton.innerHTML;
+  
   try {
+    // Disable button and show loading state
+    saveButton.disabled = true;
+    saveButton.innerHTML = '⏳ Saving...';
+    
     const response = await fetch(`/api/projects/${currentProjectId}/save-standalone-checklists`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({
-        checklists: generatedChecklistsData
+        checklists: generatedChecklistsData,
+        sourceDocuments: generatedSourceDocuments
       })
     });
     
@@ -993,15 +1003,23 @@ async function saveStandaloneChecklists() {
       throw new Error(error.message || 'Failed to save checklists');
     }
     
+    // Show success immediately
+    saveButton.innerHTML = '✅ Saved!';
     showNotification('✅ Checklists saved successfully!', 'success');
-    closeUploadModal();
     
-    // Switch to standalone tab and reload
-    switchTab('standalone');
+    // Close modal after short delay
+    setTimeout(() => {
+      closeUploadModal();
+      // Switch to standalone tab and reload
+      switchTab('standalone');
+    }, 1000);
     
   } catch (error) {
     console.error('Save error:', error);
     showNotification(`Failed to save checklists: ${error.message}`, 'error');
+    // Re-enable button on error
+    saveButton.disabled = false;
+    saveButton.innerHTML = originalText;
   }
 }
 
