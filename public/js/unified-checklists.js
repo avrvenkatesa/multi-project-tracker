@@ -857,11 +857,12 @@ async function generateChecklistsFromDocuments() {
     }
     
     const data = await response.json();
-    // API returns: { success: true, preview: { checklists: [], sourceDocument: '', uploadId: '', metadata: {} } }
+    // API returns: { success: true, preview: { checklists: [], sourceDocuments: [], uploadId: '', metadata: {} } }
     const checklists = data.preview?.checklists || data.preview || [];
+    const sourceDocuments = data.preview?.sourceDocuments || [];
     generatedChecklistsData = checklists;
     
-    displayChecklistsPreview(checklists);
+    displayChecklistsPreview(checklists, sourceDocuments);
     
   } catch (error) {
     console.error('Upload error:', error);
@@ -872,15 +873,70 @@ async function generateChecklistsFromDocuments() {
   }
 }
 
-function displayChecklistsPreview(checklists) {
+function displayChecklistsPreview(checklists, sourceDocuments = []) {
   document.getElementById('processingView').classList.add('hidden');
   document.getElementById('previewView').classList.remove('hidden');
   
   // Ensure checklists is an array
   const checklistsArray = Array.isArray(checklists) ? checklists : [];
   
-  const metadata = `${checklistsArray.length} checklist${checklistsArray.length !== 1 ? 's' : ''} generated`;
-  document.getElementById('previewMetadata').textContent = metadata;
+  // Build metadata with document classifications
+  let metadataHTML = `${checklistsArray.length} checklist${checklistsArray.length !== 1 ? 's' : ''} generated`;
+  
+  if (sourceDocuments.length > 0) {
+    metadataHTML += ` from ${sourceDocuments.length} document${sourceDocuments.length !== 1 ? 's' : ''}`;
+  }
+  
+  document.getElementById('previewMetadata').innerHTML = metadataHTML;
+  
+  // Display document classifications if available
+  const previewView = document.getElementById('previewView');
+  const existingClassifications = previewView.querySelector('.document-classifications');
+  if (existingClassifications) {
+    existingClassifications.remove();
+  }
+  
+  if (sourceDocuments.length > 0 && sourceDocuments.some(d => d.classification)) {
+    const classificationsHTML = `
+      <div class="document-classifications bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <h4 class="font-semibold text-blue-900 mb-3 flex items-center">
+          <span class="mr-2">🏷️</span>
+          Document Classifications
+        </h4>
+        <div class="space-y-2">
+          ${sourceDocuments.map(doc => {
+            if (!doc.classification) return '';
+            
+            const conf = doc.classification;
+            const confidencePercent = Math.round(conf.confidence * 100);
+            const confidenceColor = conf.confidence >= 0.8 ? 'green' : conf.confidence >= 0.6 ? 'yellow' : 'gray';
+            const categoryBadge = conf.is_custom 
+              ? `<span class="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded">Custom</span>`
+              : `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Base</span>`;
+            
+            return `
+              <div class="flex items-start justify-between bg-white rounded p-3 text-sm">
+                <div class="flex-1">
+                  <div class="font-medium text-gray-900 mb-1">📄 ${escapeHtml(doc.filename)}</div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2 py-1 bg-gray-100 text-gray-800 rounded font-medium">${escapeHtml(conf.category)}</span>
+                    ${categoryBadge}
+                    <span class="text-xs px-2 py-1 bg-${confidenceColor}-100 text-${confidenceColor}-800 rounded">
+                      ${confidencePercent}% confident
+                    </span>
+                  </div>
+                  ${conf.reasoning ? `<div class="text-xs text-gray-600 mt-2 italic">${escapeHtml(conf.reasoning)}</div>` : ''}
+                </div>
+              </div>
+            `;
+          }).filter(Boolean).join('')}
+        </div>
+      </div>
+    `;
+    
+    const previewMetadata = previewView.querySelector('.bg-purple-50');
+    previewMetadata.insertAdjacentHTML('afterend', classificationsHTML);
+  }
   
   const container = document.getElementById('checklistsPreview');
   container.innerHTML = checklistsArray.map((checklist, index) => {
