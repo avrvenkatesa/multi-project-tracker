@@ -3299,6 +3299,7 @@ async function deleteRelationship(relationshipId) {
 // Global state for AI analysis
 let currentAIAnalysis = null;
 let selectedFile = null;
+let accumulatedFiles = []; // Array to store multiple files as user selects them
 
 // Show AI analysis modal
 function showAIAnalysisModal() {
@@ -3338,6 +3339,7 @@ function resetAnalysis() {
   document.getElementById('analyze-btn').disabled = true;
   document.getElementById('analysis-progress').classList.add('hidden');
   selectedFile = null;
+  accumulatedFiles = [];
   currentAIAnalysis = null;
   
   // Update project complexity display
@@ -3364,30 +3366,83 @@ function resetAnalysis() {
   }
 }
 
-// Handle file selection (now supports multiple files)
+// Handle file selection - accumulates files instead of replacing
 function handleFileSelect(event) {
-  const files = event.target.files;
-  if (!files || files.length === 0) return;
+  const newFiles = event.target.files;
+  if (!newFiles || newFiles.length === 0) return;
 
-  selectedFile = files; // Store FileList object
+  // Get project's max file limit
+  const maxFiles = currentProject?.max_file_uploads || 5;
   
-  // Show all selected file names and sizes
+  // Add new files to accumulated list
+  Array.from(newFiles).forEach(file => {
+    // Check if we've reached the limit
+    if (accumulatedFiles.length >= maxFiles) {
+      alert(`Maximum ${maxFiles} files allowed for ${currentProject?.complexity_level || 'standard'} complexity projects`);
+      return;
+    }
+    
+    // Check for duplicate filenames
+    const isDuplicate = accumulatedFiles.some(f => f.name === file.name);
+    if (!isDuplicate) {
+      accumulatedFiles.push(file);
+    }
+  });
+  
+  // Clear the file input so the same file can be selected again if needed
+  event.target.value = '';
+  
+  // Update the display
+  updateFilesList();
+  
+  // Enable analyze button if we have files
+  document.getElementById('analyze-btn').disabled = accumulatedFiles.length === 0;
+}
+
+// Update the files list display
+function updateFilesList() {
   const fileNamesContainer = document.getElementById('file-names');
-  const filesHTML = Array.from(files).map((file, index) => {
+  const fileNameList = document.getElementById('file-name-list');
+  
+  if (accumulatedFiles.length === 0) {
+    fileNameList.classList.add('hidden');
+    return;
+  }
+  
+  const filesHTML = accumulatedFiles.map((file, index) => {
     const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-    return `<div class="text-sm py-1">📄 ${index + 1}. ${file.name} (${fileSizeMB} MB)</div>`;
+    return `
+      <div class="flex items-center justify-between py-1 px-2 hover:bg-green-100 rounded">
+        <div class="text-sm">📄 ${index + 1}. ${file.name} (${fileSizeMB} MB)</div>
+        <button 
+          onclick="removeFile(${index})" 
+          class="text-red-600 hover:text-red-800 text-sm font-bold ml-2"
+          title="Remove file"
+        >
+          ✕
+        </button>
+      </div>
+    `;
   }).join('');
   
   fileNamesContainer.innerHTML = filesHTML;
-  document.getElementById('file-name-list').classList.remove('hidden');
-  
-  // Enable analyze button
-  document.getElementById('analyze-btn').disabled = false;
+  fileNameList.classList.remove('hidden');
 }
 
-// Analyze transcript with AI (now supports multiple files)
+// Remove a file from the accumulated list
+function removeFile(index) {
+  accumulatedFiles.splice(index, 1);
+  updateFilesList();
+  
+  // Disable analyze button if no files left
+  if (accumulatedFiles.length === 0) {
+    document.getElementById('analyze-btn').disabled = true;
+  }
+}
+
+// Analyze transcript with AI (now supports multiple accumulated files)
 async function analyzeTranscript() {
-  if (!selectedFile || !currentProject) return;
+  if (accumulatedFiles.length === 0 || !currentProject) return;
   
   const analyzeBtn = document.getElementById('analyze-btn');
   const progressDiv = document.getElementById('analysis-progress');
@@ -3397,19 +3452,12 @@ async function analyzeTranscript() {
     analyzeBtn.disabled = true;
     progressDiv.classList.remove('hidden');
     
-    // Create FormData
+    // Create FormData and append all accumulated files
     const formData = new FormData();
     
-    // Handle both single file (backwards compatibility) and multiple files
-    if (selectedFile instanceof FileList) {
-      // Multiple files - append each one
-      Array.from(selectedFile).forEach(file => {
-        formData.append('transcript', file);
-      });
-    } else {
-      // Single file (old behavior)
-      formData.append('transcript', selectedFile);
-    }
+    accumulatedFiles.forEach(file => {
+      formData.append('transcript', file);
+    });
     
     formData.append('projectId', currentProject.id);
     
