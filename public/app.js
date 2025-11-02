@@ -3496,7 +3496,7 @@ async function analyzeTranscript() {
 function displayAIResults() {
   if (!currentAIAnalysis) return;
   
-  const { actionItems, issues, metadata } = currentAIAnalysis;
+  const { actionItems, issues, metadata, documentClassifications } = currentAIAnalysis;
   
   // Calculate statistics
   const totalItems = actionItems.length + issues.length;
@@ -3574,6 +3574,54 @@ function displayAIResults() {
     existingGuidance.querySelectorAll('.text-3xl')[1].textContent = issues.length;
     existingGuidance.querySelectorAll('.text-3xl')[2].textContent = `${avgConfidence}%`;
     existingGuidance.querySelectorAll('.text-3xl')[3].textContent = assignedCount;
+  }
+  
+  // Display document classifications if available
+  const existingClassifications = reviewStepContent.querySelector('.document-classifications');
+  if (existingClassifications) {
+    existingClassifications.remove();
+  }
+  
+  if (documentClassifications && documentClassifications.length > 0) {
+    const classificationsHTML = `
+      <div class="document-classifications bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <h4 class="font-semibold text-blue-900 mb-3 flex items-center">
+          <span class="mr-2">🏷️</span>
+          Document Classifications
+        </h4>
+        <div class="space-y-2">
+          ${documentClassifications.map(doc => {
+            const confidencePercent = Math.round(doc.confidence * 100);
+            const confidenceColor = doc.confidence >= 0.8 ? 'green' : doc.confidence >= 0.6 ? 'yellow' : 'gray';
+            const categoryBadge = doc.is_custom 
+              ? `<span class="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded">Custom</span>`
+              : `<span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Base</span>`;
+            
+            return `
+              <div class="flex items-start justify-between bg-white rounded p-3 text-sm">
+                <div class="flex-1">
+                  <div class="font-medium text-gray-900 mb-1">📄 ${escapeHtml(doc.filename)}</div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2 py-1 bg-gray-100 text-gray-800 rounded font-medium">${escapeHtml(doc.category)}</span>
+                    ${categoryBadge}
+                    <span class="text-xs px-2 py-1 bg-${confidenceColor}-100 text-${confidenceColor}-800 rounded">
+                      ${confidencePercent}% confident
+                    </span>
+                  </div>
+                  ${doc.reasoning ? `<div class="text-xs text-gray-600 mt-2 italic">${escapeHtml(doc.reasoning)}</div>` : ''}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+    
+    // Insert after the stats section
+    const statsSection = reviewStepContent.querySelector('.ai-guidance-box');
+    if (statsSection) {
+      statsSection.insertAdjacentHTML('afterend', classificationsHTML);
+    }
   }
   
   // Display action items

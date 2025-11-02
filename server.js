@@ -5988,6 +5988,60 @@ app.post('/api/meetings/analyze',
       
       transcriptText = transcriptText.trim();
 
+      // Classify each uploaded document
+      const documentClassifier = require('./services/document-classifier');
+      console.log(`\n📋 Classifying ${req.files.length} document(s)...`);
+      
+      const documentClassifications = [];
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
+        const fileText = transcriptText.split(`=== ${file.originalname} ===`)[1]?.split('===')[0]?.trim() || '';
+        
+        try {
+          const classification = await documentClassifier.classifyDocument(
+            fileText,
+            file.originalname
+          );
+          
+          // Store classification in database
+          await pool.query(
+            `INSERT INTO document_classifications 
+             (project_id, filename, category, confidence, reasoning, is_custom_category, text_length)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id`,
+            [
+              projectId,
+              file.originalname,
+              classification.category,
+              classification.confidence,
+              classification.reasoning,
+              classification.is_custom_category,
+              classification.text_length
+            ]
+          );
+          
+          documentClassifications.push({
+            filename: file.originalname,
+            category: classification.category,
+            confidence: classification.confidence,
+            is_custom: classification.is_custom_category,
+            reasoning: classification.reasoning
+          });
+        } catch (classificationError) {
+          console.error(`   ❌ Failed to classify ${file.originalname}:`, classificationError.message);
+          
+          documentClassifications.push({
+            filename: file.originalname,
+            category: 'other',
+            confidence: 0.3,
+            is_custom: false,
+            reasoning: `Classification failed: ${classificationError.message}`
+          });
+        }
+      }
+      
+      console.log(`✅ Classification complete\n`);
+
       // Calculate estimated tokens for logging
       const estimatedTokens = Math.ceil(transcriptText.length / 4);
       
@@ -6574,7 +6628,7 @@ IMPORTANT: Extract ALL action items, issues, status updates, and relationships. 
       console.log(`Analysis complete: ${parsedResponse.actionItems?.length || 0} action items, ${parsedResponse.issues?.length || 0} issues`);
       console.log(`Model used: ${attemptedModel}, Tokens: ${totalTokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
 
-      // STEP 4: Return results with transcript ID, status updates, and relationships
+      // STEP 4: Return results with transcript ID, status updates, relationships, and document classifications
       res.json({
         success: true,
         analysisId: analysisId,
@@ -6582,11 +6636,13 @@ IMPORTANT: Extract ALL action items, issues, status updates, and relationships. 
         ...parsedResponse,
         statusUpdateResults: statusUpdateResults,
         relationshipResults: relationshipResults,
+        documentClassifications: documentClassifications,
         metadata: {
           projectId: parseInt(projectId),
           analyzedAt: new Date().toISOString(),
           analyzedBy: req.user.id,
           transcriptLength: transcriptText.length,
+          fileCount: req.files.length,
           model: modelUsed,
           modelName: attemptedModel,
           tokensUsed: {
