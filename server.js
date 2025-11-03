@@ -9518,9 +9518,9 @@ app.post('/api/checklists/generate-from-issue', authenticateToken, async (req, r
     // Format tags for AI
     issue.tags = Array.isArray(issue.tags) ? issue.tags.map(t => t.name).join(', ') : '';
     
-    // Generate checklist using AI
+    // Generate checklist using AI with cost tracking
     console.log(`✨ Generating checklist from issue ${issue_id} with ${attachment_ids.length} attachments...`);
-    const checklistPreview = await generateChecklistFromIssue(issue, attachment_ids, use_description);
+    const checklistPreview = await generateChecklistFromIssue(issue, attachment_ids, use_description, userId, issue.project_id);
     
     // Add metadata
     checklistPreview.issue_id = issue_id;
@@ -9586,9 +9586,9 @@ app.post('/api/checklists/generate-from-action', authenticateToken, async (req, 
       return res.status(403).json({ error: 'Access denied to this project' });
     }
     
-    // Generate checklist using AI
+    // Generate checklist using AI with cost tracking
     console.log(`✨ Generating checklist from action item ${action_id} with ${attachment_ids.length} attachments...`);
-    const checklistPreview = await generateChecklistFromActionItem(actionItem, attachment_ids, use_description);
+    const checklistPreview = await generateChecklistFromActionItem(actionItem, attachment_ids, use_description, userId, actionItem.project_id);
     
     // Add metadata
     checklistPreview.action_id = action_id;
@@ -9891,7 +9891,7 @@ app.post('/api/checklists/generate-batch', authenticateToken, async (req, res) =
     
     sourceData.use_description = use_description;
     
-    // Generate multiple checklists
+    // Generate multiple checklists with cost tracking
     console.log(`[BATCH] Starting batch generation: ${workstreams.length} checklists for ${source_type} #${source_id}`);
     console.log(`[BATCH] Attachment IDs: ${attachment_ids?.join(', ') || 'none'}`);
     console.log(`[BATCH] Use description: ${use_description}`);
@@ -9900,7 +9900,9 @@ app.post('/api/checklists/generate-batch', authenticateToken, async (req, res) =
       source_type,
       sourceData,
       attachment_ids,
-      workstreams
+      workstreams,
+      userId,
+      sourceData.project_id
     );
     
     console.log(`[BATCH] Batch generation complete: ${results.filter(r => r.success).length} succeeded, ${results.filter(r => !r.success).length} failed`);

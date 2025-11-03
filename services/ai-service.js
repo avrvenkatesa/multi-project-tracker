@@ -501,7 +501,7 @@ async function callAI(prompt, sourceType, userId = null, projectId = null) {
 /**
  * Generate multiple checklists from one document based on workstream analysis
  */
-async function generateMultipleChecklists(sourceType, sourceData, attachmentIds, workstreams) {
+async function generateMultipleChecklists(sourceType, sourceData, attachmentIds, workstreams, userId = null, projectId = null) {
   const results = [];
   
   // Get full document content
@@ -531,7 +531,7 @@ async function generateMultipleChecklists(sourceType, sourceData, attachmentIds,
         workstreams.length
       );
       
-      const checklist = await callAI(focusedPrompt, sourceType);
+      const checklist = await callAI(focusedPrompt, sourceType, userId, projectId);
       
       results.push({
         workstream_name: workstream.name,
