@@ -59,6 +59,7 @@ const dependencyService = require('./services/dependency-service');
 const documentService = require('./services/document-service');
 const { calculateProjectSchedule } = require('./services/schedule-calculation-service');
 const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
+const aiCostTracker = require('./services/ai-cost-tracker');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -6626,6 +6627,22 @@ IMPORTANT: Extract ALL action items, issues, status updates, and relationships. 
         calculateAvgConfidence(parsedResponse),
         transcriptId
       ]);
+
+      // STEP 3.5: Track AI cost in centralized analytics
+      await aiCostTracker.trackAIUsage({
+        userId: req.user.id,
+        projectId: parseInt(projectId),
+        feature: 'meeting_analysis',
+        model: attemptedModel,
+        promptTokens: inputTokens,
+        completionTokens: outputTokens,
+        metadata: {
+          transcript_id: transcriptId,
+          file_count: req.files?.length || 0,
+          action_items_extracted: parsedResponse.actionItems?.length || 0,
+          issues_extracted: parsedResponse.issues?.length || 0
+        }
+      });
 
       console.log(`Analysis complete: ${parsedResponse.actionItems?.length || 0} action items, ${parsedResponse.issues?.length || 0} issues`);
       console.log(`Model used: ${attemptedModel}, Tokens: ${totalTokens}, Cost: ~$${estimatedCost.toFixed(4)}`);
