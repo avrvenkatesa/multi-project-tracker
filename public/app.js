@@ -9978,6 +9978,7 @@ window.deleteScheduleDependency = deleteScheduleDependency;
 function initializeChecklistEnforcementToggle(item, project) {
   const section = document.getElementById('checklist-enforcement-section');
   const toggle = document.getElementById('item-enforce-checklist-toggle');
+  const placeholder = document.getElementById('checklist-enforcement-placeholder');
   
   if (!section || !toggle || !item || !project) return;
   
@@ -9998,6 +9999,10 @@ function initializeChecklistEnforcementToggle(item, project) {
   const projectLevelIsOptional = !project.checklist_completion_enabled;
   
   if (isManagerOrAbove && projectLevelIsOptional) {
+    // Move section to placeholder (after due date)
+    if (placeholder && section.parentElement !== placeholder) {
+      placeholder.appendChild(section);
+    }
     section.classList.remove('hidden');
     
     // Set initial toggle state from item data
@@ -10068,7 +10073,6 @@ document.addEventListener('DOMContentLoaded', function() {
               if (currentDetailItem && currentProject) {
                 initializeChecklistEnforcementToggle(currentDetailItem, currentProject);
               }
-              enhanceDueDateDisplay();
             }, 150);
           }
         }
@@ -10085,55 +10089,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if (currentDetailItem && currentProject) {
           initializeChecklistEnforcementToggle(currentDetailItem, currentProject);
         }
-        enhanceDueDateDisplay();
       }, 100);
     }
   });
 });
-
-// Helper function to enhance due date display in Details tab
-function enhanceDueDateDisplay() {
-  if (!currentDetailItem) return;
-  
-  const detailInfo = document.getElementById('item-detail-info');
-  if (!detailInfo) return;
-  
-  // Find the due date section in the info panel
-  const dueDateElements = detailInfo.querySelectorAll('.due-date-badge');
-  if (dueDateElements.length === 0) return;
-  
-  const dueDate = currentDetailItem.due_date;
-  if (!dueDate) return;
-  
-  // Format the actual due date
-  const dateObj = new Date(dueDate);
-  const formattedDate = dateObj.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
-  });
-  
-  // Find parent container and add actual date if not already present
-  dueDateElements.forEach(badge => {
-    const parent = badge.parentElement;
-    if (parent && !parent.querySelector('.actual-due-date')) {
-      const dateSpan = document.createElement('div');
-      dateSpan.className = 'actual-due-date text-sm font-medium text-gray-700 mt-1';
-      dateSpan.textContent = formattedDate;
-      // Insert before the badge
-      parent.insertBefore(dateSpan, badge);
-    }
-  });
-}
 
 // Helper function to initialize checklist toggle for current item
 window.refreshChecklistEnforcementToggle = function() {
   if (currentDetailItem && currentProject) {
     initializeChecklistEnforcementToggle(currentDetailItem, currentProject);
   }
-  enhanceDueDateDisplay();
 };
 
 // Export for use in other parts of the application
 window.initializeChecklistEnforcementToggle = initializeChecklistEnforcementToggle;
-window.enhanceDueDateDisplay = enhanceDueDateDisplay;
