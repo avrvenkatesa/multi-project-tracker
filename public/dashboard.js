@@ -634,7 +634,7 @@ function renderAICostAnalytics() {
     return '';
   }
   
-  const { summary, breakdown } = dashboardData.aiCost;
+  const { summary, byFeature, recentOperations } = dashboardData.aiCost;
   
   // Calculate totals
   const totalCost = summary?.total_cost_usd || 0;
@@ -642,7 +642,7 @@ function renderAICostAnalytics() {
   const totalOperations = summary?.total_operations || 0;
   
   // Group breakdown by feature
-  const featureBreakdown = breakdown || [];
+  const featureBreakdown = byFeature || [];
   
   // Format currency
   const formatCost = (cost) => {
@@ -1268,8 +1268,8 @@ function initializeCharts() {
   // AI Cost pie chart (System Administrator only)
   if (currentUser && currentUser.role === 'System Administrator' && dashboardData.aiCost) {
     const aiCostCtx = document.getElementById('aiCostChart');
-    if (aiCostCtx && dashboardData.aiCost.breakdown && dashboardData.aiCost.breakdown.length > 0) {
-      const breakdown = dashboardData.aiCost.breakdown;
+    if (aiCostCtx && dashboardData.aiCost.byFeature && dashboardData.aiCost.byFeature.length > 0) {
+      const breakdown = dashboardData.aiCost.byFeature;
       const labels = breakdown.map(item => {
         const featureName = (item.feature || 'unknown').replace(/_/g, ' ');
         return featureName.charAt(0).toUpperCase() + featureName.slice(1);
