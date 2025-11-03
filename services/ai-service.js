@@ -29,7 +29,7 @@ async function getTemplateByName(templateName) {
 /**
  * Generate checklist from issue
  */
-async function generateChecklistFromIssue(issue, attachmentIds = [], useDescription = true) {
+async function generateChecklistFromIssue(issue, attachmentIds = [], useDescription = true, userId = null, projectId = null) {
   let contextText = '';
   
   if (useDescription) {
@@ -46,13 +46,13 @@ async function generateChecklistFromIssue(issue, attachmentIds = [], useDescript
   }
   
   const prompt = buildEnhancedPrompt('issue', issue, contextText, attachmentIds);
-  return await callAI(prompt, 'issue');
+  return await callAI(prompt, 'issue', userId, projectId);
 }
 
 /**
  * Generate checklist from action item
  */
-async function generateChecklistFromActionItem(actionItem, attachmentIds = [], useDescription = true) {
+async function generateChecklistFromActionItem(actionItem, attachmentIds = [], useDescription = true, userId = null, projectId = null) {
   let contextText = '';
   
   if (useDescription) {
@@ -69,7 +69,7 @@ async function generateChecklistFromActionItem(actionItem, attachmentIds = [], u
   }
   
   const prompt = buildEnhancedPrompt('action-item', actionItem, contextText, attachmentIds);
-  return await callAI(prompt, 'action-item');
+  return await callAI(prompt, 'action-item', userId, projectId);
 }
 
 /**
