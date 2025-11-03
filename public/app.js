@@ -10055,19 +10055,40 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Initialize checklist toggle and enhance due date when Details tab is clicked
-  const detailsTabBtn = document.querySelector('[data-tab="details"]');
-  if (detailsTabBtn) {
-    detailsTabBtn.addEventListener('click', function() {
-      // Small delay to ensure data is loaded
+  // Watch for detail modal opening and initialize features
+  const detailModal = document.getElementById('item-detail-modal');
+  if (detailModal) {
+    const observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          const isVisible = !detailModal.classList.contains('hidden');
+          if (isVisible) {
+            // Modal just opened - initialize features after short delay for data to load
+            setTimeout(() => {
+              if (currentDetailItem && currentProject) {
+                initializeChecklistEnforcementToggle(currentDetailItem, currentProject);
+              }
+              enhanceDueDateDisplay();
+            }, 150);
+          }
+        }
+      });
+    });
+    
+    observer.observe(detailModal, { attributes: true });
+  }
+  
+  // Also initialize when Details tab is clicked (for tab switches)
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('[data-tab="details"]')) {
       setTimeout(() => {
         if (currentDetailItem && currentProject) {
           initializeChecklistEnforcementToggle(currentDetailItem, currentProject);
         }
         enhanceDueDateDisplay();
       }, 100);
-    });
-  }
+    }
+  });
 });
 
 // Helper function to enhance due date display in Details tab

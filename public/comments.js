@@ -578,7 +578,7 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
     const item = response.data;
     
     // Set global state for relationship buttons
-    currentDetailItem = { id: itemId, type: itemType, title: item.title };
+    currentDetailItem = { ...item, id: itemId, type: itemType, title: item.title };
     
     title.textContent = item.title;
     
@@ -603,7 +603,8 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
       </div>
       <div class="mt-4">
         <div class="text-sm text-gray-500 mb-2">Due Date</div>
-        ${createDueDateBadge(item.due_date)}
+        ${item.due_date ? `<div class="text-sm font-medium text-gray-700 mb-1">${new Date(item.due_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>` : ''}
+        ${createDueDateBadge(item.due_date, item.status, item.completed_at)}
       </div>
       ${item.description ? `<div class="mt-4"><div class="text-sm text-gray-500">Description</div><div class="mt-1">${item.description}</div></div>` : ''}
     `;
@@ -615,6 +616,11 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
     
     // Setup tabs
     setupItemDetailTabs();
+    
+    // Initialize checklist enforcement toggle (requires currentDetailItem and currentProject)
+    if (typeof window.initializeChecklistEnforcementToggle === 'function' && currentProject) {
+      window.initializeChecklistEnforcementToggle(currentDetailItem, currentProject);
+    }
     
     // Check permissions for edit/delete buttons
     const currentUser = AuthManager.currentUser;
