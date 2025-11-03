@@ -1379,17 +1379,28 @@ async function renderKanbanBoard() {
                         ` : ''}
                         <div class="flex items-center justify-between gap-2">
                             <div class="checklist-badge-container flex-1">${generateChecklistBadge(checklistStatus)}</div>
-                            ${userRoleLevel >= roleHierarchy['Team Member'] ? `
+                            <div class="flex items-center gap-2">
                                 <button 
-                                    class="quick-log-btn text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1 flex-shrink-0"
-                                    data-action="quick-log"
+                                    class="copy-link-btn text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors flex items-center gap-1 flex-shrink-0"
+                                    data-action="copy-link"
                                     data-item-id="${item.id}"
                                     data-item-type="${item.type}"
-                                    title="Quick Log Time"
+                                    title="Copy Link"
                                 >
-                                    ⏱️ Log
+                                    🔗
                                 </button>
-                            ` : ''}
+                                ${userRoleLevel >= roleHierarchy['Team Member'] ? `
+                                    <button 
+                                        class="quick-log-btn text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1 flex-shrink-0"
+                                        data-action="quick-log"
+                                        data-item-id="${item.id}"
+                                        data-item-type="${item.type}"
+                                        title="Quick Log Time"
+                                    >
+                                        ⏱️ Log
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
                             </div>
                         </div>
@@ -9754,6 +9765,17 @@ document.getElementById('quickLogModal')?.addEventListener('click', function(e) 
   }
 });
 
+// Event delegation for Copy Link buttons on kanban cards
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('[data-action="copy-link"]');
+  if (btn) {
+    e.stopPropagation(); // Prevent card click event
+    const itemId = parseInt(btn.dataset.itemId);
+    const itemType = btn.dataset.itemType;
+    copyItemLink(itemId, itemType);
+  }
+});
+
 // Event delegation for Quick Log buttons on kanban cards
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('[data-action="quick-log"]');
@@ -9943,3 +9965,96 @@ document.addEventListener('DOMContentLoaded', function() {
 // Make functions globally accessible
 window.showScheduleDependencies = showScheduleDependencies;
 window.deleteScheduleDependency = deleteScheduleDependency;
+
+
+// ===== ITEM-LEVEL CHECKLIST ENFORCEMENT TOGGLE =====
+
+/**
+ * Initialize checklist enforcement toggle when detail modal opens
+ * Shows toggle only when:
+ * 1. User is System Administrator or Manager
+ * 2. Project-level checklist completion is optional
+ */
+function initializeChecklistEnforcementToggle(item, project) {
+  const section = document.getElementById('checklist-enforcement-section');
+  const toggle = document.getElementById('item-enforce-checklist-toggle');
+  
+  if (!section || !toggle || !item || !project) return;
+  
+  // Check user role
+  const currentUser = AuthManager.currentUser;
+  const roleHierarchy = {
+    'System Administrator': 5,
+    'Project Manager': 4,
+    'Team Lead': 3,
+    'Team Member': 2,
+    'Stakeholder': 1,
+    'External Viewer': 0
+  };
+  const userRoleLevel = currentUser ? (roleHierarchy[currentUser.role] || 0) : 0;
+  const isManagerOrAbove = userRoleLevel >= roleHierarchy['Project Manager'];
+  
+  // Only show toggle if user is Manager+ AND project-level is optional
+  const projectLevelIsOptional = !project.checklist_completion_enabled;
+  
+  if (isManagerOrAbove && projectLevelIsOptional) {
+    section.classList.remove('hidden');
+    
+    // Set initial toggle state from item data
+    const isEnforced = item.enforce_checklist_completion || false;
+    toggle.checked = isEnforced;
+  } else {
+    section.classList.add('hidden');
+  }
+}
+
+/**
+ * Handle checklist enforcement toggle change
+ */
+async function handleChecklistEnforcementToggle(enforceChecklistCompletion) {
+  if (!currentDetailItem) return;
+  
+  try {
+    const endpoint = currentDetailItem.type === 'issue' 
+      ? `/api/issues/${currentDetailItem.id}/enforce-checklist`
+      : `/api/action-items/${currentDetailItem.id}/enforce-checklist`;
+    
+    await axios.patch(endpoint, { enforceChecklistCompletion }, { withCredentials: true });
+    
+    // Update local item data
+    currentDetailItem.enforce_checklist_completion = enforceChecklistCompletion;
+    
+    const message = enforceChecklistCompletion
+      ? 'Checklist completion is now required for this item'
+      : 'Checklist completion is now optional for this item';
+    
+    showToast(message, 'success');
+    
+    // Reload project data to reflect changes
+    if (currentProject) {
+      await loadProjectData(currentProject.id);
+    }
+  } catch (error) {
+    console.error('Error updating checklist enforcement:', error);
+    showToast('Failed to update checklist enforcement', 'error');
+    
+    // Revert toggle on error
+    const toggle = document.getElementById('item-enforce-checklist-toggle');
+    if (toggle) {
+      toggle.checked = !enforceChecklistCompletion;
+    }
+  }
+}
+
+// Event listener for toggle
+document.addEventListener('DOMContentLoaded', function() {
+  const toggle = document.getElementById('item-enforce-checklist-toggle');
+  if (toggle) {
+    toggle.addEventListener('change', function(e) {
+      handleChecklistEnforcementToggle(e.target.checked);
+    });
+  }
+});
+
+// Export for use in other parts of the application
+window.initializeChecklistEnforcementToggle = initializeChecklistEnforcementToggle;

@@ -5110,6 +5110,70 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
   }
 });
 
+// Update checklist enforcement for issue (System Administrator or Manager only)
+app.patch('/api/issues/:id/enforce-checklist', authenticateToken, requireRole('Project Manager'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { enforceChecklistCompletion } = req.body;
+    
+    if (typeof enforceChecklistCompletion !== 'boolean') {
+      return res.status(400).json({ error: 'enforceChecklistCompletion must be a boolean' });
+    }
+    
+    const [issue] = await sql`SELECT * FROM issues WHERE id = ${id}`;
+    
+    if (!issue) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    // Update the enforcement setting
+    await sql`
+      UPDATE issues 
+      SET enforce_checklist_completion = ${enforceChecklistCompletion},
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${id}
+    `;
+    
+    const [updated] = await sql`SELECT * FROM issues WHERE id = ${id}`;
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating issue checklist enforcement:', error);
+    res.status(500).json({ error: 'Failed to update checklist enforcement' });
+  }
+});
+
+// Update checklist enforcement for action item (System Administrator or Manager only)
+app.patch('/api/action-items/:id/enforce-checklist', authenticateToken, requireRole('Project Manager'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { enforceChecklistCompletion } = req.body;
+    
+    if (typeof enforceChecklistCompletion !== 'boolean') {
+      return res.status(400).json({ error: 'enforceChecklistCompletion must be a boolean' });
+    }
+    
+    const [item] = await sql`SELECT * FROM action_items WHERE id = ${id}`;
+    
+    if (!item) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    // Update the enforcement setting
+    await sql`
+      UPDATE action_items 
+      SET enforce_checklist_completion = ${enforceChecklistCompletion},
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${id}
+    `;
+    
+    const [updated] = await sql`SELECT * FROM action_items WHERE id = ${id}`;
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating action item checklist enforcement:', error);
+    res.status(500).json({ error: 'Failed to update checklist enforcement' });
+  }
+});
+
 // Delete action item (creator OR Team Lead or higher)
 app.delete('/api/action-items/:id', authenticateToken, async (req, res) => {
   try {

@@ -56,6 +56,7 @@ export const issues = pgTable('issues', {
   assignee: varchar('assignee', { length: 255 }),
   createdBy: varchar('created_by', { length: 255 }),
   createdViaAiBy: integer('created_via_ai_by').references(() => users.id),
+  enforceChecklistCompletion: boolean('enforce_checklist_completion').default(false),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -83,6 +84,7 @@ export const actionItems = pgTable('action_items', {
   categoryId: integer('category_id').references(() => actionItemCategories.id),
   createdBy: varchar('created_by', { length: 255 }),
   createdViaAiBy: integer('created_via_ai_by').references(() => users.id),
+  enforceChecklistCompletion: boolean('enforce_checklist_completion').default(false),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

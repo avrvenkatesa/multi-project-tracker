@@ -1066,6 +1066,31 @@
                             <div id="item-detail-info" class="bg-gray-50 rounded-lg p-4">
                                 <!-- Item details will be displayed here -->
                             </div>
+                            
+                            <!-- Checklist Enforcement Toggle (Admin/Manager Only) -->
+                            <div id="checklist-enforcement-section" class="mt-4 bg-white rounded-lg border border-gray-200 p-4 hidden">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex-1">
+                                        <h4 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                                            <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                            Require Checklist Completion
+                                        </h4>
+                                        <p class="text-xs text-gray-600 mt-1">
+                                            Override project-level setting to enforce checklist completion for this item
+                                        </p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer ml-4">
+                                        <input 
+                                            type="checkbox" 
+                                            id="item-enforce-checklist-toggle"
+                                            class="sr-only peer"
+                                        >
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- Effort Estimates Tab -->
