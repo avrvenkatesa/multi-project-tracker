@@ -89,6 +89,28 @@ export const actionItems = pgTable('action_items', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Multiple assignees for issues with effort percentage allocation
+export const issueAssignees = pgTable('issue_assignees', {
+  id: serial('id').primaryKey(),
+  issueId: integer('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  isPrimary: boolean('is_primary').default(false),
+  effortPercentage: integer('effort_percentage').default(100),
+  assignedAt: timestamp('assigned_at').defaultNow(),
+  assignedBy: integer('assigned_by').references(() => users.id),
+});
+
+// Multiple assignees for action items with effort percentage allocation
+export const actionItemAssignees = pgTable('action_item_assignees', {
+  id: serial('id').primaryKey(),
+  actionItemId: integer('action_item_id').notNull().references(() => actionItems.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  isPrimary: boolean('is_primary').default(false),
+  effortPercentage: integer('effort_percentage').default(100),
+  assignedAt: timestamp('assigned_at').defaultNow(),
+  assignedBy: integer('assigned_by').references(() => users.id),
+});
+
 export const issueDependencies = pgTable('issue_dependencies', {
   id: serial('id').primaryKey(),
   issueId: integer('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),

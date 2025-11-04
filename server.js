@@ -5174,6 +5174,260 @@ app.patch('/api/action-items/:id/enforce-checklist', authenticateToken, requireR
   }
 });
 
+// ====================
+// ASSIGNEE MANAGEMENT ENDPOINTS
+// ====================
+
+// Add assignee to issue
+app.post('/api/issues/:id/assignees', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, isPrimary = false, effortPercentage = 100 } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+    
+    if (effortPercentage < 0 || effortPercentage > 100) {
+      return res.status(400).json({ error: 'effortPercentage must be between 0 and 100' });
+    }
+    
+    // Check if issue exists
+    const [issue] = await sql`SELECT * FROM issues WHERE id = ${id}`;
+    if (!issue) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
+    
+    // Check if user exists
+    const [user] = await sql`SELECT * FROM users WHERE id = ${userId}`;
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // If setting as primary, unset other primary assignees
+    if (isPrimary) {
+      await sql`
+        UPDATE issue_assignees 
+        SET is_primary = FALSE 
+        WHERE issue_id = ${id}
+      `;
+    }
+    
+    // Insert or update assignee
+    const [assignee] = await sql`
+      INSERT INTO issue_assignees (issue_id, user_id, is_primary, effort_percentage, assigned_by)
+      VALUES (${id}, ${userId}, ${isPrimary}, ${effortPercentage}, ${req.user.id})
+      ON CONFLICT (issue_id, user_id) 
+      DO UPDATE SET 
+        is_primary = ${isPrimary},
+        effort_percentage = ${effortPercentage},
+        assigned_at = NOW()
+      RETURNING *
+    `;
+    
+    res.json(assignee);
+  } catch (error) {
+    console.error('Error adding issue assignee:', error);
+    res.status(500).json({ error: 'Failed to add assignee' });
+  }
+});
+
+// Remove assignee from issue
+app.delete('/api/issues/:id/assignees/:userId', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+    
+    const [deleted] = await sql`
+      DELETE FROM issue_assignees 
+      WHERE issue_id = ${id} AND user_id = ${userId}
+      RETURNING *
+    `;
+    
+    if (!deleted) {
+      return res.status(404).json({ error: 'Assignee not found' });
+    }
+    
+    res.json({ message: 'Assignee removed successfully' });
+  } catch (error) {
+    console.error('Error removing issue assignee:', error);
+    res.status(500).json({ error: 'Failed to remove assignee' });
+  }
+});
+
+// Update assignees for issue (batch update with percentages)
+app.patch('/api/issues/:id/assignees', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assignees } = req.body; // [{userId, isPrimary, effortPercentage}]
+    
+    if (!Array.isArray(assignees)) {
+      return res.status(400).json({ error: 'assignees must be an array' });
+    }
+    
+    // Validate total percentage
+    const totalPercentage = assignees.reduce((sum, a) => sum + (a.effortPercentage || 0), 0);
+    if (totalPercentage > 100) {
+      return res.status(400).json({ error: 'Total effort percentage cannot exceed 100%' });
+    }
+    
+    // Validate only one primary
+    const primaryCount = assignees.filter(a => a.isPrimary).length;
+    if (primaryCount > 1) {
+      return res.status(400).json({ error: 'Only one assignee can be primary' });
+    }
+    
+    // Delete all existing assignees
+    await sql`DELETE FROM issue_assignees WHERE issue_id = ${id}`;
+    
+    // Insert new assignees
+    for (const assignee of assignees) {
+      await sql`
+        INSERT INTO issue_assignees (issue_id, user_id, is_primary, effort_percentage, assigned_by)
+        VALUES (${id}, ${assignee.userId}, ${assignee.isPrimary || false}, ${assignee.effortPercentage || 100}, ${req.user.id})
+      `;
+    }
+    
+    // Get updated assignees with user details
+    const updated = await sql`
+      SELECT ia.*, u.username, u.email
+      FROM issue_assignees ia
+      JOIN users u ON ia.user_id = u.id
+      WHERE ia.issue_id = ${id}
+      ORDER BY ia.is_primary DESC, ia.assigned_at ASC
+    `;
+    
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating issue assignees:', error);
+    res.status(500).json({ error: 'Failed to update assignees' });
+  }
+});
+
+// Add assignee to action item
+app.post('/api/action-items/:id/assignees', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, isPrimary = false, effortPercentage = 100 } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+    
+    if (effortPercentage < 0 || effortPercentage > 100) {
+      return res.status(400).json({ error: 'effortPercentage must be between 0 and 100' });
+    }
+    
+    // Check if action item exists
+    const [actionItem] = await sql`SELECT * FROM action_items WHERE id = ${id}`;
+    if (!actionItem) {
+      return res.status(404).json({ error: 'Action item not found' });
+    }
+    
+    // Check if user exists
+    const [user] = await sql`SELECT * FROM users WHERE id = ${userId}`;
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // If setting as primary, unset other primary assignees
+    if (isPrimary) {
+      await sql`
+        UPDATE action_item_assignees 
+        SET is_primary = FALSE 
+        WHERE action_item_id = ${id}
+      `;
+    }
+    
+    // Insert or update assignee
+    const [assignee] = await sql`
+      INSERT INTO action_item_assignees (action_item_id, user_id, is_primary, effort_percentage, assigned_by)
+      VALUES (${id}, ${userId}, ${isPrimary}, ${effortPercentage}, ${req.user.id})
+      ON CONFLICT (action_item_id, user_id) 
+      DO UPDATE SET 
+        is_primary = ${isPrimary},
+        effort_percentage = ${effortPercentage},
+        assigned_at = NOW()
+      RETURNING *
+    `;
+    
+    res.json(assignee);
+  } catch (error) {
+    console.error('Error adding action item assignee:', error);
+    res.status(500).json({ error: 'Failed to add assignee' });
+  }
+});
+
+// Remove assignee from action item
+app.delete('/api/action-items/:id/assignees/:userId', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+    
+    const [deleted] = await sql`
+      DELETE FROM action_item_assignees 
+      WHERE action_item_id = ${id} AND user_id = ${userId}
+      RETURNING *
+    `;
+    
+    if (!deleted) {
+      return res.status(404).json({ error: 'Assignee not found' });
+    }
+    
+    res.json({ message: 'Assignee removed successfully' });
+  } catch (error) {
+    console.error('Error removing action item assignee:', error);
+    res.status(500).json({ error: 'Failed to remove assignee' });
+  }
+});
+
+// Update assignees for action item (batch update with percentages)
+app.patch('/api/action-items/:id/assignees', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assignees } = req.body; // [{userId, isPrimary, effortPercentage}]
+    
+    if (!Array.isArray(assignees)) {
+      return res.status(400).json({ error: 'assignees must be an array' });
+    }
+    
+    // Validate total percentage
+    const totalPercentage = assignees.reduce((sum, a) => sum + (a.effortPercentage || 0), 0);
+    if (totalPercentage > 100) {
+      return res.status(400).json({ error: 'Total effort percentage cannot exceed 100%' });
+    }
+    
+    // Validate only one primary
+    const primaryCount = assignees.filter(a => a.isPrimary).length;
+    if (primaryCount > 1) {
+      return res.status(400).json({ error: 'Only one assignee can be primary' });
+    }
+    
+    // Delete all existing assignees
+    await sql`DELETE FROM action_item_assignees WHERE action_item_id = ${id}`;
+    
+    // Insert new assignees
+    for (const assignee of assignees) {
+      await sql`
+        INSERT INTO action_item_assignees (action_item_id, user_id, is_primary, effort_percentage, assigned_by)
+        VALUES (${id}, ${assignee.userId}, ${assignee.isPrimary || false}, ${assignee.effortPercentage || 100}, ${req.user.id})
+      `;
+    }
+    
+    // Get updated assignees with user details
+    const updated = await sql`
+      SELECT aia.*, u.username, u.email
+      FROM action_item_assignees aia
+      JOIN users u ON aia.user_id = u.id
+      WHERE aia.action_item_id = ${id}
+      ORDER BY aia.is_primary DESC, aia.assigned_at ASC
+    `;
+    
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating action item assignees:', error);
+    res.status(500).json({ error: 'Failed to update assignees' });
+  }
+});
+
 // Delete action item (creator OR Team Lead or higher)
 app.delete('/api/action-items/:id', authenticateToken, async (req, res) => {
   try {
