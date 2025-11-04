@@ -2001,12 +2001,37 @@ function showCreateIssue() {
                 </div>
             </div>
             
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Assigned To</label>
-                <select id="issue-assignee" 
-                        class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-                    ${generateAssigneeOptions()}
-                </select>
+            <!-- Multiple Assignees Section -->
+            <div class="mb-4 bg-gray-50 rounded-lg border border-gray-200 p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <label class="block text-sm font-semibold text-gray-800">Assignees</label>
+                    <button type="button" id="create-add-assignee-btn" 
+                            class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                        + Add Assignee
+                    </button>
+                </div>
+                
+                <!-- Assignees List -->
+                <div id="create-assignees-list" class="space-y-2 mb-3">
+                    <p class="text-sm text-gray-500 italic">No assignees yet</p>
+                </div>
+                
+                <!-- Add Assignee Dropdown (hidden by default) -->
+                <div id="create-add-assignee-container" class="hidden mt-3 border-t pt-3">
+                    <select id="create-new-assignee-select" 
+                            class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select member...</option>
+                    </select>
+                </div>
+                
+                <!-- Total Effort Percentage -->
+                <div class="mt-3 pt-3 border-t">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="font-medium text-gray-700">Total Effort Allocation:</span>
+                        <span id="create-total-effort" class="font-bold text-blue-600">0%</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">Must be ≤100%</div>
+                </div>
             </div>
             
             <div class="mb-4">
@@ -2042,6 +2067,9 @@ function showCreateIssue() {
     
     // Load tags for issues/actions (tag_type: 'issue_action' or 'both')
     loadTagsForIssues();
+    
+    // Initialize assignee management for create modal
+    initializeCreateAssigneeManagement();
     
     // Add event listeners
     document.getElementById('cancel-issue-btn').addEventListener('click', hideModal);
@@ -2155,6 +2183,15 @@ function generateAssigneeOptions() {
 async function createIssue(event) {
     event.preventDefault();
     
+    // Validate total effort percentage
+    if (createModalAssignees.length > 0) {
+        const totalEffort = createModalAssignees.reduce((sum, a) => sum + (a.effortPercentage || 0), 0);
+        if (totalEffort > 100) {
+            alert('Total effort percentage cannot exceed 100%. Please adjust the percentages.');
+            return;
+        }
+    }
+    
     const issueData = {
         title: document.getElementById('issue-title').value,
         description: document.getElementById('issue-description').value,
@@ -2162,7 +2199,7 @@ async function createIssue(event) {
         category: document.getElementById('issue-category').value,
         phase: document.getElementById('issue-phase').value,
         component: document.getElementById('issue-component').value,
-        assignee: document.getElementById('issue-assignee').value.trim(),
+        assignee: '', // Leave empty - we'll use the assignees array
         dueDate: document.getElementById('issue-due-date').value,
         projectId: currentProject.id,
         type: 'issue',
@@ -2197,6 +2234,21 @@ async function createIssue(event) {
                 },
                 body: JSON.stringify({ tagIds: selectedTagIds })
             });
+        }
+        
+        // Add multiple assignees if specified
+        if (createModalAssignees.length > 0) {
+            for (const assignee of createModalAssignees) {
+                try {
+                    await axios.post(`/api/issues/${newIssue.id}/assignees`, {
+                        userId: assignee.userId,
+                        isPrimary: assignee.isPrimary,
+                        effortPercentage: assignee.effortPercentage || 0
+                    }, { withCredentials: true });
+                } catch (err) {
+                    console.error('Error adding assignee:', err);
+                }
+            }
         }
         
         issues.push(newIssue);
@@ -10157,3 +10209,167 @@ window.refreshChecklistEnforcementToggle = function() {
 
 // Export for use in other parts of the application
 window.initializeChecklistEnforcementToggle = initializeChecklistEnforcementToggle;
+
+// ===== Multiple Assignee Management for Create/Edit Modals =====
+let createModalAssignees = [];
+
+function initializeCreateAssigneeManagement() {
+  createModalAssignees = [];
+  
+  // Load team members and populate dropdown
+  loadTeamMembersForCreateModal();
+  
+  // Add event listener for "+ Add Assignee" button
+  const addBtn = document.getElementById('create-add-assignee-btn');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const container = document.getElementById('create-add-assignee-container');
+      if (container) {
+        container.classList.toggle('hidden');
+      }
+    });
+  }
+  
+  // Add event listener for assignee selection
+  const select = document.getElementById('create-new-assignee-select');
+  if (select) {
+    select.addEventListener('change', (e) => {
+      if (e.target.value) {
+        addAssigneeToCreateModal(parseInt(e.target.value));
+        e.target.value = ''; // Reset dropdown
+        document.getElementById('create-add-assignee-container').classList.add('hidden');
+      }
+    });
+  }
+}
+
+async function loadTeamMembersForCreateModal() {
+  if (!currentProject) return;
+  
+  try {
+    const response = await axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true });
+    const teamMembers = response.data;
+    
+    const select = document.getElementById('create-new-assignee-select');
+    if (select) {
+      select.innerHTML = '<option value="">Select member...</option>';
+      teamMembers.forEach(member => {
+        // Skip if already assigned
+        if (!createModalAssignees.some(a => a.userId === member.user_id)) {
+          const option = document.createElement('option');
+          option.value = member.user_id;
+          option.textContent = member.username;
+          select.appendChild(option);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error loading team members:', error);
+  }
+}
+
+function addAssigneeToCreateModal(userId) {
+  // Find user details from team members
+  axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true })
+    .then(response => {
+      const member = response.data.find(m => m.user_id === userId);
+      if (member) {
+        const isPrimary = createModalAssignees.length === 0; // First assignee is primary by default
+        createModalAssignees.push({
+          userId: member.user_id,
+          username: member.username,
+          email: member.email,
+          isPrimary: isPrimary,
+          effortPercentage: isPrimary ? 100 : 0
+        });
+        renderCreateModalAssignees();
+      }
+    });
+}
+
+function removeAssigneeFromCreateModal(userId) {
+  const wasPrimary = createModalAssignees.find(a => a.userId === userId)?.isPrimary;
+  createModalAssignees = createModalAssignees.filter(a => a.userId !== userId);
+  
+  // If we removed the primary, make the first remaining assignee primary
+  if (wasPrimary && createModalAssignees.length > 0) {
+    createModalAssignees[0].isPrimary = true;
+  }
+  
+  renderCreateModalAssignees();
+}
+
+function setPrimaryAssigneeInCreateModal(userId) {
+  createModalAssignees.forEach(a => {
+    a.isPrimary = (a.userId === userId);
+  });
+  renderCreateModalAssignees();
+}
+
+function updateAssigneeEffortInCreateModal(userId, percentage) {
+  const assignee = createModalAssignees.find(a => a.userId === userId);
+  if (assignee) {
+    assignee.effortPercentage = Math.max(0, Math.min(100, percentage));
+    renderCreateModalAssignees();
+  }
+}
+
+function renderCreateModalAssignees() {
+  const container = document.getElementById('create-assignees-list');
+  if (!container) return;
+  
+  if (createModalAssignees.length === 0) {
+    container.innerHTML = '<p class="text-sm text-gray-500 italic">No assignees yet</p>';
+    updateCreateModalTotalEffort();
+    return;
+  }
+  
+  // Sort: primary first
+  const sorted = [...createModalAssignees].sort((a, b) => b.isPrimary - a.isPrimary);
+  
+  container.innerHTML = sorted.map(assignee => `
+    <div class="flex items-center justify-between bg-white border rounded px-3 py-2">
+      <div class="flex items-center gap-2 flex-1">
+        <button type="button" onclick="setPrimaryAssigneeInCreateModal(${assignee.userId})" 
+                class="text-lg ${assignee.isPrimary ? 'text-yellow-500' : 'text-gray-300'} hover:text-yellow-500"
+                title="${assignee.isPrimary ? 'Primary Assignee' : 'Set as Primary'}">
+          ⭐
+        </button>
+        <div class="flex-1">
+          <div class="text-sm font-medium">${assignee.username}</div>
+          ${assignee.isPrimary ? '<span class="text-xs text-blue-600 font-semibold">PRIMARY</span>' : ''}
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="number" min="0" max="100" 
+                 value="${assignee.effortPercentage}"
+                 onchange="updateAssigneeEffortInCreateModal(${assignee.userId}, parseInt(this.value))"
+                 class="w-16 border rounded px-2 py-1 text-sm text-right"
+                 placeholder="%" />
+          <span class="text-sm text-gray-600">%</span>
+        </div>
+      </div>
+      <button type="button" onclick="removeAssigneeFromCreateModal(${assignee.userId})"
+              class="ml-3 text-red-600 hover:text-red-800 text-sm">
+        ✕
+      </button>
+    </div>
+  `).join('');
+  
+  updateCreateModalTotalEffort();
+  loadTeamMembersForCreateModal(); // Refresh dropdown to remove newly added members
+}
+
+function updateCreateModalTotalEffort() {
+  const total = createModalAssignees.reduce((sum, a) => sum + (a.effortPercentage || 0), 0);
+  const display = document.getElementById('create-total-effort');
+  if (display) {
+    display.textContent = `${total}%`;
+    display.className = total > 100 ? 'font-bold text-red-600' : 'font-bold text-blue-600';
+  }
+}
+
+// Export functions to window for inline onclick handlers
+window.addAssigneeToCreateModal = addAssigneeToCreateModal;
+window.removeAssigneeFromCreateModal = removeAssigneeFromCreateModal;
+window.setPrimaryAssigneeInCreateModal = setPrimaryAssigneeInCreateModal;
+window.updateAssigneeEffortInCreateModal = updateAssigneeEffortInCreateModal;
