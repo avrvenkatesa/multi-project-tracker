@@ -10274,7 +10274,7 @@ async function loadTeamMembersForCreateModal() {
       if (!createModalAssignees.some(a => a.userId === member.user_id)) {
         const option = document.createElement('option');
         option.value = member.user_id;
-        option.textContent = `${member.username} (${member.email})`;
+        option.textContent = `${member.name} (${member.email})`;
         select.appendChild(option);
       }
     });
@@ -10294,7 +10294,7 @@ function addAssigneeToCreateModal(userId) {
         const isPrimary = createModalAssignees.length === 0; // First assignee is primary by default
         createModalAssignees.push({
           userId: member.user_id,
-          username: member.username,
+          username: member.name,
           email: member.email,
           isPrimary: isPrimary,
           effortPercentage: isPrimary ? 100 : 0
