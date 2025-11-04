@@ -1091,6 +1091,78 @@
                                     </label>
                                 </div>
                             </div>
+                            
+                            <!-- Multiple Assignees Management -->
+                            <div id="assignees-section" class="mt-4 bg-white rounded-lg border border-gray-200 p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                                        </svg>
+                                        Assignees
+                                    </h4>
+                                    <button 
+                                        id="add-assignee-btn"
+                                        class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                    >
+                                        + Add Assignee
+                                    </button>
+                                </div>
+                                
+                                <!-- Current Assignees List -->
+                                <div id="assignees-list" class="space-y-2 mb-3">
+                                    <!-- Assignees will be rendered here -->
+                                </div>
+                                
+                                <!-- Add Assignee Form (Hidden by default) -->
+                                <div id="add-assignee-form" class="hidden mt-3 p-3 bg-gray-50 rounded border border-gray-200">
+                                    <div class="grid grid-cols-2 gap-2 mb-2">
+                                        <div>
+                                            <label class="block text-xs text-gray-600 mb-1">Team Member</label>
+                                            <select id="new-assignee-select" class="w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                                <option value="">Select member...</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-600 mb-1">Effort %</label>
+                                            <input 
+                                                type="number" 
+                                                id="new-assignee-effort" 
+                                                min="0" 
+                                                max="100" 
+                                                value="100"
+                                                class="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                                            >
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <input type="checkbox" id="new-assignee-primary" class="rounded">
+                                        <label for="new-assignee-primary" class="text-xs text-gray-700">Set as primary assignee</label>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button 
+                                            id="confirm-add-assignee-btn"
+                                            class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                                        >
+                                            Add
+                                        </button>
+                                        <button 
+                                            id="cancel-add-assignee-btn"
+                                            class="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Total Effort Percentage Display -->
+                                <div class="mt-3 pt-3 border-t border-gray-200">
+                                    <div class="flex justify-between items-center text-sm">
+                                        <span class="text-gray-600">Total Effort Allocated:</span>
+                                        <span id="total-effort-percentage" class="font-semibold text-gray-900">0%</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- Effort Estimates Tab -->
@@ -2561,6 +2633,7 @@
         <script src="comments.js?v=3"></script>
         <script src="js/checklist-completion-warning.js"></script>
         <script src="js/timesheet.js"></script>
+        <script src="js/assignee-manager.js"></script>
         <script src="app.js?v=47"></script>
         <script src="js/project-management.js"></script>
     </body>

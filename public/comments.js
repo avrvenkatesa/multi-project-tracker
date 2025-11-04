@@ -629,6 +629,13 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
       });
     }
     
+    // Initialize assignee management
+    if (typeof window.initializeAssigneeManagement === 'function') {
+      requestAnimationFrame(() => {
+        window.initializeAssigneeManagement(currentDetailItem, itemType);
+      });
+    }
+    
     // Check permissions for edit/delete buttons
     const currentUser = AuthManager.currentUser;
     const isOwner = currentUser && parseInt(item.created_by, 10) === parseInt(currentUser.id, 10);

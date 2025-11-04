@@ -1362,7 +1362,7 @@ async function renderKanbanBoard() {
                                 : ""
                         }
                         <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
-                            <span>${item.assignee || "Unassigned"}</span>
+                            <span>${typeof window.getPrimaryAssigneeDisplay === 'function' ? window.getPrimaryAssigneeDisplay(item.assignees) : (item.assignee || "Unassigned")}</span>
                         </div>
                         ${createDueDateBadge(item.due_date, item.status, item.completed_at)}
                         ${createEffortEstimateBadge(item)}

@@ -3289,15 +3289,29 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
         sh.changed_at as completed_at,
         COALESCE(
           json_agg(
-            json_build_object('id', t.id, 'name', t.name, 'color', t.color)
-            ORDER BY t.name
+            DISTINCT json_build_object('id', t.id, 'name', t.name, 'color', t.color)
           ) FILTER (WHERE t.id IS NOT NULL),
           '[]'
-        ) as tags
+        ) as tags,
+        COALESCE(
+          json_agg(
+            DISTINCT json_build_object(
+              'userId', ia.user_id,
+              'username', au.username,
+              'email', au.email,
+              'isPrimary', ia.is_primary,
+              'effortPercentage', ia.effort_percentage,
+              'assignedAt', ia.assigned_at
+            )
+          ) FILTER (WHERE ia.user_id IS NOT NULL),
+          '[]'
+        ) as assignees
       FROM issues i
       LEFT JOIN users u ON i.created_by = u.id::text
       LEFT JOIN issue_tags it ON i.id = it.issue_id
       LEFT JOIN tags t ON it.tag_id = t.id
+      LEFT JOIN issue_assignees ia ON i.id = ia.issue_id
+      LEFT JOIN users au ON ia.user_id = au.id
       LEFT JOIN LATERAL (
         SELECT changed_at 
         FROM status_history 
@@ -3601,35 +3615,50 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
       ).catch(err => console.error('Error sending Teams notification:', err));
     }
     
-    // Send assignment notification if assignee is set (non-blocking)
-    if (assignee && assignee.trim() !== '') {
+    // Send assignment notification to all assignees (non-blocking)
+    // Check both new multi-assignee system and legacy single assignee
+    const assigneesToNotify = [];
+    
+    // Get assignees from database
+    const dbAssignees = await sql`
+      SELECT u.id, u.username 
+      FROM issue_assignees ia
+      JOIN users u ON ia.user_id = u.id
+      WHERE ia.issue_id = ${newIssue.id}
+    `;
+    
+    if (dbAssignees.length > 0) {
+      assigneesToNotify.push(...dbAssignees);
+    } else if (assignee && assignee.trim() !== '') {
+      // Fallback to legacy single assignee
       try {
         const assigneeUser = await pool.query(
-          'SELECT id FROM users WHERE username = $1',
+          'SELECT id, username FROM users WHERE username = $1',
           [assignee]
         );
-        
         if (assigneeUser.rows.length > 0) {
-          // Fire and forget - don't await to avoid blocking issue creation
-          notificationService.sendAssignmentNotification({
-            assignedUserId: assigneeUser.rows[0].id,
-            assignerName: req.user.username,
-            itemTitle: title,
-            itemType: 'issue',
-            itemId: newIssue.id,
-            projectId: parseInt(projectId),
-            dueDate: dueDate,
-            priority: priority || 'medium'
-          }).catch(err => {
-            console.error('Error sending assignment notification:', err);
-          });
-        } else {
-          console.warn(`Assignee not found: ${assignee}`);
+          assigneesToNotify.push(assigneeUser.rows[0]);
         }
       } catch (err) {
-        console.error('Error looking up assignee for notification:', err);
+        console.error('Error looking up assignee:', err);
       }
     }
+    
+    // Send notification to each assignee
+    assigneesToNotify.forEach(assigneeUser => {
+      notificationService.sendAssignmentNotification({
+        assignedUserId: assigneeUser.id,
+        assignerName: req.user.username,
+        itemTitle: title,
+        itemType: 'issue',
+        itemId: newIssue.id,
+        projectId: parseInt(projectId),
+        dueDate: dueDate,
+        priority: priority || 'medium'
+      }).catch(err => {
+        console.error(`Error sending assignment notification to ${assigneeUser.username}:`, err);
+      });
+    });
     
     // Auto-create checklist if template mapping exists for this issue type
     let checklist = null;
@@ -4361,15 +4390,29 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
         sh.changed_at as completed_at,
         COALESCE(
           json_agg(
-            json_build_object('id', t.id, 'name', t.name, 'color', t.color)
-            ORDER BY t.name
+            DISTINCT json_build_object('id', t.id, 'name', t.name, 'color', t.color)
           ) FILTER (WHERE t.id IS NOT NULL),
           '[]'
-        ) as tags
+        ) as tags,
+        COALESCE(
+          json_agg(
+            DISTINCT json_build_object(
+              'userId', aia.user_id,
+              'username', au.username,
+              'email', au.email,
+              'isPrimary', aia.is_primary,
+              'effortPercentage', aia.effort_percentage,
+              'assignedAt', aia.assigned_at
+            )
+          ) FILTER (WHERE aia.user_id IS NOT NULL),
+          '[]'
+        ) as assignees
       FROM action_items a
       LEFT JOIN users u ON a.created_by = u.id::text
       LEFT JOIN action_item_tags ait ON a.id = ait.action_item_id
       LEFT JOIN tags t ON ait.tag_id = t.id
+      LEFT JOIN action_item_assignees aia ON a.id = aia.action_item_id
+      LEFT JOIN users au ON aia.user_id = au.id
       LEFT JOIN LATERAL (
         SELECT changed_at 
         FROM status_history 
@@ -4665,35 +4708,49 @@ app.post("/api/action-items", authenticateToken, requireRole('Team Member'), asy
       console.error('Error sending Teams notification:', err);
     }
     
-    // Send assignment notification if assignee is set (non-blocking)
-    if (assignee && assignee.trim() !== '') {
+    // Send assignment notification to all assignees (non-blocking)
+    const assigneesToNotify = [];
+    
+    // Get assignees from database
+    const dbAssignees = await sql`
+      SELECT u.id, u.username 
+      FROM action_item_assignees aia
+      JOIN users u ON aia.user_id = u.id
+      WHERE aia.action_item_id = ${newItem.id}
+    `;
+    
+    if (dbAssignees.length > 0) {
+      assigneesToNotify.push(...dbAssignees);
+    } else if (assignee && assignee.trim() !== '') {
+      // Fallback to legacy single assignee
       try {
         const assigneeUser = await pool.query(
-          'SELECT id FROM users WHERE username = $1',
+          'SELECT id, username FROM users WHERE username = $1',
           [assignee]
         );
-        
         if (assigneeUser.rows.length > 0) {
-          // Fire and forget - don't await to avoid blocking action item creation
-          notificationService.sendAssignmentNotification({
-            assignedUserId: assigneeUser.rows[0].id,
-            assignerName: req.user.username,
-            itemTitle: title,
-            itemType: 'action item',
-            itemId: newItem.id,
-            projectId: parseInt(projectId),
-            dueDate: dueDate,
-            priority: priority || 'medium'
-          }).catch(err => {
-            console.error('Error sending assignment notification:', err);
-          });
-        } else {
-          console.warn(`Assignee not found: ${assignee}`);
+          assigneesToNotify.push(assigneeUser.rows[0]);
         }
       } catch (err) {
-        console.error('Error looking up assignee for notification:', err);
+        console.error('Error looking up assignee:', err);
       }
     }
+    
+    // Send notification to each assignee
+    assigneesToNotify.forEach(assigneeUser => {
+      notificationService.sendAssignmentNotification({
+        assignedUserId: assigneeUser.id,
+        assignerName: req.user.username,
+        itemTitle: title,
+        itemType: 'action item',
+        itemId: newItem.id,
+        projectId: parseInt(projectId),
+        dueDate: dueDate,
+        priority: priority || 'medium'
+      }).catch(err => {
+        console.error(`Error sending assignment notification to ${assigneeUser.username}:`, err);
+      });
+    });
     
     // Auto-create checklist if template mapping exists for this action item category
     let checklist = null;

@@ -90,8 +90,10 @@ function detectTaskRisks(task, projectEndDate = null) {
     risks.push('No effort estimate');
   }
   
-  // Risk 2: No assignee
-  if (!task.assignee || task.assignee === 'Unassigned') {
+  // Risk 2: No assignee (check both old single assignee and new multiple assignees)
+  const hasAssignees = (task.assignees && task.assignees.length > 0) || 
+                      (task.assignee && task.assignee !== 'Unassigned');
+  if (!hasAssignees) {
     risks.push('No assignee');
   }
   
@@ -122,7 +124,7 @@ function detectTaskRisks(task, projectEndDate = null) {
 }
 
 /**
- * Calculate resource allocation timeline
+ * Calculate resource allocation timeline with percentage-based effort distribution
  * @param {Array} scheduledTasks - Tasks with calculated dates
  * @returns {Object} - Resource allocation by person and week
  */
@@ -130,10 +132,25 @@ function calculateResourceAllocation(scheduledTasks) {
   const allocation = {};
   
   scheduledTasks.forEach(task => {
-    if (!task.assignee || task.assignee === 'Unassigned') return;
+    const taskHours = task.estimatedHours || 0;
     
-    if (!allocation[task.assignee]) {
-      allocation[task.assignee] = {};
+    // Support both new multiple assignees and legacy single assignee
+    let assigneesToProcess = [];
+    
+    if (task.assignees && task.assignees.length > 0) {
+      // New multi-assignee system: distribute effort by percentage
+      assigneesToProcess = task.assignees.map(assignee => ({
+        name: assignee.username,
+        hours: (taskHours * (assignee.effortPercentage || 100)) / 100
+      }));
+    } else if (task.assignee && task.assignee !== 'Unassigned') {
+      // Legacy single assignee: gets 100% of effort
+      assigneesToProcess = [{
+        name: task.assignee,
+        hours: taskHours
+      }];
+    } else {
+      return; // Skip tasks with no assignee
     }
     
     // Get the week starting Monday for this task
@@ -142,20 +159,29 @@ function calculateResourceAllocation(scheduledTasks) {
     weekStart.setDate(taskStart.getDate() - taskStart.getDay() + 1);
     const weekKey = weekStart.toISOString().split('T')[0];
     
-    if (!allocation[task.assignee][weekKey]) {
-      allocation[task.assignee][weekKey] = {
-        tasks: [],
-        totalHours: 0
-      };
-    }
-    
-    allocation[task.assignee][weekKey].tasks.push({
-      type: task.itemType,
-      id: task.itemId,
-      title: task.title,
-      hours: task.estimatedHours || 0
+    // Allocate to each assignee based on their effort percentage
+    assigneesToProcess.forEach(assignee => {
+      if (!allocation[assignee.name]) {
+        allocation[assignee.name] = {};
+      }
+      
+      if (!allocation[assignee.name][weekKey]) {
+        allocation[assignee.name][weekKey] = {
+          tasks: [],
+          totalHours: 0
+        };
+      }
+      
+      allocation[assignee.name][weekKey].tasks.push({
+        type: task.itemType,
+        id: task.itemId,
+        title: task.title,
+        hours: assignee.hours,
+        effortPercentage: task.assignees ? 
+          task.assignees.find(a => a.username === assignee.name)?.effortPercentage : 100
+      });
+      allocation[assignee.name][weekKey].totalHours += assignee.hours;
     });
-    allocation[task.assignee][weekKey].totalHours += task.estimatedHours || 0;
   });
   
   return allocation;
