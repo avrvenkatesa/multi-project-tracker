@@ -10000,7 +10000,9 @@ function initializeChecklistEnforcementToggle(item, project) {
   
   if (isManagerOrAbove && projectLevelIsOptional) {
     // Move section to placeholder (after due date)
-    if (placeholder && section.parentElement !== placeholder) {
+    if (placeholder) {
+      // Clear placeholder and append section
+      placeholder.innerHTML = '';
       placeholder.appendChild(section);
     }
     section.classList.remove('hidden');
@@ -10010,6 +10012,12 @@ function initializeChecklistEnforcementToggle(item, project) {
     toggle.checked = isEnforced;
   } else {
     section.classList.add('hidden');
+    
+    // Move section back to its original location if hidden
+    const detailsTab = document.getElementById('details-tab');
+    if (detailsTab && section.parentElement !== detailsTab) {
+      detailsTab.appendChild(section);
+    }
   }
 }
 
