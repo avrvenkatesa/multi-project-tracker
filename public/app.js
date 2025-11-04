@@ -4721,9 +4721,9 @@ async function openEditModal(itemId, itemType) {
       document.getElementById('edit-action-item-status').value = item.status || 'To Do';
       document.getElementById('edit-action-item-progress').value = item.completion_percentage || item.progress || 0;
       
-      // Load team members for assignee dropdown
+      // Initialize multiple assignee management (replaces old single assignee dropdown)
       if (currentProject) {
-        await loadTeamMembersForEdit('action-item', item.assignee || '');
+        await initializeEditActionItemAssigneeManagement(item.id);
       }
       
       // Load tags and pre-select current ones
@@ -5169,11 +5169,20 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
 document.getElementById('editActionItemForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   
+  // Validate total effort percentage
+  if (editActionItemModalAssignees.length > 0) {
+    const totalEffort = editActionItemModalAssignees.reduce((sum, a) => sum + (a.effortPercentage || 0), 0);
+    if (totalEffort > 100) {
+      alert('Total effort percentage cannot exceed 100%. Please adjust the percentages.');
+      return;
+    }
+  }
+  
   const itemId = document.getElementById('edit-action-item-id').value;
   const data = {
     title: document.getElementById('edit-action-item-title').value,
     description: document.getElementById('edit-action-item-description').value,
-    assignee: document.getElementById('edit-action-item-assignee').value.trim(),
+    assignee: '', // Clear old assignee field - we'll use multiple assignees
     due_date: document.getElementById('edit-action-item-due-date').value,
     priority: document.getElementById('edit-action-item-priority').value,
     status: document.getElementById('edit-action-item-status').value,
@@ -5193,6 +5202,21 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     await axios.put(`/api/action-items/${itemId}/tags`, { tagIds: selectedTagIds }, {
       withCredentials: true
     });
+    
+    // Update multiple assignees (replaces/migrates old single assignee)
+    // First, delete all existing assignees
+    await axios.delete(`/api/action-items/${itemId}/assignees`, { withCredentials: true });
+    
+    // Then, add new assignees
+    if (editActionItemModalAssignees.length > 0) {
+      for (const assignee of editActionItemModalAssignees) {
+        await axios.post(`/api/action-items/${itemId}/assignees`, {
+          userId: assignee.userId,
+          isPrimary: assignee.isPrimary,
+          effortPercentage: assignee.effortPercentage || 0
+        }, { withCredentials: true });
+      }
+    }
     
     // Close modal
     document.getElementById('editActionItemModal').classList.add('hidden');
@@ -10838,3 +10862,205 @@ window.addAssigneeToEditIssueModal = addAssigneeToEditIssueModal;
 window.removeAssigneeFromEditIssueModal = removeAssigneeFromEditIssueModal;
 window.setPrimaryAssigneeInEditIssueModal = setPrimaryAssigneeInEditIssueModal;
 window.updateAssigneeEffortInEditIssueModal = updateAssigneeEffortInEditIssueModal;
+
+// ===== Multiple Assignee Management for Edit Action Item Modal =====
+let editActionItemModalAssignees = [];
+
+async function initializeEditActionItemAssigneeManagement(itemId) {
+  editActionItemModalAssignees = [];
+  
+  // Load existing assignees with backward compatibility
+  await loadExistingAssigneesForEditActionItem(itemId);
+  
+  // Add event listener for "+ Add Assignee" button
+  const addBtn = document.getElementById('edit-action-item-add-assignee-btn');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const container = document.getElementById('edit-action-item-add-assignee-container');
+      if (container) {
+        container.classList.toggle('hidden');
+      }
+    });
+  }
+  
+  // Add event listener for assignee selection
+  const select = document.getElementById('edit-action-item-new-assignee-select');
+  if (select) {
+    select.addEventListener('change', (e) => {
+      if (e.target.value) {
+        addAssigneeToEditActionItemModal(parseInt(e.target.value));
+        e.target.value = '';
+        document.getElementById('edit-action-item-add-assignee-container').classList.add('hidden');
+      }
+    });
+  }
+}
+
+async function loadExistingAssigneesForEditActionItem(itemId) {
+  try {
+    const response = await axios.get(`/api/action-items/${itemId}/assignees`, { withCredentials: true });
+    
+    if (response.data && response.data.length > 0) {
+      editActionItemModalAssignees = response.data.map(a => ({
+        userId: a.user_id,
+        username: a.username,
+        email: a.email,
+        isPrimary: a.is_primary || false,
+        effortPercentage: a.effort_percentage || 0
+      }));
+    } else {
+      const itemResponse = await axios.get(`/api/action-items/${itemId}`, { withCredentials: true });
+      const item = itemResponse.data;
+      
+      if (item.assignee && item.assignee.trim()) {
+        const teamResponse = await axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true });
+        const matchedUser = teamResponse.data.find(m => m.name === item.assignee.trim());
+        
+        if (matchedUser) {
+          editActionItemModalAssignees = [{
+            userId: matchedUser.user_id,
+            username: matchedUser.name,
+            email: matchedUser.email,
+            isPrimary: true,
+            effortPercentage: 100
+          }];
+        }
+      }
+    }
+    
+    renderEditActionItemModalAssignees();
+    loadTeamMembersForEditActionItemModal();
+  } catch (error) {
+    console.error('Error loading assignees for edit action item:', error);
+    renderEditActionItemModalAssignees();
+    loadTeamMembersForEditActionItemModal();
+  }
+}
+
+async function loadTeamMembersForEditActionItemModal() {
+  if (!currentProject) return;
+  
+  try {
+    const response = await axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true });
+    const teamMembers = response.data;
+    
+    const select = document.getElementById('edit-action-item-new-assignee-select');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">Select member...</option>';
+    
+    teamMembers.forEach(member => {
+      if (!editActionItemModalAssignees.some(a => a.userId === member.user_id)) {
+        const option = document.createElement('option');
+        option.value = member.user_id;
+        option.textContent = `${member.name} (${member.email})`;
+        select.appendChild(option);
+      }
+    });
+  } catch (error) {
+    console.error('Error loading team members for edit action item modal:', error);
+  }
+}
+
+function addAssigneeToEditActionItemModal(userId) {
+  axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true })
+    .then(response => {
+      const member = response.data.find(m => m.user_id === userId);
+      if (member) {
+        const isPrimary = editActionItemModalAssignees.length === 0;
+        editActionItemModalAssignees.push({
+          userId: member.user_id,
+          username: member.name,
+          email: member.email,
+          isPrimary: isPrimary,
+          effortPercentage: isPrimary ? 100 : 0
+        });
+        renderEditActionItemModalAssignees();
+      }
+    });
+}
+
+function removeAssigneeFromEditActionItemModal(userId) {
+  const wasPrimary = editActionItemModalAssignees.find(a => a.userId === userId)?.isPrimary;
+  editActionItemModalAssignees = editActionItemModalAssignees.filter(a => a.userId !== userId);
+  
+  if (wasPrimary && editActionItemModalAssignees.length > 0) {
+    editActionItemModalAssignees[0].isPrimary = true;
+  }
+  
+  renderEditActionItemModalAssignees();
+}
+
+function setPrimaryAssigneeInEditActionItemModal(userId) {
+  editActionItemModalAssignees.forEach(a => {
+    a.isPrimary = (a.userId === userId);
+  });
+  renderEditActionItemModalAssignees();
+}
+
+function updateAssigneeEffortInEditActionItemModal(userId, percentage) {
+  const assignee = editActionItemModalAssignees.find(a => a.userId === userId);
+  if (assignee) {
+    assignee.effortPercentage = Math.max(0, Math.min(100, percentage));
+    renderEditActionItemModalAssignees();
+  }
+}
+
+function renderEditActionItemModalAssignees() {
+  const container = document.getElementById('edit-action-item-assignees-list');
+  if (!container) return;
+  
+  if (editActionItemModalAssignees.length === 0) {
+    container.innerHTML = '<p class="text-sm text-gray-500 italic">No assignees yet</p>';
+    updateEditActionItemModalTotalEffort();
+    return;
+  }
+  
+  const sorted = [...editActionItemModalAssignees].sort((a, b) => b.isPrimary - a.isPrimary);
+  
+  container.innerHTML = sorted.map(assignee => `
+    <div class="flex items-center justify-between bg-white border rounded px-3 py-2">
+      <div class="flex items-center gap-2 flex-1">
+        <button type="button" onclick="setPrimaryAssigneeInEditActionItemModal(${assignee.userId})" 
+                class="text-lg ${assignee.isPrimary ? 'text-yellow-500' : 'text-gray-300'} hover:text-yellow-500"
+                title="${assignee.isPrimary ? 'Primary Assignee' : 'Set as Primary'}">
+          ⭐
+        </button>
+        <div class="flex-1">
+          <div class="text-sm font-medium">${assignee.username}</div>
+          ${assignee.isPrimary ? '<span class="text-xs text-blue-600 font-semibold">PRIMARY</span>' : ''}
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="number" min="0" max="100" 
+                 value="${assignee.effortPercentage}"
+                 onchange="updateAssigneeEffortInEditActionItemModal(${assignee.userId}, parseInt(this.value))"
+                 class="w-16 border rounded px-2 py-1 text-sm text-right"
+                 placeholder="%" />
+          <span class="text-sm text-gray-600">%</span>
+        </div>
+      </div>
+      <button type="button" onclick="removeAssigneeFromEditActionItemModal(${assignee.userId})"
+              class="ml-3 text-red-600 hover:text-red-800 text-sm">
+        ✕
+      </button>
+    </div>
+  `).join('');
+  
+  updateEditActionItemModalTotalEffort();
+  loadTeamMembersForEditActionItemModal();
+}
+
+function updateEditActionItemModalTotalEffort() {
+  const total = editActionItemModalAssignees.reduce((sum, a) => sum + (a.effortPercentage || 0), 0);
+  const display = document.getElementById('edit-action-item-total-effort');
+  if (display) {
+    display.textContent = `${total}%`;
+    display.className = total > 100 ? 'font-bold text-red-600' : 'font-bold text-blue-600';
+  }
+}
+
+// Export functions to window for inline onclick handlers
+window.addAssigneeToEditActionItemModal = addAssigneeToEditActionItemModal;
+window.removeAssigneeFromEditActionItemModal = removeAssigneeFromEditActionItemModal;
+window.setPrimaryAssigneeInEditActionItemModal = setPrimaryAssigneeInEditActionItemModal;
+window.updateAssigneeEffortInEditActionItemModal = updateAssigneeEffortInEditActionItemModal;
