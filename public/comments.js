@@ -621,8 +621,11 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
     setupItemDetailTabs();
     
     // Initialize checklist enforcement toggle (requires currentDetailItem and currentProject)
+    // Defer to ensure DOM is fully updated after innerHTML assignment
     if (typeof window.initializeChecklistEnforcementToggle === 'function' && currentProject) {
-      window.initializeChecklistEnforcementToggle(currentDetailItem, currentProject);
+      requestAnimationFrame(() => {
+        window.initializeChecklistEnforcementToggle(currentDetailItem, currentProject);
+      });
     }
     
     // Check permissions for edit/delete buttons
