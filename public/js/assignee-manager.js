@@ -12,9 +12,10 @@ async function initializeAssigneeManagement(item, itemType) {
   // Load current assignees from item data
   currentItemAssignees = item.assignees || [];
   
-  // Load available team members from current project
-  if (currentProject) {
-    await loadTeamMembers();
+  // Load available team members - use item's project_id directly
+  const projectId = item.project_id || (currentProject && currentProject.id);
+  if (projectId) {
+    await loadTeamMembers(projectId);
   }
   
   // Render assignees list
@@ -28,11 +29,11 @@ async function initializeAssigneeManagement(item, itemType) {
 }
 
 /**
- * Load team members from current project
+ * Load team members from specified project
  */
-async function loadTeamMembers() {
+async function loadTeamMembers(projectId) {
   try {
-    const response = await axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true });
+    const response = await axios.get(`/api/projects/${projectId}/team`, { withCredentials: true });
     availableTeamMembers = response.data.map(member => ({
       userId: member.user_id,
       username: member.username,
