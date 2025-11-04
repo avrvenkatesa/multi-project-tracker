@@ -3287,31 +3287,27 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
         u.username as creator_username,
         u.email as creator_email,
         sh.changed_at as completed_at,
-        COALESCE(
-          json_agg(
-            DISTINCT json_build_object('id', t.id, 'name', t.name, 'color', t.color)
-          ) FILTER (WHERE t.id IS NOT NULL),
-          '[]'
-        ) as tags,
-        COALESCE(
-          json_agg(
-            DISTINCT json_build_object(
-              'userId', ia.user_id,
-              'username', au.username,
-              'email', au.email,
-              'isPrimary', ia.is_primary,
-              'effortPercentage', ia.effort_percentage,
-              'assignedAt', ia.assigned_at
-            )
-          ) FILTER (WHERE ia.user_id IS NOT NULL),
-          '[]'
-        ) as assignees
+        COALESCE((
+          SELECT json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color))
+          FROM issue_tags it
+          JOIN tags t ON it.tag_id = t.id
+          WHERE it.issue_id = i.id
+        ), '[]') as tags,
+        COALESCE((
+          SELECT json_agg(json_build_object(
+            'userId', ia.user_id,
+            'username', au.username,
+            'email', au.email,
+            'isPrimary', ia.is_primary,
+            'effortPercentage', ia.effort_percentage,
+            'assignedAt', ia.assigned_at
+          ))
+          FROM issue_assignees ia
+          JOIN users au ON ia.user_id = au.id
+          WHERE ia.issue_id = i.id
+        ), '[]') as assignees
       FROM issues i
       LEFT JOIN users u ON i.created_by = u.id::text
-      LEFT JOIN issue_tags it ON i.id = it.issue_id
-      LEFT JOIN tags t ON it.tag_id = t.id
-      LEFT JOIN issue_assignees ia ON i.id = ia.issue_id
-      LEFT JOIN users au ON ia.user_id = au.id
       LEFT JOIN LATERAL (
         SELECT changed_at 
         FROM status_history 
@@ -3322,7 +3318,6 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
         LIMIT 1
       ) sh ON true
       ${whereClause} 
-      GROUP BY i.id, u.username, u.email, sh.changed_at
       ORDER BY i.created_at DESC
     `;
     
@@ -4388,31 +4383,27 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
         u.username as creator_username,
         u.email as creator_email,
         sh.changed_at as completed_at,
-        COALESCE(
-          json_agg(
-            DISTINCT json_build_object('id', t.id, 'name', t.name, 'color', t.color)
-          ) FILTER (WHERE t.id IS NOT NULL),
-          '[]'
-        ) as tags,
-        COALESCE(
-          json_agg(
-            DISTINCT json_build_object(
-              'userId', aia.user_id,
-              'username', au.username,
-              'email', au.email,
-              'isPrimary', aia.is_primary,
-              'effortPercentage', aia.effort_percentage,
-              'assignedAt', aia.assigned_at
-            )
-          ) FILTER (WHERE aia.user_id IS NOT NULL),
-          '[]'
-        ) as assignees
+        COALESCE((
+          SELECT json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color))
+          FROM action_item_tags ait
+          JOIN tags t ON ait.tag_id = t.id
+          WHERE ait.action_item_id = a.id
+        ), '[]') as tags,
+        COALESCE((
+          SELECT json_agg(json_build_object(
+            'userId', aia.user_id,
+            'username', au.username,
+            'email', au.email,
+            'isPrimary', aia.is_primary,
+            'effortPercentage', aia.effort_percentage,
+            'assignedAt', aia.assigned_at
+          ))
+          FROM action_item_assignees aia
+          JOIN users au ON aia.user_id = au.id
+          WHERE aia.action_item_id = a.id
+        ), '[]') as assignees
       FROM action_items a
       LEFT JOIN users u ON a.created_by = u.id::text
-      LEFT JOIN action_item_tags ait ON a.id = ait.action_item_id
-      LEFT JOIN tags t ON ait.tag_id = t.id
-      LEFT JOIN action_item_assignees aia ON a.id = aia.action_item_id
-      LEFT JOIN users au ON aia.user_id = au.id
       LEFT JOIN LATERAL (
         SELECT changed_at 
         FROM status_history 
@@ -4423,7 +4414,6 @@ app.get("/api/action-items", authenticateToken, async (req, res) => {
         LIMIT 1
       ) sh ON true
       ${whereClause} 
-      GROUP BY a.id, u.username, u.email, sh.changed_at
       ORDER BY a.created_at DESC
     `;
     
