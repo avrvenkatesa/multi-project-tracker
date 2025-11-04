@@ -5225,6 +5225,46 @@ app.patch('/api/action-items/:id/enforce-checklist', authenticateToken, requireR
 // ASSIGNEE MANAGEMENT ENDPOINTS
 // ====================
 
+// Get assignees for issue
+app.get('/api/issues/:id/assignees', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const assignees = await sql`
+      SELECT ia.*, u.username, u.email
+      FROM issue_assignees ia
+      JOIN users u ON ia.user_id = u.id
+      WHERE ia.issue_id = ${id}
+      ORDER BY ia.is_primary DESC, ia.assigned_at ASC
+    `;
+    
+    res.json(assignees);
+  } catch (error) {
+    console.error('Error fetching issue assignees:', error);
+    res.status(500).json({ error: 'Failed to fetch assignees' });
+  }
+});
+
+// Get assignees for action item
+app.get('/api/action-items/:id/assignees', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const assignees = await sql`
+      SELECT aia.*, u.username, u.email
+      FROM action_item_assignees aia
+      JOIN users u ON aia.user_id = u.id
+      WHERE aia.action_item_id = ${id}
+      ORDER BY aia.is_primary DESC, aia.assigned_at ASC
+    `;
+    
+    res.json(assignees);
+  } catch (error) {
+    console.error('Error fetching action item assignees:', error);
+    res.status(500).json({ error: 'Failed to fetch assignees' });
+  }
+});
+
 // Add assignee to issue
 app.post('/api/issues/:id/assignees', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
