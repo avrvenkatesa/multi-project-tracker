@@ -606,10 +606,11 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
         ${item.due_date ? `<div class="font-medium text-gray-700 mb-1">${new Date(item.due_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>` : ''}
         ${createDueDateBadge(item.due_date, item.status, item.completed_at)}
       </div>
-      ${item.description ? `<div class="mt-4"><div class="text-sm text-gray-500">Description</div><div class="mt-1">${item.description}</div></div>` : ''}
       
       <!-- Checklist Enforcement Toggle will be inserted here by JavaScript -->
       <div id="checklist-enforcement-placeholder"></div>
+      
+      ${item.description ? `<div class="mt-4"><div class="text-sm text-gray-500">Description</div><div class="mt-1">${item.description}</div></div>` : ''}
     `;
     
     modal.classList.remove('hidden');

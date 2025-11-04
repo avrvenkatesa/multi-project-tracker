@@ -9980,18 +9980,7 @@ function initializeChecklistEnforcementToggle(item, project) {
   const toggle = document.getElementById('item-enforce-checklist-toggle');
   const placeholder = document.getElementById('checklist-enforcement-placeholder');
   
-  console.log('🔧 Checklist enforcement toggle init:', {
-    section: !!section,
-    toggle: !!toggle,
-    placeholder: !!placeholder,
-    item: !!item,
-    project: !!project
-  });
-  
-  if (!section || !toggle || !item || !project) {
-    console.warn('Missing elements for checklist enforcement toggle');
-    return;
-  }
+  if (!section || !toggle || !item || !project) return;
   
   // Check user role
   const currentUser = AuthManager.currentUser;
@@ -10012,13 +10001,9 @@ function initializeChecklistEnforcementToggle(item, project) {
   if (isManagerOrAbove && projectLevelIsOptional) {
     // Move section to placeholder (after due date)
     if (placeholder) {
-      console.log('✅ Moving toggle to placeholder');
       // Clear placeholder and append section
       placeholder.innerHTML = '';
       placeholder.appendChild(section);
-      console.log('✅ Toggle moved. Parent:', section.parentElement?.id);
-    } else {
-      console.warn('❌ Placeholder not found!');
     }
     section.classList.remove('hidden');
     
@@ -10026,7 +10011,6 @@ function initializeChecklistEnforcementToggle(item, project) {
     const isEnforced = item.enforce_checklist_completion || false;
     toggle.checked = isEnforced;
   } else {
-    console.log('⚠️ Toggle hidden (role or project setting)');
     section.classList.add('hidden');
     
     // Move section back to its original location if hidden
