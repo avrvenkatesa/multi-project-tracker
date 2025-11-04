@@ -4692,9 +4692,9 @@ async function openEditModal(itemId, itemType) {
       categorySelect.innerHTML = '<option value="">Select Category</option>' + generateCategoryOptions();
       categorySelect.value = item.category || '';
       
-      // Load team members for assignee dropdown
+      // Initialize multiple assignee management (replaces old single assignee dropdown)
       if (currentProject) {
-        await loadTeamMembersForEdit('issue', item.assignee || '');
+        await initializeEditIssueAssigneeManagement(item.id);
       }
       
       // Load tags and pre-select current ones
@@ -5092,11 +5092,20 @@ async function uploadEditAttachment(files, itemId, itemType) {
 document.getElementById('editIssueForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   
+  // Validate total effort percentage
+  if (editIssueModalAssignees.length > 0) {
+    const totalEffort = editIssueModalAssignees.reduce((sum, a) => sum + (a.effortPercentage || 0), 0);
+    if (totalEffort > 100) {
+      alert('Total effort percentage cannot exceed 100%. Please adjust the percentages.');
+      return;
+    }
+  }
+  
   const itemId = document.getElementById('edit-issue-id').value;
   const data = {
     title: document.getElementById('edit-issue-title').value,
     description: document.getElementById('edit-issue-description').value,
-    assignee: document.getElementById('edit-issue-assignee').value.trim(),
+    assignee: '', // Clear old assignee field - we'll use multiple assignees
     due_date: document.getElementById('edit-issue-due-date').value,
     priority: document.getElementById('edit-issue-priority').value,
     status: document.getElementById('edit-issue-status').value,
@@ -5116,6 +5125,21 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     await axios.put(`/api/issues/${itemId}/tags`, { tagIds: selectedTagIds }, {
       withCredentials: true
     });
+    
+    // Update multiple assignees (replaces/migrates old single assignee)
+    // First, delete all existing assignees
+    await axios.delete(`/api/issues/${itemId}/assignees`, { withCredentials: true });
+    
+    // Then, add new assignees
+    if (editIssueModalAssignees.length > 0) {
+      for (const assignee of editIssueModalAssignees) {
+        await axios.post(`/api/issues/${itemId}/assignees`, {
+          userId: assignee.userId,
+          isPrimary: assignee.isPrimary,
+          effortPercentage: assignee.effortPercentage || 0
+        }, { withCredentials: true });
+      }
+    }
     
     // Close modal
     document.getElementById('editIssueModal').classList.add('hidden');
@@ -10608,3 +10632,209 @@ window.addAssigneeToActionCreateModal = addAssigneeToActionCreateModal;
 window.removeAssigneeFromActionCreateModal = removeAssigneeFromActionCreateModal;
 window.setPrimaryAssigneeInActionCreateModal = setPrimaryAssigneeInActionCreateModal;
 window.updateAssigneeEffortInActionCreateModal = updateAssigneeEffortInActionCreateModal;
+
+// ===== Multiple Assignee Management for Edit Issue Modal =====
+let editIssueModalAssignees = [];
+
+async function initializeEditIssueAssigneeManagement(itemId) {
+  editIssueModalAssignees = [];
+  
+  // Load existing assignees with backward compatibility
+  await loadExistingAssigneesForEditIssue(itemId);
+  
+  // Add event listener for "+ Add Assignee" button
+  const addBtn = document.getElementById('edit-issue-add-assignee-btn');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const container = document.getElementById('edit-issue-add-assignee-container');
+      if (container) {
+        container.classList.toggle('hidden');
+      }
+    });
+  }
+  
+  // Add event listener for assignee selection
+  const select = document.getElementById('edit-issue-new-assignee-select');
+  if (select) {
+    select.addEventListener('change', (e) => {
+      if (e.target.value) {
+        addAssigneeToEditIssueModal(parseInt(e.target.value));
+        e.target.value = ''; // Reset dropdown
+        document.getElementById('edit-issue-add-assignee-container').classList.add('hidden');
+      }
+    });
+  }
+}
+
+async function loadExistingAssigneesForEditIssue(itemId) {
+  try {
+    // First, try loading from new assignees table
+    const response = await axios.get(`/api/issues/${itemId}/assignees`, { withCredentials: true });
+    
+    if (response.data && response.data.length > 0) {
+      // New assignees exist
+      editIssueModalAssignees = response.data.map(a => ({
+        userId: a.user_id,
+        username: a.username,
+        email: a.email,
+        isPrimary: a.is_primary || false,
+        effortPercentage: a.effort_percentage || 0
+      }));
+    } else {
+      // Fallback to legacy assignee field - will be migrated on save
+      const issueResponse = await axios.get(`/api/issues/${itemId}`, { withCredentials: true });
+      const issue = issueResponse.data;
+      
+      if (issue.assignee && issue.assignee.trim()) {
+        // Try to find matching user - this is best effort
+        const teamResponse = await axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true });
+        const matchedUser = teamResponse.data.find(m => m.name === issue.assignee.trim());
+        
+        if (matchedUser) {
+          editIssueModalAssignees = [{
+            userId: matchedUser.user_id,
+            username: matchedUser.name,
+            email: matchedUser.email,
+            isPrimary: true,
+            effortPercentage: 100
+          }];
+        }
+      }
+    }
+    
+    renderEditIssueModalAssignees();
+    loadTeamMembersForEditIssueModal();
+  } catch (error) {
+    console.error('Error loading assignees for edit:', error);
+    renderEditIssueModalAssignees(); // Render empty state
+    loadTeamMembersForEditIssueModal();
+  }
+}
+
+async function loadTeamMembersForEditIssueModal() {
+  if (!currentProject) return;
+  
+  try {
+    const response = await axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true });
+    const teamMembers = response.data;
+    
+    const select = document.getElementById('edit-issue-new-assignee-select');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">Select member...</option>';
+    
+    teamMembers.forEach(member => {
+      if (!editIssueModalAssignees.some(a => a.userId === member.user_id)) {
+        const option = document.createElement('option');
+        option.value = member.user_id;
+        option.textContent = `${member.name} (${member.email})`;
+        select.appendChild(option);
+      }
+    });
+  } catch (error) {
+    console.error('Error loading team members for edit issue modal:', error);
+  }
+}
+
+function addAssigneeToEditIssueModal(userId) {
+  axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true })
+    .then(response => {
+      const member = response.data.find(m => m.user_id === userId);
+      if (member) {
+        const isPrimary = editIssueModalAssignees.length === 0;
+        editIssueModalAssignees.push({
+          userId: member.user_id,
+          username: member.name,
+          email: member.email,
+          isPrimary: isPrimary,
+          effortPercentage: isPrimary ? 100 : 0
+        });
+        renderEditIssueModalAssignees();
+      }
+    });
+}
+
+function removeAssigneeFromEditIssueModal(userId) {
+  const wasPrimary = editIssueModalAssignees.find(a => a.userId === userId)?.isPrimary;
+  editIssueModalAssignees = editIssueModalAssignees.filter(a => a.userId !== userId);
+  
+  if (wasPrimary && editIssueModalAssignees.length > 0) {
+    editIssueModalAssignees[0].isPrimary = true;
+  }
+  
+  renderEditIssueModalAssignees();
+}
+
+function setPrimaryAssigneeInEditIssueModal(userId) {
+  editIssueModalAssignees.forEach(a => {
+    a.isPrimary = (a.userId === userId);
+  });
+  renderEditIssueModalAssignees();
+}
+
+function updateAssigneeEffortInEditIssueModal(userId, percentage) {
+  const assignee = editIssueModalAssignees.find(a => a.userId === userId);
+  if (assignee) {
+    assignee.effortPercentage = Math.max(0, Math.min(100, percentage));
+    renderEditIssueModalAssignees();
+  }
+}
+
+function renderEditIssueModalAssignees() {
+  const container = document.getElementById('edit-issue-assignees-list');
+  if (!container) return;
+  
+  if (editIssueModalAssignees.length === 0) {
+    container.innerHTML = '<p class="text-sm text-gray-500 italic">No assignees yet</p>';
+    updateEditIssueModalTotalEffort();
+    return;
+  }
+  
+  const sorted = [...editIssueModalAssignees].sort((a, b) => b.isPrimary - a.isPrimary);
+  
+  container.innerHTML = sorted.map(assignee => `
+    <div class="flex items-center justify-between bg-white border rounded px-3 py-2">
+      <div class="flex items-center gap-2 flex-1">
+        <button type="button" onclick="setPrimaryAssigneeInEditIssueModal(${assignee.userId})" 
+                class="text-lg ${assignee.isPrimary ? 'text-yellow-500' : 'text-gray-300'} hover:text-yellow-500"
+                title="${assignee.isPrimary ? 'Primary Assignee' : 'Set as Primary'}">
+          ⭐
+        </button>
+        <div class="flex-1">
+          <div class="text-sm font-medium">${assignee.username}</div>
+          ${assignee.isPrimary ? '<span class="text-xs text-blue-600 font-semibold">PRIMARY</span>' : ''}
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="number" min="0" max="100" 
+                 value="${assignee.effortPercentage}"
+                 onchange="updateAssigneeEffortInEditIssueModal(${assignee.userId}, parseInt(this.value))"
+                 class="w-16 border rounded px-2 py-1 text-sm text-right"
+                 placeholder="%" />
+          <span class="text-sm text-gray-600">%</span>
+        </div>
+      </div>
+      <button type="button" onclick="removeAssigneeFromEditIssueModal(${assignee.userId})"
+              class="ml-3 text-red-600 hover:text-red-800 text-sm">
+        ✕
+      </button>
+    </div>
+  `).join('');
+  
+  updateEditIssueModalTotalEffort();
+  loadTeamMembersForEditIssueModal();
+}
+
+function updateEditIssueModalTotalEffort() {
+  const total = editIssueModalAssignees.reduce((sum, a) => sum + (a.effortPercentage || 0), 0);
+  const display = document.getElementById('edit-issue-total-effort');
+  if (display) {
+    display.textContent = `${total}%`;
+    display.className = total > 100 ? 'font-bold text-red-600' : 'font-bold text-blue-600';
+  }
+}
+
+// Export functions to window for inline onclick handlers
+window.addAssigneeToEditIssueModal = addAssigneeToEditIssueModal;
+window.removeAssigneeFromEditIssueModal = removeAssigneeFromEditIssueModal;
+window.setPrimaryAssigneeInEditIssueModal = setPrimaryAssigneeInEditIssueModal;
+window.updateAssigneeEffortInEditIssueModal = updateAssigneeEffortInEditIssueModal;
