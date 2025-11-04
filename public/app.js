@@ -10244,27 +10244,44 @@ function initializeCreateAssigneeManagement() {
 }
 
 async function loadTeamMembersForCreateModal() {
-  if (!currentProject) return;
+  if (!currentProject) {
+    console.warn('No current project set');
+    return;
+  }
   
   try {
+    console.log('Loading team members for project:', currentProject.id);
     const response = await axios.get(`/api/projects/${currentProject.id}/team`, { withCredentials: true });
     const teamMembers = response.data;
     
+    console.log('Team members loaded:', teamMembers.length, teamMembers);
+    
     const select = document.getElementById('create-new-assignee-select');
-    if (select) {
-      select.innerHTML = '<option value="">Select member...</option>';
-      teamMembers.forEach(member => {
-        // Skip if already assigned
-        if (!createModalAssignees.some(a => a.userId === member.user_id)) {
-          const option = document.createElement('option');
-          option.value = member.user_id;
-          option.textContent = member.username;
-          select.appendChild(option);
-        }
-      });
+    if (!select) {
+      console.error('Dropdown element not found');
+      return;
     }
+    
+    select.innerHTML = '<option value="">Select member...</option>';
+    
+    if (teamMembers.length === 0) {
+      select.innerHTML += '<option value="" disabled>No team members available</option>';
+      return;
+    }
+    
+    teamMembers.forEach(member => {
+      // Skip if already assigned
+      if (!createModalAssignees.some(a => a.userId === member.user_id)) {
+        const option = document.createElement('option');
+        option.value = member.user_id;
+        option.textContent = `${member.username} (${member.email})`;
+        select.appendChild(option);
+      }
+    });
+    
+    console.log('Dropdown populated with', select.options.length - 1, 'members');
   } catch (error) {
-    console.error('Error loading team members:', error);
+    console.error('Error loading team members for create modal:', error);
   }
 }
 
