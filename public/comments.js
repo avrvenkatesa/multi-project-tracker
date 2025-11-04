@@ -577,6 +577,32 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
     const response = await axios.get(endpoint, { withCredentials: true });
     const item = response.data;
     
+    // Load assignees (multiple assignees support)
+    let assigneesDisplay = 'Unassigned';
+    try {
+      const assigneesEndpoint = itemType === 'issue' 
+        ? `/api/issues/${itemId}/assignees`
+        : `/api/action-items/${itemId}/assignees`;
+      const assigneesResponse = await axios.get(assigneesEndpoint, { withCredentials: true });
+      const assignees = assigneesResponse.data;
+      
+      if (assignees && assignees.length > 0) {
+        const primary = assignees.find(a => a.is_primary);
+        if (assignees.length === 1) {
+          assigneesDisplay = `${assignees[0].username} (${assignees[0].effort_percentage}%)`;
+        } else if (primary) {
+          assigneesDisplay = `${primary.username} (${primary.effort_percentage}%) +${assignees.length - 1} more`;
+        } else {
+          assigneesDisplay = `${assignees.length} assignees`;
+        }
+      } else if (item.assignee && item.assignee.trim()) {
+        assigneesDisplay = item.assignee;
+      }
+    } catch (err) {
+      console.log('Could not load assignees, falling back to legacy field');
+      assigneesDisplay = item.assignee || 'Unassigned';
+    }
+    
     // Set global state for relationship buttons
     currentDetailItem = { ...item, id: itemId, type: itemType, title: item.title };
     
@@ -594,7 +620,7 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
         </div>
         <div>
           <div class="text-sm text-gray-500">Assigned To</div>
-          <div class="font-medium">${item.assignee || 'Unassigned'}</div>
+          <div class="font-medium">${assigneesDisplay}</div>
         </div>
         <div>
           <div class="text-sm text-gray-500">Created</div>

@@ -5204,18 +5204,27 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     });
     
     // Update multiple assignees (replaces/migrates old single assignee)
+    console.log('Updating assignees:', editActionItemModalAssignees);
+    
     // First, delete all existing assignees
+    console.log('Deleting existing assignees...');
     await axios.delete(`/api/action-items/${itemId}/assignees`, { withCredentials: true });
+    console.log('Deleted existing assignees successfully');
     
     // Then, add new assignees
     if (editActionItemModalAssignees.length > 0) {
+      console.log(`Adding ${editActionItemModalAssignees.length} new assignees...`);
       for (const assignee of editActionItemModalAssignees) {
+        console.log('Adding assignee:', assignee);
         await axios.post(`/api/action-items/${itemId}/assignees`, {
           userId: assignee.userId,
           isPrimary: assignee.isPrimary,
           effortPercentage: assignee.effortPercentage || 0
         }, { withCredentials: true });
       }
+      console.log('All assignees added successfully');
+    } else {
+      console.log('No assignees to add');
     }
     
     // Close modal
