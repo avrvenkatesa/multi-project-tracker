@@ -185,17 +185,42 @@ async function showChecklistWarningModal(itemId, itemType, checklistInfo) {
  * @returns {Promise<boolean>} - true if change should proceed, false otherwise
  */
 async function validateStatusChange(itemId, itemType, newStatus) {
-  // Check if checklist completion is enabled for current project
-  if (typeof currentProject !== 'undefined' && currentProject && currentProject.checklist_completion_enabled === false) {
-    return true; // Skip validation if feature is disabled
-  }
-  
   // Only validate when moving to "Done" (case-insensitive)
   if (!newStatus || newStatus.toLowerCase() !== 'done') {
     return true;
   }
   
-  // Get checklist status
+  // Determine if checklist completion is required
+  // Check both project-level AND item-level enforcement
+  let isEnforcementRequired = false;
+  
+  // First check project-level setting
+  const projectLevelEnabled = typeof currentProject !== 'undefined' && currentProject && currentProject.checklist_completion_enabled === true;
+  
+  if (projectLevelEnabled) {
+    // Project requires checklist completion for all items
+    isEnforcementRequired = true;
+  } else {
+    // Project-level is optional, but check if THIS item has enforcement enabled
+    // Get the item data to check item-level enforcement
+    const itemsList = itemType === 'issue' ? 
+      (typeof issues !== 'undefined' ? issues : []) : 
+      (typeof actionItems !== 'undefined' ? actionItems : []);
+    
+    const item = itemsList.find(i => i.id == itemId);
+    
+    if (item && item.enforce_checklist_completion === true) {
+      // This specific item requires checklist completion
+      isEnforcementRequired = true;
+    }
+  }
+  
+  // If enforcement is not required, allow the move
+  if (!isEnforcementRequired) {
+    return true;
+  }
+  
+  // Enforcement is required - check checklist status
   const checklistInfo = await getChecklistStatus(itemId, itemType);
   
   // If API error, block the move and show error
@@ -213,7 +238,7 @@ async function validateStatusChange(itemId, itemType, newStatus) {
     return true;
   }
   
-  // Show warning modal and wait for user decision
+  // Checklist is incomplete and enforcement is required - show warning
   const proceed = await showChecklistWarningModal(itemId, itemType, checklistInfo);
   return proceed;
 }
