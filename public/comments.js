@@ -577,6 +577,11 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
     const response = await axios.get(endpoint, { withCredentials: true });
     const item = response.data;
     
+    // Ensure item has project_id (critical for assignee management)
+    if (!item.project_id && currentProject) {
+      item.project_id = currentProject.id;
+    }
+    
     // Load assignees (multiple assignees support)
     let assigneesDisplay = 'Unassigned';
     try {
@@ -603,8 +608,8 @@ async function openItemDetailModal(itemId, itemType, initialTab = 'details') {
       assigneesDisplay = item.assignee || 'Unassigned';
     }
     
-    // Set global state for relationship buttons
-    currentDetailItem = { ...item, id: itemId, type: itemType, title: item.title };
+    // Set global state for relationship buttons (ensure project_id is included)
+    currentDetailItem = { ...item, id: itemId, type: itemType, title: item.title, project_id: item.project_id };
     
     title.textContent = item.title;
     
