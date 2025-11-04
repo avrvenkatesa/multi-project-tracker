@@ -5279,7 +5279,7 @@ app.post('/api/issues/:id/assignees', authenticateToken, requireRole('Team Membe
   }
 });
 
-// Remove assignee from issue
+// Remove single assignee from issue
 app.delete('/api/issues/:id/assignees/:userId', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id, userId } = req.params;
@@ -5298,6 +5298,20 @@ app.delete('/api/issues/:id/assignees/:userId', authenticateToken, requireRole('
   } catch (error) {
     console.error('Error removing issue assignee:', error);
     res.status(500).json({ error: 'Failed to remove assignee' });
+  }
+});
+
+// Remove all assignees from issue (bulk delete)
+app.delete('/api/issues/:id/assignees', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await sql`DELETE FROM issue_assignees WHERE issue_id = ${id}`;
+    
+    res.json({ message: 'All assignees removed successfully' });
+  } catch (error) {
+    console.error('Error removing all issue assignees:', error);
+    res.status(500).json({ error: 'Failed to remove all assignees' });
   }
 });
 
@@ -5404,7 +5418,7 @@ app.post('/api/action-items/:id/assignees', authenticateToken, requireRole('Team
   }
 });
 
-// Remove assignee from action item
+// Remove single assignee from action item
 app.delete('/api/action-items/:id/assignees/:userId', authenticateToken, requireRole('Team Member'), async (req, res) => {
   try {
     const { id, userId } = req.params;
@@ -5423,6 +5437,20 @@ app.delete('/api/action-items/:id/assignees/:userId', authenticateToken, require
   } catch (error) {
     console.error('Error removing action item assignee:', error);
     res.status(500).json({ error: 'Failed to remove assignee' });
+  }
+});
+
+// Remove all assignees from action item (bulk delete)
+app.delete('/api/action-items/:id/assignees', authenticateToken, requireRole('Team Member'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await sql`DELETE FROM action_item_assignees WHERE action_item_id = ${id}`;
+    
+    res.json({ message: 'All assignees removed successfully' });
+  } catch (error) {
+    console.error('Error removing all action item assignees:', error);
+    res.status(500).json({ error: 'Failed to remove all assignees' });
   }
 });
 
