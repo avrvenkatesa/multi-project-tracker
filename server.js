@@ -59,6 +59,7 @@ const dependencyService = require('./services/dependency-service');
 const documentService = require('./services/document-service');
 const { calculateProjectSchedule } = require('./services/schedule-calculation-service');
 const aiCostTracker = require('./services/ai-cost-tracker');
+const timelineExtractor = require('./services/timeline-extractor');
 const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 
 // Configure WebSocket for Node.js < v22
@@ -13458,6 +13459,62 @@ app.post('/api/schedules/suggest-dependencies', authenticateToken, async (req, r
     res.status(500).json({ 
       error: 'Failed to suggest dependencies',
       message: error.message
+    });
+  }
+});
+
+/**
+ * Extract timeline information from document text
+ * POST /api/projects/:projectId/extract-timeline
+ * Body: { documentText: string, projectStartDate?: string }
+ */
+app.post('/api/projects/:projectId/extract-timeline', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { documentText, projectStartDate } = req.body;
+    const userId = req.user.id;
+
+    if (!documentText) {
+      return res.status(400).json({ error: 'documentText is required' });
+    }
+
+    // Check project access - user must be a project member
+    const projectCheck = await pool.query(
+      `SELECT p.id FROM projects p
+       INNER JOIN project_members pm ON p.id = pm.project_id
+       WHERE p.id = $1 AND pm.user_id = $2`,
+      [projectId, userId]
+    );
+
+    if (projectCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied - you are not a member of this project' });
+    }
+
+    console.log(`📅 Timeline extraction for project ${projectId}`);
+
+    const result = await timelineExtractor.extractTimeline(documentText, {
+      projectId: parseInt(projectId),
+      userId,
+      projectStartDate: projectStartDate || new Date().toISOString().split('T')[0]
+    });
+
+    res.json({
+      success: true,
+      timeline: result.timeline,
+      aiCost: {
+        tokensUsed: result.cost?.totalTokens || 0,
+        promptTokens: result.cost?.promptTokens || 0,
+        completionTokens: result.cost?.completionTokens || 0,
+        costUsd: result.cost?.costUsd || 0,
+        method: result.method
+      }
+    });
+
+  } catch (error) {
+    console.error('Error extracting timeline:', error);
+    res.status(500).json({
+      error: 'Failed to extract timeline',
+      details: error.message
     });
   }
 });

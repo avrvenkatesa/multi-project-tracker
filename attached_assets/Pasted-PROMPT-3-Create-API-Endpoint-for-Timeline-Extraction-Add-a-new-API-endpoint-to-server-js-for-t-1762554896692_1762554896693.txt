@@ -1,0 +1,108 @@
+PROMPT 3: Create API Endpoint for Timeline Extraction
+
+  Add a new API endpoint to server.js for timeline extraction.
+
+  Location: Add this after the existing AI-related endpoints (around line 9000-12000)
+
+  Endpoint: POST /api/projects/:projectId/extract-timeline
+
+  Requirements:
+  1. Authenticate user with authenticateToken middleware
+  2. Accept request body with:
+     - documentText (required): The text to extract timeline from
+     - projectStartDate (optional): Start date for project, defaults to today
+  3. Call the timeline-extractor service
+  4. Return extracted timeline with phases, milestones, tasks
+  5. Return AI cost information (tokens used, cost in USD)
+  6. Handle errors gracefully
+
+  Expected request body:
+  {
+    "documentText": "Phase 1: Discovery (Weeks 1-4)...",
+    "projectStartDate": "2025-01-01"
+  }
+
+  Expected response:
+  {
+    "success": true,
+    "timeline": {
+      "phases": [
+        {
+          "name": "Discovery",
+          "startDate": "2025-01-01",
+          "endDate": "2025-01-28",
+          "durationDays": 28,
+          "description": "...",
+          "deliverables": [...]
+        }
+      ],
+      "milestones": [
+        {
+          "name": "Requirements Complete",
+          "dueDate": "2025-01-28",
+          "description": "..."
+        }
+      ],
+      "tasks": [...]
+    },
+    "aiCost": {
+      "tokensUsed": 8500,
+      "costUsd": 0.0128,
+      "method": "ai"
+    }
+  }
+
+  Error response (400 or 500):
+  {
+    "error": "Error message here"
+  }
+
+  Implementation:
+  - Require the timeline-extractor service at the top of server.js
+  - Use try/catch for error handling
+  - Validate that documentText is provided
+  - Log the request for debugging
+
+  Add this code:
+
+  const timelineExtractor = require('./services/timeline-extractor');
+
+  app.post('/api/projects/:projectId/extract-timeline',
+    authenticateToken,
+    async (req, res) => {
+      try {
+        const { projectId } = req.params;
+        const { documentText, projectStartDate } = req.body;
+        const userId = req.user?.id || 1;
+
+        if (!documentText) {
+          return res.status(400).json({ error: 'documentText is required' });
+        }
+
+        console.log(`📅 Timeline extraction for project ${projectId}`);
+
+        const result = await timelineExtractor.extractTimeline(documentText, {
+          projectId: parseInt(projectId),
+          userId,
+          projectStartDate: projectStartDate || new Date().toISOString().split('T')[0]
+        });
+
+        res.json({
+          success: true,
+          timeline: result.timeline,
+          aiCost: {
+            tokensUsed: result.tokensUsed,
+            costUsd: result.costUsd,
+            method: result.method
+          }
+        });
+
+      } catch (error) {
+        console.error('Error extracting timeline:', error);
+        res.status(500).json({
+          error: 'Failed to extract timeline',
+          details: error.message
+        });
+      }
+    }
+  );
