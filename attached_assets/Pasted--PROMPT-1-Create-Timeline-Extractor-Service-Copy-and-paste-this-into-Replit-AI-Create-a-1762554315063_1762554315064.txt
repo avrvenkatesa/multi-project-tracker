@@ -1,0 +1,72 @@
+  PROMPT 1: Create Timeline Extractor Service
+
+  Copy and paste this into Replit AI:
+
+  Create a new file: services/timeline-extractor.js
+
+  This service extracts project timeline information (phases, milestones, tasks) from document text using AI.
+
+  Requirements:
+  1. Use OpenAI GPT-4o model for timeline extraction
+  2. Extract phases with start/end dates or duration
+  3. Extract milestones with due dates
+  4. Parse relative dates like "Week 1-4", "Month 2-3", "Q1 2025"
+  5. Convert relative dates to absolute dates based on project start date
+  6. Track AI usage (tokens and cost) for each extraction
+  7. Fallback to heuristic extraction if AI fails
+
+  Key functions to implement:
+  - extractTimeline(documentText, options) - Main function that uses AI
+  - convertRelativeDates(rawTimeline, projectStartDate) - Converts relative to absolute dates
+  - parseDateRange(timeframe, baseDate) - Parses "Week 1-4" format
+  - parseMilestoneDate(timeframe, baseDate, phases) - Parses milestone dates
+  - extractTimelineHeuristic(documentText, projectStartDate) - Regex-based fallback
+
+  The AI prompt should ask for JSON output with this structure:
+  {
+    "phases": [
+      {
+        "name": "Phase name",
+        "description": "Brief description",
+        "timeframe": "Week 1-4" or "Month 2-3" or "Q1 2025",
+        "duration": "number of days",
+        "deliverables": ["deliverable 1", "deliverable 2"]
+      }
+    ],
+    "milestones": [
+      {
+        "name": "Milestone name",
+        "description": "What is delivered",
+        "timeframe": "Week 4" or "End of Phase 1",
+        "dependencies": ["Phase 1", "Task X"]
+      }
+    ],
+    "tasks": [
+      {
+        "name": "Task name",
+        "phase": "Which phase this belongs to",
+        "duration": "number of days or hours",
+        "timeframe": "Week 2-3"
+      }
+    ]
+  }
+
+  Options parameter should include:
+  - projectId (for AI cost tracking)
+  - userId (for AI cost tracking)
+  - projectStartDate (defaults to today)
+  - useAI (defaults to true, set false for heuristic only)
+
+  Cost tracking:
+  - Use GPT-4o pricing: $15 per 1M tokens
+  - Track tokens used and cost in USD
+  - Return cost info in the result
+
+  Error handling:
+  - Try AI first, fall back to heuristic if fails
+  - Return method used ('ai' or 'heuristic') in result
+
+  Use require('openai') for OpenAI client.
+  Use process.env.OPENAI_API_KEY for authentication.
+
+  Include detailed comments and JSDoc documentation.
