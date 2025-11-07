@@ -1,0 +1,75 @@
+ PROMPT 4: Create AI Cost Tracking (if not exists)
+
+  Check if the ai_cost_tracker service exists. If not, create: services/ai-cost-tracker.js
+
+  This service tracks AI usage and costs across the application.
+
+  Requirements:
+  1. Function to track AI usage: trackAIUsage(data)
+  2. Store in ai_usage_tracking table
+  3. Data includes: userId, projectId, feature, tokensUsed, costUsd, model
+
+  Create the ai_usage_tracking table if it doesn't exist:
+
+  CREATE TABLE IF NOT EXISTS ai_usage_tracking (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER,
+    project_id INTEGER,
+    feature VARCHAR(100),
+    operation_type VARCHAR(50),
+    tokens_used INTEGER,
+    cost_usd DECIMAL(10, 6),
+    model VARCHAR(50) DEFAULT 'gpt-4o',
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ai_usage_project
+  ON ai_usage_tracking(project_id);
+
+  Create the service file with this function:
+
+  async function trackAIUsage(data) {
+    const {
+      userId,
+      projectId,
+      feature,
+      operationType = 'generate',
+      tokensUsed,
+      costUsd,
+      model = 'gpt-4o'
+    } = data;
+
+    try {
+      const pool = require('../db').pool;
+
+      await pool.query(
+        `INSERT INTO ai_usage_tracking
+         (user_id, project_id, feature, operation_type, tokens_used, cost_usd, model)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [userId, projectId, feature, operationType, tokensUsed, costUsd, model]
+      );
+
+      console.log(`💰 AI Cost tracked: ${feature} - $${costUsd.toFixed(6)} (${tokensUsed} tokens)`);
+    } catch (error) {
+      console.error('Error tracking AI usage:', error);
+      // Don't throw - tracking failure shouldn't break the main flow
+    }
+  }
+
+  module.exports = { trackAIUsage };
+
+  Then update timeline-extractor.js to use this:
+
+  const aiCostTracker = require('./ai-cost-tracker');
+
+  // After AI call completes:
+  if (projectId && userId) {
+    await aiCostTracker.trackAIUsage({
+      projectId,
+      userId,
+      feature: 'timeline_extraction',
+      tokensUsed,
+      costUsd,
+      model: 'gpt-4o'
+    });
+  }
