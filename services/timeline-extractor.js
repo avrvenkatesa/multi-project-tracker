@@ -178,7 +178,7 @@ Guidelines:
     method: 'ai',
     timeline,
     cost: {
-      tokens: totalTokens,
+      totalTokens,
       promptTokens,
       completionTokens,
       costUsd
