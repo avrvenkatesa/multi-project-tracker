@@ -1,4 +1,5 @@
 const { OpenAI } = require('openai');
+const aiCostTracker = require('./ai-cost-tracker');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -347,20 +348,24 @@ async function generateEstimateFromItem(pool, itemType, itemId, options = {}) {
         ]
       );
 
-      // Track AI usage
-      await client.query(
-        `INSERT INTO ai_usage_tracking 
-         (user_id, project_id, feature, operation_type, tokens_used, cost_usd)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          userId,
-          item.project_id,
-          'effort_estimation',
-          'generate_estimate',
-          estimate.metadata.totalTokens.total,
-          estimate.metadata.totalCost
-        ]
-      );
+      // Track AI usage with centralized service
+      await aiCostTracker.trackAIUsage({
+        userId,
+        projectId: item.project_id,
+        feature: 'effort_estimation',
+        operationType: 'generate_estimate',
+        promptTokens: estimate.metadata.totalTokens.prompt,
+        completionTokens: estimate.metadata.totalTokens.completion,
+        totalTokens: estimate.metadata.totalTokens.total,
+        costUsd: estimate.metadata.totalCost,
+        model: 'gpt-4o',
+        metadata: {
+          itemType,
+          itemId,
+          version: newVersion,
+          confidence: estimate.confidence
+        }
+      });
 
       await client.query('COMMIT');
     } catch (error) {

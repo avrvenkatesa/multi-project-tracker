@@ -58,6 +58,7 @@ const { validateChecklist, getValidationStatus } = require('./services/validatio
 const dependencyService = require('./services/dependency-service');
 const documentService = require('./services/document-service');
 const { calculateProjectSchedule } = require('./services/schedule-calculation-service');
+const aiCostTracker = require('./services/ai-cost-tracker');
 const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 
 // Configure WebSocket for Node.js < v22
@@ -13428,13 +13429,22 @@ app.post('/api/schedules/suggest-dependencies', authenticateToken, async (req, r
       });
     }
 
-    // Track AI usage
-    await pool.query(
-      `INSERT INTO ai_usage_tracking 
-       (user_id, project_id, feature, operation_type, tokens_used, cost_usd)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [userId, projectId, 'dependency_suggestion', 'suggest_dependencies', 0, 0]
-    );
+    // Track AI usage with centralized service
+    await aiCostTracker.trackAIUsage({
+      userId,
+      projectId,
+      feature: 'dependency_suggestion',
+      operationType: 'suggest_dependencies',
+      promptTokens: result.usage?.prompt_tokens || 0,
+      completionTokens: result.usage?.completion_tokens || 0,
+      totalTokens: result.usage?.total_tokens || 0,
+      costUsd: result.cost || 0,
+      model: result.model || 'gpt-4o',
+      metadata: {
+        tasksAnalyzed: tasks.length,
+        dependenciesGenerated: result.dependencies?.length || 0
+      }
+    });
 
     res.json({
       success: true,
@@ -14685,20 +14695,25 @@ async function processBatchEstimation(jobId, items, userId, projectId) {
           ]
         );
 
-        // Track AI usage
-        await client.query(
-          `INSERT INTO ai_usage_tracking 
-           (user_id, project_id, feature, operation_type, tokens_used, cost_usd)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            userId,
-            projectId,
-            'effort_estimation',
-            'batch_generate',
-            estimate.metadata.totalTokens.total,
-            estimate.metadata.totalCost
-          ]
-        );
+        // Track AI usage with centralized service
+        await aiCostTracker.trackAIUsage({
+          userId,
+          projectId,
+          feature: 'effort_estimation',
+          operationType: 'batch_generate',
+          promptTokens: estimate.metadata.totalTokens.prompt,
+          completionTokens: estimate.metadata.totalTokens.completion,
+          totalTokens: estimate.metadata.totalTokens.total,
+          costUsd: estimate.metadata.totalCost,
+          model: 'gpt-4o',
+          metadata: {
+            itemId: item.id,
+            itemType: normalizedItemType,
+            version: newVersion,
+            confidence: estimate.confidence,
+            taskCount: estimate.breakdown.length
+          }
+        });
 
         await client.query('COMMIT');
       } catch (dbError) {
