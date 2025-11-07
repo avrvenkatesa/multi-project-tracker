@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb, date, decimal } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const users = pgTable('users', {
@@ -58,6 +58,9 @@ export const issues = pgTable('issues', {
   createdViaAiBy: integer('created_via_ai_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+  startDate: date('start_date'),
+  endDate: date('end_date'),
+  effortHours: decimal('effort_hours', { precision: 10, scale: 2 }),
 });
 
 // Action Item Categories
