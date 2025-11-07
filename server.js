@@ -13474,23 +13474,37 @@ app.post('/api/projects/:projectId/extract-timeline', authenticateToken, async (
     const { documentText, projectStartDate } = req.body;
     const userId = req.user.id;
 
-    if (!documentText) {
-      return res.status(400).json({ error: 'documentText is required' });
+    // Validate documentText
+    if (!documentText || typeof documentText !== 'string' || documentText.trim().length === 0) {
+      return res.status(400).json({ error: 'documentText is required and must be a non-empty string' });
     }
 
-    // Check project access - user must be a project member
+    // Validate projectStartDate if provided
+    if (projectStartDate) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(projectStartDate)) {
+        return res.status(400).json({ error: 'projectStartDate must be in YYYY-MM-DD format' });
+      }
+      const parsedDate = new Date(projectStartDate);
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ error: 'projectStartDate must be a valid date' });
+      }
+    }
+
+    // Check project membership - user must be an active member
     const projectCheck = await pool.query(
-      `SELECT p.id FROM projects p
+      `SELECT p.id, pm.role 
+       FROM projects p
        INNER JOIN project_members pm ON p.id = pm.project_id
-       WHERE p.id = $1 AND pm.user_id = $2`,
+       WHERE p.id = $1 AND pm.user_id = $2 AND pm.status = 'active'`,
       [projectId, userId]
     );
 
     if (projectCheck.rows.length === 0) {
-      return res.status(403).json({ error: 'Access denied - you are not a member of this project' });
+      return res.status(403).json({ error: 'Access denied - you are not an active member of this project' });
     }
 
-    console.log(`📅 Timeline extraction for project ${projectId}`);
+    console.log(`📅 Timeline extraction for project ${projectId} by user ${userId}`);
 
     const result = await timelineExtractor.extractTimeline(documentText, {
       projectId: parseInt(projectId),
@@ -13499,7 +13513,7 @@ app.post('/api/projects/:projectId/extract-timeline', authenticateToken, async (
     });
 
     res.json({
-      success: true,
+      success: result.success,
       timeline: result.timeline,
       aiCost: {
         tokensUsed: result.cost?.totalTokens || 0,
