@@ -1,0 +1,87 @@
+ Fix the parseDateRange function in services/timeline-extractor.js to handle plural "Weeks" format.
+
+  Problem: The function currently only handles "Week 1" (singular) but AI returns "Weeks 2-3" (plural), causing dates to show as
+  N/A.
+
+  Find the parseDateRange function and update the week range regex pattern:
+
+  CURRENT CODE (that needs fixing):
+  ```javascript
+  // Week X-Y format
+  const weekRangeMatch = timeframe.match(/Week[s]?\s+(\d+)[-–](\d+)/i);
+
+  REPLACE WITH:
+  // Week X-Y format (handles both "Week" and "Weeks")
+  const weekRangeMatch = timeframe.match(/Weeks?\s+(\d+)[-–](\d+)/i);
+
+  Also ensure the single week pattern handles plural:
+
+  CURRENT CODE:
+  // Single week format
+  const singleWeekMatch = timeframe.match(/Week\s+(\d+)/i);
+
+  REPLACE WITH:
+  // Single week format (handles both "Week 1" and "Weeks 1")
+  const singleWeekMatch = timeframe.match(/Weeks?\s+(\d+)/i);
+
+  The complete parseDateRange function should look like this:
+
+  function parseDateRange(timeframe, baseDate) {
+    const base = new Date(baseDate);
+
+    // Week X-Y format (handles "Week 1-4" or "Weeks 2-3")
+    const weekRangeMatch = timeframe.match(/Weeks?\s+(\d+)[-–](\d+)/i);
+    if (weekRangeMatch) {
+      const startWeek = parseInt(weekRangeMatch[1]) - 1;
+      const endWeek = parseInt(weekRangeMatch[2]) - 1;
+
+      const start = new Date(base.getTime() + startWeek * 7 * 24 * 60 * 60 * 1000);
+      const end = new Date(base.getTime() + (endWeek * 7 + 6) * 24 * 60 * 60 * 1000);
+
+      return { start, end };
+    }
+
+    // Single week format (handles "Week 1" or "Weeks 1")
+    const singleWeekMatch = timeframe.match(/Weeks?\s+(\d+)/i);
+    if (singleWeekMatch) {
+      const week = parseInt(singleWeekMatch[1]) - 1;
+      const start = new Date(base.getTime() + week * 7 * 24 * 60 * 60 * 1000);
+      const end = new Date(base.getTime() + (week * 7 + 6) * 24 * 60 * 60 * 1000);
+      return { start, end };
+    }
+
+    // Month X-Y format (existing code, keep as is)
+    const monthRangeMatch = timeframe.match(/Months?\s+(\d+)[-–](\d+)/i);
+    if (monthRangeMatch) {
+      const startMonth = parseInt(monthRangeMatch[1]) - 1;
+      const endMonth = parseInt(monthRangeMatch[2]) - 1;
+      const start = new Date(base);
+      start.setMonth(base.getMonth() + startMonth);
+      const end = new Date(base);
+      end.setMonth(base.getMonth() + endMonth + 1);
+      end.setDate(0); // Last day of month
+      return { start, end };
+    }
+
+    // Quarter format (existing code, keep as is)
+    const quarterMatch = timeframe.match(/Q(\d)\s+(\d{4})/i);
+    if (quarterMatch) {
+      const quarter = parseInt(quarterMatch[1]);
+      const year = parseInt(quarterMatch[2]);
+      const startMonth = (quarter - 1) * 3;
+      const start = new Date(year, startMonth, 1);
+      const end = new Date(year, startMonth + 3, 0);
+      return { start, end };
+    }
+
+    // Default: assume 4 weeks from base date
+    return {
+      start: base,
+      end: new Date(base.getTime() + 28 * 24 * 60 * 60 * 1000)
+    };
+  }
+
+  After making this change, save the file and re-run the test:
+  node tests/test-timeline-extraction.js
+
+  Expected result: All phases should now show calculated dates instead of N/A.

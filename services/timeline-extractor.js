@@ -271,8 +271,8 @@ function parseDateRange(timeframe, baseDate) {
     }
   }
 
-  // Parse "Week X" or "Week X-Y"
-  const weekMatch = timeframe.match(/week\s+(\d+)(?:\s*-\s*(\d+))?/i);
+  // Parse "Week X" or "Week X-Y" (handles both "Week" and "Weeks")
+  const weekMatch = timeframe.match(/weeks?\s+(\d+)(?:\s*-\s*(\d+))?/i);
   if (weekMatch) {
     const startWeek = parseInt(weekMatch[1]);
     const endWeek = weekMatch[2] ? parseInt(weekMatch[2]) : startWeek;
@@ -286,8 +286,8 @@ function parseDateRange(timeframe, baseDate) {
     return { start, end };
   }
 
-  // Parse "Month X" or "Month X-Y"
-  const monthMatch = timeframe.match(/month\s+(\d+)(?:\s*-\s*(\d+))?/i);
+  // Parse "Month X" or "Month X-Y" (handles both "Month" and "Months")
+  const monthMatch = timeframe.match(/months?\s+(\d+)(?:\s*-\s*(\d+))?/i);
   if (monthMatch) {
     const startMonth = parseInt(monthMatch[1]);
     const endMonth = monthMatch[2] ? parseInt(monthMatch[2]) : startMonth;
