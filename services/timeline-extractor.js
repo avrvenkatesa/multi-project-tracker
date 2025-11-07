@@ -12,10 +12,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// GPT-4o pricing per 1M tokens
+// GPT-4o pricing per 1M tokens (as of 2025)
 const GPT4O_PRICING = {
-  prompt: 2.50 / 1_000_000,      // $2.50 per 1M input tokens
-  completion: 10.00 / 1_000_000   // $10.00 per 1M output tokens
+  prompt: 5.00 / 1_000_000,      // $5.00 per 1M input tokens
+  completion: 15.00 / 1_000_000   // $15.00 per 1M output tokens
 };
 
 /**
@@ -377,67 +377,127 @@ function extractTimelineHeuristic(documentText, projectStartDate) {
     tasks: []
   };
 
-  const lines = documentText.split('\n');
+  const lines = documentText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  // Extract phases (look for headers with timeframes)
-  const phaseRegex = /(?:phase|stage|sprint)\s*(\d+|[IVX]+)?:?\s*(.+?)(?:\s*[-–]\s*(.+?))?(?:\s*\(([^)]+)\))?/i;
+  // Extract phases (look for "Phase X:" or "Phase X -" patterns)
+  const phaseRegex = /^(?:phase|stage|sprint)\s+(\d+|[IVX]+)?:?\s+([^(]+?)(?:\s*\(([^)]+)\))?$/i;
   
   lines.forEach((line, index) => {
     const match = line.match(phaseRegex);
     if (match) {
-      const timeframe = match[4] || match[3];
-      const dateRange = parseDateRange(timeframe, projectStartDate);
-      
-      timeline.phases.push({
-        name: match[2].trim(),
-        description: lines[index + 1]?.trim() || '',
-        timeframe: timeframe || 'TBD',
-        startDate: dateRange.start,
-        endDate: dateRange.end,
-        deliverables: [],
-        originalTimeframe: timeframe
-      });
-    }
-  });
-
-  // Extract milestones (look for dates or week markers)
-  const milestoneRegex = /(?:milestone|deliverable|deadline|due)s?:?\s*(.+?)(?:\s*[-–]\s*(.+?))?(?:\s*\(([^)]+)\))?/i;
-  
-  lines.forEach((line) => {
-    const match = line.match(milestoneRegex);
-    if (match) {
-      const timeframe = match[3] || match[2];
-      const dueDate = parseMilestoneDate(timeframe, projectStartDate, timeline.phases);
-      
-      timeline.milestones.push({
-        name: match[1].trim(),
-        description: match[2]?.trim() || '',
-        timeframe: timeframe || 'TBD',
-        dueDate,
-        dependencies: [],
-        originalTimeframe: timeframe
-      });
-    }
-  });
-
-  // Extract tasks (look for task markers or numbered items)
-  const taskRegex = /(?:task|activity|action)s?:?\s*(.+?)(?:\s*[-–]\s*(.+?))?(?:\s*\(([^)]+)\))?/i;
-  
-  lines.forEach((line) => {
-    const match = line.match(taskRegex);
-    if (match) {
+      const phaseName = match[2].trim();
       const timeframe = match[3];
       const dateRange = parseDateRange(timeframe, projectStartDate);
       
-      timeline.tasks.push({
-        name: match[1].trim(),
-        phase: timeline.phases[0]?.name || 'General',
-        duration: null,
+      // Look ahead for description/deliverables in next few lines
+      let description = '';
+      const deliverables = [];
+      for (let i = index + 1; i < Math.min(index + 5, lines.length); i++) {
+        const nextLine = lines[i];
+        if (nextLine.match(/^(?:phase|stage|milestone|task)/i)) break;
+        if (nextLine.startsWith('-') || nextLine.startsWith('•')) {
+          const item = nextLine.replace(/^[-•]\s*/, '').trim();
+          if (item.toLowerCase().includes('deliverable')) {
+            deliverables.push(item.replace(/deliverable:?\s*/i, '').trim());
+          }
+        } else if (!description && !nextLine.match(/^[A-Z\s]+:$/)) {
+          description = nextLine;
+        }
+      }
+      
+      timeline.phases.push({
+        name: phaseName,
+        description,
         timeframe: timeframe || 'TBD',
         startDate: dateRange.start,
         endDate: dateRange.end,
+        deliverables,
         originalTimeframe: timeframe
       });
+    }
+  });
+
+  // Extract milestones (look for "Milestone:" or "- MilestoneName (timeframe)")
+  const milestoneRegex = /^[-•]?\s*(.+?)\s*\(([^)]+)\)\s*$/;
+  const milestoneHeaderRegex = /^milestones?:?\s*$/i;
+  
+  let inMilestoneSection = false;
+  lines.forEach((line) => {
+    if (milestoneHeaderRegex.test(line)) {
+      inMilestoneSection = true;
+      return;
+    }
+    
+    if (inMilestoneSection) {
+      // Stop if we hit another section
+      if (line.match(/^(?:phase|stage|task|key\s+task)s?:?/i)) {
+        inMilestoneSection = false;
+        return;
+      }
+      
+      const match = line.match(milestoneRegex);
+      if (match) {
+        const milestoneName = match[1].trim();
+        const timeframe = match[2].trim();
+        const dueDate = parseMilestoneDate(timeframe, projectStartDate, timeline.phases);
+        
+        timeline.milestones.push({
+          name: milestoneName,
+          description: '',
+          timeframe,
+          dueDate,
+          dependencies: [],
+          originalTimeframe: timeframe
+        });
+      }
+    }
+  });
+
+  // Extract tasks (look for "- Task: Name (timeframe, duration)")
+  const taskRegex = /^[-•]?\s*(?:task:?\s+)?(.+?)\s*\(([^)]+)\)\s*$/i;
+  const taskHeaderRegex = /^(?:key\s+)?tasks?:?\s*$/i;
+  
+  let inTaskSection = false;
+  lines.forEach((line) => {
+    if (taskHeaderRegex.test(line)) {
+      inTaskSection = true;
+      return;
+    }
+    
+    if (inTaskSection) {
+      const match = line.match(taskRegex);
+      if (match) {
+        const taskName = match[1].trim().replace(/^task:?\s+/i, '');
+        const paramsStr = match[2];
+        
+        // Parse timeframe and duration from params
+        const parts = paramsStr.split(',').map(p => p.trim());
+        let timeframe = parts[0];
+        let duration = null;
+        
+        // Check if second part is duration (e.g., "10 days")
+        if (parts[1]) {
+          const durationMatch = parts[1].match(/(\d+)\s*(day|hour|week)s?/i);
+          if (durationMatch) {
+            duration = durationMatch[1];
+          } else {
+            // Second part might be continuation of timeframe
+            timeframe = paramsStr;
+          }
+        }
+        
+        const dateRange = parseDateRange(timeframe, projectStartDate);
+        
+        timeline.tasks.push({
+          name: taskName,
+          phase: timeline.phases[0]?.name || 'General',
+          duration,
+          timeframe,
+          startDate: dateRange.start,
+          endDate: dateRange.end,
+          originalTimeframe: timeframe
+        });
+      }
     }
   });
 
