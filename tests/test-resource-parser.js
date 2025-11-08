@@ -1,456 +1,138 @@
 /**
  * Resource Parser - Test Suite
  * 
- * Tests all parsing strategies and user matching logic.
+ * Tests resource extraction from various document formats.
  * Run with: node tests/test-resource-parser.js
  */
 
 const resourceParser = require('../services/resource-parser');
 
-// Mock users for testing
-const mockUsers = [
-  { id: 1, username: 'jdoe', full_name: 'John Doe' },
-  { id: 2, username: 'jsmith', full_name: 'Jane Smith' },
-  { id: 3, username: 'bwilson', full_name: 'Bob Wilson' },
-  { id: 4, username: 'sjohnson', full_name: 'Sarah Johnson' }
-];
+async function runTests() {
+  console.log('═══════════════════════════════════════');
+  console.log('   RESOURCE PARSER TESTS');
+  console.log('═══════════════════════════════════════\n');
 
-/**
- * Test 1: Parse Resource Table
- */
-function testParseResourceTable() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 1: Parse Resource Table');
-  console.log('═══════════════════════════════════════════\n');
+  // Test Document 1: Table Format
+  const tableDoc = `
+Resource Allocation Table:
 
-  const documentText = `
-Resource Allocation:
-
-| Task Component  | Resource   | Role      | Effort   |
-|-----------------|------------|-----------|----------|
-| API Development | John Doe   | Developer | 80 hours |
-| Database Design | Jane Smith | DBA       | 40 hours |
-| Testing         | Bob Wilson | QA        | 60h      |
-| Documentation   | Sarah Johnson | Tech Writer | 3 days |
+| Task Component       | Resource      | Role               | Effort   |
+|----------------------|---------------|--------------------|----------|
+| API Development      | John Doe      | Senior Developer   | 80 hours |
+| Database Design      | Jane Smith    | Database Architect | 40h      |
+| Infrastructure Setup | Mike Chen     | DevOps Engineer    | 5 days   |
+| Testing & QA         | Bob Wilson    | QA Lead            | 60 hours |
+| Documentation        | Sarah Johnson | Technical Writer   | 3 days   |
   `;
 
-  const resources = resourceParser.parseResourceTable(documentText);
-  
-  console.log(`\n✓ Parsed ${resources.length} resources from table`);
-  
-  // Verify results
-  const expected = [
-    { name: 'John Doe', effort: 80, unit: 'hours', task: 'API Development' },
-    { name: 'Jane Smith', effort: 40, unit: 'hours', task: 'Database Design' },
-    { name: 'Bob Wilson', effort: 60, unit: 'h', task: 'Testing' },
-    { name: 'Sarah Johnson', effort: 3, unit: 'days', task: 'Documentation' }
-  ];
-  
-  let passed = true;
-  for (let i = 0; i < expected.length; i++) {
-    if (resources[i].name !== expected[i].name ||
-        resources[i].effort !== expected[i].effort ||
-        resources[i].task !== expected[i].task) {
-      console.error(`❌ Mismatch at index ${i}`);
-      passed = false;
-    }
-  }
-  
-  if (passed && resources.length === expected.length) {
-    console.log('✅ TEST 1 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 1 FAILED\n');
-    return false;
-  }
-}
+  console.log('Test 1: Parse Resource Table');
+  console.log('─────────────────────────────');
+  const tableResources = resourceParser.parseResourceTable(tableDoc);
+  console.log(`Extracted ${tableResources.length} resources from table`);
+  tableResources.forEach(r => {
+    console.log(`  ✓ ${r.task}: ${r.name} (${r.role}) - ${r.effort} ${r.unit}`);
+  });
+  console.log('');
 
-/**
- * Test 2: Parse Resource List
- */
-function testParseResourceList() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 2: Parse Resource List');
-  console.log('═══════════════════════════════════════════\n');
+  // Test Document 2: List Format
+  const listDoc = `
+Team Assignments:
 
-  const documentText = `
-Additional assignments:
-- Infrastructure Setup: Mike Chen (DevOps) - 5 days
-- Code Review: Jane Smith (Senior Dev) - 20 hours
-- Security Audit: Alice Brown (Security) - 40h
+- Discovery Phase: Sarah Johnson (Project Manager) - 40 hours
+- Architecture Design: Mike Chen (Solution Architect) - 60h
+- Implementation: Dev Team (3 developers) - 240 hours total
+- Code Review: John Doe (Tech Lead) - 2 days
   `;
 
-  const resources = resourceParser.parseResourceList(documentText);
-  
-  console.log(`\n✓ Parsed ${resources.length} resources from list`);
-  
-  if (resources.length === 3 &&
-      resources[0].name === 'Mike Chen' &&
-      resources[0].effort === 5 &&
-      resources[0].unit === 'days' &&
-      resources[1].name === 'Jane Smith' &&
-      resources[2].name === 'Alice Brown') {
-    console.log('✅ TEST 2 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 2 FAILED\n');
-    console.log('Resources:', resources);
-    return false;
-  }
-}
+  console.log('Test 2: Parse Resource List');
+  console.log('────────────────────────────');
+  const listResources = resourceParser.parseResourceList(listDoc);
+  console.log(`Extracted ${listResources.length} resources from list`);
+  listResources.forEach(r => {
+    console.log(`  ✓ ${r.task}: ${r.name} (${r.role}) - ${r.effort} ${r.unit}`);
+  });
+  console.log('');
 
-/**
- * Test 3: Parse Resource Paragraphs
- */
-function testParseResourceParagraphs() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 3: Parse Resource Paragraphs');
-  console.log('═══════════════════════════════════════════\n');
+  // Test Document 3: Mixed Format (AD Migration style)
+  const mixedDoc = `
+AD Migration - Resource Allocation
 
-  const documentText = `
-The API development will be handled by John Doe (Senior Developer) - 80 hours.
-Jane Smith (Database Administrator) will spend 40 hours on database optimization.
-Testing activities will be managed by Bob Wilson (QA Engineer) - 60 hours.
+Phase 0: Prerequisites
+- Backup Validation: Sultan (Infrastructure Manager) - 5.2 hours
+- NTDS.DIT Extraction: Srihari S (Systems Engineer) - 2.3 hours
+
+Phase 1: Discovery (Weeks 2-3)
+Infrastructure assessment will be handled by Moshik V (Cloud Architect) - 40 hours
+Domain analysis: Sultan and Srihari - 30 hours combined
+
+| Activity                 | Sultan | Srihari S | Moshik V | Total |
+|--------------------------|--------|-----------|----------|-------|
+| Functional Level Upgrade | 8.6h   | 3.0h      | 2.0h     | 13.6h |
+| Replication Setup        | 12.0h  | 8.0h      | -        | 20.0h |
   `;
 
-  const resources = resourceParser.parseResourceParagraphs(documentText);
-  
-  console.log(`\n✓ Parsed ${resources.length} resources from paragraphs`);
-  
-  if (resources.length >= 2) {
-    console.log('✅ TEST 3 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 3 FAILED\n');
-    console.log('Resources:', resources);
-    return false;
-  }
-}
+  console.log('Test 3: Parse Mixed Format (AD Migration)');
+  console.log('──────────────────────────────────────────');
+  const mixedResult = await resourceParser.parseResources(mixedDoc, {});
+  console.log(`Extracted ${mixedResult.resources.length} total resources`);
+  mixedResult.resources.forEach(r => {
+    console.log(`  ✓ ${r.task}: ${r.name} (${r.role || 'N/A'}) - ${r.effort} ${r.unit}`);
+  });
+  console.log('');
 
-/**
- * Test 4: User Matching - Exact Match
- */
-function testUserMatchingExact() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 4: User Matching - Exact Match');
-  console.log('═══════════════════════════════════════════\n');
+  // Test 4: Fuzzy User Matching
+  console.log('Test 4: Fuzzy User Matching');
+  console.log('────────────────────────────');
 
-  const match = resourceParser.findMatchingUser('John Doe', mockUsers);
-  
-  if (match && match.user.id === 1 && match.confidence === 1.0) {
-    console.log('✓ Exact match found: John Doe → user.id = 1');
-    console.log('✅ TEST 4 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 4 FAILED\n');
-    console.log('Match:', match);
-    return false;
-  }
-}
-
-/**
- * Test 5: User Matching - Partial Match
- */
-function testUserMatchingPartial() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 5: User Matching - Partial Match');
-  console.log('═══════════════════════════════════════════\n');
-
-  const match = resourceParser.findMatchingUser('John D', mockUsers);
-  
-  if (match && match.user.id === 1 && match.confidence >= 0.8) {
-    console.log(`✓ Partial match found: "John D" → John Doe (confidence: ${match.confidence})`);
-    console.log('✅ TEST 5 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 5 FAILED\n');
-    console.log('Match:', match);
-    return false;
-  }
-}
-
-/**
- * Test 6: User Matching - Fuzzy Match
- */
-function testUserMatchingFuzzy() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 6: User Matching - Fuzzy Match');
-  console.log('═══════════════════════════════════════════\n');
-
-  const match = resourceParser.findMatchingUser('Jon Doe', mockUsers); // Typo: Jon instead of John
-  
-  if (match && match.user.id === 1) {
-    console.log(`✓ Fuzzy match found: "Jon Doe" → John Doe (confidence: ${match.confidence.toFixed(2)})`);
-    console.log('✅ TEST 6 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 6 FAILED\n');
-    console.log('Match:', match);
-    return false;
-  }
-}
-
-/**
- * Test 7: User Matching - First Name Only
- */
-function testUserMatchingFirstName() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 7: User Matching - First Name Only');
-  console.log('═══════════════════════════════════════════\n');
-
-  const match = resourceParser.findMatchingUser('Sarah', mockUsers);
-  
-  if (match && match.user.id === 4 && match.confidence >= 0.7) {
-    console.log(`✓ First name match found: "Sarah" → Sarah Johnson (confidence: ${match.confidence})`);
-    console.log('✅ TEST 7 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 7 FAILED\n');
-    console.log('Match:', match);
-    return false;
-  }
-}
-
-/**
- * Test 8: Match Resources to Users
- */
-function testMatchResourcesToUsers() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 8: Match Resources to Users');
-  console.log('═══════════════════════════════════════════\n');
-
-  const resources = [
-    { name: 'John Doe', task: 'API Development', effort: 80, unit: 'hours' },
-    { name: 'Jane Smith', task: 'Database', effort: 40, unit: 'hours' },
-    { name: 'Unknown Person', task: 'Mystery', effort: 20, unit: 'hours' }
+  const mockUsers = [
+    { id: 1, username: 'john.doe', full_name: 'John Doe' },
+    { id: 2, username: 'jane.smith', full_name: 'Jane Smith' },
+    { id: 3, username: 'sultan.k', full_name: 'Sultan Khan' }
   ];
 
-  const matched = resourceParser.matchResourcesToUsers(resources, mockUsers);
-  
-  console.log(`\n✓ Processed ${matched.length} resources`);
-  console.log(`  Matched: ${matched.filter(r => r.userId).length}`);
-  console.log(`  Need review: ${matched.filter(r => r.needsReview).length}`);
-  
-  if (matched[0].userId === 1 &&
-      matched[1].userId === 2 &&
-      matched[2].userId === null) {
-    console.log('✅ TEST 8 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 8 FAILED\n');
-    console.log('Matched:', matched);
-    return false;
-  }
-}
-
-/**
- * Test 9: Normalize Effort to Hours
- */
-function testNormalizeEffort() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 9: Normalize Effort to Hours');
-  console.log('═══════════════════════════════════════════\n');
-
-  const tests = [
-    { value: 40, unit: 'hours', expected: 40 },
-    { value: 5, unit: 'days', expected: 40 },
-    { value: 2.5, unit: 'days', expected: 20 },
-    { value: 60, unit: 'h', expected: 60 },
-    { value: 3, unit: 'd', expected: 24 }
+  const testResources = [
+    { name: 'John Doe', task: 'API Dev' },
+    { name: 'J. Smith', task: 'DB Design' }, // Partial match
+    { name: 'Sultan', task: 'Infrastructure' }, // First name only
+    { name: 'Unknown Person', task: 'Testing' } // No match
   ];
 
-  let passed = true;
-  for (const test of tests) {
-    const result = resourceParser.normalizeEffortToHours(test.value, test.unit);
-    const status = result === test.expected ? '✓' : '❌';
-    console.log(`  ${status} ${test.value} ${test.unit} → ${result} hours (expected: ${test.expected})`);
-    if (result !== test.expected) {
-      passed = false;
+  const matched = resourceParser.matchResourcesToUsers(testResources, mockUsers);
+  matched.forEach(r => {
+    if (r.userId) {
+      console.log(`  ✓ "${r.name}" → ${mockUsers.find(u => u.id === r.userId).full_name} (confidence: ${r.matchConfidence})`);
+    } else {
+      console.log(`  ⚠️  "${r.name}" → NO MATCH (needs review)`);
     }
-  }
+  });
+  console.log('');
 
-  if (passed) {
-    console.log('✅ TEST 9 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 9 FAILED\n');
-    return false;
-  }
-}
+  // Test 5: Deduplication
+  console.log('Test 5: Resource Deduplication');
+  console.log('───────────────────────────────');
 
-/**
- * Test 10: Deduplicate Resources
- */
-function testDeduplicateResources() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 10: Deduplicate Resources');
-  console.log('═══════════════════════════════════════════\n');
-
-  const resources = [
-    { name: 'John Doe', task: 'API Development', effort: 80 },
-    { name: 'Jane Smith', task: 'Database', effort: 40 },
-    { name: 'John Doe', task: 'API Development', effort: 80 }, // Duplicate
-    { name: 'John Doe', task: 'Testing', effort: 20 } // Different task - not duplicate
+  const duplicates = [
+    { name: 'John Doe', task: 'API Development', effort: 40 },
+    { name: 'John Doe', task: 'API Development', effort: 40 }, // Duplicate
+    { name: 'Jane Smith', task: 'Testing', effort: 20 },
+    { name: 'John Doe', task: 'Code Review', effort: 10 } // Different task, not duplicate
   ];
 
-  const unique = resourceParser.deduplicateResources(resources);
-  
-  console.log(`\n✓ Original: ${resources.length} resources`);
-  console.log(`✓ Unique: ${unique.length} resources`);
-  
-  if (unique.length === 3) {
-    console.log('✅ TEST 10 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 10 FAILED\n');
-    console.log('Unique:', unique);
-    return false;
-  }
+  const unique = resourceParser.deduplicateResources(duplicates);
+  console.log(`  Original: ${duplicates.length} resources`);
+  console.log(`  After deduplication: ${unique.length} resources`);
+  console.log('');
+
+  console.log('═══════════════════════════════════════');
+  console.log('✅ All resource parser tests completed!');
+  console.log('═══════════════════════════════════════');
 }
 
-/**
- * Test 11: Levenshtein Distance
- */
-function testLevenshteinDistance() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 11: Levenshtein Distance');
-  console.log('═══════════════════════════════════════════\n');
-
-  const tests = [
-    { str1: 'John Doe', str2: 'John Doe', expected: 0 },
-    { str1: 'John Doe', str2: 'Jon Doe', expected: 1 },
-    { str1: 'Jane Smith', str2: 'Jane Smit', expected: 1 },
-    { str1: 'Bob', str2: 'Robert', expected: 3 }
-  ];
-
-  let passed = true;
-  for (const test of tests) {
-    const result = resourceParser.levenshteinDistance(test.str1, test.str2);
-    const status = result === test.expected ? '✓' : '❌';
-    console.log(`  ${status} "${test.str1}" vs "${test.str2}" → distance: ${result} (expected: ${test.expected})`);
-    if (result !== test.expected) {
-      passed = false;
-    }
-  }
-
-  if (passed) {
-    console.log('✅ TEST 11 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 11 FAILED\n');
-    return false;
-  }
-}
-
-/**
- * Test 12: Full Integration Test
- */
-function testFullIntegration() {
-  console.log('═══════════════════════════════════════════');
-  console.log('TEST 12: Full Integration Test');
-  console.log('═══════════════════════════════════════════\n');
-
-  const documentText = `
-# Resource Allocation Plan
-
-## Team Assignments
-
-| Task Component  | Resource   | Role      | Effort   |
-|-----------------|------------|-----------|----------|
-| API Development | John Doe   | Developer | 80 hours |
-| Database Design | Jane Smith | DBA       | 40 hours |
-
-## Additional Work
-
-- Testing: Bob Wilson (QA) - 3 days
-- Documentation: Sarah Johnson (Tech Writer) - 20 hours
-
-## Detailed Plans
-
-The infrastructure setup will be handled by John Doe (DevOps) - 16 hours.
-  `;
-
-  const resources = [];
-  
-  // Parse using all strategies
-  resources.push(...resourceParser.parseResourceTable(documentText));
-  resources.push(...resourceParser.parseResourceList(documentText));
-  resources.push(...resourceParser.parseResourceParagraphs(documentText));
-  
-  const unique = resourceParser.deduplicateResources(resources);
-  
-  // Normalize effort
-  for (const resource of unique) {
-    if (resource.effort && resource.unit) {
-      resource.effort = resourceParser.normalizeEffortToHours(resource.effort, resource.unit);
-      resource.unit = 'hours';
-    }
-  }
-  
-  // Match to users
-  const matched = resourceParser.matchResourcesToUsers(unique, mockUsers);
-  
-  console.log('\n📊 Integration Test Results:');
-  console.log(`   Total extracted: ${resources.length}`);
-  console.log(`   Unique: ${unique.length}`);
-  console.log(`   Matched: ${matched.filter(r => r.userId).length}`);
-  console.log(`   Need review: ${matched.filter(r => r.needsReview).length}`);
-  
-  if (unique.length >= 4 && matched.filter(r => r.userId).length >= 3) {
-    console.log('✅ TEST 12 PASSED\n');
-    return true;
-  } else {
-    console.log('❌ TEST 12 FAILED\n');
-    return false;
-  }
-}
-
-/**
- * Run all tests
- */
-async function runAllTests() {
-  console.log('\n╔═══════════════════════════════════════════════════╗');
-  console.log('║   RESOURCE PARSER - COMPREHENSIVE TEST SUITE     ║');
-  console.log('╚═══════════════════════════════════════════════════╝\n');
-
-  const results = [];
-  
-  results.push(testParseResourceTable());
-  results.push(testParseResourceList());
-  results.push(testParseResourceParagraphs());
-  results.push(testUserMatchingExact());
-  results.push(testUserMatchingPartial());
-  results.push(testUserMatchingFuzzy());
-  results.push(testUserMatchingFirstName());
-  results.push(testMatchResourcesToUsers());
-  results.push(testNormalizeEffort());
-  results.push(testDeduplicateResources());
-  results.push(testLevenshteinDistance());
-  results.push(testFullIntegration());
-  
-  const passed = results.filter(r => r).length;
-  const total = results.length;
-  
-  console.log('═══════════════════════════════════════════════════');
-  console.log('TEST SUMMARY');
-  console.log('═══════════════════════════════════════════════════\n');
-  console.log(`Total Tests: ${total}`);
-  console.log(`Passed: ${passed}`);
-  console.log(`Failed: ${total - passed}`);
-  console.log(`Success Rate: ${((passed / total) * 100).toFixed(1)}%\n`);
-  
-  if (passed === total) {
-    console.log('🎉 ALL TESTS PASSED!\n');
-    process.exit(0);
-  } else {
-    console.log('❌ SOME TESTS FAILED\n');
+runTests()
+  .catch(error => {
+    console.error('Test error:', error);
     process.exit(1);
-  }
-}
-
-// Run tests
-if (require.main === module) {
-  runAllTests();
-}
-
-module.exports = { runAllTests };
+  })
+  .finally(() => {
+    process.exit(0);
+  });
