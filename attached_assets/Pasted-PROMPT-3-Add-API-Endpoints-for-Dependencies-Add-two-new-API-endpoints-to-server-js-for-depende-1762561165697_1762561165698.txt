@@ -1,0 +1,129 @@
+PROMPT 3: Add API Endpoints for Dependencies
+
+  Add two new API endpoints to server.js for dependency management.
+
+  Location: Add after the timeline extraction endpoint (around line 12000+)
+
+  ENDPOINT 1: POST /api/projects/:projectId/dependencies/create
+
+  Purpose: Create dependencies from workstreams array
+  Used by: Multi-document analyzer (Story 8)
+
+  Request body:
+  {
+    "workstreams": [
+      {
+        "name": "Discovery",
+        "dependencies": []
+      },
+      {
+        "name": "Design",
+        "dependencies": ["Discovery"]
+      }
+    ]
+  }
+
+  Response:
+  {
+    "success": true,
+    "dependencies": [...],
+    "warnings": [...],
+    "errors": [...]
+  }
+
+  ENDPOINT 2: GET /api/projects/:projectId/dependencies
+
+  Purpose: Get all dependencies for a project (for Gantt chart)
+  Used by: Story 9 (Gantt chart visualization)
+
+  Response:
+  {
+    "dependencies": [
+      {
+        "id": 1,
+        "source_issue_id": 5,
+        "source_title": "Discovery",
+        "target_issue_id": 6,
+        "target_title": "Design",
+        "relationship_type": "dependency"
+      }
+    ]
+  }
+
+  Add this code to server.js:
+
+  const dependencyMapper = require('./services/dependency-mapper');
+
+  // Create dependencies from workstreams
+  app.post('/api/projects/:projectId/dependencies/create',
+    authenticateToken,
+    async (req, res) => {
+      try {
+        const { projectId } = req.params;
+        const { workstreams } = req.body;
+
+        if (!workstreams || !Array.isArray(workstreams)) {
+          return res.status(400).json({ error: 'workstreams array is required' });
+        }
+
+        console.log(`🔗 Creating dependencies for project ${projectId}`);
+        console.log(`   ${workstreams.length} workstreams to process`);
+
+        const result = await dependencyMapper.createDependencies(
+          workstreams,
+          parseInt(projectId)
+        );
+
+        // Log warnings and errors
+        if (result.warnings.length > 0) {
+          console.warn('⚠️  Dependency warnings:', result.warnings);
+        }
+        if (result.errors.length > 0) {
+          console.error('❌ Dependency errors:', result.errors);
+        }
+
+        res.json({
+          success: result.errors.length === 0,
+          dependencies: result.dependencies,
+          warnings: result.warnings,
+          errors: result.errors,
+          count: result.dependencies.length
+        });
+
+      } catch (error) {
+        console.error('Error creating dependencies:', error);
+        res.status(500).json({
+          error: 'Failed to create dependencies',
+          details: error.message
+        });
+      }
+    }
+  );
+
+  // Get all dependencies for a project
+  app.get('/api/projects/:projectId/dependencies',
+    authenticateToken,
+    async (req, res) => {
+      try {
+        const { projectId } = req.params;
+
+        const dependencies = await dependencyMapper.getDependencyGraph(
+          parseInt(projectId)
+        );
+
+        res.json({
+          dependencies,
+          count: dependencies.length
+        });
+
+      } catch (error) {
+        console.error('Error fetching dependencies:', error);
+        res.status(500).json({
+          error: 'Failed to fetch dependencies',
+          details: error.message
+        });
+      }
+    }
+  );
+
+  Add the require statement at the top of server.js with other service imports.
