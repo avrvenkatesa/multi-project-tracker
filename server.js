@@ -59,6 +59,7 @@ const dependencyService = require('./services/dependency-service');
 const documentService = require('./services/document-service');
 const { calculateProjectSchedule } = require('./services/schedule-calculation-service');
 const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
+const resourceParser = require('./services/resource-parser');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -14740,6 +14741,86 @@ async function processBatchEstimation(jobId, items, userId, projectId) {
 
   console.log(`Batch job ${jobId} completed: ${job.successful} successful, ${job.failed} failed`);
 }
+
+// ============================================
+// RESOURCE ASSIGNMENT PARSING ENDPOINT
+// ============================================
+
+/**
+ * Parse resource assignments from document text
+ * POST /api/projects/:projectId/resources/parse
+ * Body: { documentText, autoAssign }
+ */
+app.post('/api/projects/:projectId/resources/parse',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { documentText, autoAssign = false } = req.body;
+
+      if (!documentText) {
+        return res.status(400).json({ error: 'documentText is required' });
+      }
+
+      // Verify user has access to project
+      const memberCheck = await pool.query(
+        'SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2',
+        [projectId, req.user.id]
+      );
+
+      if (memberCheck.rows.length === 0) {
+        return res.status(403).json({ error: 'Access denied to this project' });
+      }
+
+      console.log(`👥 Parsing resources for project ${projectId}`);
+
+      // Parse resources from document
+      const result = await resourceParser.parseResources(
+        documentText,
+        { projectId: parseInt(projectId) }
+      );
+
+      console.log(`  Extracted ${result.resources.length} resource assignments`);
+
+      // Separate matched vs needs review
+      const matched = result.resources.filter(r => r.userId && !r.needsReview);
+      const needsReview = result.resources.filter(r => r.needsReview);
+
+      console.log(`  Matched: ${matched.length}, Needs review: ${needsReview.length}`);
+
+      // Optionally assign to issues
+      let assignments = [];
+      if (autoAssign && matched.length > 0) {
+        console.log('  Auto-assigning matched resources to issues...');
+        assignments = await resourceParser.assignResourcesToIssues(
+          matched,
+          parseInt(projectId)
+        );
+        console.log(`  Created ${assignments.length} assignments`);
+      }
+
+      res.json({
+        success: true,
+        resources: result.resources,
+        assignments,
+        needsReview,
+        summary: {
+          totalExtracted: result.resources.length,
+          matched: matched.length,
+          needsReview: needsReview.length,
+          assigned: assignments.length
+        }
+      });
+
+    } catch (error) {
+      console.error('Error parsing resources:', error);
+      res.status(500).json({
+        error: 'Failed to parse resources',
+        details: error.message
+      });
+    }
+  }
+);
 
 // Get all valid usernames for dropdown (includes users AND all assignee names)
 app.get('/api/admin/valid-usernames', authenticateToken, async (req, res) => {

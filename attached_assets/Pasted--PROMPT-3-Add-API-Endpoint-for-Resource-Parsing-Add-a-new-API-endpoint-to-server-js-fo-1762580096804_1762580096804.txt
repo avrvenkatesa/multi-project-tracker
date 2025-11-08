@@ -1,0 +1,95 @@
+ ### **PROMPT 3: Add API Endpoint for Resource Parsing**
+
+  Add a new API endpoint to server.js for resource parsing.
+
+  Location: Add after the dependency endpoints
+
+  Endpoint: POST /api/projects/:projectId/resources/parse
+
+  Purpose: Parse resource assignments from document text and assign to issues
+
+  Request body:
+  {
+    "documentText": "Resource allocation table text...",
+    "autoAssign": true  // Optional: automatically assign to issues (default: false)
+  }
+
+  Response:
+  {
+    "success": true,
+    "resources": [...],
+    "assignments": [...],
+    "needsReview": [...],
+    "summary": {
+      "totalExtracted": 5,
+      "matched": 4,
+      "needsReview": 1,
+      "assigned": 4
+    }
+  }
+
+  Add this code to server.js:
+
+  const resourceParser = require('./services/resource-parser');
+
+  // Parse resource assignments from document
+  app.post('/api/projects/:projectId/resources/parse',
+    authenticateToken,
+    async (req, res) => {
+      try {
+        const { projectId } = req.params;
+        const { documentText, autoAssign = false } = req.body;
+
+    if (!documentText) {
+      return res.status(400).json({ error: 'documentText is required' });
+    }
+
+    console.log(`👥 Parsing resources for project ${projectId}`);
+
+    // Parse resources from document
+    const resources = await resourceParser.parseResources(
+      documentText,
+      { projectId: parseInt(projectId) }
+    );
+
+    console.log(`  Extracted ${resources.length} resource assignments`);
+
+    // Separate matched vs needs review
+    const matched = resources.filter(r => r.userId && !r.needsReview);
+    const needsReview = resources.filter(r => r.needsReview);
+
+    console.log(`  Matched: ${matched.length}, Needs review: ${needsReview.length}`);
+
+    // Optionally assign to issues
+    let assignments = [];
+    if (autoAssign && matched.length > 0) {
+      console.log('  Auto-assigning matched resources to issues...');
+      assignments = await resourceParser.assignResourcesToIssues(
+        matched,
+        parseInt(projectId)
+      );
+      console.log(`  Created ${assignments.length} assignments`);
+    }
+
+    res.json({
+      success: true,
+      resources,
+      assignments,
+      needsReview,
+      summary: {
+        totalExtracted: resources.length,
+        matched: matched.length,
+        needsReview: needsReview.length,
+        assigned: assignments.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error parsing resources:', error);
+    res.status(500).json({
+      error: 'Failed to parse resources',
+      details: error.message
+    });
+  }
+    }
+  );
