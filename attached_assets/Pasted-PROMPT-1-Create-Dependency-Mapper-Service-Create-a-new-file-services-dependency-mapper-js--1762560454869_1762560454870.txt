@@ -1,0 +1,85 @@
+PROMPT 1: Create Dependency Mapper Service
+
+  Create a new file: services/dependency-mapper.js
+
+  This service extracts dependency relationships between tasks/workstreams and maps them to database records.
+
+  Requirements:
+  1. Extract dependencies from workstream detector output (workstreams array with dependencies property)
+  2. Map workstream names to actual issue IDs using fuzzy matching
+  3. Create dependency records in issue_relationships table
+  4. Detect circular dependencies using graph traversal (DFS)
+  5. Support fuzzy name matching (Levenshtein distance algorithm)
+  6. Return created dependencies with warnings/errors
+
+  Key functions to implement:
+
+  1. createDependencies(workstreams, projectId)
+     - Main function that processes workstreams and creates dependencies
+     - Fetches all issues for the project
+     - Maps each workstream to its issue
+     - For each dependency, finds the source issue
+     - Creates records in issue_relationships table
+     - Returns: { dependencies: [], errors: [], warnings: [] }
+
+  2. findMatchingIssue(searchName, issues)
+     - Finds issue that matches the search name
+     - Try exact match first
+     - Try partial match (contains)
+     - Try fuzzy match (Levenshtein distance ≤ 3)
+     - Returns: issue object or null
+
+  3. levenshteinDistance(str1, str2)
+     - Calculates edit distance between two strings
+     - Used for fuzzy matching
+     - Returns: number (edit distance)
+
+  4. detectCircularDependencies(dependencies)
+     - Builds adjacency list from dependencies
+     - Uses DFS to detect cycles
+     - Returns: array of circular dependency descriptions
+
+  5. getDependencyGraph(projectId)
+     - Fetches all dependencies for a project
+     - Joins with issues to get titles
+     - Returns: array of dependency objects with source/target info
+
+  Database schema for issue_relationships:
+  - source_issue_id: The issue that must complete first
+  - target_issue_id: The issue that depends on the source
+  - relationship_type: 'dependency' (or 'blocks', 'related')
+
+  Example workstreams input:
+  [
+    {
+      name: 'Discovery',
+      dependencies: []
+    },
+    {
+      name: 'Design',
+      dependencies: ['Discovery']  // Design depends on Discovery
+    },
+    {
+      name: 'Implementation',
+      dependencies: ['Design', 'Infrastructure Setup']
+    }
+  ]
+
+  Expected output:
+  {
+    dependencies: [
+      { source_issue_id: 1, target_issue_id: 2, source_name: 'Discovery', target_name: 'Design' },
+      { source_issue_id: 2, target_issue_id: 3, source_name: 'Design', target_name: 'Implementation' }
+    ],
+    errors: [],
+    warnings: []
+  }
+
+  Error handling:
+  - Warn if workstream name not found in issues
+  - Warn if dependency name not found
+  - Error if circular dependencies detected
+  - Use ON CONFLICT DO NOTHING to avoid duplicate dependencies
+
+  Use require('../db').pool for database access.
+  Include detailed JSDoc comments and console.log statements for debugging.
