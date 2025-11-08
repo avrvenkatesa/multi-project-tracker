@@ -1,0 +1,123 @@
+PROMPT 1: Create Resource Parser Service
+
+  Create a new file: services/resource-parser.js
+
+  This service extracts resource assignments (names, roles, effort) from document text.
+
+  Requirements:
+  1. Parse resource allocations from multiple formats:
+     - Tables: "| Task | Resource | Role | Effort |"
+     - Lists: "- Task: John Doe (Developer) - 40 hours"
+     - Paragraphs: "John Doe will spend 40 hours on API development"
+  2. Extract: task name, resource name, role, effort (hours/days)
+  3. Match resource names to existing project users (fuzzy matching)
+  4. Remove duplicates
+  5. Handle various hour formats: "40 hours", "40h", "5 days", "5d"
+
+  Key functions to implement:
+
+  1. parseResources(documentText, options)
+     - Main function that tries all parsing strategies
+     - Options: { projectId } for user matching
+     - Returns: array of resource objects
+
+  2. parseResourceTable(text)
+     - Parses markdown/plain tables
+     - Looks for headers: task, resource, role, effort, hours
+     - Returns: array of { task, name, role, effort, unit }
+
+  3. parseResourceList(text)
+     - Parses bullet lists with pattern: "- Task: Name (Role) - X hours"
+     - Returns: array of resource objects
+
+  4. parseResourceParagraphs(text)
+     - Parses narrative text
+     - Pattern: "Name (Role) will spend X hours on Task"
+     - Returns: array of resource objects
+
+  5. getProjectUsers(projectId)
+     - Fetches all users assigned to a project
+     - Joins users and project_members tables
+     - Returns: array of user objects with id, username, full_name
+
+  6. matchResourcesToUsers(resources, users)
+     - Maps extracted names to actual user IDs
+     - Uses fuzzy matching (exact, partial, Levenshtein)
+     - Flags resources that need manual review
+     - Returns: resources with userId and matchConfidence
+
+  7. findMatchingUser(resourceName, users)
+     - Exact match on full_name
+     - Exact match on username
+     - Partial match (first name + last initial)
+     - First name only (if unique)
+     - Returns: { user, confidence } or null
+
+  8. assignResourcesToIssues(resources, projectId)
+     - Finds matching issue for each task
+     - Updates issues.assigned_to_id
+     - Updates issues.effort_hours (convert days to hours: 1 day = 8 hours)
+     - Returns: array of assignments created
+
+  9. deduplicateResources(resources)
+     - Removes duplicates based on name + task
+     - Returns: unique resources
+
+  Example input document:
+  Resource Allocation:
+
+  | Task Component  | Resource   | Role      | Effort   |
+  |-----------------|------------|-----------|----------|
+  | API Development | John Doe   | Developer | 80 hours |
+  | Database Design | Jane Smith | DBA       | 40 hours |
+  | Testing         | Bob Wilson | QA        | 60h      |
+
+  Additional assignments:
+  - Infrastructure Setup: Mike Chen (DevOps) - 5 days
+  - Documentation: Sarah Johnson (Tech Writer) - 20 hours
+
+  Expected output:
+  ```javascript
+  [
+    {
+      task: 'API Development',
+      name: 'John Doe',
+      role: 'Developer',
+      effort: 80,
+      unit: 'hours',
+      userId: 5,
+      matchConfidence: 1.0,
+      needsReview: false
+    },
+    {
+      task: 'Database Design',
+      name: 'Jane Smith',
+      role: 'DBA',
+      effort: 40,
+      unit: 'hours',
+      userId: 6,
+      matchConfidence: 1.0,
+      needsReview: false
+    },
+    {
+      task: 'Infrastructure Setup',
+      name: 'Mike Chen',
+      role: 'DevOps',
+      effort: 40, // 5 days converted to hours
+      unit: 'hours',
+      userId: null,
+      matchConfidence: 0,
+      needsReview: true
+    }
+  ]
+
+  Implementation notes:
+  - Use regex patterns for parsing
+  - Handle both singular and plural: "hour/hours", "day/days"
+  - Normalize units to hours for storage
+  - Log warnings for unmatched resources
+  - Don't throw errors - partial success is acceptable
+
+  Use require('../db').pool for database access.
+  Include detailed JSDoc comments.
+  Add console.log statements for debugging.
