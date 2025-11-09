@@ -9,96 +9,91 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### UI/UX Decisions
-The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles. It includes a Project Dashboard with analytics and Chart.js visualizations, Kanban boards, tag displays, risk cards, and a comprehensive unified checklist system. The UI implements consistent navigation, responsive design, and prioritizes clarity and interactivity. CSP compliance is maintained through external JavaScript files and event delegation. A unified `checklists.html` page consolidates linked, standalone, and template checklists into a single tabbed view.
-
-**Design System (November 2025):** Enterprise-grade design token system implemented for professional Gantt chart redesign and UI consistency. Includes comprehensive CSS variable system (`public/css/design-tokens.css`) with brand colors (#5b7c99 primary, #e8c555 accent), 8-tier neutral palette, semantic colors, Gantt-specific tokens, typography scale, spacing tokens, shadows, and accessibility-focused focus states. Shared button component library (`public/css/buttons.css`) provides primary, secondary, danger, success, ghost, and link variants, plus professional segmented control for view selectors. All tokens are WCAG AA compliant. Style-tile mockup available at `public/style-tile.html` with comprehensive usage guidelines for future contributors.
+The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles. It includes a Project Dashboard with analytics and Chart.js visualizations, Kanban boards, tag displays, risk cards, and a comprehensive unified checklist system. A professional enterprise-grade design token system is implemented for UI consistency, including a CSS variable system, shared button components, and WCAG AA compliant styles.
 
 Key UI features include:
--   **Project Complexity Configuration**: Three-tier complexity system (Standard/Complex/Enterprise) determines maximum file upload limits (5/10/20 files) per project. Complexity level is configurable at project creation and can be updated later. Visual badges display complexity tier and file limit on project cards.
--   **Checklist Completion Validation**: Warns users about incomplete checklists when moving items to "Done" status, with visual progress badges on Kanban cards. Allows project owners to toggle enforcement.
--   **Checklist Feedback System**: Users can provide thumbs up/down feedback on completed checklists, which is persistently stored and displayed.
--   **Effort Estimates Tab**: Dedicated tab in the detail modal for comprehensive estimate management, version history with visual source icons and confidence badges, version comparison, and CSV export. Includes a full estimation UI with AI/Hybrid options and permission-based controls.
--   **Quick Log Time**: "Log" button on Kanban cards for rapid time entry without opening the full detail modal, visible to Team Members and above.
--   **Project Scheduling with Advanced Item Selection**: Pre-submission validation for unestimated items, allowing selective estimation or exclusion, with a guided estimation workflow for selected items. Features improved status filtering that excludes Done items and allows multi-select filtering for To Do and In Progress statuses.
--   **Strict Resource Assignment Mode**: Optional project-level setting to require all scheduled tasks have assignees. When enabled, prevents schedule creation if any selected items lack resource assignments, ensuring accurate workload calculations and preventing oversight of unassigned work. Users can disable strict mode on-the-fly if needed.
--   **Task-Level Estimate Selection for What-If Analysis**: Pre-schedule review modal allows users to choose which estimate type (Planning Source, AI, Manual, or Hybrid) to use for each individual task. Includes bulk actions ("Use All AI", "Use All Manual", "Use Planning Source", "Use All Hybrid") and real-time total hours calculation. Enables flexible scenario planning and comparison of different estimate approaches within the same schedule.
--   **Enhanced Schedule Visualization**: Schedule detail view displays assignee information under each task, clearly indicating "Unassigned" for tasks without resource assignments. Tasks are grouped by assignee for better workload visibility.
--   **Inline Resource Assignment**: Missing Resource Assignments modal now includes dropdown selection and quick assign functionality, allowing users to assign resources directly in the validation modal without returning to the main board. Features visual feedback and automatic revalidation.
--   **Professional Schedule Outputs**: Schedule detail view features a tabbed interface with Timeline, Gantt Chart, and Resources views, plus one-click CSV export. Gantt chart powered by Frappe Gantt library with interactive timeline visualization, dependency arrows, critical path highlighting, and adjustable view modes (Quarter Day, Half Day, Day, Week, Month).
--   **Resource Workload Analysis**: Dedicated Resources tab calculates daily workload per team member, detects overloading (>configured hours/day), and displays peak daily load, utilization percentage, and overloaded days count. Visual warnings highlight overallocated resources with actionable recommendations.
+- **Project Complexity Configuration**: Three-tier complexity system (Standard/Complex/Enterprise) determining file upload limits, with visual badges.
+- **Checklist Management**: Features include completion validation with visual progress badges, user feedback system (thumbs up/down), and a unified tabbed view for linked, standalone, and template checklists.
+- **Effort Estimates Tab**: Dedicated tab in the detail modal for comprehensive estimate management, version history, comparison, and CSV export, with AI/Hybrid options.
+- **Quick Log Time**: "Log" button on Kanban cards for rapid time entry.
+- **Project Scheduling with Advanced Item Selection**: Pre-submission validation, selective estimation, improved status filtering, and multi-select filtering.
+- **Strict Resource Assignment Mode**: Optional project-level setting to require all scheduled tasks have assignees for accurate workload calculation.
+- **Task-Level Estimate Selection for What-If Analysis**: Pre-schedule review modal allows users to choose estimate types (Planning Source, AI, Manual, Hybrid) for individual tasks, with bulk actions and real-time calculations.
+- **Enhanced Schedule Visualization**: Schedule detail view displays assignee information, groups tasks by assignee, and allows inline resource assignment.
+- **Professional Schedule Outputs**: Tabbed interface with Timeline, Gantt Chart, and Resources views, plus one-click CSV export. The Gantt chart features interactive timeline visualization, dependency arrows, critical path highlighting, and adjustable view modes.
+- **Resource Workload Analysis**: Calculates daily workload, detects overloading, and provides visual warnings and recommendations.
+- **Enterprise Gantt Chart Redesign**: Professional redesign with neutral styling, compact view toggle, swim-lane grouping by assignee, interactive dependency chain highlighting, optimized popup layout, and professional view controls.
 
 ### Technical Implementations
-The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system. Joi is used for request validation, and bcryptjs for password hashing. The backend handles complete CRUD operations, atomic transactions, project-level authorization, and logging.
+The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication with httpOnly cookie-based session management, and a 6-tier RBAC system. Joi is used for request validation and bcryptjs for password hashing. The backend handles CRUD operations, atomic transactions, project-level authorization, and logging. Performance optimizations include a bulk metadata endpoint, debounced search, and loading indicators.
 
-Performance optimizations include a bulk metadata endpoint, debounced search, loading indicators, and non-blocking queue loading.
+Key service layers manage completion, templates, dependencies, documents, AI processing, standalone checklists, workstream detection, checklist matching, document classification, topological sort, schedule calculation, AI cost tracking, and timeline extraction.
 
-Key service layers: Completion, Template, Dependency, Document, AI, Standalone Checklist, Workstream Detector, Checklist Matcher, Document Classifier, Topological Sort, Schedule Calculation, AI Cost Tracker, and Timeline Extractor. These services manage various aspects from checklist operations and AI processing to dependency management, document classification, project scheduling, and centralized AI cost monitoring.
-
-API endpoints support advanced features like auto-creating checklists, status updates based on checklist completion, bulk template application, comprehensive checklist dependency management, document upload for AI processing, standalone checklist lifecycle, checklist quality feedback, effort estimate version history, and project scheduling with critical path analysis.
+API endpoints support features like auto-creating checklists, status updates based on checklist completion, bulk template application, comprehensive checklist dependency management, document upload for AI processing, standalone checklist lifecycle, checklist quality feedback, effort estimate version history, and project scheduling with critical path analysis.
 
 ### System Design Choices
-The database schema includes Users, Projects, Issues, Action Items, and a comprehensive checklist system with templates, sections, items, responses, and signoffs. It supports AI-specific data, collaboration data, user preferences, risk management, and tag typing. Checklist templates include public/featured flags and auto-creation mappings. `checklist_item_dependencies` tracks dependencies with circular dependency prevention. Standalone checklists and user feedback for quality ratings are supported. `document_classifications` stores AI-generated document classifications with category, confidence, reasoning, and custom category flags for routing to specialized processors.
+The database schema includes Users, Projects, Issues, Action Items, and a comprehensive checklist system with templates, sections, items, responses, and signoffs. It supports AI-specific data, collaboration data, user preferences, risk management, and tag typing. `checklist_item_dependencies` tracks dependencies with circular dependency prevention. Standalone checklists and user feedback for quality ratings are supported. `document_classifications` stores AI-generated document classifications with category, confidence, reasoning, and custom category flags.
 
-Projects include a `complexity_level` field (standard/complex/enterprise) with automatic `max_file_uploads` calculation via database trigger. The trigger fires on any project INSERT or UPDATE to ensure max_file_uploads stays synchronized with complexity_level. Backend validation strictly enforces valid complexity values, returning 400 errors for invalid inputs.
+Projects include a `complexity_level` field (standard/complex/enterprise) with automatic `max_file_uploads` calculation via a database trigger.
 
 Project scheduling involves `project_schedules` (versioning), `schedule_items`, `task_schedules` (calculated dates, critical path, risk indicators), and `schedule_changes`. Schedules support multiple scenarios, topological sort-based task ordering, critical path identification, risk detection, and resource allocation analysis.
 
 ### AI Features
--   **AI Meeting Analysis**: Two-phase processing for item extraction and status update detection with a persistent review queue. Features automatic model fallback: starts with GPT-3.5-Turbo (16K context, cost-effective) and automatically switches to GPT-4o (128K context) if documents exceed the initial limit. Supports multi-file document upload (PDF, DOCX, TXT) with file accumulator interface and project-based complexity limits. Displays which AI model was used in analysis results.
--   **AI Checklist Generation**: Generates comprehensive checklists from issue/action descriptions and uploaded documents using OpenAI GPT-4o, supporting multi-checklist generation and batch preview.
--   **AI Document Classification**: Hybrid classification system for uploaded documents using GPT-4o. First checks against base categories (requirements, timeline, resources, dependencies, risks, architecture, other) with high confidence threshold (>0.7). If no base category fits, creates custom domain-specific categories (e.g., "migration-procedure", "test-plan", "cost-estimate"). Stores classifications in database with confidence scores and reasoning for downstream processing. Includes intelligent fallback to filename-based heuristics if AI unavailable.
--   **AI Timeline Extraction**: Extracts project timeline information (phases, milestones, tasks) from document text using GPT-4o. Parses relative dates (Week 1-4, Month 2-3, Q1 2025) and converts them to absolute dates based on project start date. Supports both AI-powered extraction and heuristic regex-based fallback when AI is unavailable. Tracks detailed usage metadata including phases/milestones/tasks extracted and document length.
--   **Workstream Detection**: AI-powered document analysis to identify 3-10 distinct workstreams, extract key requirements, and generate focused checklists using OpenAI GPT-4o.
--   **Intelligent Issue Matching**: AI-powered semantic matching of generated checklists to existing issues with confidence scoring and automatic new issue suggestions for unmatched checklists.
--   **AI Dependency Suggestion**: GPT-4o analyzes selected tasks and suggests logical dependencies based on workflow patterns, technical prerequisites, and risk mitigation, with automatic circular dependency detection and filtering.
--   **Comprehensive Cycle Detection**: Multi-layer circular dependency validation prevents invalid dependency graphs at all entry points (AI suggestions, user approval, and schedule creation) with detailed, actionable error messages showing exact cycle paths and remediation steps.
--   **Checklist Validation**: Provides quality scoring, required field validation, and consistency checks.
--   **Centralized AI Cost Tracking**: All AI features integrate with a centralized cost tracking service (`services/ai-cost-tracker.js`) that records prompt tokens, completion tokens, total tokens, cost in USD, model used, and feature-specific metadata to the `ai_usage_tracking` table. Provides helper methods for retrieving project-level and user-level AI usage statistics. Ensures consistent, accurate cost monitoring across all AI operations (GPT-4o: $5 input / $15 output per 1M tokens; GPT-3.5-Turbo rates also supported).
+- **AI Meeting Analysis**: Two-phase processing for item extraction and status updates with a persistent review queue and automatic model fallback (GPT-3.5-Turbo to GPT-4o). Supports multi-file document upload with project-based complexity limits.
+- **AI Checklist Generation**: Generates comprehensive checklists from issue/action descriptions and uploaded documents using OpenAI GPT-4o.
+- **AI Document Classification**: Hybrid classification system using GPT-4o for uploaded documents, checking against base categories and creating custom categories if necessary. Stores classifications with confidence scores and reasoning.
+- **AI Timeline Extraction**: Extracts project timeline information from document text using GPT-4o, parsing relative dates and converting them to absolute dates.
+- **Workstream Detection**: AI-powered document analysis to identify workstreams, extract requirements, and generate focused checklists using OpenAI GPT-4o.
+- **Intelligent Issue Matching**: AI-powered semantic matching of generated checklists to existing issues, with new issue suggestions.
+- **AI Dependency Suggestion**: GPT-4o analyzes tasks and suggests logical dependencies, with automatic circular dependency detection.
+- **Comprehensive Cycle Detection**: Multi-layer circular dependency validation prevents invalid dependency graphs at all entry points.
+- **Checklist Validation**: Provides quality scoring, required field validation, and consistency checks.
+- **Centralized AI Cost Tracking**: All AI features integrate with a centralized cost tracking service that records prompt/completion tokens, total tokens, cost, model used, and feature-specific metadata to the `ai_usage_tracking` table.
 
 ### Reporting & Export
--   **PDF Export**: Generates professional PDF reports for checklists.
--   **CSV Export**: Provides CSV file generation for checklists and project schedules, including task details, dates, assignees, dependencies, and risk indicators.
+- **PDF Export**: Generates professional PDF reports for checklists.
+- **CSV Export**: Provides CSV file generation for checklists and project schedules.
 
 ## External Dependencies
 
 ### Core Frameworks
--   Express.js
--   Axios
--   Tailwind CSS
+- Express.js
+- Axios
+- Tailwind CSS
 
 ### Security Libraries
--   Helmet
--   CORS
--   bcryptjs
--   jsonwebtoken
--   express-rate-limit
+- Helmet
+- CORS
+- bcryptjs
+- jsonwebtoken
+- express-rate-limit
 
 ### Validation & Utilities
--   Joi
--   Multer
--   uuid
--   string-similarity
--   pdf-parse
--   mammoth
--   file-type
+- Joi
+- Multer
+- uuid
+- string-similarity
+- pdf-parse
+- mammoth
+- file-type
 
 ### AI Integration
--   OpenAI (GPT-3.5-Turbo, GPT-4o) - Exclusive AI provider for consistent validation and reliability
+- OpenAI (GPT-3.5-Turbo, GPT-4o)
 
 ### Database & ORM
--   @neondatabase/serverless
--   drizzle-orm
--   drizzle-kit
+- @neondatabase/serverless
+- drizzle-orm
+- drizzle-kit
 
 ### Email & Notifications
--   nodemailer
--   node-cron
+- nodemailer
+- node-cron
 
 ### Reporting & Export
--   pdfkit
--   stream-buffers
--   csv-writer
+- pdfkit
+- stream-buffers
+- csv-writer
 
 ### CDN Services
--   Chart.js
--   Frappe Gantt (v0.6.1)
+- Chart.js
+- Frappe Gantt (v0.6.1)
