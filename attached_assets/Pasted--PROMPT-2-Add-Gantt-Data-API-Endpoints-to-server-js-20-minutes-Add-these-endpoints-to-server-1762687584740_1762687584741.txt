@@ -1,0 +1,74 @@
+ PROMPT 2: Add Gantt Data API Endpoints to server.js (20 minutes)
+
+  Add these endpoints to server.js (after existing /api/projects endpoints):
+
+  const ganttFormatter = require('./services/gantt-formatter');
+
+  // Get Gantt chart data for a project
+  app.get('/api/projects/:projectId/gantt-data',
+    authenticateToken,
+    async (req, res) => {
+      try {
+        const { projectId } = req.params;
+
+        // Verify user has access to project
+        const projectCheck = await pool.query(
+          'SELECT id FROM projects WHERE id = $1',
+          [projectId]
+        );
+
+        if (projectCheck.rows.length === 0) {
+          return res.status(404).json({ error: 'Project not found' });
+        }
+
+        const ganttData = await ganttFormatter.getGanttData(parseInt(projectId));
+        res.json(ganttData);
+      } catch (error) {
+        console.error('Error fetching Gantt data:', error);
+        res.status(500).json({ error: 'Failed to fetch Gantt data' });
+      }
+    }
+  );
+
+  // Update task dates from Gantt chart
+  app.put('/api/issues/:issueId/dates',
+    authenticateToken,
+    async (req, res) => {
+      try {
+        const { issueId } = req.params;
+        const { startDate, endDate } = req.body;
+
+        const result = await ganttFormatter.updateTaskDates(
+          parseInt(issueId),
+          startDate,
+          endDate
+        );
+
+        res.json(result);
+      } catch (error) {
+        console.error('Error updating task dates:', error);
+        res.status(500).json({ error: 'Failed to update task dates' });
+      }
+    }
+  );
+
+  // Update task progress from Gantt chart
+  app.put('/api/issues/:issueId/progress',
+    authenticateToken,
+    async (req, res) => {
+      try {
+        const { issueId } = req.params;
+        const { progress } = req.body;
+
+        const result = await ganttFormatter.updateTaskProgress(
+          parseInt(issueId),
+          progress
+        );
+
+        res.json(result);
+      } catch (error) {
+        console.error('Error updating task progress:', error);
+        res.status(500).json({ error: 'Failed to update task progress' });
+      }
+    }
+  );

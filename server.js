@@ -61,6 +61,7 @@ const documentService = require('./services/document-service');
 const { calculateProjectSchedule } = require('./services/schedule-calculation-service');
 const aiCostTracker = require('./services/ai-cost-tracker');
 const timelineExtractor = require('./services/timeline-extractor');
+const ganttFormatter = require('./services/gantt-formatter');
 const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 
 // Configure WebSocket for Node.js < v22
@@ -2807,6 +2808,77 @@ app.get('/api/projects/:projectId/dashboard/trends', authenticateToken, async (r
     res.status(500).json({ error: 'Failed to fetch dashboard trends' });
   }
 });
+
+// ============= GANTT CHART ROUTES =============
+
+// Get Gantt chart data for a project
+app.get('/api/projects/:projectId/gantt-data',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { projectId } = req.params;
+
+      // Verify user has access to project
+      const projectCheck = await pool.query(
+        'SELECT id FROM projects WHERE id = $1',
+        [projectId]
+      );
+
+      if (projectCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      const ganttData = await ganttFormatter.getGanttData(parseInt(projectId));
+      res.json(ganttData);
+    } catch (error) {
+      console.error('Error fetching Gantt data:', error);
+      res.status(500).json({ error: 'Failed to fetch Gantt data' });
+    }
+  }
+);
+
+// Update task dates from Gantt chart
+app.put('/api/issues/:issueId/dates',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { issueId } = req.params;
+      const { startDate, endDate } = req.body;
+
+      const result = await ganttFormatter.updateTaskDates(
+        parseInt(issueId),
+        startDate,
+        endDate
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error updating task dates:', error);
+      res.status(500).json({ error: 'Failed to update task dates' });
+    }
+  }
+);
+
+// Update task progress from Gantt chart
+app.put('/api/issues/:issueId/progress',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { issueId } = req.params;
+      const { progress } = req.body;
+
+      const result = await ganttFormatter.updateTaskProgress(
+        parseInt(issueId),
+        progress
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error updating task progress:', error);
+      res.status(500).json({ error: 'Failed to update task progress' });
+    }
+  }
+);
 
 // ============= REPORTING ROUTES =============
 
@@ -14996,8 +15068,11 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`   GET  /api/auth/me`);
   console.log(`   GET  /api/projects`);
   console.log(`   POST /api/projects`);
+  console.log(`   GET  /api/projects/:projectId/gantt-data`);
   console.log(`   GET  /api/issues`);
   console.log(`   POST /api/issues`);
+  console.log(`   PUT  /api/issues/:issueId/dates`);
+  console.log(`   PUT  /api/issues/:issueId/progress`);
   console.log(`   GET  /api/action-items`);
   console.log(`   POST /api/action-items`);
   console.log(`   GET  /api/users`);
