@@ -63,11 +63,22 @@
   opacity: 0.8;
 }
 
-/* Task labels */
+/* Task labels - Enhanced visibility for Day view */
 .gantt .bar-label {
-  fill: #ffffff;
-  font-size: 12px;
-  font-weight: 500;
+  fill: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  paint-order: stroke fill !important;
+  stroke: rgba(0, 0, 0, 0.3) !important;
+  stroke-width: 0.5px !important;
+}
+
+/* Additional text enhancement */
+.gantt text.bar-label {
+  fill: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
 }
 
 /* Hover effects */
