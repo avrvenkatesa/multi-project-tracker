@@ -169,6 +169,23 @@ class MultiDocumentAnalyzer {
         console.log('⚠️  Timeline extractor not available - skipping\n');
       }
 
+      // Step 4b: Update issues with timeline data (OPTIONAL)
+      if (result.timeline.phases || result.timeline.milestones) {
+        console.log('Step 4b/7: Updating issues with timeline data...');
+        try {
+          const ganttFormatter = require('./gantt-formatter');
+          const timelineUpdate = await ganttFormatter.updateIssuesWithTimeline(
+            projectId,
+            result.timeline
+          );
+          console.log(`✅ Updated ${timelineUpdate.updated} issues, created ${timelineUpdate.created} milestones\n`);
+        } catch (error) {
+          console.error('Failed to update issues with timeline:', error);
+          result.warnings.push('Timeline extracted but failed to update issues');
+          console.log(`⚠️  Timeline update failed: ${error.message}\n`);
+        }
+      }
+
       // Step 5: Create dependencies (OPTIONAL)
       console.log('Step 5/7: Creating dependencies...');
       if (this.dependencyMapper && result.issues.ids.length > 1) {
