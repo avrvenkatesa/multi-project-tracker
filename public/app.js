@@ -541,6 +541,11 @@ function setupEventListeners() {
             window.location.href = `schedules.html?projectId=${currentProject.id}`;
         }
     });
+    document.getElementById('view-timeline-btn')?.addEventListener('click', () => {
+        if (currentProject) {
+            window.location.href = `gantt.html?projectId=${currentProject.id}`;
+        }
+    });
     document.getElementById('view-checklists-btn')?.addEventListener('click', () => {
         if (currentProject) {
             window.location.href = `checklists.html?project=${currentProject.id}`;

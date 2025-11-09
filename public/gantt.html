@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Timeline - Gantt View</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+  <style>
+    .gantt-container {
+      overflow-x: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .bar {
+      fill: #3b82f6;
+    }
+    .bar-progress {
+      fill: #1d4ed8;
+    }
+    .bar-critical {
+      fill: #ef4444 !important;
+    }
+    .bar-milestone {
+      fill: #10b981 !important;
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <!-- Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+          <a href="/dashboard.html" class="text-blue-600 hover:text-blue-800">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+          </a>
+          <h1 class="text-2xl font-bold text-gray-900">
+            <i class="fas fa-chart-gantt text-blue-600 mr-2"></i>
+            Project Timeline
+          </h1>
+        </div>
+        <div class="flex items-center space-x-4">
+          <span id="user-display" class="text-gray-700"></span>
+          <button id="logout-btn" class="text-gray-600 hover:text-gray-900">
+            <i class="fas fa-sign-out-alt"></i> Logout
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+    <div class="bg-white rounded-lg shadow-sm p-6">
+      <div class="mb-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-2">Interactive Timeline</h2>
+        <p class="text-sm text-gray-600">Drag tasks to adjust dates, or modify progress bars directly.</p>
+      </div>
+
+      <!-- Gantt Container -->
+      <div id="gantt" class="gantt-container"></div>
+      
+      <!-- View Mode Controls -->
+      <div id="view-controls" class="mt-6 flex justify-center space-x-2 hidden">
+        <button data-view="Quarter Day" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm">Quarter Day</button>
+        <button data-view="Half Day" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm">Half Day</button>
+        <button data-view="Day" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm">Day</button>
+        <button data-view="Week" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Week</button>
+        <button data-view="Month" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm">Month</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+  <script src="/js/gantt-loader.js"></script>
+</body>
+</html>
