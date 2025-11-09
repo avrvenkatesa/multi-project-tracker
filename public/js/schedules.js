@@ -2689,3 +2689,226 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+
+// ============================================
+// GANTT CHART API INTEGRATION (Issue-Based Timeline View)
+// Separate from schedule-based rendering above
+// ============================================
+
+/**
+ * Load Gantt chart directly from backend issues API
+ * This shows issue timelines without requiring a calculated schedule
+ * 
+ * @param {number} projectId - Project ID to load
+ * @param {string} containerId - DOM element ID for Gantt container
+ */
+async function loadGanttChartFromAPI(projectId, containerId = 'gantt-container') {
+  try {
+    const container = document.getElementById(containerId);
+    if (!container) {
+      console.error(`Gantt container ${containerId} not found`);
+      return;
+    }
+
+    showGanttLoadingSpinner(container);
+
+    const response = await fetch(`/api/projects/${projectId}/gantt-data`, {
+      headers: {
+        'Authorization': 'Bearer ' + localStorage.getItem('token')
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to load Gantt data');
+    }
+
+    const ganttData = await response.json();
+
+    if (!ganttData.tasks || ganttData.tasks.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-8">
+          <p class="text-gray-500 mb-4">No timeline data available.</p>
+          <p class="text-sm text-gray-400">Create issues with start/end dates or upload documents to generate a project schedule.</p>
+        </div>
+      `;
+      hideGanttLoadingSpinner(container);
+      return;
+    }
+
+    // Render Gantt chart using Frappe Gantt
+    const gantt = new Gantt(container, ganttData.tasks, {
+      view_mode: 'Week',
+      date_format: 'YYYY-MM-DD',
+      bar_height: 30,
+      bar_corner_radius: 3,
+      arrow_curve: 5,
+      padding: 18,
+      view_modes: ['Quarter Day', 'Half Day', 'Day', 'Week', 'Month'],
+      custom_popup_html: function(task) {
+        const startDate = new Date(task.start).toLocaleDateString();
+        const endDate = new Date(task.end).toLocaleDateString();
+        return `
+          <div class="details-container" style="padding: 12px;">
+            <h5 style="margin: 0 0 8px 0; font-weight: 600;">${task.name}</h5>
+            <p style="margin: 4px 0;"><strong>Start:</strong> ${startDate}</p>
+            <p style="margin: 4px 0;"><strong>End:</strong> ${endDate}</p>
+            <p style="margin: 4px 0;"><strong>Progress:</strong> ${task.progress}%</p>
+            ${task.dependencies ? `<p style="margin: 4px 0;"><strong>Dependencies:</strong> ${task.dependencies}</p>` : ''}
+          </div>
+        `;
+      },
+      on_click: function(task) {
+        console.log('Task clicked:', task);
+      },
+      on_date_change: async function(task, start, end) {
+        console.log('Task dates changed:', task, start, end);
+        await updateTaskDatesAPI(task.id, start, end);
+      },
+      on_progress_change: async function(task, progress) {
+        console.log('Task progress changed:', task, progress);
+        await updateTaskProgressAPI(task.id, progress);
+      }
+    });
+
+    // Store instance globally (separate from schedule-based instance)
+    window.currentGanttAPIInstance = gantt;
+
+    console.log('✅ Gantt chart loaded successfully from issues API');
+    hideGanttLoadingSpinner(container);
+  } catch (error) {
+    console.error('Error loading Gantt chart from API:', error);
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.innerHTML = `
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p class="text-red-800"><strong>Error:</strong> Failed to load Gantt chart. ${error.message}</p>
+        </div>
+      `;
+    }
+    hideGanttLoadingSpinner(container);
+  }
+}
+
+/**
+ * Update task dates via API (triggered by Gantt drag-and-drop)
+ * @param {number} issueId - Issue ID to update
+ * @param {Date} startDate - New start date
+ * @param {Date} endDate - New end date
+ */
+async function updateTaskDatesAPI(issueId, startDate, endDate) {
+  try {
+    const response = await fetch(`/api/issues/${issueId}/dates`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + localStorage.getItem('token')
+      },
+      body: JSON.stringify({
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update task dates');
+    }
+
+    showGanttNotification('Task dates updated successfully', 'success');
+  } catch (error) {
+    console.error('Error updating task dates:', error);
+    showGanttNotification('Failed to update task dates', 'error');
+  }
+}
+
+/**
+ * Update task progress via API (triggered by Gantt progress bar adjustment)
+ * @param {number} issueId - Issue ID to update
+ * @param {number} progress - Progress percentage (0-100)
+ */
+async function updateTaskProgressAPI(issueId, progress) {
+  try {
+    const response = await fetch(`/api/issues/${issueId}/progress`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + localStorage.getItem('token')
+      },
+      body: JSON.stringify({ progress })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update task progress');
+    }
+
+    showGanttNotification('Task progress updated successfully', 'success');
+  } catch (error) {
+    console.error('Error updating task progress:', error);
+    showGanttNotification('Failed to update task progress', 'error');
+  }
+}
+
+/**
+ * Show toast notification to user (Tailwind-styled)
+ * @param {string} message - Notification message
+ * @param {string} type - Notification type (success, error, info, warning)
+ */
+function showGanttNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  
+  const bgColors = {
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500',
+    warning: 'bg-yellow-500'
+  };
+  
+  notification.className = `fixed top-4 right-4 ${bgColors[type] || bgColors.info} text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300`;
+  notification.style.opacity = '0';
+  notification.innerHTML = `
+    <div class="flex items-center space-x-2">
+      <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+      <span>${message}</span>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Fade in
+  setTimeout(() => {
+    notification.style.opacity = '1';
+  }, 10);
+  
+  // Fade out and remove
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    setTimeout(() => {
+      notification.remove();
+    }, 300);
+  }, 3000);
+}
+
+/**
+ * Show loading spinner in Gantt container
+ */
+function showGanttLoadingSpinner(container) {
+  const spinner = document.createElement('div');
+  spinner.id = 'gantt-api-loading';
+  spinner.className = 'text-center py-12';
+  spinner.innerHTML = `
+    <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+    <p class="text-gray-600">Loading Gantt chart...</p>
+  `;
+  container.innerHTML = '';
+  container.appendChild(spinner);
+}
+
+/**
+ * Hide loading spinner from Gantt container
+ */
+function hideGanttLoadingSpinner(container) {
+  const spinner = document.getElementById('gantt-api-loading');
+  if (spinner) spinner.remove();
+}
+
+// Make functions globally accessible for HTML onclick handlers if needed
+window.loadGanttChartFromAPI = loadGanttChartFromAPI;

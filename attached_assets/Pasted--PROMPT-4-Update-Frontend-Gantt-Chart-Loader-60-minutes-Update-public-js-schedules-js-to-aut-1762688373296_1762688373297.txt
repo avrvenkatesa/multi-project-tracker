@@ -1,0 +1,181 @@
+ PROMPT 4: Update Frontend Gantt Chart Loader (60 minutes)
+
+  Update public/js/schedules.js to auto-load imported timeline data:
+
+  /**
+   * Load Gantt chart from backend data
+   */
+  async function loadGanttChart(projectId) {
+    try {
+      showLoadingSpinner();
+
+      const response = await fetch(`/api/projects/${projectId}/gantt-data`, {
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('token')
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load Gantt data');
+      }
+
+      const ganttData = await response.json();
+
+      if (!ganttData.tasks || ganttData.tasks.length === 0) {
+        document.getElementById('gantt').innerHTML = `
+          <div class="text-center py-8">
+            <p class="text-gray-500 mb-4">No timeline data available.</p>
+            <p class="text-sm text-gray-400">Upload documents to generate a project schedule.</p>
+          </div>
+        `;
+        hideLoadingSpinner();
+        return;
+      }
+
+      // Render Gantt chart using Frappe Gantt
+      const gantt = new Gantt('#gantt', ganttData.tasks, {
+        view_mode: 'Week',
+        date_format: 'YYYY-MM-DD',
+        bar_height: 30,
+        bar_corner_radius: 3,
+        arrow_curve: 5,
+        padding: 18,
+        view_modes: ['Day', 'Week', 'Month', 'Quarter'],
+        custom_popup_html: function(task) {
+          const startDate = new Date(task.start).toLocaleDateString();
+          const endDate = new Date(task.end).toLocaleDateString();
+          return `
+            <div class="details-container" style="padding: 12px;">
+              <h5 style="margin: 0 0 8px 0; font-weight: 600;">${task.name}</h5>
+              <p style="margin: 4px 0;"><strong>Start:</strong> ${startDate}</p>
+              <p style="margin: 4px 0;"><strong>End:</strong> ${endDate}</p>
+              <p style="margin: 4px 0;"><strong>Progress:</strong> ${task.progress}%</p>
+              ${task.dependencies ? `<p style="margin: 4px 0;"><strong>Dependencies:</strong> ${task.dependencies}</p>` : ''}
+            </div>
+          `;
+        },
+        on_click: function(task) {
+          console.log('Task clicked:', task);
+          // Optional: Open issue detail modal
+          // openIssueModal(task.id);
+        },
+        on_date_change: async function(task, start, end) {
+          console.log('Task dates changed:', task, start, end);
+          await updateTaskDates(task.id, start, end);
+        },
+        on_progress_change: async function(task, progress) {
+          console.log('Task progress changed:', task, progress);
+          await updateTaskProgress(task.id, progress);
+        }
+      });
+
+      console.log('✅ Gantt chart rendered successfully');
+      hideLoadingSpinner();
+    } catch (error) {
+      console.error('Error loading Gantt chart:', error);
+      document.getElementById('gantt').innerHTML = `
+        <div class="alert alert-danger">
+          <strong>Error:</strong> Failed to load Gantt chart. ${error.message}
+        </div>
+      `;
+      hideLoadingSpinner();
+    }
+  }
+
+  /**
+   * Update task dates via API
+   */
+  async function updateTaskDates(issueId, startDate, endDate) {
+    try {
+      const response = await fetch(`/api/issues/${issueId}/dates`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + localStorage.getItem('token')
+        },
+        body: JSON.stringify({
+          startDate: startDate.toISOString().split('T')[0],
+          endDate: endDate.toISOString().split('T')[0]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update task dates');
+      }
+
+      showNotification('Task dates updated successfully', 'success');
+    } catch (error) {
+      console.error('Error updating task dates:', error);
+      showNotification('Failed to update task dates', 'error');
+    }
+  }
+
+  /**
+   * Update task progress via API
+   */
+  async function updateTaskProgress(issueId, progress) {
+    try {
+      const response = await fetch(`/api/issues/${issueId}/progress`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + localStorage.getItem('token')
+        },
+        body: JSON.stringify({ progress })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update task progress');
+      }
+
+      showNotification('Task progress updated successfully', 'success');
+    } catch (error) {
+      console.error('Error updating task progress:', error);
+      showNotification('Failed to update task progress', 'error');
+    }
+  }
+
+  /**
+   * Show notification to user
+   */
+  function showNotification(message, type = 'info') {
+    // Simple notification implementation
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+    notification.style.zIndex = '9999';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+      notification.remove();
+    }, 3000);
+  }
+
+  function showLoadingSpinner() {
+    const spinner = document.createElement('div');
+    spinner.id = 'gantt-loading';
+    spinner.innerHTML = '<div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>';
+    spinner.className = 'text-center py-4';
+    document.getElementById('gantt').appendChild(spinner);
+  }
+
+  function hideLoadingSpinner() {
+    const spinner = document.getElementById('gantt-loading');
+    if (spinner) spinner.remove();
+  }
+
+  // Auto-load Gantt chart when page loads
+  document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectId = urlParams.get('projectId');
+
+    if (projectId) {
+      loadGanttChart(projectId);
+    } else {
+      document.getElementById('gantt').innerHTML = `
+        <div class="alert alert-warning">
+          No project selected. Please select a project from the dashboard.
+        </div>
+      `;
+    }
+  });
