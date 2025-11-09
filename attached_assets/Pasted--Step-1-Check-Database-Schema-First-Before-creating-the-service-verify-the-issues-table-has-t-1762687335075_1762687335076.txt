@@ -1,0 +1,274 @@
+ Step 1: Check Database Schema First
+
+  Before creating the service, verify the issues table has the required columns:
+
+  -- Run this in your database console or via Replit
+  SELECT column_name, data_type
+  FROM information_schema.columns
+  WHERE table_name = 'issues'
+  AND column_name IN ('start_date', 'end_date', 'effort_hours');
+
+  If columns are missing, add them:
+
+  ALTER TABLE issues
+  ADD COLUMN IF NOT EXISTS start_date DATE,
+  ADD COLUMN IF NOT EXISTS end_date DATE,
+  ADD COLUMN IF NOT EXISTS effort_hours DECIMAL(10,2);
+
+  ---
+  Step 2: Create gantt-formatter.js Service
+
+  Create file: services/gantt-formatter.js
+
+  const pool = require('../db');
+
+  /**
+   * Get Gantt chart data for a project
+   * Converts issues and timeline data to Frappe Gantt format
+   */
+  async function getGanttData(projectId) {
+    try {
+      console.log(`📊 Fetching Gantt data for project ${projectId}...`);
+
+      // Get all issues with timeline data
+      const issuesResult = await pool.query(
+        `SELECT
+          i.id,
+          i.title,
+          i.description,
+          i.status,
+          i.start_date,
+          i.end_date,
+          i.assigned_to_id,
+          u.username as assigned_to
+         FROM issues i
+         LEFT JOIN users u ON i.assigned_to_id = u.id
+         WHERE i.project_id = $1
+         ORDER BY
+           CASE WHEN i.start_date IS NULL THEN 1 ELSE 0 END,
+           i.start_date,
+           i.id`,
+        [projectId]
+      );
+
+      if (issuesResult.rows.length === 0) {
+        console.log('⚠️ No issues found for project');
+        return { tasks: [] };
+      }
+
+      console.log(`Found ${issuesResult.rows.length} issues`);
+
+      // Get dependencies - check both 'dependency' and 'blocks' relationship types
+      const depsResult = await pool.query(
+        `SELECT source_issue_id, target_issue_id, relationship_type
+         FROM issue_relationships
+         WHERE relationship_type IN ('dependency', 'blocks', 'depends_on')
+         AND source_issue_id IN (SELECT id FROM issues WHERE project_id = $1)`,
+        [projectId]
+      );
+
+      console.log(`Found ${depsResult.rows.length} dependencies`);
+
+      // Build dependency map (target depends on source)
+      const dependencyMap = new Map();
+      depsResult.rows.forEach(dep => {
+        if (!dependencyMap.has(dep.target_issue_id)) {
+          dependencyMap.set(dep.target_issue_id, []);
+        }
+        dependencyMap.get(dep.target_issue_id).push(dep.source_issue_id);
+      });
+
+      // Convert to Frappe Gantt format
+      const tasks = issuesResult.rows.map(issue => {
+        const deps = dependencyMap.get(issue.id) || [];
+
+        // Calculate dates if missing
+        let startDate = issue.start_date;
+        let endDate = issue.end_date;
+
+        if (!startDate) {
+          // Default to today
+          startDate = new Date().toISOString().split('T')[0];
+        } else if (startDate instanceof Date) {
+          startDate = startDate.toISOString().split('T')[0];
+        }
+
+        if (!endDate) {
+          // Default to 7 days from start
+          const end = new Date(startDate);
+          end.setDate(end.getDate() + 7);
+          endDate = end.toISOString().split('T')[0];
+        } else if (endDate instanceof Date) {
+          endDate = endDate.toISOString().split('T')[0];
+        }
+
+        // Map status to progress percentage
+        let progress = 0;
+        if (issue.status === 'completed' || issue.status === 'done') {
+          progress = 100;
+        } else if (issue.status === 'in_progress' || issue.status === 'in-progress') {
+          progress = 50;
+        }
+
+        // Check if this is a milestone
+        const isMilestone = issue.title && (
+          issue.title.toLowerCase().includes('milestone') ||
+          issue.title.startsWith('🎯') ||
+          issue.title.toLowerCase().includes('gate')
+        );
+
+        return {
+          id: issue.id.toString(),
+          name: issue.title || 'Untitled Task',
+          start: startDate,
+          end: endDate,
+          progress: progress,
+          dependencies: deps.length > 0 ? deps.join(',') : '',
+          custom_class: isMilestone ? 'milestone' : ''
+        };
+      });
+
+      console.log(`✅ Converted ${tasks.length} tasks to Gantt format`);
+      return { tasks };
+
+    } catch (error) {
+      console.error('❌ Error getting Gantt data:', error);
+      console.error('Error details:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update issues with timeline data from extraction
+   */
+  async function updateIssuesWithTimeline(projectId, timeline) {
+    try {
+      console.log(`📅 Updating issues with timeline data for project ${projectId}...`);
+
+      // Get existing issues
+      const issuesResult = await pool.query(
+        'SELECT id, title FROM issues WHERE project_id = $1',
+        [projectId]
+      );
+      const issues = issuesResult.rows;
+
+      let updatedCount = 0;
+      let createdCount = 0;
+
+      // Match timeline phases to issues and update dates
+      if (timeline.phases && Array.isArray(timeline.phases)) {
+        for (const phase of timeline.phases) {
+          // Fuzzy match issue by title
+          const matchingIssue = issues.find(i => {
+            const issueTitle = (i.title || '').toLowerCase();
+            const phaseName = (phase.name || '').toLowerCase();
+            return issueTitle.includes(phaseName) || phaseName.includes(issueTitle);
+          });
+
+          if (matchingIssue && phase.startDate && phase.endDate) {
+            await pool.query(
+              'UPDATE issues SET start_date = $1, end_date = $2, updated_at = NOW() WHERE id = $3',
+              [phase.startDate, phase.endDate, matchingIssue.id]
+            );
+            console.log(`✅ Updated issue "${matchingIssue.title}" with dates ${phase.startDate} to ${phase.endDate}`);
+            updatedCount++;
+          }
+        }
+      }
+
+      // Create milestone issues if they don't exist
+      if (timeline.milestones && Array.isArray(timeline.milestones)) {
+        for (const milestone of timeline.milestones) {
+          const exists = issues.some(i =>
+            (i.title || '').includes(milestone.name)
+          );
+
+          if (!exists && milestone.dueDate) {
+            const result = await pool.query(
+              `INSERT INTO issues (project_id, title, description, start_date, end_date, status, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, 'open', NOW(), NOW())
+               RETURNING id`,
+              [
+                projectId,
+                `🎯 ${milestone.name}`,
+                milestone.description || 'Auto-generated milestone from timeline extraction',
+                milestone.dueDate,
+                milestone.dueDate
+              ]
+            );
+            console.log(`✅ Created milestone issue: ${milestone.name} (ID: ${result.rows[0].id})`);
+            createdCount++;
+          }
+        }
+      }
+
+      console.log(`📊 Timeline update complete: ${updatedCount} updated, ${createdCount} created`);
+      return { updated: updatedCount, created: createdCount };
+
+    } catch (error) {
+      console.error('❌ Error updating issues with timeline:', error);
+      console.error('Error details:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update task dates from Gantt chart drag-and-drop
+   */
+  async function updateTaskDates(issueId, startDate, endDate) {
+    try {
+      const result = await pool.query(
+        'UPDATE issues SET start_date = $1, end_date = $2, updated_at = NOW() WHERE id = $3 RETURNING id',
+        [startDate, endDate, issueId]
+      );
+
+      if (result.rows.length === 0) {
+        throw new Error(`Issue ${issueId} not found`);
+      }
+
+      console.log(`✅ Updated dates for issue ${issueId}: ${startDate} to ${endDate}`);
+      return { success: true, issueId: result.rows[0].id };
+
+    } catch (error) {
+      console.error('❌ Error updating task dates:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update task progress from Gantt chart
+   */
+  async function updateTaskProgress(issueId, progress) {
+    try {
+      // Map progress percentage to status
+      let status = 'open';
+      if (progress >= 100) {
+        status = 'completed';
+      } else if (progress > 0) {
+        status = 'in_progress';
+      }
+
+      const result = await pool.query(
+        'UPDATE issues SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, status',
+        [status, issueId]
+      );
+
+      if (result.rows.length === 0) {
+        throw new Error(`Issue ${issueId} not found`);
+      }
+
+      console.log(`✅ Updated progress for issue ${issueId}: ${progress}% (status: ${status})`);
+      return { success: true, issueId: result.rows[0].id, status: result.rows[0].status };
+
+    } catch (error) {
+      console.error('❌ Error updating task progress:', error);
+      throw error;
+    }
+  }
+
+  module.exports = {
+    getGanttData,
+    updateIssuesWithTimeline,
+    updateTaskDates,
+    updateTaskProgress
+  };
