@@ -43,8 +43,9 @@ async function createDependencies(workstreams, projectId) {
       return result;
     }
 
-    // Build workstream to issue mapping
+    // Build workstream to issue mapping (by both name and ID)
     const workstreamMapping = new Map();
+    const workstreamIdToName = new Map();
     const unmatchedWorkstreams = [];
 
     for (const workstream of workstreams) {
@@ -52,6 +53,10 @@ async function createDependencies(workstreams, projectId) {
       
       if (matchedIssue) {
         workstreamMapping.set(workstream.name, matchedIssue);
+        // Also map by workstream ID for dependency resolution
+        if (workstream.id) {
+          workstreamIdToName.set(workstream.id, workstream.name);
+        }
         console.log(`  ✓ Mapped "${workstream.name}" → Issue #${matchedIssue.id} "${matchedIssue.title}"`);
       } else {
         unmatchedWorkstreams.push(workstream.name);
@@ -78,11 +83,13 @@ async function createDependencies(workstreams, projectId) {
       // Process each dependency
       if (workstream.dependencies && Array.isArray(workstream.dependencies)) {
         for (const dependencyName of workstream.dependencies) {
-          const sourceIssue = workstreamMapping.get(dependencyName);
+          // Resolve workstream ID to name if needed (e.g., "workstream-1" → actual name)
+          const resolvedName = workstreamIdToName.get(dependencyName) || dependencyName;
+          const sourceIssue = workstreamMapping.get(resolvedName);
           
           if (!sourceIssue) {
             result.warnings.push(
-              `Dependency "${dependencyName}" for "${workstream.name}" not found in issues`
+              `Dependency "${dependencyName}" (resolved to: ${resolvedName}) for "${workstream.name}" not found in issues`
             );
             continue;
           }

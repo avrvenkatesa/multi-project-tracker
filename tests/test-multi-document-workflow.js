@@ -27,7 +27,23 @@ async function runWorkflowTest() {
     );
     projectId = projectResult.rows[0].id;
 
-    console.log(`✓ Created project ${projectId}\n`);
+    // Add test users as project members for resource matching
+    await pool.query(
+      `INSERT INTO users (username, email, password)
+       VALUES 
+         ('sultan', 'sultan@example.com', 'hash'),
+         ('srihari', 'srihari@example.com', 'hash'),
+         ('moshik', 'moshik@example.com', 'hash')
+       ON CONFLICT (username) DO NOTHING`
+    );
+
+    await pool.query(
+      `INSERT INTO project_members (project_id, user_id, role)
+       SELECT $1, id, 'Member' FROM users WHERE username IN ('sultan', 'srihari', 'moshik', 'test_user')`,
+      [projectId]
+    );
+
+    console.log(`✓ Created project ${projectId} with 4 members\n`);
 
     const documents = [
       {

@@ -364,7 +364,7 @@ function matchResourcesToUsers(resources, users) {
       resource.needsReview = match.confidence < 0.9;
       
       const reviewFlag = resource.needsReview ? '⚠️' : '✓';
-      console.log(`  ${reviewFlag} Matched "${resource.name}" → ${match.user.full_name} (confidence: ${(match.confidence * 100).toFixed(0)}%)`);
+      console.log(`  ${reviewFlag} Matched "${resource.name}" → ${match.user.username} (ID: ${match.user.id}, confidence: ${(match.confidence * 100).toFixed(0)}%)`);
     } else {
       resource.userId = null;
       resource.matchConfidence = 0;

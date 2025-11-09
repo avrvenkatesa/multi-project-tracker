@@ -209,11 +209,16 @@ class MultiDocumentAnalyzer {
           if (effortDoc) {
             const resourceResult = await this.resourceParser.parseResources(
               effortDoc.text,
-              { projectId, issueIds: result.issues.ids }
+              { 
+                projectId, 
+                issueIds: result.issues.ids,
+                assignToIssues: true  // Enable actual assignment to issues
+              }
             );
             
-            result.resourceAssignments.assigned = resourceResult.assigned || 0;
-            result.resourceAssignments.needsReview = resourceResult.needsReview || [];
+            // Map response correctly
+            result.resourceAssignments.assigned = resourceResult.assignments?.length || 0;
+            result.resourceAssignments.needsReview = resourceResult.resources?.filter(r => r.needsReview) || [];
             
             console.log(`✓ Assigned ${result.resourceAssignments.assigned} resources\n`);
           } else {
