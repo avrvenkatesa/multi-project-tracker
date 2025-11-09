@@ -84,6 +84,12 @@ function setupEventListeners() {
       window.location.href = 'templates.html';
     }
   });
+  document.getElementById('view-schedules-btn')?.addEventListener('click', () => {
+    window.location.href = `schedules.html?projectId=${currentProjectId}`;
+  });
+  document.getElementById('view-timeline-btn')?.addEventListener('click', () => {
+    window.location.href = `gantt.html?projectId=${currentProjectId}`;
+  });
   
   // Create dropdown navigation
   document.getElementById('create-issue-btn')?.addEventListener('click', () => {
