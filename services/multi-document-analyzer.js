@@ -113,10 +113,7 @@ class MultiDocumentAnalyzer {
       });
       result.workstreams = workstreamsResult.workstreams || [];
       
-      if (workstreamsResult.cost) {
-        result.aiCostBreakdown.workstream_detection = workstreamsResult.cost;
-        result.totalCost += workstreamsResult.cost;
-      }
+      // Workstream detector doesn't return cost - it's tracked separately via ai-cost-tracker
 
       console.log(`✓ Found ${result.workstreams.length} workstreams`);
       result.workstreams.forEach((ws, i) => {
@@ -155,9 +152,11 @@ class MultiDocumentAnalyzer {
           
           result.timeline = timelineResult.timeline || { phases: [], milestones: [] };
           
-          if (timelineResult.cost) {
-            result.aiCostBreakdown.timeline_extraction = timelineResult.cost;
-            result.totalCost += timelineResult.cost;
+          // Extract cost from timeline result (it's an object with costUsd property)
+          if (timelineResult.cost && typeof timelineResult.cost === 'object') {
+            const costAmount = timelineResult.cost.costUsd || 0;
+            result.aiCostBreakdown.timeline_extraction = costAmount;
+            result.totalCost += costAmount;
           }
           
           console.log(`✓ Extracted ${result.timeline.phases?.length || 0} phases, ${result.timeline.milestones?.length || 0} milestones\n`);
