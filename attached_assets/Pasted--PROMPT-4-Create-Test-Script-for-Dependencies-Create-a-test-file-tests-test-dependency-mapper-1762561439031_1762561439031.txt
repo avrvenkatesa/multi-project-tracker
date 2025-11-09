@@ -1,0 +1,76 @@
+ PROMPT 4: Create Test Script for Dependencies
+
+  Create a test file: tests/test-dependency-mapper.js
+
+  This script tests dependency extraction, circular detection, and fuzzy matching.
+
+  Requirements:
+  1. Load environment variables
+  2. Import dependency-mapper service
+  3. Create test project and issues
+  4. Test workstream dependency creation
+  5. Test circular dependency detection
+  6. Test fuzzy name matching
+  7. Clean up test data
+
+  Test cases to implement:
+
+  1. Basic Dependency Creation
+     - Create 3 issues: Discovery, Design, Implementation
+     - Workstreams: Design depends on Discovery, Implementation depends on Design
+     - Verify 2 dependencies created
+     - Verify source/target IDs are correct
+
+  2. Circular Dependency Detection
+     - Create workstreams with circular reference: A→B, B→C, C→A
+     - Verify circular dependency error returned
+     - Verify no dependencies created
+
+  3. Fuzzy Name Matching
+     - Create issue "AD Migration Discovery"
+     - Workstream dependency references "Discovery" (partial match)
+     - Verify dependency created successfully
+     - Test Levenshtein matching with minor typos
+
+  4. Missing Dependency Warning
+     - Reference non-existent workstream in dependencies
+     - Verify warning is returned
+     - Verify other valid dependencies still created
+
+  Sample test structure:
+
+  const dependencyMapper = require('../services/dependency-mapper');
+  const { pool } = require('../db');
+
+  async function runTests() {
+    console.log('=== DEPENDENCY MAPPER TESTS ===\n');
+
+    // Test 1: Basic creation
+    console.log('Test 1: Basic Dependency Creation');
+    // ... test code
+
+    // Test 2: Circular detection
+    console.log('\nTest 2: Circular Dependency Detection');
+    // ... test code
+
+    // Test 3: Fuzzy matching
+    console.log('\nTest 3: Fuzzy Name Matching');
+    // ... test code
+
+    // Test 4: Missing dependency
+    console.log('\nTest 4: Missing Dependency Warning');
+    // ... test code
+
+    console.log('\n✅ All tests completed!');
+  }
+
+  runTests().catch(console.error).finally(() => process.exit(0));
+
+  Expected output:
+  - All tests pass
+  - Dependencies created in database
+  - Circular dependencies detected
+  - Fuzzy matching works
+  - Warnings for missing dependencies
+
+  Run with: node tests/test-dependency-mapper.js

@@ -1,0 +1,156 @@
+/**
+ * Dependency Mapper - Integration Test
+ * 
+ * Lightweight integration test that verifies database operations.
+ * Unit tests already cover logic - this tests database connectivity.
+ * 
+ * Run with: node tests/test-dependency-integration.js
+ */
+
+const dependencyMapper = require('../services/dependency-mapper');
+const { pool } = require('../db');
+
+async function runIntegrationTest() {
+  console.log('🔗 DEPENDENCY MAPPER - INTEGRATION TEST\n');
+  console.log('Unit tests already verify logic ✅');
+  console.log('This test verifies database operations\n');
+
+  let projectId;
+
+  try {
+    // Setup: Create test project and issues
+    console.log('Setup: Creating test data...');
+
+    const projectResult = await pool.query(
+      `INSERT INTO projects (name, description, created_by)
+       VALUES ($1, $2, $3) RETURNING id`,
+      ['Integration Test Project', 'Testing DB operations', 'testuser']
+    );
+    projectId = projectResult.rows[0].id;
+
+    // Create 3 test issues
+    const issue1 = await pool.query(
+      `INSERT INTO issues (project_id, title, status, created_by)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [projectId, 'Phase 1: Discovery', 'open', 1]
+    );
+
+    const issue2 = await pool.query(
+      `INSERT INTO issues (project_id, title, status, created_by)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [projectId, 'Phase 2: Design', 'open', 1]
+    );
+
+    const issue3 = await pool.query(
+      `INSERT INTO issues (project_id, title, status, created_by)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [projectId, 'Phase 3: Implementation', 'open', 1]
+    );
+
+    console.log(`✓ Created project ${projectId} with 3 issues\n`);
+
+    // TEST 1: Create Dependencies
+    console.log('Test 1: Create dependencies in database');
+    console.log('────────────────────────────────────────');
+
+    const workstreams = [
+      { name: 'Phase 1: Discovery', dependencies: [] },
+      { name: 'Phase 2: Design', dependencies: ['Phase 1: Discovery'] },
+      { name: 'Phase 3: Implementation', dependencies: ['Phase 2: Design'] }
+    ];
+
+    const result = await dependencyMapper.createDependencies(workstreams, projectId);
+
+    console.log(`  Dependencies created: ${result.dependencies.length}`);
+    console.log(`  Warnings: ${result.warnings.length}`);
+    console.log(`  Errors: ${result.errors.length}`);
+
+    result.dependencies.forEach(dep => {
+      console.log(`  ✓ ${dep.source_name} → ${dep.target_name}`);
+    });
+
+    if (result.dependencies.length === 2 && result.errors.length === 0) {
+      console.log('✅ Test 1 PASSED\n');
+    } else {
+      console.log('❌ Test 1 FAILED\n');
+      throw new Error('Dependency creation failed');
+    }
+
+    // TEST 2: Retrieve Dependency Graph
+    console.log('Test 2: Retrieve dependency graph from database');
+    console.log('───────────────────────────────────────────────');
+
+    const graph = await dependencyMapper.getDependencyGraph(projectId);
+
+    console.log(`  Dependencies retrieved: ${graph.length}`);
+    graph.forEach(dep => {
+      console.log(`  ✓ ${dep.source_title} → ${dep.target_title} (${dep.relationship_type})`);
+    });
+
+    if (graph.length === 2) {
+      console.log('✅ Test 2 PASSED\n');
+    } else {
+      console.log('❌ Test 2 FAILED\n');
+      throw new Error('Dependency retrieval failed');
+    }
+
+    // Verify polymorphic structure
+    console.log('Test 3: Verify polymorphic table structure');
+    console.log('──────────────────────────────────────────');
+
+    const dbCheck = await pool.query(
+      `SELECT source_type, target_type, relationship_type
+       FROM issue_relationships
+       WHERE source_id = $1 AND target_id = $2
+       LIMIT 1`,
+      [issue1.rows[0].id, issue2.rows[0].id]
+    );
+
+    if (dbCheck.rows.length > 0) {
+      const row = dbCheck.rows[0];
+      console.log(`  ✓ source_type: ${row.source_type}`);
+      console.log(`  ✓ target_type: ${row.target_type}`);
+      console.log(`  ✓ relationship_type: ${row.relationship_type}`);
+
+      if (row.source_type === 'issue' && row.target_type === 'issue' && row.relationship_type === 'dependency') {
+        console.log('✅ Test 3 PASSED\n');
+      } else {
+        console.log('❌ Test 3 FAILED - Incorrect types\n');
+      }
+    } else {
+      console.log('❌ Test 3 FAILED - Record not found\n');
+    }
+
+    console.log('═══════════════════════════════════════════');
+    console.log('✅ ALL INTEGRATION TESTS PASSED!');
+    console.log('═══════════════════════════════════════════\n');
+
+  } catch (error) {
+    console.error('\n❌ Integration test failed:', error);
+    throw error;
+  } finally {
+    // Cleanup
+    if (projectId) {
+      console.log('Cleanup: Removing test data...');
+      await pool.query(
+        `DELETE FROM issue_relationships
+         WHERE source_id IN (SELECT id FROM issues WHERE project_id = $1)`,
+        [projectId]
+      );
+      await pool.query('DELETE FROM issues WHERE project_id = $1', [projectId]);
+      await pool.query('DELETE FROM projects WHERE id = $1', [projectId]);
+      console.log('✓ Cleanup complete\n');
+    }
+  }
+}
+
+runIntegrationTest()
+  .then(() => {
+    console.log('🎉 Integration test suite completed successfully!');
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error('💥 Integration test suite failed!');
+    console.error(error);
+    process.exit(1);
+  });

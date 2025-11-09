@@ -56,6 +56,7 @@ const { initializeDailyJobs } = require('./jobs/dailyNotifications');
 const { generateChecklistPDF, generateSchedulePDF } = require('./services/pdf-service');
 const { validateChecklist, getValidationStatus } = require('./services/validation-service');
 const dependencyService = require('./services/dependency-service');
+const dependencyMapper = require('./services/dependency-mapper');
 const documentService = require('./services/document-service');
 const { calculateProjectSchedule } = require('./services/schedule-calculation-service');
 const aiCostTracker = require('./services/ai-cost-tracker');
@@ -14826,6 +14827,110 @@ async function processBatchEstimation(jobId, items, userId, projectId) {
 
   console.log(`Batch job ${jobId} completed: ${job.successful} successful, ${job.failed} failed`);
 }
+
+// ============================================
+// DEPENDENCY MANAGEMENT ENDPOINTS
+// ============================================
+
+/**
+ * Create dependencies from workstreams
+ * POST /api/projects/:projectId/dependencies/create
+ * Body: { workstreams: [{name, dependencies}] }
+ */
+app.post('/api/projects/:projectId/dependencies/create',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { workstreams } = req.body;
+
+      if (!workstreams || !Array.isArray(workstreams)) {
+        return res.status(400).json({ error: 'workstreams array is required' });
+      }
+
+      // Verify user has access to project
+      const memberCheck = await pool.query(
+        'SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2',
+        [projectId, req.user.id]
+      );
+
+      if (memberCheck.rows.length === 0) {
+        return res.status(403).json({ error: 'Access denied to this project' });
+      }
+
+      console.log(`🔗 Creating dependencies for project ${projectId}`);
+      console.log(`   ${workstreams.length} workstreams to process`);
+
+      const result = await dependencyMapper.createDependencies(
+        workstreams,
+        parseInt(projectId)
+      );
+
+      // Log warnings and errors
+      if (result.warnings.length > 0) {
+        console.warn('⚠️  Dependency warnings:', result.warnings);
+      }
+      if (result.errors.length > 0) {
+        console.error('❌ Dependency errors:', result.errors);
+      }
+
+      res.json({
+        success: result.errors.length === 0,
+        dependencies: result.dependencies,
+        warnings: result.warnings,
+        errors: result.errors,
+        count: result.dependencies.length
+      });
+
+    } catch (error) {
+      console.error('Error creating dependencies:', error);
+      res.status(500).json({
+        error: 'Failed to create dependencies',
+        details: error.message
+      });
+    }
+  }
+);
+
+/**
+ * Get all dependencies for a project
+ * GET /api/projects/:projectId/dependencies
+ * Used by Gantt chart visualization
+ */
+app.get('/api/projects/:projectId/dependencies',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { projectId } = req.params;
+
+      // Verify user has access to project
+      const memberCheck = await pool.query(
+        'SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2',
+        [projectId, req.user.id]
+      );
+
+      if (memberCheck.rows.length === 0) {
+        return res.status(403).json({ error: 'Access denied to this project' });
+      }
+
+      const dependencies = await dependencyMapper.getDependencyGraph(
+        parseInt(projectId)
+      );
+
+      res.json({
+        dependencies,
+        count: dependencies.length
+      });
+
+    } catch (error) {
+      console.error('Error fetching dependencies:', error);
+      res.status(500).json({
+        error: 'Failed to fetch dependencies',
+        details: error.message
+      });
+    }
+  }
+);
 
 // Get all valid usernames for dropdown (includes users AND all assignee names)
 app.get('/api/admin/valid-usernames', authenticateToken, async (req, res) => {
