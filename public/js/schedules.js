@@ -3,6 +3,7 @@
 
 let currentProjectId = null;
 let currentUser = null;
+let lastGanttContext = { tasks: null, schedule: null }; // Cache for compact toggle re-renders
 let allItems = [];
 let filteredItems = [];
 let selectedItemIds = new Set();
@@ -2128,6 +2129,16 @@ function renderScheduleDetail(data) {
       <!-- Gantt Chart Tab -->
       <div id="gantt-tab" class="detail-tab-content">
         <div class="bg-white rounded-lg border border-gray-200 p-4">
+          <!-- Compact View Toggle -->
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-sm font-semibold text-gray-700">Gantt Chart</h3>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-600">Compact View</span>
+              <button id="compact-view-toggle" class="btn-ghost btn-sm" data-compact="true" title="Toggle compact view">
+                <i class="fas fa-compress-alt"></i>
+              </button>
+            </div>
+          </div>
           <div id="gantt-container" class="gantt-container"></div>
         </div>
       </div>
@@ -2217,8 +2228,22 @@ function switchDetailTab(tabName, tasks, schedule) {
 }
 
 function renderGanttChart(tasks, schedule) {
+  // Cache context for compact toggle re-renders
+  lastGanttContext = { tasks, schedule };
+  
   const ganttContainer = document.getElementById('gantt-container');
-  ganttContainer.innerHTML = ''; // Clear previous chart
+  ganttContainer.innerHTML = ''; // Clear previous chart to avoid stacking
+
+  // Read compact view state from toggle button
+  const toggleBtn = document.getElementById('compact-view-toggle');
+  const isCompact = toggleBtn ? toggleBtn.dataset.compact === 'true' : true; // Default ON
+  
+  // Apply full-width class when compact mode is enabled
+  if (isCompact) {
+    ganttContainer.classList.add('gantt-expanded');
+  } else {
+    ganttContainer.classList.remove('gantt-expanded');
+  }
 
   // Prepare Gantt data
   const ganttTasks = tasks.map(task => {
@@ -2240,12 +2265,12 @@ function renderGanttChart(tasks, schedule) {
     return;
   }
 
-  // Create Gantt chart
+  // Create Gantt chart with conditional density
   try {
     const gantt = new Gantt(ganttContainer, ganttTasks, {
       view_mode: 'Day',
-      bar_height: 30,
-      padding: 18,
+      bar_height: isCompact ? 18 : 30,
+      padding: isCompact ? 12 : 18,
       date_format: 'YYYY-MM-DD',
       language: 'en',
       custom_popup_html: function(task) {
@@ -2408,15 +2433,16 @@ function renderGanttChart(tasks, schedule) {
         const viewMode = e.target.getAttribute('data-view-mode');
         changeGanttView(viewMode);
         
-        // Update active button styling
+        // Update active button styling (segmented control)
         document.querySelectorAll('[data-action="gantt-view"]').forEach(btn => {
-          btn.classList.remove('bg-blue-600', 'text-white');
-          btn.classList.add('bg-gray-200');
+          btn.classList.remove('active');
         });
-        e.target.classList.remove('bg-gray-200');
-        e.target.classList.add('bg-blue-600', 'text-white');
+        e.target.classList.add('active');
       });
     });
+
+    // Add compact view toggle listener (re-bound after each render)
+    bindCompactToggle();
 
   } catch (error) {
     console.error('Error rendering Gantt chart:', error);
@@ -2427,6 +2453,31 @@ function renderGanttChart(tasks, schedule) {
 function changeGanttView(viewMode) {
   if (window.currentGanttInstance) {
     window.currentGanttInstance.change_view_mode(viewMode);
+  }
+}
+
+function bindCompactToggle() {
+  const compactToggle = document.getElementById('compact-view-toggle');
+  if (compactToggle && !compactToggle.dataset.bound) {
+    compactToggle.dataset.bound = 'true'; // Prevent duplicate bindings
+    compactToggle.addEventListener('click', () => {
+      const isCompact = compactToggle.dataset.compact === 'true';
+      const nextState = !isCompact;
+      
+      // Update toggle state
+      compactToggle.dataset.compact = String(nextState);
+      
+      // Swap icon
+      const icon = compactToggle.querySelector('i');
+      if (icon) {
+        icon.className = nextState ? 'fas fa-compress-alt' : 'fas fa-expand-alt';
+      }
+      
+      // Re-render Gantt with cached context
+      if (lastGanttContext.tasks && lastGanttContext.schedule) {
+        renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+      }
+    });
   }
 }
 

@@ -76,6 +76,14 @@
     .gantt-container::-webkit-scrollbar-thumb:hover {
       background: var(--color-neutral-400);
     }
+    
+    /* Expanded Gantt for compact mode (full width) */
+    .gantt-expanded {
+      width: 100%;
+      max-width: none;
+      margin-left: calc(-1 * var(--spacing-md));
+      margin-right: calc(-1 * var(--spacing-md));
+    }
     .overloaded {
       @apply bg-red-50 border-red-200;
     }
