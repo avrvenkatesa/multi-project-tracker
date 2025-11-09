@@ -845,6 +845,24 @@
                     </div>
                     
                     <div class="p-6">
+                        <!-- Mode Selector -->
+                        <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">Select Analysis Mode:</label>
+                            <div class="segmented-control-group">
+                                <button type="button" id="mode-meeting-transcript" class="segmented-control-button active">
+                                    <i class="fas fa-file-alt mr-2"></i>
+                                    <span>Meeting Transcript</span>
+                                </button>
+                                <button type="button" id="mode-multi-document" class="segmented-control-button">
+                                    <i class="fas fa-folder-open mr-2"></i>
+                                    <span>Multi-Document Processing</span>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2" id="mode-description">
+                                Extract action items and issues from meeting transcripts
+                            </p>
+                        </div>
+                        
                         <!-- Step 1: Upload -->
                         <div id="upload-step" class="mb-6">
                             <h4 class="font-semibold mb-3">Step 1: Upload Meeting Transcript(s)</h4>
