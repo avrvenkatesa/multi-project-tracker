@@ -272,14 +272,68 @@ class MultiDocumentAnalyzer {
             context
           );
           
-          // Count items from returned checklists array
+          // Count items from returned checklists array and save them to database
           let itemCount = 0;
           if (Array.isArray(checklists)) {
             for (const checklist of checklists) {
-              if (checklist.sections) {
-                for (const section of checklist.sections) {
-                  itemCount += section.items?.length || 0;
+              // Save each checklist to the database
+              try {
+                // Insert the checklist
+                const checklistResult = await pool.query(
+                  `INSERT INTO checklists (
+                    project_id, related_issue_id, title, description, status,
+                    is_ai_generated, generation_source, created_by
+                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                  RETURNING id`,
+                  [
+                    projectId,
+                    workstream.issueId,
+                    checklist.name || workstream.name,
+                    checklist.description || `Generated from multi-document import for ${workstream.name}`,
+                    'pending',
+                    true,
+                    'multi-document-import',
+                    userId
+                  ]
+                );
+                
+                const checklistId = checklistResult.rows[0].id;
+                
+                // Insert checklist sections and items
+                if (checklist.sections) {
+                  for (const section of checklist.sections) {
+                    const sectionResult = await pool.query(
+                      `INSERT INTO checklist_sections (checklist_id, title, order_index)
+                       VALUES ($1, $2, $3)
+                       RETURNING id`,
+                      [checklistId, section.name, section.order || 0]
+                    );
+                    
+                    const sectionId = sectionResult.rows[0].id;
+                    
+                    // Insert checklist items
+                    if (section.items && Array.isArray(section.items)) {
+                      for (let i = 0; i < section.items.length; i++) {
+                        const item = section.items[i];
+                        await pool.query(
+                          `INSERT INTO checklist_items (
+                            section_id, description, order_index, is_required
+                          ) VALUES ($1, $2, $3, $4)`,
+                          [
+                            sectionId,
+                            item.description || item.text || item,
+                            i,
+                            item.required || false
+                          ]
+                        );
+                        itemCount++;
+                      }
+                    }
+                  }
                 }
+              } catch (dbError) {
+                console.log(`  ⚠️  Failed to save checklist to database: ${dbError.message}`);
+                result.warnings.push(`Failed to save checklist for ${workstream.name}: ${dbError.message}`);
               }
             }
           }

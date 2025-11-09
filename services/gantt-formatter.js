@@ -45,10 +45,10 @@ async function getGanttData(projectId) {
 
     // Get dependencies - check both 'dependency' and 'blocks' relationship types
     const depsResult = await pool.query(
-      `SELECT source_issue_id, target_issue_id, relationship_type
+      `SELECT source_id, target_id, relationship_type
        FROM issue_relationships
        WHERE relationship_type IN ('dependency', 'blocks', 'depends_on')
-       AND source_issue_id IN (SELECT id FROM issues WHERE project_id = $1)`,
+       AND source_id IN (SELECT id FROM issues WHERE project_id = $1)`,
       [projectId]
     );
 
@@ -57,10 +57,10 @@ async function getGanttData(projectId) {
     // Build dependency map (target depends on source)
     const dependencyMap = new Map();
     depsResult.rows.forEach(dep => {
-      if (!dependencyMap.has(dep.target_issue_id)) {
-        dependencyMap.set(dep.target_issue_id, []);
+      if (!dependencyMap.has(dep.target_id)) {
+        dependencyMap.set(dep.target_id, []);
       }
-      dependencyMap.get(dep.target_issue_id).push(dep.source_issue_id);
+      dependencyMap.get(dep.target_id).push(dep.source_id);
     });
 
     // Convert to Frappe Gantt format
