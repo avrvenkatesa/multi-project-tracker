@@ -1,0 +1,110 @@
+/* Gantt Chart Custom Styling */
+
+/* Milestone Styling - Gold/Yellow for milestones */
+.gantt .bar-wrapper .bar.milestone {
+  fill: #FFD700 !important;
+  stroke: #FFA500 !important;
+  stroke-width: 2px;
+}
+
+.gantt .bar-wrapper .bar.milestone .bar-label {
+  font-weight: bold;
+  fill: #000 !important;
+}
+
+/* Critical path highlighting - Red for critical tasks */
+.gantt .bar-wrapper .bar.critical-path {
+  fill: #dc3545 !important;
+  stroke: #bd2130 !important;
+}
+
+.gantt .bar-wrapper .bar.bar-critical {
+  fill: #dc3545 !important;
+  stroke: #bd2130 !important;
+  stroke-width: 2px;
+}
+
+/* Standard task bar styling */
+.gantt .bar {
+  fill: #3b82f6;
+  stroke: #2563eb;
+  stroke-width: 1px;
+}
+
+/* Gantt chart dependency arrows */
+.gantt .arrow {
+  stroke: #666;
+  stroke-width: 1.5px;
+  fill: none;
+}
+
+/* Gantt chart grid styling */
+.gantt .grid-background {
+  fill: none;
+}
+
+.gantt .grid-header {
+  fill: #f8f9fa;
+  stroke: #dee2e6;
+  stroke-width: 1px;
+}
+
+.gantt .grid-row {
+  fill: #ffffff;
+}
+
+.gantt .grid-row:nth-child(even) {
+  fill: #f9fafb;
+}
+
+/* Task progress bar - Green for completion */
+.gantt .bar-progress {
+  fill: #28a745 !important;
+  opacity: 0.8;
+}
+
+/* Task labels */
+.gantt .bar-label {
+  fill: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Hover effects */
+.gantt .bar-wrapper:hover .bar {
+  opacity: 0.9;
+  stroke-width: 2px;
+}
+
+/* Today marker */
+.gantt .today-highlight {
+  fill: rgba(239, 68, 68, 0.1);
+  stroke: #ef4444;
+  stroke-width: 2px;
+}
+
+/* Custom popup styling */
+.gantt .popup-wrapper {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.gantt .popup-wrapper .details-container {
+  min-width: 200px;
+}
+
+.gantt .popup-wrapper h5 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.gantt .popup-wrapper p {
+  font-size: 12px;
+  color: #4b5563;
+  margin: 4px 0;
+}
