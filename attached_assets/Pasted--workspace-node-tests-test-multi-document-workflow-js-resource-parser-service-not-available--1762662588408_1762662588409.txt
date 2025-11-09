@@ -1,0 +1,87 @@
+~/workspace$ node tests/test-multi-document-workflow.js
+⚠️  resource-parser service not available - resource assignment will be skipped
+╔══════════════════════════════════════════════════════╗
+║  MULTI-DOCUMENT WORKFLOW - INTEGRATION TEST          ║
+╚══════════════════════════════════════════════════════╝
+
+Setup: Creating test project...
+✓ Created project 17
+
+Running multi-document analyzer...
+
+╔════════════════════════════════════════════════════╗
+║   MULTI-DOCUMENT PROJECT IMPORT STARTING           ║
+╚════════════════════════════════════════════════════╝
+📁 Project ID: 17
+📄 Documents: 3
+📅 Start Date: 2025-01-06
+
+Step 1/7: Combining document text...
+✓ Combined 1403 characters
+
+Step 2/7: Detecting workstreams...
+🔍 Analyzing document for workstreams...
+Error detecting workstreams: TypeError: Cannot read properties of undefined (reading 'projectName')
+    at buildWorkstreamDetectionPrompt (/home/runner/workspace/services/workstream-detector.js:118:22)
+    at Object.detectWorkstreams (/home/runner/workspace/services/workstream-detector.js:35:20)
+    at MultiDocumentAnalyzer.analyzeMultipleDocuments (/home/runner/workspace/services/multi-document-analyzer.js:103:63)
+    at runWorkflowTest (/home/runner/workspace/tests/test-multi-document-workflow.js:100:48)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+❌ Multi-document import failed: Cannot read properties of undefined (reading 'projectName')
+Failed to store import failure metadata: column "imported_by" of relation "project_imports" does not exist
+
+╔══════════════════════════════════════════════════════╗
+║  TEST RESULTS                                        ║
+╚══════════════════════════════════════════════════════╝
+
+Overall Success: ❌ FAIL
+
+Documents Processed: 3
+  Expected: 3
+  Status: ✅
+
+Workstreams Created: 0
+  Expected: 3 (Phase 0, 1, 2)
+  Status: ❌
+
+Issues Created: 0
+  Expected: 3+
+  Status: ❌
+
+Timeline Extracted:
+  Phases: 0 (expected: 3)
+  Milestones: 0 (expected: 3)
+  Status: ⚠️ 
+
+Dependencies Created: 0
+  Expected: 1+ (Phase 1 → Phase 2)
+  Status: ⚠️ 
+
+Resource Assignments: 0
+  Expected: 2+ (Sultan, Srihari)
+  Status: ⚠️ 
+
+Checklists: 0
+  Items: 0
+  Status: ⚠️ 
+
+AI Cost: $0.0000
+  Expected: < $0.50
+  Status: ✅
+
+Errors: 1
+  Expected: 0
+  Status: ❌
+    ❌ Cannot read properties of undefined (reading 'projectName')
+
+Warnings: 0
+
+╔══════════════════════════════════════════════════════╗
+║  ⚠️  SOME TESTS FAILED                               ║
+║  Review the results above                            ║
+╚══════════════════════════════════════════════════════╝
+
+Cleaning up test data...
+✓ Cleanup complete
+
+🎉 Workflow test completed!

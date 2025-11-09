@@ -100,7 +100,17 @@ class MultiDocumentAnalyzer {
         throw new Error('Workstream detector service not available - cannot proceed');
       }
 
-      const workstreamsResult = await this.workstreamDetector.detectWorkstreams(combinedText);
+      // Get project name for context
+      const projectResult = await pool.query('SELECT name, description FROM projects WHERE id = $1', [projectId]);
+      const projectName = projectResult.rows[0]?.name || 'Unknown Project';
+      const projectDescription = projectResult.rows[0]?.description;
+
+      const workstreamsResult = await this.workstreamDetector.detectWorkstreams(combinedText, {
+        projectId,
+        projectName,
+        projectDescription,
+        documentFilename: documents.length === 1 ? documents[0].filename : `${documents.length} documents`
+      });
       result.workstreams = workstreamsResult.workstreams || [];
       
       if (workstreamsResult.cost) {
@@ -279,10 +289,10 @@ class MultiDocumentAnalyzer {
       // Store import metadata
       const importResult = await pool.query(
         `INSERT INTO project_imports (
-          project_id, imported_by, documents_processed,
-          workstreams_created, issues_created, timeline_phases_created, timeline_milestones_created,
-          dependencies_created, resource_assignments_created, checklists_created, checklist_items_created,
-          ai_cost_breakdown, total_ai_cost, success_status, errors, warnings, duration_ms
+          project_id, user_id, documents_processed,
+          workstreams_created, issues_created, phases_extracted, milestones_extracted,
+          dependencies_created, resource_assignments, checklists_created, checklist_items_created,
+          ai_cost_breakdown, total_ai_cost_usd, success, errors, warnings, duration_ms
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         RETURNING id`,
         [
@@ -299,7 +309,7 @@ class MultiDocumentAnalyzer {
           result.checklists.items,
           JSON.stringify(result.aiCostBreakdown),
           result.totalCost,
-          JSON.stringify({ completed: true }),
+          true,
           JSON.stringify(result.errors),
           JSON.stringify(result.warnings),
           Date.now() - startTime
@@ -329,14 +339,14 @@ class MultiDocumentAnalyzer {
         try {
           await pool.query(
             `INSERT INTO project_imports (
-              project_id, imported_by, documents_processed,
-              success_status, errors, warnings, duration_ms
+              project_id, user_id, documents_processed,
+              success, errors, warnings, duration_ms
             ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
               projectId,
               userId,
               documents.length,
-              JSON.stringify({ completed: false, failed: true }),
+              false,
               JSON.stringify(result.errors),
               JSON.stringify(result.warnings),
               result.duration
