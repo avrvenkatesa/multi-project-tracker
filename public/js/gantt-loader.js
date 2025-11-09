@@ -124,6 +124,9 @@ async function loadGanttChart(projectId) {
       }
     });
 
+    // Enhance text visibility by adding dark backgrounds behind labels
+    enhanceTextVisibility();
+
     document.getElementById('view-controls').classList.remove('hidden');
     console.log('✅ Gantt chart rendered successfully');
     hideLoadingSpinner();
@@ -190,7 +193,60 @@ async function updateTaskProgress(issueId, progress) {
 function changeView(viewMode) {
   if (currentGanttInstance) {
     currentGanttInstance.change_view_mode(viewMode);
+    // Re-enhance text visibility after view change
+    requestAnimationFrame(() => {
+      setTimeout(() => enhanceTextVisibility(), 50);
+    });
   }
+}
+
+function enhanceTextVisibility() {
+  // Add semi-transparent dark backgrounds behind all bar labels for better visibility
+  const barGroups = document.querySelectorAll('.gantt .bar-group');
+  
+  barGroups.forEach(group => {
+    const labels = group.querySelectorAll('text.bar-label');
+    
+    labels.forEach(label => {
+      // Skip if already enhanced in this render cycle
+      if (label.dataset.enhanced === 'true') return;
+      
+      try {
+        const bbox = label.getBBox();
+        
+        // Only add background if label has content
+        if (bbox.width === 0 || bbox.height === 0) return;
+        
+        const padding = 4;
+        
+        // Remove old background if exists
+        const oldBg = group.querySelector('.label-bg');
+        if (oldBg) oldBg.remove();
+        
+        // Create background rectangle
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', bbox.x - padding);
+        rect.setAttribute('y', bbox.y - padding);
+        rect.setAttribute('width', bbox.width + (padding * 2));
+        rect.setAttribute('height', bbox.height + (padding * 2));
+        rect.setAttribute('rx', '3');
+        rect.setAttribute('ry', '3');
+        rect.classList.add('label-bg');
+        
+        // Insert background before the label
+        group.insertBefore(rect, label);
+        label.dataset.enhanced = 'true';
+        
+        // Ensure text is white and bold
+        label.setAttribute('fill', '#ffffff');
+        label.style.fontWeight = '700';
+        label.style.fontSize = '14px';
+      } catch (error) {
+        // Silently handle getBBox errors (can occur mid-transition)
+        console.debug('Could not enhance label:', error);
+      }
+    });
+  });
 }
 
 function showNotification(message, type = 'info') {

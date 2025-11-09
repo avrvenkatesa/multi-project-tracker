@@ -63,22 +63,43 @@
   opacity: 0.8;
 }
 
-/* Task labels - Enhanced visibility for Day view */
-.gantt .bar-label {
+/* Task labels - Maximum visibility for all views */
+.gantt .bar-label,
+.gantt text.bar-label,
+.gantt .bar-wrapper .bar-label,
+text.bar-label {
   fill: #ffffff !important;
-  font-size: 14px !important;
-  font-weight: 700 !important;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  opacity: 1 !important;
+  text-shadow: 
+    0 0 3px rgba(0, 0, 0, 0.9),
+    0 0 5px rgba(0, 0, 0, 0.7),
+    1px 1px 2px rgba(0, 0, 0, 0.8),
+    -1px -1px 2px rgba(0, 0, 0, 0.8) !important;
   paint-order: stroke fill !important;
-  stroke: rgba(0, 0, 0, 0.3) !important;
-  stroke-width: 0.5px !important;
+  stroke: rgba(0, 0, 0, 0.6) !important;
+  stroke-width: 1px !important;
+  stroke-linejoin: round !important;
+  stroke-linecap: round !important;
 }
 
-/* Additional text enhancement */
-.gantt text.bar-label {
+/* Ensure SVG text elements are visible */
+svg .bar-label {
   fill: #ffffff !important;
-  font-size: 14px !important;
-  font-weight: 700 !important;
+  font-weight: 900 !important;
+  opacity: 1 !important;
+}
+
+/* Label background for better text visibility */
+.label-bg {
+  fill: rgba(0, 0, 0, 0.7) !important;
+  opacity: 0.95;
+  transition: opacity 0.2s ease;
+}
+
+.gantt .bar-wrapper:hover .label-bg {
+  opacity: 1;
 }
 
 /* Hover effects */
