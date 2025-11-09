@@ -44,6 +44,7 @@ Project scheduling involves `project_schedules` (versioning), `schedule_items`, 
 - **AI Document Classification**: Hybrid classification system using GPT-4o for uploaded documents, checking against base categories and creating custom categories if necessary. Stores classifications with confidence scores and reasoning.
 - **AI Timeline Extraction**: Extracts project timeline information from document text using GPT-4o, parsing relative dates and converting them to absolute dates.
 - **Workstream Detection**: AI-powered document analysis to identify workstreams, extract requirements, and generate focused checklists using OpenAI GPT-4o.
+- **Automatic Effort Estimation (November 2025)**: AI-created issues from multi-document processing automatically receive effort estimates based on workstream complexity. Base estimates: Low=30h, Medium=60h, High=120h, with ±15-20% adjustments based on requirements count. Includes confidence scoring (0.60-0.85) based on description quality, requirements clarity, and document references. Enables immediate schedule creation without manual estimation.
 - **Intelligent Issue Matching**: AI-powered semantic matching of generated checklists to existing issues, with new issue suggestions.
 - **AI Dependency Suggestion**: GPT-4o analyzes tasks and suggests logical dependencies, with automatic circular dependency detection.
 - **Comprehensive Cycle Detection**: Multi-layer circular dependency validation prevents invalid dependency graphs at all entry points.
