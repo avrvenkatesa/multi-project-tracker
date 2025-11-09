@@ -205,6 +205,18 @@ class MultiDocumentAnalyzer {
           }
           
           console.log(`✓ Created ${result.dependencies.created} dependencies\n`);
+          
+          // Step 5b: Calculate dates based on dependencies
+          if (result.dependencies.created > 0) {
+            console.log('Step 5b/7: Calculating dates based on dependencies...');
+            try {
+              await this.calculateDependencyBasedDates(projectId, projectStartDate);
+              console.log(`✓ Calculated and applied dependency-based dates\n`);
+            } catch (error) {
+              result.warnings.push('Date calculation failed: ' + error.message);
+              console.log(`⚠️  Date calculation failed: ${error.message}\n`);
+            }
+          }
         } catch (error) {
           result.warnings.push('Dependency mapping failed: ' + error.message);
           console.log(`⚠️  Dependency mapping failed: ${error.message}\n`);
@@ -424,6 +436,176 @@ class MultiDocumentAnalyzer {
     }
 
     return result;
+  }
+
+  /**
+   * Calculate and apply dependency-based dates for issues
+   * Uses topological sort to schedule tasks based on their dependency chain
+   */
+  async calculateDependencyBasedDates(projectId, projectStartDate) {
+    const DEFAULT_DURATION_DAYS = 7;
+    
+    // Get project start date or fallback to today
+    const startDate = projectStartDate ? new Date(projectStartDate) : new Date();
+    startDate.setHours(0, 0, 0, 0); // Normalize to start of day
+    
+    // Fetch all issues for this project
+    const issuesResult = await pool.query(
+      `SELECT id, start_date, end_date FROM issues WHERE project_id = $1`,
+      [projectId]
+    );
+    
+    if (issuesResult.rows.length === 0) {
+      return { updated: 0 };
+    }
+    
+    // Build issue map
+    const issues = new Map();
+    issuesResult.rows.forEach(row => {
+      issues.set(row.id, {
+        id: row.id,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        calculatedStart: null,
+        calculatedEnd: null
+      });
+    });
+    
+    // Fetch dependencies (source blocks target, so target depends on source)
+    const depsResult = await pool.query(
+      `SELECT source_id, target_id 
+       FROM issue_relationships 
+       WHERE relationship_type IN ('dependency', 'blocks', 'depends_on')
+       AND source_id IN (SELECT id FROM issues WHERE project_id = $1)`,
+      [projectId]
+    );
+    
+    // Build adjacency list and indegree map
+    const adjacencyList = new Map(); // source -> [targets]
+    const indegree = new Map(); // target -> count of predecessors
+    const predecessors = new Map(); // target -> [sources]
+    
+    // Initialize
+    issues.forEach((_, issueId) => {
+      adjacencyList.set(issueId, []);
+      indegree.set(issueId, 0);
+      predecessors.set(issueId, []);
+    });
+    
+    // Build graph
+    depsResult.rows.forEach(dep => {
+      const source = dep.source_id;
+      const target = dep.target_id;
+      
+      if (issues.has(source) && issues.has(target)) {
+        adjacencyList.get(source).push(target);
+        indegree.set(target, indegree.get(target) + 1);
+        predecessors.get(target).push(source);
+      }
+    });
+    
+    // Topological sort with date calculation
+    const queue = [];
+    const visited = new Set();
+    
+    // Start with issues that have no dependencies
+    indegree.forEach((degree, issueId) => {
+      if (degree === 0) {
+        queue.push(issueId);
+      }
+    });
+    
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+      visited.add(currentId);
+      
+      const issue = issues.get(currentId);
+      const preds = predecessors.get(currentId);
+      
+      // Skip if this issue already has both start and end dates (e.g., milestones from timeline)
+      if (issue.startDate && issue.endDate) {
+        // Preserve existing dates - don't recalculate
+        issue.calculatedStart = new Date(issue.startDate);
+        issue.calculatedEnd = new Date(issue.endDate);
+      }
+      // Calculate start date for issues without dates
+      else if (preds.length === 0) {
+        // No predecessors: start at project start date
+        issue.calculatedStart = new Date(startDate);
+      } else {
+        // Has predecessors: start after all predecessors complete
+        const predEndDates = preds
+          .map(predId => issues.get(predId)?.calculatedEnd)
+          .filter(date => date != null);
+        
+        if (predEndDates.length > 0) {
+          const maxEndDate = new Date(Math.max(...predEndDates.map(d => d.getTime())));
+          issue.calculatedStart = new Date(maxEndDate);
+          issue.calculatedStart.setDate(issue.calculatedStart.getDate() + 1); // Start day after predecessor ends
+        } else {
+          // Predecessor dates not yet calculated (shouldn't happen in topological order)
+          issue.calculatedStart = new Date(startDate);
+        }
+      }
+      
+      // Calculate end date only if not already set
+      if (!issue.calculatedEnd) {
+        // Use default duration
+        issue.calculatedEnd = new Date(issue.calculatedStart);
+        issue.calculatedEnd.setDate(issue.calculatedEnd.getDate() + DEFAULT_DURATION_DAYS - 1);
+      }
+      
+      // Update successors
+      const successors = adjacencyList.get(currentId);
+      for (const successorId of successors) {
+        const newIndegree = indegree.get(successorId) - 1;
+        indegree.set(successorId, newIndegree);
+        
+        if (newIndegree === 0) {
+          queue.push(successorId);
+        }
+      }
+    }
+    
+    // Detect cycles (nodes not visited have indegree > 0)
+    const cycleNodes = [];
+    indegree.forEach((degree, issueId) => {
+      if (degree > 0 && !visited.has(issueId)) {
+        cycleNodes.push(issueId);
+      }
+    });
+    
+    if (cycleNodes.length > 0) {
+      console.warn(`⚠️  Detected ${cycleNodes.length} issues in circular dependency - skipping date updates for those`);
+    }
+    
+    // Batch update database (only for issues that didn't already have dates)
+    let updated = 0;
+    for (const [issueId, issue] of issues) {
+      if (issue.calculatedStart && issue.calculatedEnd && visited.has(issueId)) {
+        // Only update if the issue didn't already have both dates
+        if (!issue.startDate || !issue.endDate) {
+          await pool.query(
+            `UPDATE issues 
+             SET start_date = $1, end_date = $2, updated_at = NOW()
+             WHERE id = $3`,
+            [
+              issue.calculatedStart.toISOString().split('T')[0],
+              issue.calculatedEnd.toISOString().split('T')[0],
+              issueId
+            ]
+          );
+          updated++;
+        }
+      }
+    }
+    
+    console.log(`  ℹ️  Updated ${updated} issues with dependency-based dates`);
+    if (cycleNodes.length > 0) {
+      console.log(`  ⚠️  Skipped ${cycleNodes.length} issues due to circular dependencies`);
+    }
+    
+    return { updated, cyclesDetected: cycleNodes.length };
   }
 
   /**
