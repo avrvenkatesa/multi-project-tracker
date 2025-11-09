@@ -151,9 +151,11 @@ C.2 Gate 1 Approval Criteria
     console.log('  Status:', result.checklists.created > 0 ? '✅' : '⚠️ ');
     console.log('');
 
-    console.log('AI Cost: $' + result.totalCost.toFixed(4));
+    // Safely handle totalCost (convert to number if needed)
+    const totalCost = typeof result.totalCost === 'number' ? result.totalCost : parseFloat(result.totalCost) || 0;
+    console.log('AI Cost: $' + totalCost.toFixed(4));
     console.log('  Expected: < $0.50');
-    console.log('  Status:', result.totalCost < 0.50 ? '✅' : '⚠️ ');
+    console.log('  Status:', totalCost < 0.50 ? '✅' : '⚠️ ');
     console.log('');
 
     console.log('Errors:', result.errors.length);

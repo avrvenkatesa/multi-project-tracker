@@ -234,7 +234,6 @@ class MultiDocumentAnalyzer {
       console.log(`  Processing ${result.workstreams.length} of ${result.workstreams.length} workstreams`);
       
       const aiService = require('./ai-service');
-      let totalChecklistCost = 0;
       
       for (const workstream of result.workstreams) {
         try {
@@ -245,29 +244,21 @@ class MultiDocumentAnalyzer {
             mode: 'issue'
           };
           
-          const checklistResult = await aiService.generateChecklistFromDocument(
+          // generateChecklistFromDocument returns an array of checklists, not a cost object
+          const checklists = await aiService.generateChecklistFromDocument(
             combinedText,
             context
           );
           
-          // Track checklist generation cost
-          if (checklistResult.cost) {
-            totalChecklistCost += checklistResult.cost;
-          }
-          
-          // Count items (checklistResult could be array or single checklist)
+          // Count items from returned checklists array
           let itemCount = 0;
-          if (Array.isArray(checklistResult)) {
-            for (const checklist of checklistResult) {
+          if (Array.isArray(checklists)) {
+            for (const checklist of checklists) {
               if (checklist.sections) {
                 for (const section of checklist.sections) {
                   itemCount += section.items?.length || 0;
                 }
               }
-            }
-          } else if (checklistResult.sections) {
-            for (const section of checklistResult.sections) {
-              itemCount += section.items?.length || 0;
             }
           }
           
@@ -279,10 +270,8 @@ class MultiDocumentAnalyzer {
         }
       }
       
-      if (totalChecklistCost > 0) {
-        result.aiCostBreakdown.checklist_generation = totalChecklistCost;
-        result.totalCost += totalChecklistCost;
-      }
+      // Note: checklist generation cost is not tracked separately
+      // It's included in the overall OpenAI API usage tracked by ai-cost-tracker
       
       console.log(`✓ Generated ${result.checklists.created} checklists with ${result.checklists.items} items\n`);
 

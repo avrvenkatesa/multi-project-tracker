@@ -1,0 +1,258 @@
+~/workspace$ node tests/test-multi-document-workflow.js
+⚠️  resource-parser service not available - resource assignment will be skipped
+╔══════════════════════════════════════════════════════╗
+║  MULTI-DOCUMENT WORKFLOW - INTEGRATION TEST          ║
+╚══════════════════════════════════════════════════════╝
+
+Setup: Creating test project...
+✓ Created project 17
+
+Running multi-document analyzer...
+
+╔════════════════════════════════════════════════════╗
+║   MULTI-DOCUMENT PROJECT IMPORT STARTING           ║
+╚════════════════════════════════════════════════════╝
+📁 Project ID: 17
+📄 Documents: 3
+📅 Start Date: 2025-01-06
+
+Step 1/7: Combining document text...
+✓ Combined 1403 characters
+
+Step 2/7: Detecting workstreams...
+🔍 Analyzing document for workstreams...
+Error detecting workstreams: TypeError: Cannot read properties of undefined (reading 'projectName')
+    at buildWorkstreamDetectionPrompt (/home/runner/workspace/services/workstream-detector.js:118:22)
+    at Object.detectWorkstreams (/home/runner/workspace/services/workstream-detector.js:35:20)
+    at MultiDocumentAnalyzer.analyzeMultipleDocuments (/home/runner/workspace/services/multi-document-analyzer.js:103:63)
+    at runWorkflowTest (/home/runner/workspace/tests/test-multi-document-workflow.js:100:48)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+❌ Multi-document import failed: Cannot read properties of undefined (reading 'projectName')
+Failed to store import failure metadata: column "imported_by" of relation "project_imports" does not exist
+
+╔══════════════════════════════════════════════════════╗
+║  TEST RESULTS                                        ║
+╚══════════════════════════════════════════════════════╝
+
+Overall Success: ❌ FAIL
+
+Documents Processed: 3
+  Expected: 3
+  Status: ✅
+
+Workstreams Created: 0
+  Expected: 3 (Phase 0, 1, 2)
+  Status: ❌
+
+Issues Created: 0
+  Expected: 3+
+  Status: ❌
+
+Timeline Extracted:
+  Phases: 0 (expected: 3)
+  Milestones: 0 (expected: 3)
+  Status: ⚠️ 
+
+Dependencies Created: 0
+  Expected: 1+ (Phase 1 → Phase 2)
+  Status: ⚠️ 
+
+Resource Assignments: 0
+  Expected: 2+ (Sultan, Srihari)
+  Status: ⚠️ 
+
+Checklists: 0
+  Items: 0
+  Status: ⚠️ 
+
+AI Cost: $0.0000
+  Expected: < $0.50
+  Status: ✅
+
+Errors: 1
+  Expected: 0
+  Status: ❌
+    ❌ Cannot read properties of undefined (reading 'projectName')
+
+Warnings: 0
+
+╔══════════════════════════════════════════════════════╗
+║  ⚠️  SOME TESTS FAILED                               ║
+║  Review the results above                            ║
+╚══════════════════════════════════════════════════════╝
+
+Cleaning up test data...
+✓ Cleanup complete
+
+🎉 Workflow test completed!
+~/workspace$ node tests/test-multi-document-workflow.js
+⚠️  resource-parser service not available - resource assignment will be skipped
+╔══════════════════════════════════════════════════════╗
+║  MULTI-DOCUMENT WORKFLOW - INTEGRATION TEST          ║
+╚══════════════════════════════════════════════════════╝
+
+Setup: Creating test project...
+✓ Created project 18
+
+Running multi-document analyzer...
+
+╔════════════════════════════════════════════════════╗
+║   MULTI-DOCUMENT PROJECT IMPORT STARTING           ║
+╚════════════════════════════════════════════════════╝
+📁 Project ID: 18
+📄 Documents: 3
+📅 Start Date: 2025-01-06
+
+Step 1/7: Combining document text...
+✓ Combined 1403 characters
+
+Step 2/7: Detecting workstreams...
+🔍 Analyzing document for workstreams...
+📄 Raw AI response length: 2273
+🔢 Tokens used: 1392
+✅ Identified 3 workstreams
+✓ Found 3 workstreams
+  1. Prerequisites Validation and Approval (unknown complexity)
+  2. Infrastructure Discovery and Analysis (unknown complexity)
+  3. Migration Execution and Deployment (unknown complexity)
+
+Step 3/7: Creating issues from workstreams...
+  ✓ Created issue #115: Prerequisites Validation and Approval
+  ✓ Created issue #116: Infrastructure Discovery and Analysis
+  ✓ Created issue #117: Migration Execution and Deployment
+✓ Created 3 issues
+
+Step 4/7: Extracting timeline...
+✓ Extracted 3 phases, 3 milestones
+
+Step 5/7: Creating dependencies...
+⚠️  Dependency mapping failed: this.dependencyMapper.mapDependencies is not a function
+
+Step 6/7: Parsing resource assignments...
+⚠️  Resource parser not available - skipping
+
+Step 7/7: Generating checklists...
+  Processing 3 of 3 workstreams
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 4
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup Validation" - 3 items
+  Section: "Initial Setup" - 3 items
+  ✅ Valid: 6 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Infrastructure Assessment" - 3 items
+  ✅ Valid: 3 total items
+Checklist: "Phase 2: Execution"
+  Section: "Deployment and Setup" - 3 items
+  ✅ Valid: 3 total items
+Checklist: "Project Milestones"
+  Section: "Milestone Tracking" - 3 items
+  ✅ Valid: 3 total items
+✅ Generated 4 valid checklists with 15 total items
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 4
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup Validation" - 3 items
+  Section: "NTDS.DIT Extraction" - 2 items
+  Section: "Gate 1 Approval" - 1 items
+  ✅ Valid: 6 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Infrastructure Assessment" - 1 items
+  Section: "Domain Analysis" - 1 items
+  Section: "Migration Planning" - 1 items
+  ✅ Valid: 3 total items
+Checklist: "Phase 2: Execution"
+  Section: "AWS Deployment" - 1 items
+  Section: "Replication Setup" - 1 items
+  Section: "Functional Level Upgrade" - 1 items
+  ✅ Valid: 3 total items
+Checklist: "Milestones and Dependencies"
+  Section: "Milestones" - 3 items
+  Section: "Dependencies" - 1 items
+  ✅ Valid: 4 total items
+✅ Generated 4 valid checklists with 16 total items
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 3
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup and Validation" - 4 items
+  Section: "NTDS.DIT Extraction" - 1 items
+  Section: "Gate 1 Approval" - 3 items
+  ✅ Valid: 8 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Infrastructure Assessment" - 1 items
+  Section: "Domain Analysis" - 1 items
+  Section: "Migration Planning" - 1 items
+  ✅ Valid: 3 total items
+Checklist: "Phase 2: Execution"
+  Section: "AWS Deployment" - 1 items
+  Section: "Replication Setup" - 1 items
+  Section: "Functional Level Upgrade" - 1 items
+  ✅ Valid: 3 total items
+✅ Generated 3 valid checklists with 14 total items
+✓ Generated 3 checklists with 45 items
+
+❌ Multi-document import failed: invalid input syntax for type numeric: "0[object Object]"
+
+╔══════════════════════════════════════════════════════╗
+║  TEST RESULTS                                        ║
+╚══════════════════════════════════════════════════════╝
+
+Overall Success: ❌ FAIL
+
+Documents Processed: 3
+  Expected: 3
+  Status: ✅
+
+Workstreams Created: 3
+  Expected: 3 (Phase 0, 1, 2)
+  Status: ✅
+
+Issues Created: 3
+  Expected: 3+
+  Status: ✅
+
+Timeline Extracted:
+  Phases: 3 (expected: 3)
+  Milestones: 3 (expected: 3)
+  Status: ✅
+
+Dependencies Created: 0
+  Expected: 1+ (Phase 1 → Phase 2)
+  Status: ⚠️ 
+
+Resource Assignments: 0
+  Expected: 2+ (Sultan, Srihari)
+  Status: ⚠️ 
+
+Checklists: 3
+  Items: 45
+  Status: ✅
+
+
+❌ Workflow test failed: TypeError: result.totalCost.toFixed is not a function
+    at runWorkflowTest (/home/runner/workspace/tests/test-multi-document-workflow.js:154:49)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+TypeError: result.totalCost.toFixed is not a function
+    at runWorkflowTest (/home/runner/workspace/tests/test-multi-document-workflow.js:154:49)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+Cleaning up test data...
+✓ Cleanup complete
+
+💥 Workflow test failed!
+TypeError: result.totalCost.toFixed is not a function
+    at runWorkflowTest (/home/runner/workspace/tests/test-multi-document-workflow.js:154:49)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+~/workspace$ 
