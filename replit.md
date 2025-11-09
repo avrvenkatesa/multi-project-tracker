@@ -11,6 +11,8 @@ Preferred communication style: Simple, everyday language.
 ### UI/UX Decisions
 The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles. It includes a Project Dashboard with analytics and Chart.js visualizations, Kanban boards, tag displays, risk cards, and a comprehensive unified checklist system. The UI implements consistent navigation, responsive design, and prioritizes clarity and interactivity. CSP compliance is maintained through external JavaScript files and event delegation. A unified `checklists.html` page consolidates linked, standalone, and template checklists into a single tabbed view.
 
+**Gantt Chart Scalability Design**: The timeline visualization uses view-aware styling optimized for hundreds of tasks: Day view (20px bars, 11px font), Week view (18px bars, 10px font), Month view (16px bars, 10px font). Bars use lighter colors (#a7c7ff blue, #ffe08a yellow, #f7b0b0 red) with black text for maximum readability at scale. Text truncation with tooltips ensures compact display without sacrificing information access.
+
 Key UI features include:
 -   **Project Complexity Configuration**: Three-tier complexity system (Standard/Complex/Enterprise) determines maximum file upload limits (5/10/20 files) per project. Complexity level is configurable at project creation and can be updated later. Visual badges display complexity tier and file limit on project cards.
 -   **Checklist Completion Validation**: Warns users about incomplete checklists when moving items to "Done" status, with visual progress badges on Kanban cards. Allows project owners to toggle enforcement.

@@ -1,6 +1,15 @@
 let currentGanttInstance = null;
 let currentUser = null;
 
+// View-specific styling for scalability with hundreds of tasks
+const VIEW_STYLES = {
+  'Quarter Day': { barHeight: 20, fontSize: 11, padding: 8 },
+  'Half Day': { barHeight: 20, fontSize: 11, padding: 8 },
+  'Day': { barHeight: 20, fontSize: 11, padding: 8 },
+  'Week': { barHeight: 18, fontSize: 10, padding: 6 },
+  'Month': { barHeight: 16, fontSize: 10, padding: 6 }
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const projectId = urlParams.get('projectId');
@@ -90,13 +99,16 @@ async function loadGanttChart(projectId) {
       return;
     }
 
+    const defaultView = 'Week';
+    const viewStyle = VIEW_STYLES[defaultView];
+    
     currentGanttInstance = new Gantt('#gantt', ganttData.tasks, {
-      view_mode: 'Week',
+      view_mode: defaultView,
       date_format: 'YYYY-MM-DD',
-      bar_height: 45,
-      bar_corner_radius: 3,
+      bar_height: viewStyle.barHeight,
+      bar_corner_radius: 2,
       arrow_curve: 5,
-      padding: 20,
+      padding: viewStyle.padding,
       view_modes: ['Quarter Day', 'Half Day', 'Day', 'Week', 'Month'],
       custom_popup_html: function(task) {
         const startDate = new Date(task.start).toLocaleDateString();
@@ -124,8 +136,8 @@ async function loadGanttChart(projectId) {
       }
     });
 
-    // Enhance text visibility by adding dark backgrounds behind labels
-    enhanceTextVisibility();
+    // Apply view-specific styling
+    applyViewStyling(defaultView);
 
     document.getElementById('view-controls').classList.remove('hidden');
     console.log('✅ Gantt chart rendered successfully');
@@ -193,60 +205,36 @@ async function updateTaskProgress(issueId, progress) {
 function changeView(viewMode) {
   if (currentGanttInstance) {
     currentGanttInstance.change_view_mode(viewMode);
-    // Re-enhance text visibility after view change
+    // Apply view-specific styling after view change
     requestAnimationFrame(() => {
-      setTimeout(() => enhanceTextVisibility(), 50);
+      setTimeout(() => applyViewStyling(viewMode), 50);
     });
   }
 }
 
-function enhanceTextVisibility() {
-  // Add semi-transparent dark backgrounds behind all bar labels for better visibility
-  const barGroups = document.querySelectorAll('.gantt .bar-group');
+function applyViewStyling(viewMode) {
+  const style = VIEW_STYLES[viewMode];
+  if (!style) return;
   
-  barGroups.forEach(group => {
-    const labels = group.querySelectorAll('text.bar-label');
+  // Apply font sizing and text styling to all labels
+  const labels = document.querySelectorAll('.gantt .bar-label');
+  
+  labels.forEach(label => {
+    label.setAttribute('fill', '#000000');
+    label.style.fontSize = `${style.fontSize}px`;
+    label.style.fontWeight = '600';
     
-    labels.forEach(label => {
-      // Skip if already enhanced in this render cycle
-      if (label.dataset.enhanced === 'true') return;
-      
-      try {
-        const bbox = label.getBBox();
-        
-        // Only add background if label has content
-        if (bbox.width === 0 || bbox.height === 0) return;
-        
-        const padding = 4;
-        
-        // Remove old background if exists
-        const oldBg = group.querySelector('.label-bg');
-        if (oldBg) oldBg.remove();
-        
-        // Create background rectangle
-        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        rect.setAttribute('x', bbox.x - padding);
-        rect.setAttribute('y', bbox.y - padding);
-        rect.setAttribute('width', bbox.width + (padding * 2));
-        rect.setAttribute('height', bbox.height + (padding * 2));
-        rect.setAttribute('rx', '3');
-        rect.setAttribute('ry', '3');
-        rect.classList.add('label-bg');
-        
-        // Insert background before the label
-        group.insertBefore(rect, label);
-        label.dataset.enhanced = 'true';
-        
-        // Ensure text is white and bold
-        label.setAttribute('fill', '#ffffff');
-        label.style.fontWeight = '700';
-        label.style.fontSize = '14px';
-      } catch (error) {
-        // Silently handle getBBox errors (can occur mid-transition)
-        console.debug('Could not enhance label:', error);
-      }
-    });
+    // Add title tooltip for truncated text
+    const text = label.textContent;
+    if (text) {
+      label.innerHTML = `<title>${text}</title>${text}`;
+    }
   });
+  
+  // Update CSS custom properties for responsive styling
+  document.documentElement.style.setProperty('--gantt-bar-height', `${style.barHeight}px`);
+  document.documentElement.style.setProperty('--gantt-font-size', `${style.fontSize}px`);
+  document.documentElement.style.setProperty('--gantt-padding', `${style.padding}px`);
 }
 
 function showNotification(message, type = 'info') {

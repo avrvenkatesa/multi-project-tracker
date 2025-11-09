@@ -1,34 +1,38 @@
 /* Gantt Chart Custom Styling */
 
-/* Milestone Styling - Gold/Yellow for milestones */
+/* Milestone Styling - Lighter yellow for better black text contrast */
 .gantt .bar-wrapper .bar.milestone {
-  fill: #FFD700 !important;
-  stroke: #FFA500 !important;
-  stroke-width: 2px;
+  fill: #ffe08a !important;
+  stroke: #ffc107 !important;
+  stroke-width: 1px;
+  opacity: 0.9;
 }
 
 .gantt .bar-wrapper .bar.milestone .bar-label {
-  font-weight: bold;
+  font-weight: 600;
   fill: #000 !important;
 }
 
-/* Critical path highlighting - Red for critical tasks */
+/* Critical path highlighting - Lighter red for better black text contrast */
 .gantt .bar-wrapper .bar.critical-path {
-  fill: #dc3545 !important;
-  stroke: #bd2130 !important;
+  fill: #f7b0b0 !important;
+  stroke: #dc3545 !important;
+  opacity: 0.9;
 }
 
 .gantt .bar-wrapper .bar.bar-critical {
-  fill: #dc3545 !important;
-  stroke: #bd2130 !important;
-  stroke-width: 2px;
+  fill: #f7b0b0 !important;
+  stroke: #dc3545 !important;
+  stroke-width: 1px;
+  opacity: 0.9;
 }
 
-/* Standard task bar styling */
+/* Standard task bar styling - Lighter blue for better black text contrast */
 .gantt .bar {
-  fill: #3b82f6;
-  stroke: #2563eb;
+  fill: #a7c7ff;
+  stroke: #3b82f6;
   stroke-width: 1px;
+  opacity: 0.9;
 }
 
 /* Gantt chart dependency arrows */
@@ -38,7 +42,7 @@
   fill: none;
 }
 
-/* Gantt chart grid styling */
+/* Gantt chart grid styling - Reduced spacing for density */
 .gantt .grid-background {
   fill: none;
 }
@@ -54,52 +58,39 @@
 }
 
 .gantt .grid-row:nth-child(even) {
-  fill: #f9fafb;
+  fill: #fafbfc;
 }
 
-/* Task progress bar - Green for completion */
+/* Compact row spacing */
+.gantt-container .bar-wrapper {
+  margin-bottom: var(--gantt-padding, 6px);
+}
+
+/* Task progress bar - Lighter green with better opacity */
 .gantt .bar-progress {
-  fill: #28a745 !important;
-  opacity: 0.8;
+  fill: #7fb3ff !important;
+  opacity: 0.7;
 }
 
-/* Task labels - Maximum visibility for all views */
+/* Task labels - Compact, scalable styling for hundreds of tasks */
 .gantt .bar-label,
 .gantt text.bar-label,
 .gantt .bar-wrapper .bar-label,
 text.bar-label {
-  fill: #ffffff !important;
-  font-size: 15px !important;
-  font-weight: 900 !important;
+  fill: #000000 !important;
+  font-size: var(--gantt-font-size, 10px) !important;
+  font-weight: 600 !important;
   opacity: 1 !important;
-  text-shadow: 
-    0 0 3px rgba(0, 0, 0, 0.9),
-    0 0 5px rgba(0, 0, 0, 0.7),
-    1px 1px 2px rgba(0, 0, 0, 0.8),
-    -1px -1px 2px rgba(0, 0, 0, 0.8) !important;
-  paint-order: stroke fill !important;
-  stroke: rgba(0, 0, 0, 0.6) !important;
-  stroke-width: 1px !important;
-  stroke-linejoin: round !important;
-  stroke-linecap: round !important;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-/* Ensure SVG text elements are visible */
+/* Ensure SVG text elements use compact styling */
 svg .bar-label {
-  fill: #ffffff !important;
-  font-weight: 900 !important;
+  fill: #000000 !important;
+  font-weight: 600 !important;
   opacity: 1 !important;
-}
-
-/* Label background for better text visibility */
-.label-bg {
-  fill: rgba(0, 0, 0, 0.7) !important;
-  opacity: 0.95;
-  transition: opacity 0.2s ease;
-}
-
-.gantt .bar-wrapper:hover .label-bg {
-  opacity: 1;
 }
 
 /* Hover effects */
