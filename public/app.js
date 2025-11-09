@@ -3305,6 +3305,42 @@ async function deleteRelationship(relationshipId) {
 let currentAIAnalysis = null;
 let selectedFile = null;
 let accumulatedFiles = []; // Array to store multiple files as user selects them
+let currentAnalysisMode = 'meeting'; // 'meeting' or 'multi-document'
+
+// Mode configuration for dynamic UI updates
+const MODE_CONFIG = {
+  meeting: {
+    title: 'AI Meeting Analysis',
+    subtitle: 'Powered by GPT-3.5-Turbo / GPT-4o',
+    uploadTitle: 'Step 1: Upload Meeting Transcript(s)',
+    uploadDescription: 'PDF, Word (.docx), or Text files, up to 10MB each',
+    analyzeButtonText: 'Analyze with AI',
+    progressText: 'Analyzing transcript with AI...',
+    progressSubtext: 'This may take 30-60 seconds'
+  },
+  'multi-document': {
+    title: 'Multi-Document Project Import',
+    subtitle: 'Powered by GPT-4o - Advanced AI Analysis',
+    uploadTitle: 'Step 1: Upload Project Documents',
+    uploadDescription: 'Upload requirements, SOWs, timelines, resource docs (PDF, DOCX, TXT)',
+    analyzeButtonText: 'Import & Analyze Documents',
+    progressText: 'Analyzing documents and building project structure...',
+    progressSubtext: 'This may take 1-2 minutes for comprehensive analysis'
+  }
+};
+
+// Update modal UI based on selected mode
+function updateModalForMode(mode) {
+  currentAnalysisMode = mode;
+  const config = MODE_CONFIG[mode];
+  
+  document.getElementById('ai-modal-title').textContent = config.title;
+  document.getElementById('ai-modal-subtitle').textContent = config.subtitle;
+  document.getElementById('upload-step-title').textContent = config.uploadTitle;
+  document.getElementById('analyze-btn').textContent = config.analyzeButtonText;
+  document.getElementById('analysis-progress-text').textContent = config.progressText;
+  document.getElementById('analysis-progress-subtext').textContent = config.progressSubtext;
+}
 
 // Show AI analysis modal
 function showAIAnalysisModal() {
@@ -3324,6 +3360,11 @@ function showAIAnalysisModal() {
     AuthManager.showNotification('Insufficient permissions - Only Project Managers and System Administrators can upload transcripts and run AI analysis', 'error');
     return;
   }
+
+  // Reset to default mode
+  currentAnalysisMode = 'meeting';
+  document.querySelector('input[name="analysis-mode"][value="meeting"]').checked = true;
+  updateModalForMode('meeting');
 
   document.getElementById('ai-analysis-modal').classList.remove('hidden');
   resetAnalysis();
@@ -3445,7 +3486,7 @@ function removeFile(index) {
   }
 }
 
-// Analyze transcript with AI (now supports multiple accumulated files)
+// Analyze transcript with AI (now supports multiple accumulated files and modes)
 async function analyzeTranscript() {
   if (accumulatedFiles.length === 0 || !currentProject) return;
   
@@ -3460,41 +3501,223 @@ async function analyzeTranscript() {
     // Create FormData and append all accumulated files
     const formData = new FormData();
     
-    accumulatedFiles.forEach(file => {
-      formData.append('transcript', file);
-    });
-    
-    formData.append('projectId', currentProject.id);
-    
-    // Call API
-    const response = await axios.post('/api/meetings/analyze', formData, {
-      withCredentials: true,
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    });
-    
-    currentAIAnalysis = response.data;
-    
-    // Show review step
-    displayAIResults();
-    document.getElementById('upload-step').classList.add('hidden');
-    document.getElementById('review-step').classList.remove('hidden');
+    if (currentAnalysisMode === 'meeting') {
+      // Meeting analysis mode
+      accumulatedFiles.forEach(file => {
+        formData.append('transcript', file);
+      });
+      formData.append('projectId', currentProject.id);
+      
+      const response = await axios.post('/api/meetings/analyze', formData, {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      currentAIAnalysis = response.data;
+      
+      // Show meeting analysis results
+      displayAIResults();
+      document.getElementById('upload-step').classList.add('hidden');
+      document.getElementById('review-step').classList.remove('hidden');
+      
+    } else if (currentAnalysisMode === 'multi-document') {
+      // Multi-document import mode
+      accumulatedFiles.forEach(file => {
+        formData.append('documents', file);
+      });
+      formData.append('projectStartDate', new Date().toISOString().split('T')[0]);
+      
+      const response = await axios.post(`/api/projects/${currentProject.id}/import-documents`, formData, {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      currentAIAnalysis = response.data;
+      
+      // Show multi-document import results
+      displayMultiDocumentResults();
+      document.getElementById('upload-step').classList.add('hidden');
+      document.getElementById('review-step').classList.remove('hidden');
+    }
     
   } catch (error) {
-    console.error('Error analyzing transcript:', error);
+    console.error('Error analyzing documents:', error);
     const errorMessage = error.response?.data?.message || error.response?.data?.error;
     
     if (error.response?.status === 403) {
-      // Permission denied error
-      alert(`⚠️ Permission Denied\n\n${errorMessage}\n\nOnly Project Managers and System Administrators can upload transcripts and run AI analysis.`);
+      alert(`⚠️ Permission Denied\n\n${errorMessage}\n\nOnly Project Managers and System Administrators can run AI analysis.`);
     } else {
-      alert(errorMessage || 'Failed to analyze transcript. Please check your OpenAI API key.');
+      alert(errorMessage || 'Failed to analyze documents. Please check your OpenAI API key and try again.');
     }
     
     progressDiv.classList.add('hidden');
     analyzeBtn.disabled = false;
   }
+}
+
+// Display multi-document import results
+function displayMultiDocumentResults() {
+  if (!currentAIAnalysis) return;
+  
+  const reviewStepContent = document.getElementById('review-step');
+  
+  const html = `
+    <div class="space-y-6">
+      <!-- Success Header -->
+      <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+        <h4 class="font-semibold text-green-900 mb-2">✅ Multi-Document Import Complete!</h4>
+        <p class="text-sm text-green-800">
+          Successfully analyzed ${currentAIAnalysis.documents.uploaded} document(s) and built comprehensive project structure.
+        </p>
+        <p class="text-xs text-green-700 mt-1">
+          Duration: ${(currentAIAnalysis.duration / 1000).toFixed(1)}s | 
+          Cost: $${currentAIAnalysis.totalCost.toFixed(4)}
+        </p>
+      </div>
+      
+      <!-- Summary Grid -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+          <div class="text-3xl font-bold text-blue-600">${currentAIAnalysis.workstreams.length}</div>
+          <div class="text-sm text-gray-600">Workstreams</div>
+        </div>
+        <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+          <div class="text-3xl font-bold text-green-600">${currentAIAnalysis.issues.created}</div>
+          <div class="text-sm text-gray-600">Issues Created</div>
+        </div>
+        <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+          <div class="text-3xl font-bold text-purple-600">${currentAIAnalysis.checklists.created}</div>
+          <div class="text-sm text-gray-600">Checklists</div>
+        </div>
+      </div>
+      
+      <!-- Documents Processed -->
+      <div class="border rounded-lg p-4">
+        <h5 class="font-semibold text-gray-800 mb-3">📄 Documents Processed</h5>
+        <div class="space-y-2">
+          ${currentAIAnalysis.documents.files.map(file => `
+            <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+              <span class="text-sm font-medium">${escapeHtml(file.filename)}</span>
+              <span class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">
+                ${escapeHtml(file.classification)}
+              </span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <!-- Workstreams -->
+      ${currentAIAnalysis.workstreams.length > 0 ? `
+      <div class="border rounded-lg p-4">
+        <h5 class="font-semibold text-gray-800 mb-3">🎯 Workstreams Detected</h5>
+        <div class="space-y-2">
+          ${currentAIAnalysis.workstreams.map(ws => `
+            <div class="p-3 bg-blue-50 border border-blue-200 rounded">
+              <div class="font-medium text-blue-900">${escapeHtml(ws.name)}</div>
+              <div class="text-sm text-blue-700 mt-1">${escapeHtml(ws.description)}</div>
+              ${ws.complexity ? `<span class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800 mt-2 inline-block">${escapeHtml(ws.complexity)}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      ` : ''}
+      
+      <!-- Timeline Updates -->
+      ${(currentAIAnalysis.timeline.phases > 0 || currentAIAnalysis.timeline.milestones > 0) ? `
+      <div class="border rounded-lg p-4">
+        <h5 class="font-semibold text-gray-800 mb-3">📅 Timeline Extracted</h5>
+        <div class="grid grid-cols-3 gap-3">
+          <div class="text-center p-3 bg-purple-50 rounded">
+            <div class="text-2xl font-bold text-purple-600">${currentAIAnalysis.timeline.phases}</div>
+            <div class="text-xs text-purple-700">Phases</div>
+          </div>
+          <div class="text-center p-3 bg-yellow-50 rounded">
+            <div class="text-2xl font-bold text-yellow-600">${currentAIAnalysis.timeline.milestones}</div>
+            <div class="text-xs text-yellow-700">Milestones</div>
+          </div>
+          <div class="text-center p-3 bg-green-50 rounded">
+            <div class="text-2xl font-bold text-green-600">${currentAIAnalysis.timeline.issuesUpdated || 0}</div>
+            <div class="text-xs text-green-700">Issues Updated</div>
+          </div>
+        </div>
+      </div>
+      ` : ''}
+      
+      <!-- Dependencies & Resources -->
+      <div class="grid grid-cols-2 gap-4">
+        ${currentAIAnalysis.dependencies.created > 0 ? `
+        <div class="border rounded-lg p-4">
+          <h5 class="font-semibold text-gray-800 mb-2">🔗 Dependencies</h5>
+          <div class="text-2xl font-bold text-indigo-600">${currentAIAnalysis.dependencies.created}</div>
+          <div class="text-sm text-gray-600">Relationships Created</div>
+        </div>
+        ` : ''}
+        
+        ${currentAIAnalysis.resourceAssignments.assigned > 0 ? `
+        <div class="border rounded-lg p-4">
+          <h5 class="font-semibold text-gray-800 mb-2">👤 Resources</h5>
+          <div class="text-2xl font-bold text-teal-600">${currentAIAnalysis.resourceAssignments.assigned}</div>
+          <div class="text-sm text-gray-600">Tasks Assigned</div>
+        </div>
+        ` : ''}
+      </div>
+      
+      <!-- Warnings -->
+      ${currentAIAnalysis.warnings && currentAIAnalysis.warnings.length > 0 ? `
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <h5 class="font-semibold text-yellow-900 mb-2">⚠️ Warnings</h5>
+        <ul class="text-sm text-yellow-800 space-y-1">
+          ${currentAIAnalysis.warnings.map(w => `
+            <li>${typeof w === 'string' ? escapeHtml(w) : escapeHtml(w.message || JSON.stringify(w))}</li>
+          `).join('')}
+        </ul>
+      </div>
+      ` : ''}
+      
+      <!-- Errors -->
+      ${currentAIAnalysis.errors && currentAIAnalysis.errors.length > 0 ? `
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+        <h5 class="font-semibold text-red-900 mb-2">❌ Errors</h5>
+        <ul class="text-sm text-red-800 space-y-1">
+          ${currentAIAnalysis.errors.map(e => `
+            <li>${typeof e === 'string' ? escapeHtml(e) : escapeHtml(e.message || JSON.stringify(e))}</li>
+          `).join('')}
+        </ul>
+      </div>
+      ` : ''}
+      
+      <!-- Actions -->
+      <div class="flex justify-between items-center pt-4 border-t">
+        <button id="reset-analysis-btn" class="text-sm text-gray-600 hover:text-gray-800">
+          ← Upload More Documents
+        </button>
+        <div class="space-x-3">
+          <button id="view-timeline-btn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium">
+            📅 View Timeline
+          </button>
+          <button id="close-import-btn" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+            Done - Refresh Project
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  reviewStepContent.innerHTML = html;
+  
+  // Attach event listeners
+  document.getElementById('view-timeline-btn')?.addEventListener('click', () => {
+    window.location.href = '/gantt.html';
+  });
+  
+  document.getElementById('close-import-btn')?.addEventListener('click', () => {
+    closeAIAnalysisModal();
+    loadProject(currentProject.id); // Refresh project to show new items
+  });
 }
 
 // Display AI analysis results
@@ -4387,6 +4610,14 @@ document.addEventListener('DOMContentLoaded', function() {
   if (createBtn) {
     createBtn.addEventListener('click', createAllItems);
   }
+  
+  // Mode selector radio buttons
+  const modeRadios = document.querySelectorAll('input[name="analysis-mode"]');
+  modeRadios.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      updateModalForMode(e.target.value);
+    });
+  });
   
   // Transcripts modal event listeners
   const closeTranscriptsBtn = document.getElementById('close-transcripts-modal-btn');

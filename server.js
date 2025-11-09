@@ -11506,6 +11506,193 @@ app.post('/api/projects/:projectId/create-matched-checklists', authenticateToken
 });
 
 // ============================================
+// Story 8: Multi-Document Project Import
+// ============================================
+
+const multiDocumentAnalyzer = require('./services/multi-document-analyzer.js');
+
+app.post('/api/projects/:projectId/import-documents',
+  authenticateToken,
+  requireRole('Team Member'),
+  getDocumentUploadMiddleware,
+  async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+      const { projectId } = req.params;
+      const { projectStartDate } = req.body;
+      
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ 
+          error: 'No files uploaded',
+          message: 'Please upload at least one document for import'
+        });
+      }
+      
+      console.log('╔══════════════════════════════════════════════════════╗');
+      console.log('║     MULTI-DOCUMENT IMPORT - FRONTEND REQUEST         ║');
+      console.log('╚══════════════════════════════════════════════════════╝');
+      console.log(`📁 Project ID: ${projectId}`);
+      console.log(`📄 Files uploaded: ${req.files.length}`);
+      console.log(`📊 Project complexity: ${req.projectComplexity}`);
+      console.log(`📝 Max files allowed: ${req.projectMaxFiles}\n`);
+      
+      const documentService = require('./services/document-service.js');
+      const documentClassifier = require('./services/document-classifier');
+      const documents = [];
+      const classificationWarnings = [];
+      
+      console.log('Step 1: Extracting and classifying documents...');
+      
+      for (const file of req.files) {
+        console.log(`  Processing: ${file.originalname}`);
+        
+        let text = '';
+        if (file.mimetype === 'text/plain') {
+          text = file.buffer.toString('utf8');
+        } else {
+          const extracted = await documentService.extractTextFromDocument(
+            file.buffer,
+            file.mimetype,
+            file.originalname
+          );
+          text = extracted.text;
+        }
+        
+        let classification = 'other';
+        let confidence = 0.5;
+        let reasoning = 'Default classification';
+        
+        try {
+          const classificationResult = await documentClassifier.classifyDocument(
+            text,
+            file.originalname
+          );
+          
+          classification = classificationResult.category;
+          confidence = classificationResult.confidence;
+          reasoning = classificationResult.reasoning;
+          
+          await pool.query(
+            `INSERT INTO document_classifications 
+             (project_id, filename, category, confidence, reasoning, is_custom_category, text_length)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              projectId,
+              file.originalname,
+              classification,
+              confidence,
+              reasoning,
+              classificationResult.is_custom_category || false,
+              text.length
+            ]
+          );
+          
+          console.log(`    ✓ Classified as: ${classification} (${(confidence * 100).toFixed(0)}% confidence)`);
+        } catch (classificationError) {
+          console.error(`    ⚠️  Classification failed: ${classificationError.message}`);
+          classificationWarnings.push({
+            filename: file.originalname,
+            message: `Classification failed: ${classificationError.message}. Using default category 'other'.`
+          });
+        }
+        
+        documents.push({
+          filename: file.originalname,
+          text,
+          classification
+        });
+      }
+      
+      console.log(`✓ Extracted ${documents.length} documents\n`);
+      
+      console.log('Step 2: Running multi-document analysis...');
+      
+      const analysisResult = await multiDocumentAnalyzer.analyzeMultipleDocuments(
+        documents,
+        {
+          projectId: parseInt(projectId),
+          userId: req.user.id,
+          projectStartDate: projectStartDate || new Date().toISOString().split('T')[0]
+        }
+      );
+      
+      const duration = Date.now() - startTime;
+      analysisResult.duration = duration;
+      
+      console.log('\n╔══════════════════════════════════════════════════════╗');
+      console.log('║     MULTI-DOCUMENT IMPORT - COMPLETE                 ║');
+      console.log('╚══════════════════════════════════════════════════════╝');
+      console.log(`✓ Documents processed: ${analysisResult.documents.processed}`);
+      console.log(`✓ Workstreams detected: ${analysisResult.workstreams.length}`);
+      console.log(`✓ Issues created: ${analysisResult.issues.created}`);
+      console.log(`✓ Dependencies mapped: ${analysisResult.dependencies.created}`);
+      console.log(`✓ Resources assigned: ${analysisResult.resourceAssignments.assigned}`);
+      console.log(`✓ Checklists created: ${analysisResult.checklists.created}`);
+      console.log(`✓ Total cost: $${analysisResult.totalCost.toFixed(4)}`);
+      console.log(`✓ Duration: ${(duration / 1000).toFixed(1)}s\n`);
+      
+      res.json({
+        success: analysisResult.success,
+        message: 'Multi-document import completed successfully',
+        documents: {
+          uploaded: req.files.length,
+          processed: analysisResult.documents.processed,
+          files: documents.map(d => ({
+            filename: d.filename,
+            classification: d.classification,
+            textLength: d.text.length
+          }))
+        },
+        workstreams: analysisResult.workstreams.map(ws => ({
+          name: ws.name,
+          description: ws.description,
+          complexity: ws.complexity
+        })),
+        issues: {
+          created: analysisResult.issues.created,
+          ids: analysisResult.issues.ids
+        },
+        timeline: {
+          phases: analysisResult.timeline.phases.length,
+          milestones: analysisResult.timeline.milestones.length,
+          issuesUpdated: analysisResult.timeline.issuesUpdated || 0
+        },
+        dependencies: {
+          created: analysisResult.dependencies.created,
+          warnings: analysisResult.dependencies.warnings
+        },
+        resourceAssignments: {
+          assigned: analysisResult.resourceAssignments.assigned,
+          needsReview: analysisResult.resourceAssignments.needsReview
+        },
+        checklists: {
+          created: analysisResult.checklists.created,
+          totalItems: analysisResult.checklists.items
+        },
+        aiCostBreakdown: analysisResult.aiCostBreakdown,
+        totalCost: analysisResult.totalCost,
+        duration: duration,
+        errors: analysisResult.errors,
+        warnings: [...(analysisResult.warnings || []), ...classificationWarnings]
+      });
+      
+    } catch (error) {
+      console.error('Multi-document import error:', error);
+      
+      const duration = Date.now() - startTime;
+      
+      res.status(500).json({
+        success: false,
+        error: 'Failed to import documents',
+        message: error.message,
+        duration
+      });
+    }
+  }
+);
+
+// ============================================
 // Phase 3b Feature 1: Auto-Create Checklist APIs
 // ============================================
 

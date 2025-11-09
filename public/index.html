@@ -838,16 +838,37 @@
                 <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
                     <div class="flex items-center justify-between p-6 border-b">
                         <div>
-                            <h3 class="text-xl font-semibold text-gray-800">AI Meeting Analysis</h3>
-                            <p class="text-xs text-gray-500 mt-1">Powered by GPT-3.5-Turbo (~$0.001 per analysis)</p>
+                            <h3 id="ai-modal-title" class="text-xl font-semibold text-gray-800">AI Document Analysis</h3>
+                            <p id="ai-modal-subtitle" class="text-xs text-gray-500 mt-1">Powered by GPT-3.5-Turbo / GPT-4o</p>
                         </div>
                         <button id="close-ai-analysis-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                     </div>
                     
                     <div class="p-6">
+                        <!-- Mode Selector -->
+                        <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Analysis Mode:</label>
+                            <div class="flex gap-4">
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="radio" name="analysis-mode" value="meeting" class="mr-2" checked>
+                                    <div>
+                                        <span class="font-medium text-gray-800">Meeting Transcript Analysis</span>
+                                        <p class="text-xs text-gray-600">Extract action items and issues from meeting notes</p>
+                                    </div>
+                                </label>
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="radio" name="analysis-mode" value="multi-document" class="mr-2">
+                                    <div>
+                                        <span class="font-medium text-gray-800">Multi-Document Project Import ⭐</span>
+                                        <p class="text-xs text-gray-600">Extract workstreams, timeline, dependencies, and resources</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
                         <!-- Step 1: Upload -->
                         <div id="upload-step" class="mb-6">
-                            <h4 class="font-semibold mb-3">Step 1: Upload Meeting Transcript(s)</h4>
+                            <h4 id="upload-step-title" class="font-semibold mb-3">Step 1: Upload Meeting Transcript(s)</h4>
                             
                             <!-- Project complexity info -->
                             <div id="transcript-complexity-info" class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -880,8 +901,8 @@
                             </button>
                             <div id="analysis-progress" class="hidden mt-4 text-center">
                                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                                <p class="text-sm text-gray-600 mt-2">Analyzing transcript with GPT-3.5...</p>
-                                <p class="text-xs text-gray-500 mt-1">This may take 30-60 seconds</p>
+                                <p id="analysis-progress-text" class="text-sm text-gray-600 mt-2">Analyzing documents...</p>
+                                <p id="analysis-progress-subtext" class="text-xs text-gray-500 mt-1">This may take 30-60 seconds</p>
                             </div>
                         </div>
 
