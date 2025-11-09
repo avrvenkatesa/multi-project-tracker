@@ -125,21 +125,35 @@ class MultiDocumentAnalyzer {
         throw new Error('No workstreams detected - cannot create project structure');
       }
 
-      // Step 3: Create issues from workstreams
+      // Step 3: Create issues from workstreams with AI effort estimates
       console.log('Step 3/7: Creating issues from workstreams...');
       for (const workstream of result.workstreams) {
+        const effortEstimate = this._calculateEffortEstimate(workstream);
+        
         const issueResult = await pool.query(
-          `INSERT INTO issues (project_id, title, description, status, created_by)
-           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-          [projectId, workstream.name, workstream.description || '', 'To Do', userId]
+          `INSERT INTO issues (
+            project_id, title, description, status, created_by,
+            ai_effort_estimate_hours, ai_estimate_confidence, ai_estimate_version
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [
+            projectId, 
+            workstream.name, 
+            workstream.description || '', 
+            'To Do', 
+            userId,
+            effortEstimate.hours,
+            effortEstimate.confidence,
+            1
+          ]
         );
         const issueId = issueResult.rows[0].id;
         workstream.issueId = issueId;
         result.issues.ids.push(issueId);
         result.issues.created++;
-        console.log(`  ✓ Created issue #${issueId}: ${workstream.name}`);
+        console.log(`  ✓ Created issue #${issueId}: ${workstream.name} (${effortEstimate.hours}h, ${effortEstimate.confidence} confidence)`);
       }
-      console.log(`✓ Created ${result.issues.created} issues\n`);
+      console.log(`✓ Created ${result.issues.created} issues with AI effort estimates\n`);
 
       // Step 4: Extract timeline (OPTIONAL)
       console.log('Step 4/7: Extracting timeline...');
@@ -353,6 +367,58 @@ class MultiDocumentAnalyzer {
     }
 
     return result;
+  }
+
+  /**
+   * Calculate AI effort estimate based on workstream complexity
+   * @param {object} workstream - Workstream with estimatedComplexity
+   * @returns {object} { hours, confidence }
+   */
+  _calculateEffortEstimate(workstream) {
+    const complexity = (workstream.estimatedComplexity || workstream.complexity || 'medium').toLowerCase();
+    const requirementsCount = workstream.keyRequirements?.length || 0;
+    
+    // Base effort estimates by complexity (in hours)
+    const effortMap = {
+      'low': 30,      // ~1 week for one person
+      'medium': 60,   // ~2 weeks for one person
+      'high': 120     // ~4 weeks for one person
+    };
+    
+    // Get base hours
+    let baseHours = effortMap[complexity] || effortMap['medium'];
+    
+    // Adjust based on number of requirements (±20%)
+    if (requirementsCount > 0) {
+      if (requirementsCount <= 3) {
+        baseHours *= 0.85;  // Fewer requirements = less work
+      } else if (requirementsCount >= 8) {
+        baseHours *= 1.15;  // More requirements = more work
+      }
+    }
+    
+    // Round to nearest 5 hours for cleaner estimates
+    const estimatedHours = Math.round(baseHours / 5) * 5;
+    
+    // Calculate confidence based on available information
+    let confidence = 0.6;  // Base confidence for AI estimates
+    
+    if (workstream.description && workstream.description.length > 100) {
+      confidence += 0.1;  // Good description
+    }
+    if (requirementsCount >= 3) {
+      confidence += 0.1;  // Clear requirements
+    }
+    if (workstream.documentSections && workstream.documentSections.length > 0) {
+      confidence += 0.1;  // References to specific document sections
+    }
+    
+    confidence = Math.min(confidence, 0.85);  // Cap at 85% for AI estimates
+    
+    return {
+      hours: estimatedHours,
+      confidence: parseFloat(confidence.toFixed(2))
+    };
   }
 
   /**
