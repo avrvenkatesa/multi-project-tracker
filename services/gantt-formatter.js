@@ -8,6 +8,13 @@ async function getGanttData(projectId) {
   try {
     console.log(`📊 Fetching Gantt data for project ${projectId}...`);
 
+    // Get project name
+    const projectResult = await pool.query(
+      'SELECT name FROM projects WHERE id = $1',
+      [projectId]
+    );
+    const projectName = projectResult.rows[0]?.name || 'Unknown Project';
+
     // Get all issues with timeline data
     const issuesResult = await pool.query(
       `SELECT
@@ -31,7 +38,7 @@ async function getGanttData(projectId) {
 
     if (issuesResult.rows.length === 0) {
       console.log('⚠️ No issues found for project');
-      return { tasks: [] };
+      return { tasks: [], projectName };
     }
 
     console.log(`Found ${issuesResult.rows.length} issues`);
@@ -107,7 +114,7 @@ async function getGanttData(projectId) {
     });
 
     console.log(`✅ Converted ${tasks.length} tasks to Gantt format`);
-    return { tasks };
+    return { tasks, projectName };
 
   } catch (error) {
     console.error('❌ Error getting Gantt data:', error);

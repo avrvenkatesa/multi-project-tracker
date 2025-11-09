@@ -30,29 +30,30 @@
     }
   </style>
 </head>
-<body class="bg-gray-100">
-  <!-- Header -->
-  <header class="bg-white shadow-sm border-b border-gray-200">
-    <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between">
+<body class="bg-gray-50">
+  <!-- Navigation Bar -->
+  <nav class="bg-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
         <div class="flex items-center space-x-4">
-          <a href="/dashboard.html" class="text-blue-600 hover:text-blue-800">
-            <i class="fas fa-arrow-left"></i> Back to Dashboard
-          </a>
-          <h1 class="text-2xl font-bold text-gray-900">
-            <i class="fas fa-chart-gantt text-blue-600 mr-2"></i>
-            Project Timeline
-          </h1>
+          <a href="/" class="text-xl font-bold">Multi-Project Tracker</a>
+          <span class="text-blue-200">/</span>
+          <span id="project-name" class="text-white">Loading...</span>
+          <span class="text-blue-200">/</span>
+          <span class="text-white">Timeline</span>
         </div>
         <div class="flex items-center space-x-4">
-          <span id="user-display" class="text-gray-700"></span>
-          <button id="logout-btn" class="text-gray-600 hover:text-gray-900">
-            <i class="fas fa-sign-out-alt"></i> Logout
+          <a href="/" class="text-sm hover:text-blue-200 transition-colors flex items-center">
+            <i class="fas fa-arrow-left mr-2"></i>Back to Projects
+          </a>
+          <span id="user-display" class="text-sm"></span>
+          <button id="logout-btn" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded transition-colors">
+            Logout
           </button>
         </div>
       </div>
     </div>
-  </header>
+  </nav>
 
   <!-- Main Content -->
   <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">

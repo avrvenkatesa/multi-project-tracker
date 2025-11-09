@@ -72,6 +72,11 @@ async function loadGanttChart(projectId) {
     }
 
     const ganttData = await response.json();
+    
+    // Update project name in header
+    if (ganttData.projectName) {
+      document.getElementById('project-name').textContent = ganttData.projectName;
+    }
 
     if (!ganttData.tasks || ganttData.tasks.length === 0) {
       document.getElementById('gantt').innerHTML = `
