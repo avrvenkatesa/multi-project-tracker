@@ -3711,7 +3711,7 @@ function displayMultiDocumentResults() {
   
   // Attach event listeners
   document.getElementById('view-timeline-btn')?.addEventListener('click', () => {
-    window.location.href = '/gantt.html';
+    window.location.href = `/gantt.html?projectId=${currentProject.id}`;
   });
   
   document.getElementById('close-import-btn')?.addEventListener('click', () => {
