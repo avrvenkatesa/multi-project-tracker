@@ -272,11 +272,11 @@ function deduplicateResources(resources) {
 async function getProjectUsers(projectId) {
   try {
     const result = await pool.query(
-      `SELECT DISTINCT u.id, u.username, u.full_name
+      `SELECT DISTINCT u.id, u.username, u.email
        FROM users u
        INNER JOIN project_members pm ON u.id = pm.user_id
        WHERE pm.project_id = $1
-       ORDER BY u.full_name`,
+       ORDER BY u.username`,
       [projectId]
     );
     
@@ -299,58 +299,36 @@ async function getProjectUsers(projectId) {
 function findMatchingUser(resourceName, users) {
   const normalized = resourceName.toLowerCase().trim();
   
-  // Strategy 1: Exact match on full_name
-  for (const user of users) {
-    if (user.full_name && user.full_name.toLowerCase() === normalized) {
-      return { user, confidence: 1.0 };
-    }
-  }
-  
-  // Strategy 2: Exact match on username
+  // Strategy 1: Exact match on username
   for (const user of users) {
     if (user.username && user.username.toLowerCase() === normalized) {
       return { user, confidence: 1.0 };
     }
   }
   
-  // Strategy 3: Partial match (first name + last initial)
-  // "John D" matches "John Doe"
+  // Strategy 2: Partial match (first name from resource matches first part of username)
+  // "Sultan" matches "sultan.abc"
   const parts = normalized.split(/\s+/);
-  if (parts.length >= 2) {
+  if (parts.length >= 1) {
     const firstName = parts[0];
-    const lastInitial = parts[parts.length - 1].charAt(0);
     
     for (const user of users) {
-      if (user.full_name) {
-        const userParts = user.full_name.toLowerCase().split(/\s+/);
-        if (userParts.length >= 2 &&
-            userParts[0] === firstName &&
-            userParts[userParts.length - 1].charAt(0) === lastInitial) {
-          return { user, confidence: 0.9 };
+      if (user.username) {
+        const usernameParts = user.username.toLowerCase().split(/[\.\-_]/);
+        if (usernameParts[0] === firstName) {
+          return { user, confidence: 0.8 };
         }
       }
     }
   }
   
-  // Strategy 4: First name only (if unique)
-  if (parts.length >= 1) {
-    const firstName = parts[0];
-    const matches = users.filter(u => 
-      u.full_name && u.full_name.toLowerCase().split(/\s+/)[0] === firstName
-    );
-    
-    if (matches.length === 1) {
-      return { user: matches[0], confidence: 0.8 };
-    }
-  }
-  
-  // Strategy 5: Fuzzy match using Levenshtein distance
+  // Strategy 3: Fuzzy match using Levenshtein distance on username
   let bestMatch = null;
   let bestDistance = Infinity;
   
   for (const user of users) {
-    if (user.full_name) {
-      const distance = levenshteinDistance(normalized, user.full_name.toLowerCase());
+    if (user.username) {
+      const distance = levenshteinDistance(normalized, user.username.toLowerCase());
       if (distance < bestDistance) {
         bestDistance = distance;
         bestMatch = user;
@@ -360,7 +338,7 @@ function findMatchingUser(resourceName, users) {
   
   // Accept fuzzy match if distance is small enough
   if (bestMatch && bestDistance <= 3) {
-    const confidence = 1 - (bestDistance / Math.max(normalized.length, bestMatch.full_name.length));
+    const confidence = 1 - (bestDistance / Math.max(normalized.length, bestMatch.username.length));
     return { user: bestMatch, confidence: Math.max(0.6, confidence) };
   }
   

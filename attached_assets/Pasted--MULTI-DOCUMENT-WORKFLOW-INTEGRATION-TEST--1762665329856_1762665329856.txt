@@ -1,0 +1,285 @@
+ MULTI-DOCUMENT WORKFLOW - INTEGRATION TEST          ║
+╚══════════════════════════════════════════════════════╝
+
+Setup: Creating test project...
+✓ Created project 21
+
+Running multi-document analyzer...
+
+╔════════════════════════════════════════════════════╗
+║   MULTI-DOCUMENT PROJECT IMPORT STARTING           ║
+╚════════════════════════════════════════════════════╝
+📁 Project ID: 21
+📄 Documents: 3
+📅 Start Date: 2025-01-06
+
+Step 1/7: Combining document text...
+✓ Combined 1403 characters
+
+Step 2/7: Detecting workstreams...
+🔍 Analyzing document for workstreams...
+📄 Raw AI response length: 3532
+🔢 Tokens used: 1651
+✅ Identified 5 workstreams
+✓ Found 5 workstreams
+  1. Backup Validation and Verification (unknown complexity)
+  2. NTDS.DIT Extraction (unknown complexity)
+  3. Infrastructure Assessment and Domain Analysis (unknown complexity)
+  4. AWS Deployment and Configuration (unknown complexity)
+  5. Project Milestones and Approval Gates (unknown complexity)
+
+Step 3/7: Creating issues from workstreams...
+  ✓ Created issue #124: Backup Validation and Verification
+  ✓ Created issue #125: NTDS.DIT Extraction
+  ✓ Created issue #126: Infrastructure Assessment and Domain Analysis
+  ✓ Created issue #127: AWS Deployment and Configuration
+  ✓ Created issue #128: Project Milestones and Approval Gates
+✓ Created 5 issues
+
+Step 4/7: Extracting timeline...
+✓ Extracted 3 phases, 3 milestones
+
+Step 5/7: Creating dependencies...
+🔗 Creating dependencies for 5 workstreams in project 21
+  → Found 5 issues in project
+  ✓ Mapped "Backup Validation and Verification" → Issue #124 "Backup Validation and Verification"
+  ✓ Mapped "NTDS.DIT Extraction" → Issue #125 "NTDS.DIT Extraction"
+  ✓ Mapped "Infrastructure Assessment and Domain Analysis" → Issue #126 "Infrastructure Assessment and Domain Analysis"
+  ✓ Mapped "AWS Deployment and Configuration" → Issue #127 "AWS Deployment and Configuration"
+  ✓ Mapped "Project Milestones and Approval Gates" → Issue #128 "Project Milestones and Approval Gates"
+  → 0 dependencies to create
+✅ Created 0 dependencies
+⚠ 4 warnings
+✓ Created 0 dependencies
+
+Step 6/7: Parsing resource assignments...
+🔍 RESOURCE PARSER - Starting extraction
+
+Strategy 1: Parsing tables...
+📊 Found resource table with headers: task component, resource, role, effort
+  ✓ Parsed: Sultan (Infrastructure Lead) - 5.2 hours on Backup Validation
+  ✓ Parsed: Srihari S (Systems Engineer) - 2.3 hours on NTDS Extraction
+  ✓ Parsed: Moshik V (Cloud Architect) - 40 hours on AWS Deployment
+  ✓ Parsed: Sultan (Infrastructure Lead) - 12 hours on Replication Setup
+
+Strategy 2: Parsing lists...
+
+Strategy 3: Parsing paragraphs...
+
+📊 Total resources extracted: 4
+
+Deduplicating resources...
+✓ Unique resources: 4
+
+Fetching project users...
+❌ Error fetching project users: error: column u.full_name does not exist
+    at /home/runner/workspace/node_modules/@neondatabase/serverless/index.js:1086:33
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async getProjectUsers (/home/runner/workspace/services/resource-parser.js:274:20)
+    at async Object.parseResources (/home/runner/workspace/services/resource-parser.js:513:13)
+    at async MultiDocumentAnalyzer.analyzeMultipleDocuments (/home/runner/workspace/services/multi-document-analyzer.js:210:36)
+    at async runWorkflowTest (/home/runner/workspace/tests/test-multi-document-workflow.js:100:20) {
+  length: 109,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+  hint: undefined,
+  position: '35',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '3722',
+  routine: 'errorMissingColumn'
+}
+⚠️  No users found in project - skipping user matching
+
+✅ Resource parsing complete!
+   Resources: 4
+   Matched: 0
+   Need review: 0
+✓ Assigned 0 resources
+
+Step 7/7: Generating checklists...
+  Processing 5 of 5 workstreams
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 3
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup Validation" - 3 items
+  Section: "Gate 1 Approval" - 4 items
+  ✅ Valid: 7 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Infrastructure Assessment" - 3 items
+  ✅ Valid: 3 total items
+Checklist: "Phase 2: Execution"
+  Section: "AWS Deployment and Setup" - 3 items
+  ✅ Valid: 3 total items
+✅ Generated 3 valid checklists with 13 total items
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 3
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup and Verification" - 3 items
+  Section: "NTDS.DIT Extraction" - 1 items
+  Section: "Gate 1 Approval" - 3 items
+  ✅ Valid: 7 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Infrastructure Assessment" - 1 items
+  Section: "Domain Analysis" - 1 items
+  Section: "Migration Planning" - 1 items
+  ✅ Valid: 3 total items
+Checklist: "Phase 2: Execution"
+  Section: "AWS Deployment" - 1 items
+  Section: "Replication Setup" - 1 items
+  Section: "Functional Level Upgrade" - 1 items
+  ✅ Valid: 3 total items
+✅ Generated 3 valid checklists with 13 total items
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 4
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup Tasks" - 3 items
+  Section: "NTDS.DIT Extraction" - 1 items
+  Section: "Gate 1 Approval" - 3 items
+  ✅ Valid: 7 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Infrastructure Assessment" - 1 items
+  Section: "Domain Analysis" - 1 items
+  Section: "Migration Planning" - 1 items
+  ✅ Valid: 3 total items
+Checklist: "Phase 2: Execution"
+  Section: "AWS DC Deployment" - 1 items
+  Section: "Replication Setup" - 1 items
+  Section: "Functional Level Upgrade" - 1 items
+  ✅ Valid: 3 total items
+Checklist: "Milestones and Dependencies"
+  Section: "Milestones" - 3 items
+  Section: "Dependencies" - 1 items
+  ✅ Valid: 4 total items
+✅ Generated 4 valid checklists with 17 total items
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 4
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup Validation" - 3 items
+  Section: "Preparation" - 2 items
+  Section: "Gate 1 Approval" - 3 items
+  ✅ Valid: 8 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Infrastructure Assessment" - 2 items
+  Section: "Migration Planning" - 2 items
+  ✅ Valid: 4 total items
+Checklist: "Phase 2: Execution"
+  Section: "AWS Deployment" - 1 items
+  Section: "Replication Setup" - 1 items
+  Section: "Functional Level Upgrade" - 1 items
+  ✅ Valid: 3 total items
+Checklist: "Resource Allocation"
+  Section: "Task Assignments" - 4 items
+  ✅ Valid: 4 total items
+✅ Generated 4 valid checklists with 19 total items
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 3
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup Validation" - 3 items
+  Section: "NTDS.DIT Extraction" - 1 items
+  Section: "Gate 1 Approval" - 3 items
+  ✅ Valid: 7 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Infrastructure Assessment" - 1 items
+  Section: "Domain Analysis and Mapping" - 1 items
+  Section: "Migration Planning" - 1 items
+  ✅ Valid: 3 total items
+Checklist: "Phase 2: Execution"
+  Section: "AWS DC Deployment" - 1 items
+  Section: "Replication Setup" - 1 items
+  Section: "Functional Level Upgrade" - 1 items
+  ✅ Valid: 3 total items
+✅ Generated 3 valid checklists with 13 total items
+✓ Generated 5 checklists with 75 items
+
+╔════════════════════════════════════════════════════╗
+║   MULTI-DOCUMENT IMPORT COMPLETE                   ║
+╚════════════════════════════════════════════════════╝
+✅ Import ID: 7
+✅ Duration: 36756ms
+✅ Total AI Cost: $0.0111
+
+
+╔══════════════════════════════════════════════════════╗
+║  TEST RESULTS                                        ║
+╚══════════════════════════════════════════════════════╝
+
+Overall Success: ✅ PASS
+
+Documents Processed: 3
+  Expected: 3
+  Status: ✅
+
+Workstreams Created: 5
+  Expected: 3 (Phase 0, 1, 2)
+  Status: ✅
+
+Issues Created: 5
+  Expected: 3+
+  Status: ✅
+
+Timeline Extracted:
+  Phases: 3 (expected: 3)
+  Milestones: 3 (expected: 3)
+  Status: ✅
+
+Dependencies Created: 0
+  Expected: 1+ (Phase 1 → Phase 2)
+  Status: ⚠️ 
+
+Resource Assignments: 0
+  Expected: 2+ (Sultan, Srihari)
+  Status: ⚠️ 
+
+Checklists: 5
+  Items: 75
+  Status: ✅
+
+AI Cost: $0.0111
+  Expected: < $0.50
+  Status: ✅
+
+Errors: 0
+  Expected: 0
+  Status: ✅
+
+Warnings: 0
+
+╔══════════════════════════════════════════════════════╗
+║  ✅ ALL TESTS PASSED!                                ║
+║  Multi-document workflow is working correctly!       ║
+╚══════════════════════════════════════════════════════╝
+
+Cleaning up test data...
+✓ Cleanup complete
+
+🎉 Workflow test completed!
+~/workspace$ 
