@@ -49,29 +49,70 @@
     }
     .gantt-container {
       overflow-x: auto;
+      overflow-y: auto;
+      max-height: 600px;
       background: white;
+      border: 1px solid var(--gantt-border);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-md);
+    }
+    
+    /* Custom scrollbar styling for Gantt container */
+    .gantt-container::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    .gantt-container::-webkit-scrollbar-track {
+      background: var(--color-neutral-50);
+      border-radius: 4px;
+    }
+    
+    .gantt-container::-webkit-scrollbar-thumb {
+      background: var(--color-neutral-300);
+      border-radius: 4px;
+    }
+    
+    .gantt-container::-webkit-scrollbar-thumb:hover {
+      background: var(--color-neutral-400);
     }
     .overloaded {
       @apply bg-red-50 border-red-200;
     }
     
-    /* Gantt bar styling - muted blue with bold white text */
+    /* Gantt bar styling - neutral gray palette with gradients */
     .gantt .bar {
-      fill: #6b9bd1 !important; /* Muted blue */
+      fill: url(#gantt-bar-gradient) !important;
+      filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.08));
     }
     .gantt .bar-progress {
-      fill: #4b7ba8 !important; /* Darker muted blue for progress */
+      fill: var(--gantt-bar-progress) !important;
+      opacity: 0.65;
     }
     .gantt .bar-label {
-      fill: white !important;
-      font-weight: bold !important;
-      font-size: 12px !important;
+      fill: var(--gantt-text) !important;
+      font-weight: 500 !important;
+      font-size: 10px !important;
+      letter-spacing: 0.01em;
     }
     .gantt .bar-critical {
-      fill: #ef4444 !important; /* Red for critical path */
+      fill: url(#gantt-critical-gradient) !important;
+      filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.08));
     }
     .gantt .bar-critical .bar-progress {
-      fill: #dc2626 !important;
+      fill: #dc9ea2 !important;
+      opacity: 0.65;
+    }
+    .gantt .bar-milestone {
+      fill: url(#gantt-milestone-gradient) !important;
+      filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.08));
+    }
+    
+    /* SVG Gradients for Gantt bars */
+    @supports (fill: url(#gantt-bar-gradient)) {
+      svg defs {
+        display: block;
+      }
     }
     
     /* Horizontal popup styling */

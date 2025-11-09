@@ -2262,27 +2262,85 @@ function renderGanttChart(tasks, schedule) {
                           task.progress === 50 ? 'In Progress' : 
                           'To Do';
         
+        // Compact 2-column layout with reduced verbosity
         return `
-          <div class="details-container">
-            <h5>${task.name}</h5>
-            <p><strong>Duration:</strong> ${durationDays} day${durationDays !== 1 ? 's' : ''}</p>
-            <p><strong>Status:</strong> ${statusText} (${task.progress}%)</p>
-            <p><strong>Dates:</strong> ${formatDate(task._start)} - ${formatDate(task._end)}</p>
-            ${taskData.assignee ? `<p><strong>Assignee:</strong> ${taskData.assignee}</p>` : '<p><strong>Assignee:</strong> Unassigned</p>'}
-            ${taskData.is_critical_path ? '<p style="background: #fee2e2 !important; color: #991b1b !important; font-weight: 600 !important;"><strong>⚠️ Critical Path</strong></p>' : ''}
+          <div style="min-width: 320px;">
+            <div style="font-weight: 600; margin-bottom: 0.5rem; font-size: 13px;">${task.name}</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 0.75rem; font-size: 11px;">
+              <div><span style="color: #6b7280;">Duration:</span> <strong>${durationDays}d</strong></div>
+              <div><span style="color: #6b7280;">Progress:</span> <strong>${task.progress}%</strong></div>
+              <div><span style="color: #6b7280;">Start:</span> ${formatDate(task._start)}</div>
+              <div><span style="color: #6b7280;">End:</span> ${formatDate(task._end)}</div>
+              <div style="grid-column: 1 / -1;"><span style="color: #6b7280;">Assignee:</span> <strong>${taskData.assignee || 'Unassigned'}</strong></div>
+              ${taskData.is_critical_path ? '<div style="grid-column: 1 / -1; background: #fee2e2; padding: 0.25rem 0.5rem; border-radius: 4px; color: #991b1b; font-weight: 600; text-align: center;"><i class="fas fa-exclamation-triangle"></i> Critical Path</div>' : ''}
+            </div>
           </div>
         `;
       }
     });
 
-    // Add view mode buttons
+    // Inject SVG gradients for professional bar styling (prevent duplicates)
+    const svg = ganttContainer.querySelector('svg');
+    if (svg) {
+      let defs = svg.querySelector('defs');
+      if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svg.insertBefore(defs, svg.firstChild);
+      }
+      
+      // Helper function to create or update gradient
+      const createGradient = (id, stops) => {
+        let gradient = defs.querySelector(`#${id}`);
+        if (!gradient) {
+          gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+          gradient.setAttribute('id', id);
+          gradient.setAttribute('x1', '0%');
+          gradient.setAttribute('y1', '0%');
+          gradient.setAttribute('x2', '0%');
+          gradient.setAttribute('y2', '100%');
+          defs.appendChild(gradient);
+        }
+        gradient.innerHTML = stops;
+        return gradient;
+      };
+      
+      // Define gradients (reuse existing if already present)
+      createGradient('gantt-bar-gradient', `
+        <stop offset="0%" style="stop-color:#dae2e9;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#d4dce5;stop-opacity:1" />
+      `);
+      
+      createGradient('gantt-critical-gradient', `
+        <stop offset="0%" style="stop-color:#edc0c4;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#e8b4b8;stop-opacity:1" />
+      `);
+      
+      createGradient('gantt-milestone-gradient', `
+        <stop offset="0%" style="stop-color:#f0d583;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#e8c555;stop-opacity:1" />
+      `);
+    }
+
+    // Add professional segmented control for view modes
     const viewModesHtml = `
-      <div class="flex space-x-2 mt-4 justify-center">
-        <button data-action="gantt-view" data-view-mode="Quarter Day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Quarter Day</button>
-        <button data-action="gantt-view" data-view-mode="Half Day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Half Day</button>
-        <button data-action="gantt-view" data-view-mode="Day" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Day</button>
-        <button data-action="gantt-view" data-view-mode="Week" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Week</button>
-        <button data-action="gantt-view" data-view-mode="Month" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">Month</button>
+      <div class="flex justify-center mt-4">
+        <div class="btn-group-segmented">
+          <button data-action="gantt-view" data-view-mode="Quarter Day">
+            <i class="fas fa-clock"></i> Quarter Day
+          </button>
+          <button data-action="gantt-view" data-view-mode="Half Day">
+            <i class="fas fa-sun"></i> Half Day
+          </button>
+          <button data-action="gantt-view" data-view-mode="Day" class="active">
+            <i class="fas fa-calendar-day"></i> Day
+          </button>
+          <button data-action="gantt-view" data-view-mode="Week">
+            <i class="fas fa-calendar-week"></i> Week
+          </button>
+          <button data-action="gantt-view" data-view-mode="Month">
+            <i class="fas fa-calendar"></i> Month
+          </button>
+        </div>
       </div>
     `;
     ganttContainer.insertAdjacentHTML('afterend', viewModesHtml);
