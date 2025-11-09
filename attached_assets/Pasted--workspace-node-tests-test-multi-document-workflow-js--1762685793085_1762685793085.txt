@@ -1,0 +1,210 @@
+~/workspace$ node tests/test-multi-document-workflow.js
+╔══════════════════════════════════════════════════════╗
+║  MULTI-DOCUMENT WORKFLOW - INTEGRATION TEST          ║
+╚══════════════════════════════════════════════════════╝
+
+Setup: Creating test project...
+✓ Created project 22
+
+Running multi-document analyzer...
+
+╔════════════════════════════════════════════════════╗
+║   MULTI-DOCUMENT PROJECT IMPORT STARTING           ║
+╚════════════════════════════════════════════════════╝
+📁 Project ID: 22
+📄 Documents: 3
+📅 Start Date: 2025-01-06
+
+Step 1/7: Combining document text...
+✓ Combined 1403 characters
+
+Step 2/7: Detecting workstreams...
+🔍 Analyzing document for workstreams...
+📄 Raw AI response length: 2115
+🔢 Tokens used: 1363
+✅ Identified 3 workstreams
+✓ Found 3 workstreams
+  1. Prerequisites Validation and Approval (unknown complexity)
+  2. Infrastructure Assessment and Migration Planning (unknown complexity)
+  3. AWS Deployment and Replication Setup (unknown complexity)
+
+Step 3/7: Creating issues from workstreams...
+  ✓ Created issue #129: Prerequisites Validation and Approval
+  ✓ Created issue #130: Infrastructure Assessment and Migration Planning
+  ✓ Created issue #131: AWS Deployment and Replication Setup
+✓ Created 3 issues
+
+Step 4/7: Extracting timeline...
+✓ Extracted 3 phases, 3 milestones
+
+Step 5/7: Creating dependencies...
+🔗 Creating dependencies for 3 workstreams in project 22
+  → Found 3 issues in project
+  ✓ Mapped "Prerequisites Validation and Approval" → Issue #129 "Prerequisites Validation and Approval"
+  ✓ Mapped "Infrastructure Assessment and Migration Planning" → Issue #130 "Infrastructure Assessment and Migration Planning"
+  ✓ Mapped "AWS Deployment and Replication Setup" → Issue #131 "AWS Deployment and Replication Setup"
+  → 0 dependencies to create
+✅ Created 0 dependencies
+⚠ 2 warnings
+✓ Created 0 dependencies
+
+Step 6/7: Parsing resource assignments...
+🔍 RESOURCE PARSER - Starting extraction
+
+Strategy 1: Parsing tables...
+📊 Found resource table with headers: task component, resource, role, effort
+  ✓ Parsed: Sultan (Infrastructure Lead) - 5.2 hours on Backup Validation
+  ✓ Parsed: Srihari S (Systems Engineer) - 2.3 hours on NTDS Extraction
+  ✓ Parsed: Moshik V (Cloud Architect) - 40 hours on AWS Deployment
+  ✓ Parsed: Sultan (Infrastructure Lead) - 12 hours on Replication Setup
+
+Strategy 2: Parsing lists...
+
+Strategy 3: Parsing paragraphs...
+
+📊 Total resources extracted: 4
+
+Deduplicating resources...
+✓ Unique resources: 4
+
+Fetching project users...
+👥 Found 0 users in project 22
+⚠️  No users found in project - skipping user matching
+
+✅ Resource parsing complete!
+   Resources: 4
+   Matched: 0
+   Need review: 0
+✓ Assigned 0 resources
+
+Step 7/7: Generating checklists...
+  Processing 3 of 3 workstreams
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 4
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup and Validation" - 5 items
+  Section: "Gate 1 Approval" - 4 items
+  ✅ Valid: 9 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Assessment and Planning" - 3 items
+  Section: "Completion Milestone" - 1 items
+  ✅ Valid: 4 total items
+Checklist: "Phase 2: Execution"
+  Section: "Deployment and Setup" - 3 items
+  Section: "Completion Milestone" - 1 items
+  ✅ Valid: 4 total items
+Checklist: "Effort and Resource Allocation"
+  Section: "Resource Allocation" - 4 items
+  ✅ Valid: 4 total items
+✅ Generated 4 valid checklists with 21 total items
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 4
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup Validation" - 3 items
+  Section: "Gate 1 Approval" - 4 items
+  ✅ Valid: 7 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Assessment & Planning" - 4 items
+  ✅ Valid: 4 total items
+Checklist: "Phase 2: Execution"
+  Section: "AWS Deployment" - 1 items
+  Section: "Replication & Upgrade" - 3 items
+  ✅ Valid: 4 total items
+Checklist: "Effort Allocation"
+  Section: "Task Assignments" - 4 items
+  ✅ Valid: 4 total items
+✅ Generated 4 valid checklists with 19 total items
+🤖 Generating standalone checklists from document (1403 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 3
+Checklist: "Phase 0: Prerequisites"
+  Section: "Backup Validation" - 3 items
+  Section: "Gate 1 Approval" - 3 items
+  ✅ Valid: 6 total items
+Checklist: "Phase 1: Discovery"
+  Section: "Infrastructure Assessment" - 1 items
+  Section: "Domain Analysis and Mapping" - 2 items
+  Section: "Migration Planning" - 1 items
+  ✅ Valid: 4 total items
+Checklist: "Phase 2: Execution"
+  Section: "AWS Deployment" - 1 items
+  Section: "Replication Setup" - 1 items
+  Section: "Functional Level Upgrade" - 1 items
+  ✅ Valid: 3 total items
+✅ Generated 3 valid checklists with 13 total items
+✓ Generated 3 checklists with 53 items
+
+╔════════════════════════════════════════════════════╗
+║   MULTI-DOCUMENT IMPORT COMPLETE                   ║
+╚════════════════════════════════════════════════════╝
+✅ Import ID: 8
+✅ Duration: 24763ms
+✅ Total AI Cost: $0.0112
+
+
+╔══════════════════════════════════════════════════════╗
+║  TEST RESULTS                                        ║
+╚══════════════════════════════════════════════════════╝
+
+Overall Success: ✅ PASS
+
+Documents Processed: 3
+  Expected: 3
+  Status: ✅
+
+Workstreams Created: 3
+  Expected: 3 (Phase 0, 1, 2)
+  Status: ✅
+
+Issues Created: 3
+  Expected: 3+
+  Status: ✅
+
+Timeline Extracted:
+  Phases: 3 (expected: 3)
+  Milestones: 3 (expected: 3)
+  Status: ✅
+
+Dependencies Created: 0
+  Expected: 1+ (Phase 1 → Phase 2)
+  Status: ⚠️ 
+
+Resource Assignments: 0
+  Expected: 2+ (Sultan, Srihari)
+  Status: ⚠️ 
+
+Checklists: 3
+  Items: 53
+  Status: ✅
+
+AI Cost: $0.0112
+  Expected: < $0.50
+  Status: ✅
+
+Errors: 0
+  Expected: 0
+  Status: ✅
+
+Warnings: 0
+
+╔══════════════════════════════════════════════════════╗
+║  ✅ ALL TESTS PASSED!                                ║
+║  Multi-document workflow is working correctly!       ║
+╚══════════════════════════════════════════════════════╝
+
+Cleaning up test data...
+✓ Cleanup complete
+
+🎉 Workflow test completed!
+~/workspace$ 
