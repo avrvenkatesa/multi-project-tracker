@@ -3,7 +3,8 @@
 
 let currentProjectId = null;
 let currentUser = null;
-let lastGanttContext = { tasks: null, schedule: null }; // Cache for compact toggle re-renders
+let lastGanttContext = { tasks: null, schedule: null, metadata: null }; // Cache for compact toggle re-renders
+let laneState = new Map(); // Track expanded/collapsed state per assignee
 let allItems = [];
 let filteredItems = [];
 let selectedItemIds = new Set();
@@ -2227,9 +2228,49 @@ function switchDetailTab(tabName, tasks, schedule) {
   }
 }
 
+function sortTasksByAssignee(tasks) {
+  // Group tasks by assignee (case-insensitive, preserve original order within groups)
+  const grouped = {};
+  const metadata = [];
+  
+  tasks.forEach((task, index) => {
+    const assigneeKey = (task.assignee || 'Unassigned').toLowerCase();
+    if (!grouped[assigneeKey]) {
+      grouped[assigneeKey] = {
+        assigneeKey,
+        displayName: task.assignee || 'Unassigned',
+        tasks: [],
+        originalIndices: []
+      };
+    }
+    grouped[assigneeKey].tasks.push(task);
+    grouped[assigneeKey].originalIndices.push(index);
+  });
+  
+  // Sort groups: alphabetically, but "Unassigned" last
+  const sortedKeys = Object.keys(grouped).sort((a, b) => {
+    if (a === 'unassigned') return 1;
+    if (b === 'unassigned') return -1;
+    return a.localeCompare(b);
+  });
+  
+  // Build sorted task array and metadata
+  const sortedTasks = [];
+  sortedKeys.forEach(key => {
+    const group = grouped[key];
+    metadata.push(group);
+    sortedTasks.push(...group.tasks);
+  });
+  
+  return { sortedTasks, metadata };
+}
+
 function renderGanttChart(tasks, schedule) {
-  // Cache context for compact toggle re-renders
-  lastGanttContext = { tasks, schedule };
+  // Sort tasks by assignee
+  const { sortedTasks, metadata } = sortTasksByAssignee(tasks);
+  
+  // Cache context for compact toggle re-renders (include metadata for swim lanes)
+  lastGanttContext = { tasks, schedule, sortedTasks, metadata };
   
   const ganttContainer = document.getElementById('gantt-container');
   ganttContainer.innerHTML = ''; // Clear previous chart to avoid stacking
@@ -2245,8 +2286,8 @@ function renderGanttChart(tasks, schedule) {
     ganttContainer.classList.remove('gantt-expanded');
   }
 
-  // Prepare Gantt data
-  const ganttTasks = tasks.map(task => {
+  // Prepare Gantt data from sorted tasks
+  const ganttTasks = sortedTasks.map(task => {
     return {
       id: `${task.item_type}-${task.item_id}`,
       name: task.title,
@@ -2256,7 +2297,8 @@ function renderGanttChart(tasks, schedule) {
       dependencies: task.dependencies && task.dependencies.length > 0 
         ? task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(',') 
         : '',
-      custom_class: task.is_critical_path ? 'bar-critical' : ''
+      custom_class: task.is_critical_path ? 'bar-critical' : '',
+      _assignee: (task.assignee || 'Unassigned').toLowerCase() // Store for data attribute injection
     };
   });
 
@@ -2345,6 +2387,24 @@ function renderGanttChart(tasks, schedule) {
         <stop offset="100%" style="stop-color:#e8c555;stop-opacity:1" />
       `);
     }
+
+    // Inject data-assignee attributes onto bar-wrapper elements
+    ganttTasks.forEach((ganttTask, index) => {
+      if (ganttTask._assignee) {
+        const barWrapper = svg.querySelector(`.bar-wrapper[data-id="${ganttTask.id}"]`);
+        if (barWrapper) {
+          barWrapper.setAttribute('data-assignee', ganttTask._assignee);
+        }
+      }
+    });
+
+    // Build swim lanes (skip if only one assignee group)
+    if (metadata.length > 1) {
+      buildSwimLanes(metadata, ganttContainer, isCompact);
+    }
+
+    // Build dependency graph and attach hover highlights
+    buildDependencyHighlighting(sortedTasks, ganttContainer);
 
     // Add professional segmented control for view modes
     const viewModesHtml = `
@@ -2454,6 +2514,254 @@ function changeGanttView(viewMode) {
   if (window.currentGanttInstance) {
     window.currentGanttInstance.change_view_mode(viewMode);
   }
+}
+
+function buildSwimLanes(metadata, container, isCompact) {
+  const svg = container.querySelector('svg');
+  if (!svg) return;
+  
+  // CRITICAL FIX: Ensure all bars are visible before measuring to avoid getBBox() exceptions
+  const allBars = svg.querySelectorAll('.bar-wrapper');
+  allBars.forEach(bar => {
+    bar.style.display = ''; // Temporarily show all bars
+  });
+  
+  // Create or reuse overlay group for lane elements
+  let overlayGroup = svg.querySelector('.lane-overlays');
+  if (!overlayGroup) {
+    overlayGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    overlayGroup.setAttribute('class', 'lane-overlays');
+    svg.appendChild(overlayGroup);
+  } else {
+    overlayGroup.innerHTML = ''; // Clear existing overlays
+  }
+  
+  const padding = isCompact ? 12 : 18;
+  let currentY = padding;
+  
+  // Build lane bounds data first (while all bars are visible)
+  const laneData = metadata.map((lane, laneIndex) => {
+    const assigneeKey = lane.assigneeKey;
+    const isExpanded = laneState.get(assigneeKey) !== false; // Default to expanded
+    
+    // Find all bars for this assignee
+    const bars = Array.from(svg.querySelectorAll(`.bar-wrapper[data-assignee="${assigneeKey}"]`));
+    if (bars.length === 0) return null; // Skip if no bars found
+    
+    // Calculate lane boundaries (bars are guaranteed visible here)
+    let minY = Infinity, maxY = -Infinity;
+    bars.forEach(bar => {
+      const bbox = bar.getBBox();
+      minY = Math.min(minY, bbox.y);
+      maxY = Math.max(maxY, bbox.y + bbox.height);
+    });
+    
+    return {
+      lane,
+      laneIndex,
+      assigneeKey,
+      isExpanded,
+      bars,
+      minY,
+      maxY,
+      laneHeight: maxY - minY + padding * 2
+    };
+  }).filter(Boolean); // Remove nulls
+  
+  // Now render lane elements with pre-calculated bounds
+  laneData.forEach(data => {
+    const { lane, laneIndex, assigneeKey, isExpanded, bars, minY, maxY, laneHeight } = data;
+    
+    // Create divider background (only if not first lane)
+    if (laneIndex > 0) {
+      const divider = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      divider.setAttribute('x', '0');
+      divider.setAttribute('y', String(minY - padding));
+      divider.setAttribute('width', '100%');
+      divider.setAttribute('height', '4');
+      divider.setAttribute('fill', 'var(--color-brand-primary)');
+      divider.setAttribute('opacity', '0.4');
+      divider.setAttribute('class', 'lane-divider-accent');
+      overlayGroup.appendChild(divider);
+    }
+    
+    // Create lane background
+    const laneBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    laneBg.setAttribute('x', '0');
+    laneBg.setAttribute('y', String(minY - padding));
+    laneBg.setAttribute('width', '100%');
+    laneBg.setAttribute('height', String(laneHeight));
+    laneBg.setAttribute('fill', laneIndex % 2 === 0 ? 'transparent' : 'var(--color-neutral-50)');
+    laneBg.setAttribute('opacity', '0.5');
+    laneBg.setAttribute('class', 'lane-background');
+    overlayGroup.insertBefore(laneBg, overlayGroup.firstChild); // Background behind dividers
+    
+    // Create label text with chevron control
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', '30'); // Offset for chevron space
+    label.setAttribute('y', String(minY - padding / 2 + 4));
+    label.setAttribute('font-size', '11px');
+    label.setAttribute('font-weight', '600');
+    label.setAttribute('fill', 'var(--color-neutral-700)');
+    label.setAttribute('class', 'lane-label');
+    label.textContent = `${lane.displayName} (${lane.tasks.length})`;
+    overlayGroup.appendChild(label);
+    
+    // Create chevron icon for collapse/expand
+    const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    chevron.setAttribute('x', '8');
+    chevron.setAttribute('y', String(minY - padding / 2 + 4));
+    chevron.setAttribute('font-size', '10px');
+    chevron.setAttribute('font-family', 'Font Awesome 6 Free');
+    chevron.setAttribute('font-weight', '900');
+    chevron.setAttribute('fill', 'var(--color-neutral-500)');
+    chevron.setAttribute('class', 'lane-chevron');
+    chevron.setAttribute('data-assignee', assigneeKey);
+    chevron.setAttribute('style', 'cursor: pointer; user-select: none;');
+    chevron.textContent = isExpanded ? '\uf078' : '\uf054'; // fa-chevron-down : fa-chevron-right
+    overlayGroup.appendChild(chevron);
+    
+    // Apply collapsed state if needed
+    if (!isExpanded) {
+      bars.forEach(bar => {
+        bar.style.display = 'none';
+      });
+    }
+    
+    currentY = maxY + padding;
+  });
+  
+  // Add click handlers to chevrons (after all elements are created)
+  svg.querySelectorAll('.lane-chevron').forEach(chevron => {
+    chevron.addEventListener('click', (e) => {
+      const assigneeKey = e.target.getAttribute('data-assignee');
+      const isExpanded = laneState.get(assigneeKey) !== false;
+      laneState.set(assigneeKey, !isExpanded);
+      
+      // Re-render lanes with updated state
+      if (lastGanttContext.sortedTasks && lastGanttContext.metadata) {
+        const toggleBtn = document.getElementById('compact-view-toggle');
+        const isCompact = toggleBtn ? toggleBtn.dataset.compact === 'true' : true;
+        updateLaneLayouts(container, lastGanttContext.metadata, isCompact);
+      }
+    });
+  });
+}
+
+function updateLaneLayouts(container, metadata, isCompact) {
+  // Lightweight update after collapse/expand
+  buildSwimLanes(metadata, container, isCompact);
+}
+
+function buildDependencyHighlighting(tasks, container) {
+  const svg = container.querySelector('svg');
+  if (!svg) return;
+  
+  // Build adjacency maps for dependency graph
+  const dependsOn = new Map(); // task -> tasks it depends on (predecessors)
+  const dependedBy = new Map(); // task -> tasks that depend on it (successors)
+  
+  tasks.forEach(task => {
+    const taskId = `${task.item_type}-${task.item_id}`;
+    dependsOn.set(taskId, []);
+    dependedBy.set(taskId, []);
+  });
+  
+  tasks.forEach(task => {
+    const taskId = `${task.item_type}-${task.item_id}`;
+    if (task.dependencies && task.dependencies.length > 0) {
+      task.dependencies.forEach(dep => {
+        const depId = `${dep.item_type}-${dep.item_id}`;
+        dependsOn.get(taskId).push(depId);
+        if (dependedBy.has(depId)) {
+          dependedBy.get(depId).push(taskId);
+        }
+      });
+    }
+  });
+  
+  // BFS traversal to find all upstream/downstream tasks
+  const findDependencyChain = (startId, direction) => {
+    const chain = new Set();
+    const queue = [startId];
+    const visited = new Set();
+    
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+      if (visited.has(currentId)) continue;
+      visited.add(currentId);
+      
+      if (currentId !== startId) {
+        chain.add(currentId);
+      }
+      
+      const neighbors = direction === 'upstream' 
+        ? (dependsOn.get(currentId) || [])
+        : (dependedBy.get(currentId) || []);
+      
+      neighbors.forEach(neighborId => {
+        if (!visited.has(neighborId)) {
+          queue.push(neighborId);
+        }
+      });
+    }
+    
+    return chain;
+  };
+  
+  // Attach hover listeners to all bars
+  const barWrappers = svg.querySelectorAll('.bar-wrapper');
+  barWrappers.forEach(barWrapper => {
+    const taskId = barWrapper.getAttribute('data-id');
+    if (!taskId) return;
+    
+    barWrapper.addEventListener('mouseenter', () => {
+      // Find all upstream and downstream dependencies
+      const upstreamChain = findDependencyChain(taskId, 'upstream');
+      const downstreamChain = findDependencyChain(taskId, 'downstream');
+      
+      // Highlight all bars in the chain
+      upstreamChain.forEach(id => {
+        const bar = svg.querySelector(`.bar-wrapper[data-id="${id}"]`);
+        if (bar) {
+          bar.classList.add('dependency-highlighted', 'dependency-upstream');
+        }
+      });
+      
+      downstreamChain.forEach(id => {
+        const bar = svg.querySelector(`.bar-wrapper[data-id="${id}"]`);
+        if (bar) {
+          bar.classList.add('dependency-highlighted', 'dependency-downstream');
+        }
+      });
+      
+      // Highlight the hovered bar itself
+      barWrapper.classList.add('dependency-source');
+      
+      // Highlight dependency arrows (if they exist in DOM)
+      svg.querySelectorAll('.arrow').forEach(arrow => {
+        const fromId = arrow.getAttribute('data-from');
+        const toId = arrow.getAttribute('data-to');
+        if ((upstreamChain.has(fromId) || downstreamChain.has(fromId) || fromId === taskId) &&
+            (upstreamChain.has(toId) || downstreamChain.has(toId) || toId === taskId)) {
+          arrow.classList.add('dependency-arrow-highlighted');
+        }
+      });
+    });
+    
+    barWrapper.addEventListener('mouseleave', () => {
+      // Remove all highlights
+      svg.querySelectorAll('.dependency-highlighted').forEach(el => {
+        el.classList.remove('dependency-highlighted', 'dependency-upstream', 'dependency-downstream');
+      });
+      svg.querySelectorAll('.dependency-source').forEach(el => {
+        el.classList.remove('dependency-source');
+      });
+      svg.querySelectorAll('.dependency-arrow-highlighted').forEach(el => {
+        el.classList.remove('dependency-arrow-highlighted');
+      });
+    });
+  });
 }
 
 function bindCompactToggle() {

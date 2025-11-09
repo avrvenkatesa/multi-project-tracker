@@ -84,6 +84,62 @@
       margin-left: calc(-1 * var(--spacing-md));
       margin-right: calc(-1 * var(--spacing-md));
     }
+    
+    /* Swim lane styling */
+    .lane-overlays {
+      pointer-events: none; /* Allow clicks to pass through to bars */
+    }
+    
+    .lane-chevron {
+      pointer-events: all; /* But enable clicks on chevrons */
+    }
+    
+    .lane-label {
+      pointer-events: none;
+      user-select: none;
+    }
+    
+    .lane-background {
+      pointer-events: none;
+    }
+    
+    .lane-divider-accent {
+      pointer-events: none;
+    }
+    
+    /* Dependency chain highlighting */
+    .dependency-source .bar {
+      filter: brightness(1.2) drop-shadow(0 0 8px var(--color-brand-primary)) !important;
+      stroke: var(--color-brand-primary) !important;
+      stroke-width: 2 !important;
+    }
+    
+    .dependency-highlighted.dependency-upstream .bar {
+      filter: brightness(1.15) drop-shadow(0 0 4px rgba(59, 130, 246, 0.6)) !important;
+      stroke: #3b82f6 !important;
+      stroke-width: 1.5 !important;
+      opacity: 1 !important;
+    }
+    
+    .dependency-highlighted.dependency-downstream .bar {
+      filter: brightness(1.15) drop-shadow(0 0 4px rgba(168, 85, 247, 0.6)) !important;
+      stroke: #a855f7 !important;
+      stroke-width: 1.5 !important;
+      opacity: 1 !important;
+    }
+    
+    .dependency-arrow-highlighted {
+      stroke: var(--color-brand-primary) !important;
+      stroke-width: 2.5 !important;
+      opacity: 1 !important;
+      filter: drop-shadow(0 0 4px var(--color-brand-primary));
+    }
+    
+    /* Dim non-highlighted bars when hovering */
+    .gantt-container:has(.dependency-source) .bar-wrapper:not(.dependency-source):not(.dependency-highlighted) .bar {
+      opacity: 0.3 !important;
+      filter: grayscale(0.5);
+    }
     .overloaded {
       @apply bg-red-50 border-red-200;
     }
