@@ -93,10 +93,10 @@ async function loadGanttChart(projectId) {
     currentGanttInstance = new Gantt('#gantt', ganttData.tasks, {
       view_mode: 'Week',
       date_format: 'YYYY-MM-DD',
-      bar_height: 30,
+      bar_height: 45,
       bar_corner_radius: 3,
       arrow_curve: 5,
-      padding: 18,
+      padding: 20,
       view_modes: ['Quarter Day', 'Half Day', 'Day', 'Week', 'Month'],
       custom_popup_html: function(task) {
         const startDate = new Date(task.start).toLocaleDateString();

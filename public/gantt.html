@@ -28,6 +28,31 @@
     .bar-milestone {
       fill: #10b981 !important;
     }
+    
+    /* Improve text visibility on bars */
+    .bar-label {
+      fill: #ffffff !important;
+      font-weight: 600 !important;
+      font-size: 13px !important;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
+    }
+    
+    /* Make text more visible in Day view */
+    .gantt .bar-wrapper .bar-label {
+      dominant-baseline: middle !important;
+    }
+    
+    /* Ensure milestone text is also visible */
+    .bar-milestone + .bar-label {
+      fill: #ffffff !important;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.4) !important;
+    }
+    
+    /* Critical path text */
+    .bar-critical + .bar-label {
+      fill: #ffffff !important;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.4) !important;
+    }
   </style>
 </head>
 <body class="bg-gray-50">
