@@ -174,17 +174,18 @@ class MultiDocumentAnalyzer {
       console.log('Step 5/7: Creating dependencies...');
       if (this.dependencyMapper && result.issues.ids.length > 1) {
         try {
-          const dependencyResult = await this.dependencyMapper.mapDependencies(
+          // Call createDependencies with workstreams and projectId
+          const dependencyResult = await this.dependencyMapper.createDependencies(
             result.workstreams,
-            { projectId }
+            projectId
           );
           
-          result.dependencies.created = dependencyResult.created || 0;
+          result.dependencies.created = dependencyResult.dependencies?.length || 0;
           result.dependencies.warnings = dependencyResult.warnings || [];
           
-          if (dependencyResult.cost) {
-            result.aiCostBreakdown.dependency_mapping = dependencyResult.cost;
-            result.totalCost += dependencyResult.cost;
+          // Add any errors to our results
+          if (dependencyResult.errors && dependencyResult.errors.length > 0) {
+            result.warnings.push(...dependencyResult.errors.map(e => `Dependency error: ${e}`));
           }
           
           console.log(`✓ Created ${result.dependencies.created} dependencies\n`);
@@ -193,7 +194,7 @@ class MultiDocumentAnalyzer {
           console.log(`⚠️  Dependency mapping failed: ${error.message}\n`);
         }
       } else {
-        result.warnings.push('Dependency mapper service not available');
+        result.warnings.push('Dependency mapper service not available or insufficient issues');
         console.log('⚠️  Dependency mapper not available - skipping\n');
       }
 
