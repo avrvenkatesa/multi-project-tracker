@@ -1,0 +1,281 @@
+/**
+ * Design Tokens - Multi-Project Tracker
+ * Version: 2.0
+ * 
+ * This file defines the core design system tokens for the entire application.
+ * All colors, typography, spacing, and other design values should reference these tokens.
+ * 
+ * Usage Guidelines: See /style-tile.html for comprehensive documentation
+ */
+
+:root {
+    /* ===== BRAND COLORS ===== */
+    /* Anchor points for theming - modify these to change the entire application's color scheme */
+    --color-brand-primary: #5b7c99;
+    --color-brand-accent: #e8c555;  /* WCAG AA compliant - use for icons, badges, milestones only */
+    
+    /* ===== NEUTRAL PALETTE ===== */
+    /* Base grays for backgrounds, borders, text, and UI elements */
+    --color-neutral-50: #f6f8fa;    /* Lightest - grid backgrounds, subtle fills */
+    --color-neutral-100: #e1e4e8;   /* Borders, dividers */
+    --color-neutral-200: #d4dce5;   /* Default bars, card backgrounds */
+    --color-neutral-300: #c6d0db;   /* Hover states, secondary borders */
+    --color-neutral-400: #9ba9b8;   /* Progress fills, disabled text */
+    --color-neutral-500: #6a7a8c;   /* Secondary text, icons */
+    --color-neutral-600: #4a5568;   /* Button text, labels */
+    --color-neutral-700: #2c3e50;   /* Primary text color */
+    --color-neutral-800: #1a202c;   /* Headings, emphasis text */
+    
+    /* ===== SEMANTIC COLORS ===== */
+    /* Functional colors for states and feedback */
+    --color-success: #48bb78;       /* Completed, success states */
+    --color-warning: #d97706;       /* In-progress, warnings (WCAG AA on light backgrounds) */
+    --color-danger: #e8b4b8;        /* Critical path, errors (muted tone) */
+    --color-info: #4299e1;          /* Notifications, info messages */
+    
+    /* ===== GANTT-SPECIFIC COLORS ===== */
+    /* Specialized colors for timeline visualization */
+    --gantt-bar-default: #d4dce5;
+    --gantt-bar-default-gradient-start: #dae2e9;
+    --gantt-bar-default-gradient-end: #d4dce5;
+    --gantt-bar-progress: #9ba9b8;
+    --gantt-bar-critical: #e8b4b8;
+    --gantt-bar-milestone: #e8c555;
+    --gantt-border: #e1e4e8;
+    --gantt-grid: #f6f8fa;
+    --gantt-text: #2c3e50;
+    --gantt-accent: #5b7c99;
+    
+    /* ===== TYPOGRAPHY ===== */
+    /* Font family */
+    --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-family-mono: "Monaco", "Courier New", monospace;
+    
+    /* Font sizes */
+    --font-size-xs: 0.75rem;        /* 12px - Table headers, timestamps */
+    --font-size-sm: 0.875rem;       /* 14px - Metadata, captions */
+    --font-size-base: 1rem;         /* 16px - Main body content */
+    --font-size-lg: 1.125rem;       /* 18px - Emphasized body text */
+    --font-size-xl: 1.25rem;        /* 20px - Subsections, card headers */
+    --font-size-2xl: 1.5rem;        /* 24px - Section titles, modal headers */
+    --font-size-3xl: 1.75rem;       /* 28px - Page titles (reduced from 30px) */
+    
+    /* Font weights */
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    
+    /* Line heights */
+    --line-height-tight: 1.25;
+    --line-height-normal: 1.5;
+    --line-height-relaxed: 1.75;
+    
+    /* Letter spacing */
+    --letter-spacing-tight: -0.02em;
+    --letter-spacing-normal: 0;
+    --letter-spacing-wide: 0.01em;
+    --letter-spacing-wider: 0.02em;
+    
+    /* ===== SPACING ===== */
+    /* Consistent spacing scale for padding, margins, and gaps */
+    --spacing-xs: 0.25rem;          /* 4px - Tight icon spacing */
+    --spacing-sm: 0.5rem;           /* 8px - Related elements */
+    --spacing-md: 0.75rem;          /* 12px - Card padding */
+    --spacing-lg: 1rem;             /* 16px - Section gaps */
+    --spacing-xl: 1.5rem;           /* 24px - Page padding */
+    --spacing-2xl: 2rem;            /* 32px - Major sections */
+    --spacing-3xl: 3rem;            /* 48px - Hero sections */
+    
+    /* ===== SHADOWS ===== */
+    /* Elevation and depth for UI layers */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);         /* Cards, dropdowns */
+    --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.08);         /* Gantt bars, popovers */
+    --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);          /* Modals, overlays */
+    --shadow-focus: 0 0 0 3px rgba(91, 124, 153, 0.3);  /* Keyboard focus */
+    
+    /* ===== BORDER RADIUS ===== */
+    /* Consistent corner rounding */
+    --radius-sm: 0.25rem;           /* 4px */
+    --radius-md: 0.375rem;          /* 6px */
+    --radius-lg: 0.5rem;            /* 8px */
+    --radius-full: 9999px;          /* Fully rounded (pills, circles) */
+    
+    /* ===== TRANSITIONS ===== */
+    /* Smooth animations */
+    --transition-fast: 150ms ease;
+    --transition-base: 200ms ease;
+    --transition-slow: 300ms ease;
+    
+    /* ===== Z-INDEX SCALE ===== */
+    /* Layering system to prevent conflicts */
+    --z-base: 0;
+    --z-dropdown: 1000;
+    --z-sticky: 1020;
+    --z-fixed: 1030;
+    --z-modal-backdrop: 1040;
+    --z-modal: 1050;
+    --z-popover: 1060;
+    --z-tooltip: 1070;
+}
+
+/* ===== UTILITY CLASSES ===== */
+
+/* Typography Utilities */
+.h1 {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-neutral-800);
+    line-height: var(--line-height-tight);
+}
+
+.h2 {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-neutral-800);
+    line-height: var(--line-height-tight);
+}
+
+.h3 {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-neutral-700);
+    line-height: var(--line-height-normal);
+}
+
+.body-text {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-normal);
+    color: var(--color-neutral-700);
+    line-height: var(--line-height-normal);
+}
+
+.small-text {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-normal);
+    color: var(--color-neutral-600);
+    line-height: var(--line-height-normal);
+}
+
+.tiny-text {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-normal);
+    color: var(--color-neutral-500);
+    line-height: var(--line-height-normal);
+}
+
+/* Text Colors */
+.text-primary {
+    color: var(--color-brand-primary);
+}
+
+.text-accent {
+    color: var(--color-brand-accent);
+}
+
+.text-success {
+    color: var(--color-success);
+}
+
+.text-warning {
+    color: var(--color-warning);
+}
+
+.text-danger {
+    color: var(--color-danger);
+}
+
+.text-info {
+    color: var(--color-info);
+}
+
+/* Background Colors */
+.bg-primary {
+    background-color: var(--color-brand-primary);
+}
+
+.bg-accent {
+    background-color: var(--color-brand-accent);
+}
+
+.bg-success {
+    background-color: var(--color-success);
+}
+
+.bg-warning {
+    background-color: var(--color-warning);
+}
+
+.bg-danger {
+    background-color: var(--color-danger);
+}
+
+.bg-info {
+    background-color: var(--color-info);
+}
+
+.bg-neutral-50 {
+    background-color: var(--color-neutral-50);
+}
+
+.bg-neutral-100 {
+    background-color: var(--color-neutral-100);
+}
+
+.bg-neutral-200 {
+    background-color: var(--color-neutral-200);
+}
+
+/* Shadow Utilities */
+.shadow-sm {
+    box-shadow: var(--shadow-sm);
+}
+
+.shadow-md {
+    box-shadow: var(--shadow-md);
+}
+
+.shadow-lg {
+    box-shadow: var(--shadow-lg);
+}
+
+/* Focus Utilities */
+.focus-ring:focus {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+}
+
+.focus-ring:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+}
+
+/* Border Radius Utilities */
+.rounded-sm {
+    border-radius: var(--radius-sm);
+}
+
+.rounded-md {
+    border-radius: var(--radius-md);
+}
+
+.rounded-lg {
+    border-radius: var(--radius-lg);
+}
+
+.rounded-full {
+    border-radius: var(--radius-full);
+}
+
+/* Transition Utilities */
+.transition-fast {
+    transition: all var(--transition-fast);
+}
+
+.transition-base {
+    transition: all var(--transition-base);
+}
+
+.transition-slow {
+    transition: all var(--transition-slow);
+}
