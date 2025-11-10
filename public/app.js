@@ -4726,7 +4726,23 @@ document.addEventListener('DOMContentLoaded', function() {
           if (uploadSection) {
             console.log('Upload section display:', uploadSection.style.display);
             console.log('Upload section class:', uploadSection.className);
+            
+            // Force everything to be visible
             uploadSection.style.display = 'block';
+            uploadSection.style.visibility = 'visible';
+            uploadSection.style.opacity = '1';
+            
+            // Force all children to be visible too
+            const allChildren = uploadSection.querySelectorAll('*');
+            console.log('Found child elements:', allChildren.length);
+            allChildren.forEach((child, index) => {
+              child.style.display = child.style.display === 'none' ? 'block' : (child.style.display || '');
+              child.style.visibility = 'visible';
+              child.style.opacity = '1';
+              if (index < 5) {
+                console.log(`Child ${index}:`, child.tagName, child.className, child.id);
+              }
+            });
           }
         } else {
           console.error('multiDocContent is NULL!');
