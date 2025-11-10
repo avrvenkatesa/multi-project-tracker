@@ -6798,8 +6798,10 @@ app.post('/api/multi-document/analyze',
           checklistsCreated: result.checklists.created,
           checklistItemsTotal: result.checklists.items,
           dependenciesCreated: result.dependencies.created,
-          timelineExtracted: result.timeline.phases.length > 0
+          timelineExtracted: result.timeline.phases.length > 0,
+          scheduleCreated: result.schedule?.created || false
         },
+        schedule: result.schedule || { created: false, scheduleId: null, message: 'No schedule created' },
         warnings: result.warnings,
         errors: result.errors
       });
