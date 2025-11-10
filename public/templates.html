@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Template Library - Multi-Project Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="css/templates.css">
 </head>
 <body class="bg-gray-50">
@@ -15,7 +16,7 @@
       <div class="flex justify-between items-center mb-2">
         <h1 class="text-3xl font-bold">Template Library</h1>
         <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all">
-          ← Back to Projects
+          <i class="fas fa-arrow-left mr-2"></i>Back to Projects
         </button>
       </div>
       <p class="text-sm text-blue-100">Browse and use pre-built checklist templates for your projects</p>
@@ -134,13 +135,13 @@
       <!-- Tabs -->
       <div class="flex gap-2 border-b border-gray-200 mb-4">
         <button id="allTemplatesTab" class="tab-btn active">
-          📚 All Templates
+          <i class="fas fa-book mr-1"></i>All Templates
         </button>
         <button id="myTemplatesTab" class="tab-btn">
-          👤 My Templates
+          <i class="fas fa-user mr-1"></i>My Templates
         </button>
         <button id="featuredTemplatesTab" class="tab-btn">
-          ⭐ Featured
+          <i class="fas fa-star mr-1"></i>Featured
         </button>
       </div>
 

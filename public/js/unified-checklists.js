@@ -851,7 +851,7 @@ function updateDocumentFilesList() {
           class="text-red-600 hover:text-red-800 text-sm font-bold ml-2 px-2"
           title="Remove file"
         >
-          ✕
+          <i class="fas fa-times"></i>
         </button>
       </div>
     `;
