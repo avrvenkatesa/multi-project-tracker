@@ -294,6 +294,27 @@ ${issues.length} issue(s) and ${actionItems.length} action item(s)`;
     try {
       await client.query('BEGIN');
 
+      // Debug: Log all parameter values
+      const params = [
+        projectId,
+        name,
+        scheduleResult.summary.startDate,
+        scheduleResult.summary.endDate,
+        hoursPerDay,
+        includeWeekends,
+        scheduleResult.summary.totalTasks,
+        scheduleResult.summary.totalHours,
+        scheduleResult.summary.criticalPathTasks,
+        scheduleResult.summary.criticalPathHours,
+        scheduleResult.summary.risksCount,
+        userId,
+        notes
+      ];
+      console.log('[SCHEDULE INSERT DEBUG] Parameters:');
+      params.forEach((val, idx) => {
+        console.log(`  $${idx + 1}: ${val} (type: ${typeof val}, isArray: ${Array.isArray(val)})`);
+      });
+
       // Insert schedule
       const scheduleInsert = await client.query(
         `INSERT INTO project_schedules 
@@ -302,21 +323,7 @@ ${issues.length} issue(s) and ${actionItems.length} action item(s)`;
           is_active, is_published, created_by, notes)
          VALUES ($1, $2, 1, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE, FALSE, $12, $13)
          RETURNING id`,
-        [
-          projectId,
-          name,
-          scheduleResult.summary.startDate,
-          scheduleResult.summary.endDate,
-          hoursPerDay,
-          includeWeekends,
-          scheduleResult.summary.totalTasks,
-          scheduleResult.summary.totalHours,
-          scheduleResult.summary.criticalPathTasks,
-          scheduleResult.summary.criticalPathHours,
-          scheduleResult.summary.risksCount,
-          userId,
-          notes
-        ]
+        params
       );
 
       const scheduleId = scheduleInsert.rows[0].id;
