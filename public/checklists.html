@@ -6,24 +6,13 @@
   <title>Checklists - Multi-Project Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/design-tokens.css">
+  <link rel="stylesheet" href="css/buttons.css">
   <link rel="stylesheet" href="css/checklists.css">
 </head>
 <body class="bg-gray-50">
-  <!-- Header -->
-  <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-6 px-6 shadow-lg">
-    <div class="max-w-7xl mx-auto">
-      <p class="text-sm text-blue-100 mb-1">Multi-Project Tracker</p>
-      <div class="flex justify-between items-center mb-2">
-        <div>
-          <h1 class="text-3xl font-bold"><i class="fas fa-clipboard mr-2"></i>Checklists</h1>
-          <p class="text-sm text-blue-100 mt-1">Manage all your project checklists</p>
-        </div>
-        <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all font-medium">
-          ← Back to Projects
-        </button>
-      </div>
-    </div>
-  </header>
+  <!-- Shared Header Component -->
+  <div id="header-mount"></div>
 
   <main class="main-content max-w-7xl mx-auto">
     <!-- Project Context -->
@@ -341,6 +330,33 @@
     </div>
   </div>
   
+  <!-- Shared Components -->
+  <script src="components/shared-header.js"></script>
+  <script src="components/shared-loading.js"></script>
+  <script src="components/shared-empty-state.js"></script>
+  
+  <!-- Page Scripts -->
   <script src="js/unified-checklists.js"></script>
+  
+  <script>
+    // Initialize shared header component
+    document.addEventListener('DOMContentLoaded', () => {
+      const headerMount = document.getElementById('header-mount');
+      if (headerMount && window.SharedHeader) {
+        window.SharedHeader.render(headerMount, {
+          title: 'Checklists',
+          subtitle: 'Manage all your project checklists',
+          icon: 'clipboard',
+          showBackButton: true,
+          backButtonText: '← Back to Projects',
+          onBackClick: () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const projectId = urlParams.get('project');
+            window.location.href = projectId ? `index.html?project=${projectId}` : 'index.html';
+          }
+        });
+      }
+    });
+  </script>
 </body>
 </html>
