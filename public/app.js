@@ -508,6 +508,47 @@ document.addEventListener("DOMContentLoaded", async function () {
     initializeTableView();
 });
 
+// Initialize AI Analysis mode toggle between Meeting Transcript and Multi-Document Processing
+function initializeAIAnalysisModeToggle() {
+    const transcriptModeRadio = document.getElementById('mode-meeting-transcript');
+    const multiDocumentModeRadio = document.getElementById('mode-multi-document');
+    const meetingTranscriptContent = document.getElementById('meeting-transcript-content');
+    const multiDocumentContent = document.getElementById('multi-document-content');
+
+    if (!transcriptModeRadio || !multiDocumentModeRadio || !meetingTranscriptContent || !multiDocumentContent) {
+        return;
+    }
+
+    const showTranscriptMode = () => {
+        meetingTranscriptContent.classList.remove('hidden');
+        multiDocumentContent.classList.add('hidden');
+    };
+
+    const showMultiDocumentMode = () => {
+        meetingTranscriptContent.classList.add('hidden');
+        multiDocumentContent.classList.remove('hidden');
+    };
+
+    transcriptModeRadio.addEventListener('change', () => {
+        if (transcriptModeRadio.checked) {
+            showTranscriptMode();
+        }
+    });
+
+    multiDocumentModeRadio.addEventListener('change', () => {
+        if (multiDocumentModeRadio.checked) {
+            showMultiDocumentMode();
+        }
+    });
+
+    // Initialize correct state on page load
+    if (multiDocumentModeRadio.checked) {
+        showMultiDocumentMode();
+    } else {
+        showTranscriptMode();
+    }
+}
+
 // Setup event listeners (replaces inline onclick handlers)
 function setupEventListeners() {
     // Auth button listeners
@@ -668,6 +709,8 @@ function setupEventListeners() {
     // AI Analysis and Transcripts buttons (CSP-compliant event delegation)
     document.getElementById('ai-analysis-btn')?.addEventListener('click', showAIAnalysisModal);
     document.getElementById('transcripts-btn')?.addEventListener('click', openTranscriptsModal);
+
+    initializeAIAnalysisModeToggle();
     
     // Export button
     document.getElementById('copy-clipboard-btn')?.addEventListener('click', copyToClipboard);
@@ -4676,51 +4719,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const createBtn = document.getElementById('create-all-items-btn');
   if (createBtn) {
     createBtn.addEventListener('click', createAllItems);
-  }
-  
-  // Mode selector radio buttons
-  const modeMeetingRadio = document.getElementById('mode-meeting-transcript');
-  const modeMultiDocRadio = document.getElementById('mode-multi-document');
-  const meetingContent = document.getElementById('meeting-transcript-content');
-  const multiDocContent = document.getElementById('multi-document-content');
-  
-  if (modeMeetingRadio) {
-    modeMeetingRadio.addEventListener('change', () => {
-      console.log('=== Meeting transcript radio changed ===');
-      console.log('Checked:', modeMeetingRadio.checked);
-      
-      if (modeMeetingRadio.checked) {
-        console.log('Showing meeting transcript, hiding multi-document');
-        
-        if (meetingContent) {
-          meetingContent.classList.remove('hidden');
-        }
-        
-        if (multiDocContent) {
-          multiDocContent.classList.add('hidden');
-        }
-      }
-    });
-  }
-  
-  if (modeMultiDocRadio) {
-    modeMultiDocRadio.addEventListener('change', () => {
-      console.log('=== Multi-document radio changed ===');
-      console.log('Checked:', modeMultiDocRadio.checked);
-      console.log('multiDocContent element:', multiDocContent);
-      
-      if (modeMultiDocRadio.checked) {
-        console.log('Showing multi-document, hiding meeting transcript');
-        
-        if (multiDocContent) {
-          multiDocContent.classList.remove('hidden');
-        }
-        
-        if (meetingContent) {
-          meetingContent.classList.add('hidden');
-        }
-      }
-    });
   }
   
   // Multi-document event listeners
