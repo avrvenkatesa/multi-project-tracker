@@ -4699,9 +4699,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (multiDocContent) {
           multiDocContent.classList.add('hidden');
         }
-        
-        // Update complexity info for meeting transcript mode
-        updateTranscriptComplexityInfo();
       }
     });
   }
@@ -4722,9 +4719,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (meetingContent) {
           meetingContent.classList.add('hidden');
         }
-        
-        // Update complexity info for multi-document mode
-        updateMultiDocComplexityInfo();
       }
     });
   }
