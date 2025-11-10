@@ -10550,6 +10550,18 @@ async function processMultiDocuments() {
       addConsoleLog(`  Total checklist items: ${totalItems}`, 'info');
     }
     
+    // Schedule auto-creation
+    addConsoleLog('', 'info');
+    addConsoleLog('📅 Auto-generating project schedule...', 'step');
+    await sleep(300);
+    if (response.data.schedule?.created) {
+      addConsoleLog(`✓ Schedule #${response.data.schedule.scheduleId} created successfully`, 'success');
+      addConsoleLog(`  ${response.data.schedule.message}`, 'info');
+      addConsoleLog('  Includes: Gantt chart, dependencies, critical path analysis', 'info');
+    } else if (response.data.schedule?.message) {
+      addConsoleLog(`⚠️  ${response.data.schedule.message}`, 'warning');
+    }
+    
     updateMultiDocStep(8); // All complete
     addConsoleLog('', 'info');
     addConsoleLog('╔════════════════════════════════════════════════╗', 'success');
@@ -10585,6 +10597,23 @@ function displayMultiDocResults(results) {
   const workstreams = results.workstreams || results.issues || [];
   const totalItems = results.totalItems || 0;
   const totalCost = results.totalCost || 0;
+  const schedule = results.schedule || { created: false };
+  
+  // Build schedule card HTML if schedule was created
+  const scheduleCard = schedule.created ? `
+    <div class="col-span-3 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-300 rounded-lg">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-semibold text-indigo-900">📅 Schedule Auto-Created</div>
+          <div class="text-xs text-indigo-700 mt-1">${schedule.message || 'Project schedule with Gantt chart ready to view'}</div>
+        </div>
+        <button onclick="window.location.href='schedules.html?projectId=${currentProject.id}&scheduleId=${schedule.scheduleId}'" 
+                class="btn-primary text-xs px-4 py-2">
+          View Schedule & Gantt Chart →
+        </button>
+      </div>
+    </div>
+  ` : '';
   
   if (resultsDiv) {
     resultsDiv.innerHTML = `
@@ -10601,6 +10630,7 @@ function displayMultiDocResults(results) {
           <div class="text-2xl font-bold text-purple-600">$${totalCost.toFixed(3)}</div>
           <div class="text-xs text-gray-600">AI Cost</div>
         </div>
+        ${scheduleCard}
       </div>
       <div class="space-y-2">
         ${workstreams.map(ws => `
