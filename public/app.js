@@ -4682,11 +4682,15 @@ document.addEventListener('DOMContentLoaded', function() {
   const modeMeetingBtn = document.getElementById('mode-meeting-transcript');
   const modeMultiDocBtn = document.getElementById('mode-multi-document');
   const modeDescription = document.getElementById('mode-description');
+  const meetingContent = document.getElementById('meeting-transcript-content');
+  const multiDocContent = document.getElementById('multi-document-content');
   
   if (modeMeetingBtn) {
     modeMeetingBtn.addEventListener('click', () => {
       modeMeetingBtn.classList.add('active');
       modeMultiDocBtn.classList.remove('active');
+      meetingContent.classList.remove('hidden');
+      multiDocContent.classList.add('hidden');
       if (modeDescription) {
         modeDescription.textContent = 'Extract action items and issues from meeting transcripts';
       }
@@ -4695,13 +4699,48 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (modeMultiDocBtn) {
     modeMultiDocBtn.addEventListener('click', () => {
-      if (!currentProject) {
-        alert('Please select a project first');
-        return;
+      modeMultiDocBtn.classList.add('active');
+      modeMeetingBtn.classList.remove('active');
+      multiDocContent.classList.remove('hidden');
+      meetingContent.classList.add('hidden');
+      if (modeDescription) {
+        modeDescription.textContent = 'Comprehensive multi-document project import and analysis';
       }
-      // Navigate to multi-document processing page
-      window.location.href = `mode2-review.html?projectId=${currentProject.id}`;
     });
+  }
+  
+  // Multi-document event listeners
+  const mdFileInput = document.getElementById('md-file-input');
+  const mdFileList = document.getElementById('md-file-list');
+  const mdProcessBtn = document.getElementById('md-process-btn');
+  const mdResetBtn = document.getElementById('md-reset-btn');
+  const mdCancelBtn = document.getElementById('md-cancel-btn');
+  const mdCreateBtn = document.getElementById('md-create-btn');
+  
+  let mdSelectedFiles = [];
+  
+  if (mdFileInput) {
+    mdFileInput.addEventListener('change', (e) => {
+      mdSelectedFiles = Array.from(e.target.files);
+      displayMultiDocFiles();
+      mdProcessBtn.disabled = mdSelectedFiles.length === 0;
+    });
+  }
+  
+  if (mdProcessBtn) {
+    mdProcessBtn.addEventListener('click', processMultiDocuments);
+  }
+  
+  if (mdResetBtn) {
+    mdResetBtn.addEventListener('click', resetMultiDocWorkflow);
+  }
+  
+  if (mdCancelBtn) {
+    mdCancelBtn.addEventListener('click', closeAIAnalysisModal);
+  }
+  
+  if (mdCreateBtn) {
+    mdCreateBtn.addEventListener('click', createMultiDocResults);
   }
   
   // Transcripts modal event listeners
@@ -10264,3 +10303,114 @@ document.addEventListener('DOMContentLoaded', function() {
 // Make functions globally accessible
 window.showScheduleDependencies = showScheduleDependencies;
 window.deleteScheduleDependency = deleteScheduleDependency;
+
+// ============= MULTI-DOCUMENT PROCESSING =============
+
+function displayMultiDocFiles() {
+  const fileList = document.getElementById('md-file-list');
+  if (!fileList || mdSelectedFiles.length === 0) {
+    if (fileList) fileList.classList.add('hidden');
+    return;
+  }
+  
+  fileList.classList.remove('hidden');
+  fileList.innerHTML = mdSelectedFiles.map((file, i) => `
+    <div class="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
+      <span class="text-gray-700">${file.name}</span>
+      <span class="text-gray-500">${(file.size / 1024).toFixed(1)} KB</span>
+    </div>
+  `).join('');
+}
+
+async function processMultiDocuments() {
+  if (!currentProject || mdSelectedFiles.length === 0) return;
+  
+  document.getElementById('md-upload-section').classList.add('hidden');
+  document.getElementById('md-processing-section').classList.remove('hidden');
+  document.getElementById('md-step-indicator-2').classList.remove('bg-gray-200', 'text-gray-500');
+  document.getElementById('md-step-indicator-2').classList.add('bg-blue-600', 'text-white');
+  
+  const progressLog = document.getElementById('md-progress-log');
+  
+  try {
+    const formData = new FormData();
+    mdSelectedFiles.forEach(file => formData.append('documents', file));
+    formData.append('projectId', currentProject.id);
+    
+    progressLog.innerHTML = '<div>📤 Uploading...</div>';
+    const response = await axios.post('/api/multi-document/analyze', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      withCredentials: true
+    });
+    
+    progressLog.innerHTML += '<div>✓ Processing complete</div>';
+    displayMultiDocResults(response.data);
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error: ' + (error.response?.data?.error || error.message));
+    resetMultiDocWorkflow();
+  }
+}
+
+function displayMultiDocResults(results) {
+  document.getElementById('md-processing-section').classList.add('hidden');
+  document.getElementById('md-review-section').classList.remove('hidden');
+  document.getElementById('md-step-indicator-3').classList.remove('bg-gray-200', 'text-gray-500');
+  document.getElementById('md-step-indicator-3').classList.add('bg-blue-600', 'text-white');
+  
+  const workstreams = results.workstreams || results.issues || [];
+  document.getElementById('md-results-summary').innerHTML = `
+    <div class="text-center p-2 bg-blue-50 rounded">
+      <div class="text-xl font-bold text-blue-600">${workstreams.length}</div>
+      <div class="text-gray-600">Workstreams</div>
+    </div>
+    <div class="text-center p-2 bg-green-50 rounded">
+      <div class="text-xl font-bold text-green-600">${results.totalItems || 0}</div>
+      <div class="text-gray-600">Items</div>
+    </div>
+    <div class="text-center p-2 bg-purple-50 rounded">
+      <div class="text-xl font-bold text-purple-600">$${(results.totalCost || 0).toFixed(3)}</div>
+      <div class="text-gray-600">Cost</div>
+    </div>
+  `;
+  
+  document.getElementById('md-results-list').innerHTML = workstreams.map(ws => `
+    <div class="p-3 border rounded hover:bg-gray-50">
+      <h5 class="font-semibold text-sm">${ws.title || ws.name}</h5>
+      <p class="text-xs text-gray-600">${ws.description || ''}</p>
+    </div>
+  `).join('');
+  
+  window.mdProcessingResults = results;
+}
+
+async function createMultiDocResults() {
+  if (!window.mdProcessingResults) return;
+  const btn = document.getElementById('md-create-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+  try {
+    await loadProjectDetails(currentProject.id);
+    closeAIAnalysisModal();
+    alert('Processing complete!');
+  } catch (error) {
+    alert('Error: ' + (error.response?.data?.error || error.message));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create All';
+  }
+}
+
+function resetMultiDocWorkflow() {
+  mdSelectedFiles = [];
+  document.getElementById('md-file-input').value = '';
+  document.getElementById('md-file-list').classList.add('hidden');
+  document.getElementById('md-process-btn').disabled = true;
+  document.getElementById('md-upload-section').classList.remove('hidden');
+  document.getElementById('md-processing-section').classList.add('hidden');
+  document.getElementById('md-review-section').classList.add('hidden');
+  document.getElementById('md-step-indicator-1').className = 'w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center mx-auto mb-1';
+  document.getElementById('md-step-indicator-2').className = 'w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1';
+  document.getElementById('md-step-indicator-3').className = 'w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1';
+  window.mdProcessingResults = null;
+}
