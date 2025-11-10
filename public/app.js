@@ -4686,6 +4686,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (modeMeetingRadio) {
     modeMeetingRadio.addEventListener('change', () => {
+      console.log('Meeting transcript mode selected');
       if (modeMeetingRadio.checked) {
         meetingContent.classList.remove('hidden');
         multiDocContent.classList.add('hidden');
@@ -4695,9 +4696,12 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (modeMultiDocRadio) {
     modeMultiDocRadio.addEventListener('change', () => {
+      console.log('Multi-document mode selected');
       if (modeMultiDocRadio.checked) {
         multiDocContent.classList.remove('hidden');
         meetingContent.classList.add('hidden');
+        // Update complexity info for multi-document mode
+        updateMultiDocComplexityInfo();
       }
     });
   }
@@ -4714,9 +4718,12 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (mdFileInput) {
     mdFileInput.addEventListener('change', (e) => {
+      console.log('Files selected:', e.target.files.length);
       mdSelectedFiles = Array.from(e.target.files);
       displayMultiDocFiles();
-      mdProcessBtn.disabled = mdSelectedFiles.length === 0;
+      if (mdProcessBtn) {
+        mdProcessBtn.disabled = mdSelectedFiles.length === 0;
+      }
     });
   }
   
@@ -10301,18 +10308,22 @@ window.deleteScheduleDependency = deleteScheduleDependency;
 
 function displayMultiDocFiles() {
   const fileList = document.getElementById('md-file-list');
+  const fileNames = document.getElementById('md-file-names');
+  
   if (!fileList || mdSelectedFiles.length === 0) {
     if (fileList) fileList.classList.add('hidden');
     return;
   }
   
   fileList.classList.remove('hidden');
-  fileList.innerHTML = mdSelectedFiles.map((file, i) => `
-    <div class="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
-      <span class="text-gray-700">${file.name}</span>
-      <span class="text-gray-500">${(file.size / 1024).toFixed(1)} KB</span>
-    </div>
-  `).join('');
+  if (fileNames) {
+    fileNames.innerHTML = mdSelectedFiles.map(file => `
+      <div class="text-xs py-1">
+        <span class="font-medium">${file.name}</span>
+        <span class="text-gray-500 ml-2">(${(file.size / 1024).toFixed(1)} KB)</span>
+      </div>
+    `).join('');
+  }
 }
 
 async function processMultiDocuments() {
@@ -10396,14 +10407,41 @@ async function createMultiDocResults() {
 
 function resetMultiDocWorkflow() {
   mdSelectedFiles = [];
-  document.getElementById('md-file-input').value = '';
-  document.getElementById('md-file-list').classList.add('hidden');
-  document.getElementById('md-process-btn').disabled = true;
-  document.getElementById('md-upload-section').classList.remove('hidden');
-  document.getElementById('md-processing-section').classList.add('hidden');
-  document.getElementById('md-review-section').classList.add('hidden');
-  document.getElementById('md-step-indicator-1').className = 'w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center mx-auto mb-1';
-  document.getElementById('md-step-indicator-2').className = 'w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1';
-  document.getElementById('md-step-indicator-3').className = 'w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1';
+  const fileInput = document.getElementById('md-file-input');
+  const fileList = document.getElementById('md-file-list');
+  const fileNames = document.getElementById('md-file-names');
+  const processBtn = document.getElementById('md-process-btn');
+  const uploadSection = document.getElementById('md-upload-section');
+  const resultsStep = document.getElementById('md-results-step');
+  
+  if (fileInput) fileInput.value = '';
+  if (fileList) fileList.classList.add('hidden');
+  if (fileNames) fileNames.innerHTML = '';
+  if (processBtn) processBtn.disabled = true;
+  if (uploadSection) uploadSection.classList.remove('hidden');
+  if (resultsStep) resultsStep.classList.add('hidden');
+  
   window.mdProcessingResults = null;
+}
+
+// Update complexity info for multi-document mode
+function updateMultiDocComplexityInfo() {
+  if (!currentProject) return;
+  
+  const badge = document.getElementById('md-complexity-badge');
+  const maxFiles = document.getElementById('md-max-files');
+  
+  if (badge && maxFiles) {
+    const complexity = currentProject.complexity_level || 'standard';
+    const maxFileCount = currentProject.max_file_uploads || 5;
+    
+    badge.textContent = complexity.charAt(0).toUpperCase() + complexity.slice(1);
+    badge.className = `text-sm font-semibold px-2 py-1 rounded ${
+      complexity === 'enterprise' ? 'bg-purple-100 text-purple-800' :
+      complexity === 'complex' ? 'bg-blue-100 text-blue-800' :
+      'bg-green-100 text-green-800'
+    }`;
+    
+    maxFiles.textContent = maxFileCount;
+  }
 }
