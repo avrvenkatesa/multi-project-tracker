@@ -6698,6 +6698,54 @@ IMPORTANT: Extract ALL action items, issues, status updates, and relationships. 
     }
 });
 
+// ===================================================================
+// REAL-TIME PROGRESS STREAMING (SSE)
+// ===================================================================
+
+// Store active SSE connections (sessionId => response object)
+const activeProgressStreams = new Map();
+
+// SSE endpoint for real-time progress updates
+app.get('/api/multi-document/progress-stream/:sessionId',
+  authenticateToken,
+  (req, res) => {
+    const { sessionId } = req.params;
+    
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable Nginx buffering
+    
+    // Send initial connection message
+    res.write(`data: ${JSON.stringify({ type: 'connected', sessionId })}\n\n`);
+    
+    // Store the response object for this session
+    activeProgressStreams.set(sessionId, res);
+    
+    console.log(`📡 SSE client connected: ${sessionId}`);
+    
+    // Clean up on disconnect
+    req.on('close', () => {
+      activeProgressStreams.delete(sessionId);
+      console.log(`📡 SSE client disconnected: ${sessionId}`);
+    });
+  }
+);
+
+// Helper function to send progress events to a specific session
+function sendProgressEvent(sessionId, eventData) {
+  const res = activeProgressStreams.get(sessionId);
+  if (res && !res.writableEnded) {
+    try {
+      res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+    } catch (error) {
+      console.error(`Failed to send progress event to ${sessionId}:`, error.message);
+      activeProgressStreams.delete(sessionId);
+    }
+  }
+}
+
 // Multi-Document Analysis (Comprehensive Project Import)
 app.post('/api/multi-document/analyze',
   authenticateToken,
@@ -6711,7 +6759,7 @@ app.post('/api/multi-document/analyze',
         return res.status(400).json({ error: 'No files uploaded' });
       }
 
-      const { projectId } = req.body;
+      const { projectId, sessionId } = req.body;
       if (!projectId) {
         return res.status(400).json({ error: 'Project ID required' });
       }
@@ -6729,6 +6777,12 @@ app.post('/api/multi-document/analyze',
       console.log(`📁 Project ID: ${projectId}`);
       console.log(`📄 Files: ${req.files.length}`);
       console.log(`👤 User: ${req.user.email}`);
+      console.log(`📡 Session ID: ${sessionId || 'none (no real-time streaming)'}`);
+
+      // Create progress callback for real-time streaming
+      const progressCallback = sessionId ? (event) => {
+        sendProgressEvent(sessionId, event);
+      } : null;
 
       // Extract text from all uploaded documents
       const documentService = require('./services/document-service.js');
@@ -6774,7 +6828,8 @@ app.post('/api/multi-document/analyze',
       const result = await multiDocumentAnalyzer.analyzeMultipleDocuments(documents, {
         projectId: parseInt(projectId),
         userId: req.user.id,
-        projectStartDate: new Date().toISOString().split('T')[0]
+        projectStartDate: new Date().toISOString().split('T')[0],
+        progressCallback: progressCallback  // Pass callback for real-time updates
       });
 
       const duration = Date.now() - startTime;

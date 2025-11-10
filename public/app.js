@@ -10448,33 +10448,62 @@ async function processMultiDocuments() {
   
   // Clear console and initialize
   clearConsole();
-  addConsoleLog('🔹 Multi-Document Analysis Started', 'step');
-  addConsoleLog(`📁 Project ID: ${currentProject.id}`, 'info');
-  addConsoleLog(`📄 Files: ${mdSelectedFiles.length}`, 'info');
-  mdSelectedFiles.forEach(file => {
-    addConsoleLog(`   Processing: ${file.name}`, 'info');
-  });
+  addConsoleLog('🔹 Connecting to real-time progress stream...', 'info');
   
+  // Generate unique session ID for this upload
+  const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Connect to SSE stream FIRST
+  let eventSource;
   try {
+    eventSource = new EventSource(`/api/multi-document/progress-stream/${sessionId}`);
+    
+    // Handle real-time events from server
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'connected') {
+          addConsoleLog('✓ Real-time streaming connected', 'success');
+        } else if (data.type === 'step') {
+          // Advance stepper in real-time based on server progress
+          updateMultiDocStep(data.step);
+          if (progressText) progressText.textContent = `Step ${data.step}/7: ${data.title}...`;
+        } else if (data.type === 'log') {
+          // Display server console messages in real-time
+          const level = data.message.includes('✓') ? 'success' : 
+                       data.message.includes('⚠️') ? 'warning' :
+                       data.message.includes('✗') || data.message.includes('❌') ? 'error' :
+                       data.message.includes('Step') || data.message.includes('╔') ? 'step' : 'info';
+          addConsoleLog(data.message, level);
+        } else if (data.type === 'error') {
+          addConsoleLog(data.message, 'error');
+        } else if (data.type === 'complete') {
+          // Processing complete
+          if (progressText) progressText.textContent = 'Processing complete!';
+          updateMultiDocStep(8);
+        }
+      } catch (err) {
+        console.error('Failed to parse SSE event:', err);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      // Don't show error to user if processing completes normally
+    };
+    
+    // Wait a moment for SSE connection to establish
+    await sleep(500);
+    
     const formData = new FormData();
     mdSelectedFiles.forEach(file => formData.append('documents', file));
     formData.append('projectId', currentProject.id);
+    formData.append('sessionId', sessionId);  // Pass session ID to backend
     
     // Show upload progress
-    updateMultiDocStep(1);
-    addConsoleLog('Uploading documents to server...', 'step');
-    
-    // Start progress animation through steps during processing
-    let currentStep = 1;
-    const progressInterval = setInterval(() => {
-      if (currentStep < 7) {
-        currentStep++;
-        updateMultiDocStep(currentStep);
-        const stepLabels = ['', 'Combine Docs', 'Detect Workstreams', 'Create Issues', 
-                           'Extract Timeline', 'Dependencies', 'Parse Resources', 'Gen Checklists'];
-        if (progressText) progressText.textContent = `Processing: ${stepLabels[currentStep]}...`;
-      }
-    }, 2000); // Update every 2 seconds
+    updateMultiDocStep(0);
+    addConsoleLog('Uploading documents to server...', 'info');
     
     const response = await axios.post('/api/multi-document/analyze', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -10485,78 +10514,24 @@ async function processMultiDocuments() {
       }
     });
     
-    // Stop progress animation
-    clearInterval(progressInterval);
-    if (progressText) progressText.textContent = 'Processing complete!';
-    
-    // Mark all steps complete
-    updateMultiDocStep(8);
-    
-    // Display results in console based on actual API response
-    addConsoleLog('✓ Upload complete', 'success');
-    addConsoleLog('', 'info');
-    
-    // Show summary from API
-    const summary = response.data.summary;
-    if (summary) {
-      addConsoleLog('╔════════════════════════════════════════════════╗', 'step');
-      addConsoleLog('║   PROCESSING COMPLETE - RESULTS SUMMARY        ║', 'step');
-      addConsoleLog('╚════════════════════════════════════════════════╝', 'step');
-      addConsoleLog('', 'info');
-      
-      addConsoleLog(`📄 Documents Processed: ${summary.documentsProcessed}`, 'info');
-      
-      if (summary.workstreamsDetected > 0) {
-        addConsoleLog(`🔹 Workstreams Detected: ${summary.workstreamsDetected}`, 'success');
-        if (response.data.workstreams) {
-          response.data.workstreams.forEach((ws, idx) => {
-            addConsoleLog(`   ${idx + 1}. ${ws.name || ws.title}`, 'info');
-          });
-        }
-      }
-      
-      if (summary.issuesCreated > 0) {
-        addConsoleLog(`✓ Issues Created: ${summary.issuesCreated} (with AI effort estimates)`, 'success');
-      }
-      
-      if (summary.timelineExtracted) {
-        addConsoleLog(`✓ Timeline Extracted: Phases and milestones identified`, 'success');
-      }
-      
-      if (summary.dependenciesCreated > 0) {
-        addConsoleLog(`✓ Dependencies Created: ${summary.dependenciesCreated}`, 'success');
-      }
-      
-      if (summary.checklistsCreated > 0) {
-        addConsoleLog(`✓ Checklists Generated: ${summary.checklistsCreated} checklists, ${summary.checklistItemsTotal} items`, 'success');
-      }
-      
-      if (summary.scheduleCreated) {
-        addConsoleLog('', 'info');
-        addConsoleLog(`📅 Schedule Auto-Created: ${response.data.schedule?.message}`, 'success');
-        addConsoleLog('   Includes: Gantt chart, dependencies, critical path analysis', 'info');
-      }
-      
-      addConsoleLog('', 'info');
-      addConsoleLog(`💰 Total AI Cost: $${response.data.totalCost?.toFixed(4) || '0.0000'}`, 'info');
+    // Close SSE connection
+    if (eventSource) {
+      eventSource.close();
     }
     
-    // Show warnings if any
-    if (response.data.warnings && response.data.warnings.length > 0) {
-      addConsoleLog('', 'info');
-      addConsoleLog('⚠️  Warnings:', 'warning');
-      response.data.warnings.forEach(w => addConsoleLog(`   ${w}`, 'warning'));
-    }
-    
-    addConsoleLog('', 'info');
-    addConsoleLog('╔════════════════════════════════════════════════╗', 'success');
-    addConsoleLog('║   ✅ MULTI-DOCUMENT ANALYSIS COMPLETE           ║', 'success');
-    addConsoleLog('╚════════════════════════════════════════════════╝', 'success');
-    
+    // All console logs were shown in real-time via SSE
+    // Just display the results UI now
     if (progress) progress.classList.add('hidden');
     displayMultiDocResults(response.data);
+    
   } catch (error) {
     console.error('Error:', error);
+    
+    // Close SSE connection on error
+    if (eventSource) {
+      eventSource.close();
+    }
+    
     addConsoleLog('', 'error');
     addConsoleLog('✗ Error during processing:', 'error');
     addConsoleLog(`  ${error.response?.data?.error || error.message}`, 'error');

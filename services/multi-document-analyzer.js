@@ -56,12 +56,28 @@ class MultiDocumentAnalyzer {
   /**
    * Analyze multiple documents and create complete project structure
    * @param {Array} documents - Array of {filename, text, classification}
-   * @param {Object} options - {projectId, userId, projectStartDate}
+   * @param {Object} options - {projectId, userId, projectStartDate, progressCallback}
    * @returns {Object} Complete analysis results with created entities
    */
   async analyzeMultipleDocuments(documents, options) {
-    const { projectId, userId, projectStartDate } = options;
+    const { projectId, userId, projectStartDate, progressCallback } = options;
     const startTime = Date.now();
+    
+    // Helper function to emit progress events
+    const emit = (type, data) => {
+      if (progressCallback) {
+        progressCallback({ type, ...data, timestamp: new Date().toISOString() });
+      }
+      
+      // Also log to server console
+      if (type === 'log') {
+        console.log(data.message);
+      } else if (type === 'error') {
+        console.error(data.message);
+      } else if (type === 'step') {
+        console.log(`Step ${data.step}/7: ${data.title}...`);
+      }
+    };
     
     const result = {
       success: false,
@@ -82,21 +98,25 @@ class MultiDocumentAnalyzer {
     let importId = null;
 
     try {
-      console.log('╔════════════════════════════════════════════════════╗');
-      console.log('║   MULTI-DOCUMENT PROJECT IMPORT STARTING           ║');
-      console.log('╚════════════════════════════════════════════════════╝');
-      console.log(`📁 Project ID: ${projectId}`);
-      console.log(`📄 Documents: ${documents.length}`);
-      console.log(`📅 Start Date: ${projectStartDate}\n`);
+      emit('log', { message: '╔════════════════════════════════════════════════════╗' });
+      emit('log', { message: '║   MULTI-DOCUMENT PROJECT IMPORT STARTING           ║' });
+      emit('log', { message: '╚════════════════════════════════════════════════════╝' });
+      emit('log', { message: `📁 Project ID: ${projectId}` });
+      emit('log', { message: `📄 Documents: ${documents.length}` });
+      emit('log', { message: `📅 Start Date: ${projectStartDate}` });
+      emit('log', { message: '' });
 
       // Step 1: Combine document text
-      console.log('Step 1/7: Combining document text...');
+      emit('step', { step: 1, title: 'Combine Docs' });
+      emit('log', { message: 'Step 1/7: Combining document text...' });
       const combinedText = this._combineDocuments(documents);
-      console.log(`✓ Combined ${combinedText.length} characters\n`);
+      emit('log', { message: `✓ Combined ${combinedText.length} characters` });
+      emit('log', { message: '' });
       result.documents.processed = documents.length;
 
       // Step 2: Detect workstreams (CRITICAL - cannot proceed without this)
-      console.log('Step 2/7: Detecting workstreams...');
+      emit('step', { step: 2, title: 'Detect Workstreams' });
+      emit('log', { message: 'Step 2/7: Detecting workstreams...' });
       if (!this.workstreamDetector) {
         throw new Error('Workstream detector service not available - cannot proceed');
       }
@@ -116,18 +136,19 @@ class MultiDocumentAnalyzer {
       
       // Workstream detector doesn't return cost - it's tracked separately via ai-cost-tracker
 
-      console.log(`✓ Found ${result.workstreams.length} workstreams`);
+      emit('log', { message: `✓ Found ${result.workstreams.length} workstreams` });
       result.workstreams.forEach((ws, i) => {
-        console.log(`  ${i + 1}. ${ws.name} (${ws.complexity || 'unknown'} complexity)`);
+        emit('log', { message: `  ${i + 1}. ${ws.name} (${ws.complexity || 'unknown'} complexity)` });
       });
-      console.log('');
+      emit('log', { message: '' });
 
       if (result.workstreams.length === 0) {
         throw new Error('No workstreams detected - cannot create project structure');
       }
 
       // Step 3: Create issues from workstreams with AI effort estimates
-      console.log('Step 3/7: Creating issues from workstreams...');
+      emit('step', { step: 3, title: 'Create Issues' });
+      emit('log', { message: 'Step 3/7: Creating issues from workstreams...' });
       for (const workstream of result.workstreams) {
         const effortEstimate = this._calculateEffortEstimate(workstream);
         
@@ -152,12 +173,14 @@ class MultiDocumentAnalyzer {
         workstream.issueId = issueId;
         result.issues.ids.push(issueId);
         result.issues.created++;
-        console.log(`  ✓ Created issue #${issueId}: ${workstream.name} (${effortEstimate.hours}h, ${effortEstimate.confidence} confidence)`);
+        emit('log', { message: `  ✓ Created issue #${issueId}: ${workstream.name} (${effortEstimate.hours}h, ${effortEstimate.confidence} confidence)` });
       }
-      console.log(`✓ Created ${result.issues.created} issues with AI effort estimates\n`);
+      emit('log', { message: `✓ Created ${result.issues.created} issues with AI effort estimates` });
+      emit('log', { message: '' });
 
       // Step 4: Extract timeline (OPTIONAL)
-      console.log('Step 4/7: Extracting timeline...');
+      emit('step', { step: 4, title: 'Extract Timeline' });
+      emit('log', { message: 'Step 4/7: Extracting timeline...' });
       if (this.timelineExtractor) {
         try {
           const timelineResult = await this.timelineExtractor.extractTimeline(
@@ -174,18 +197,22 @@ class MultiDocumentAnalyzer {
             result.totalCost += costAmount;
           }
           
-          console.log(`✓ Extracted ${result.timeline.phases?.length || 0} phases, ${result.timeline.milestones?.length || 0} milestones\n`);
+          emit('log', { message: `✓ Extracted ${result.timeline.phases?.length || 0} phases, ${result.timeline.milestones?.length || 0} milestones` });
+          emit('log', { message: '' });
         } catch (error) {
           result.warnings.push('Timeline extraction failed: ' + error.message);
-          console.log(`⚠️  Timeline extraction failed: ${error.message}\n`);
+          emit('log', { message: `⚠️  Timeline extraction failed: ${error.message}` });
+          emit('log', { message: '' });
         }
       } else {
         result.warnings.push('Timeline extractor service not available');
-        console.log('⚠️  Timeline extractor not available - skipping\n');
+        emit('log', { message: '⚠️  Timeline extractor not available - skipping' });
+        emit('log', { message: '' });
       }
 
       // Step 5: Create dependencies (OPTIONAL)
-      console.log('Step 5/7: Creating dependencies...');
+      emit('step', { step: 5, title: 'Dependencies' });
+      emit('log', { message: 'Step 5/7: Creating dependencies...' });
       if (this.dependencyMapper && result.issues.ids.length > 1) {
         try {
           // Call createDependencies with workstreams and projectId
@@ -202,18 +229,22 @@ class MultiDocumentAnalyzer {
             result.warnings.push(...dependencyResult.errors.map(e => `Dependency error: ${e}`));
           }
           
-          console.log(`✓ Created ${result.dependencies.created} dependencies\n`);
+          emit('log', { message: `✓ Created ${result.dependencies.created} dependencies` });
+          emit('log', { message: '' });
         } catch (error) {
           result.warnings.push('Dependency mapping failed: ' + error.message);
-          console.log(`⚠️  Dependency mapping failed: ${error.message}\n`);
+          emit('log', { message: `⚠️  Dependency mapping failed: ${error.message}` });
+          emit('log', { message: '' });
         }
       } else {
         result.warnings.push('Dependency mapper service not available or insufficient issues');
-        console.log('⚠️  Dependency mapper not available - skipping\n');
+        emit('log', { message: '⚠️  Dependency mapper not available - skipping' });
+        emit('log', { message: '' });
       }
 
       // Step 6: Parse resource assignments (OPTIONAL)
-      console.log('Step 6/7: Parsing resource assignments...');
+      emit('step', { step: 6, title: 'Parse Resources' });
+      emit('log', { message: 'Step 6/7: Parsing resource assignments...' });
       if (this.resourceParser) {
         try {
           // Look for resources or effort documents
@@ -225,7 +256,7 @@ class MultiDocumentAnalyzer {
           );
           
           if (resourceDoc) {
-            console.log(`  Using "${resourceDoc.filename}" for resource assignment`);
+            emit('log', { message: `  Using "${resourceDoc.filename}" for resource assignment` });
             const resourceResult = await this.resourceParser.parseResources(
               resourceDoc.text,
               { 
@@ -239,23 +270,28 @@ class MultiDocumentAnalyzer {
             result.resourceAssignments.assigned = resourceResult.assignments?.length || 0;
             result.resourceAssignments.needsReview = resourceResult.resources?.filter(r => r.needsReview) || [];
             
-            console.log(`✓ Assigned ${result.resourceAssignments.assigned} resources\n`);
+            emit('log', { message: `✓ Assigned ${result.resourceAssignments.assigned} resources` });
+            emit('log', { message: '' });
           } else {
             result.warnings.push('No resource/effort document found for resource parsing');
-            console.log('⚠️  No resource/effort document found - skipping resource assignment\n');
+            emit('log', { message: '⚠️  No resource/effort document found - skipping resource assignment' });
+            emit('log', { message: '' });
           }
         } catch (error) {
           result.warnings.push('Resource assignment failed: ' + error.message);
-          console.log(`⚠️  Resource assignment failed: ${error.message}\n`);
+          emit('log', { message: `⚠️  Resource assignment failed: ${error.message}` });
+          emit('log', { message: '' });
         }
       } else {
         result.warnings.push('Resource parser service not available');
-        console.log('⚠️  Resource parser not available - skipping\n');
+        emit('log', { message: '⚠️  Resource parser not available - skipping' });
+        emit('log', { message: '' });
       }
 
       // Step 7: Generate checklists
-      console.log('Step 7/7: Generating checklists...');
-      console.log(`  Processing ${result.workstreams.length} of ${result.workstreams.length} workstreams`);
+      emit('step', { step: 7, title: 'Gen Checklists' });
+      emit('log', { message: 'Step 7/7: Generating checklists...' });
+      emit('log', { message: `  Processing ${result.workstreams.length} of ${result.workstreams.length} workstreams` });
       
       const aiService = require('./ai-service');
       
@@ -290,21 +326,22 @@ class MultiDocumentAnalyzer {
           result.checklists.items += itemCount;
         } catch (error) {
           result.warnings.push(`Checklist generation failed for ${workstream.name}: ${error.message}`);
-          console.log(`  ⚠️  Failed to generate checklist for ${workstream.name}`);
+          emit('log', { message: `  ⚠️  Failed to generate checklist for ${workstream.name}` });
         }
       }
       
       // Note: checklist generation cost is not tracked separately
       // It's included in the overall OpenAI API usage tracked by ai-cost-tracker
       
-      console.log(`✓ Generated ${result.checklists.created} checklists with ${result.checklists.items} items\n`);
+      emit('log', { message: `✓ Generated ${result.checklists.created} checklists with ${result.checklists.items} items` });
+      emit('log', { message: '' });
 
       // Auto-create project schedule if we have issues with estimates and dependencies
       result.schedule = { created: false, scheduleId: null, message: null };
       
       if (result.issues.created > 0 && result.issues.ids.length > 0) {
         try {
-          console.log('📅 Auto-generating project schedule...');
+          emit('log', { message: '📅 Auto-generating project schedule...' });
           
           // Check if a schedule already exists for this project
           const existingSchedule = await pool.query(
@@ -316,7 +353,8 @@ class MultiDocumentAnalyzer {
             result.schedule.created = false;
             result.schedule.message = 'Schedule already exists for this project';
             result.warnings.push('Schedule creation skipped: Schedule already exists');
-            console.log('⚠️  Schedule already exists - skipping auto-creation\n');
+            emit('log', { message: '⚠️  Schedule already exists - skipping auto-creation' });
+            emit('log', { message: '' });
           } else {
             // Fetch created issues with estimates and dependencies
             const issuesData = await pool.query(
@@ -397,18 +435,21 @@ class MultiDocumentAnalyzer {
             result.schedule.scheduleId = scheduleResult.scheduleId;
             result.schedule.message = `Schedule created with ${scheduleResult.totalTasks} tasks`;
             
-            console.log(`✅ Schedule #${scheduleResult.scheduleId} auto-created with ${scheduleResult.totalTasks} tasks\n`);
+            emit('log', { message: `✅ Schedule #${scheduleResult.scheduleId} auto-created with ${scheduleResult.totalTasks} tasks` });
+            emit('log', { message: '' });
           }
         } catch (scheduleError) {
           result.schedule.created = false;
           result.schedule.message = `Schedule creation failed: ${scheduleError.message}`;
           result.warnings.push(`Auto-schedule creation failed: ${scheduleError.message}`);
-          console.log(`⚠️  Schedule auto-creation failed: ${scheduleError.message}\n`);
+          emit('log', { message: `⚠️  Schedule auto-creation failed: ${scheduleError.message}` });
+          emit('log', { message: '' });
         }
       } else {
         result.schedule.created = false;
         result.schedule.message = 'No issues created to schedule';
-        console.log('⚠️  No issues to schedule - skipping schedule creation\n');
+        emit('log', { message: '⚠️  No issues to schedule - skipping schedule creation' });
+        emit('log', { message: '' });
       }
 
       // Store import metadata
@@ -445,19 +486,23 @@ class MultiDocumentAnalyzer {
       result.success = true;
       result.duration = Date.now() - startTime;
 
-      console.log('╔════════════════════════════════════════════════════╗');
-      console.log('║   MULTI-DOCUMENT IMPORT COMPLETE                   ║');
-      console.log('╚════════════════════════════════════════════════════╝');
-      console.log(`✅ Import ID: ${importId}`);
-      console.log(`✅ Duration: ${result.duration}ms`);
-      console.log(`✅ Total AI Cost: $${result.totalCost.toFixed(4)}\n`);
+      emit('log', { message: '╔════════════════════════════════════════════════════╗' });
+      emit('log', { message: '║   MULTI-DOCUMENT IMPORT COMPLETE                   ║' });
+      emit('log', { message: '╚════════════════════════════════════════════════════╝' });
+      emit('log', { message: `✅ Import ID: ${importId}` });
+      emit('log', { message: `✅ Duration: ${result.duration}ms` });
+      emit('log', { message: `✅ Total AI Cost: $${result.totalCost.toFixed(4)}` });
+      emit('log', { message: '' });
+      
+      // Send completion event
+      emit('complete', { success: true, importId, duration: result.duration, totalCost: result.totalCost });
 
     } catch (error) {
       result.success = false;
       result.errors.push(error.message);
       result.duration = Date.now() - startTime;
       
-      console.error('❌ Multi-document import failed:', error.message);
+      emit('error', { message: `❌ Multi-document import failed: ${error.message}` });
       
       // Store failed import metadata
       if (projectId && userId) {
@@ -478,9 +523,12 @@ class MultiDocumentAnalyzer {
             ]
           );
         } catch (dbError) {
-          console.error('Failed to store import failure metadata:', dbError.message);
+          emit('error', { message: `Failed to store import failure metadata: ${dbError.message}` });
         }
       }
+      
+      // Send error completion event
+      emit('complete', { success: false, error: error.message, duration: result.duration });
     }
 
     return result;
