@@ -4681,65 +4681,27 @@ document.addEventListener('DOMContentLoaded', function() {
   // Mode selector buttons
   const modeMeetingBtn = document.getElementById('mode-meeting-transcript');
   const modeMultiDocBtn = document.getElementById('mode-multi-document');
+  const modeDescription = document.getElementById('mode-description');
   
   if (modeMeetingBtn) {
-    modeMeetingBtn.addEventListener('click', () => switchAnalysisMode('meeting'));
-  }
-  
-  if (modeMultiDocBtn) {
-    modeMultiDocBtn.addEventListener('click', () => switchAnalysisMode('multi-document'));
-  }
-  
-  // Multi-document processing event listeners
-  const mdDropZone = document.getElementById('md-drop-zone');
-  const mdFileInput = document.getElementById('md-file-input');
-  const mdClearFile = document.getElementById('md-clear-file');
-  const mdAnalyzeBtn = document.getElementById('md-analyze-btn');
-  const mdResetBtn = document.getElementById('md-reset-btn');
-  const mdCancelBtn = document.getElementById('md-cancel-btn');
-  
-  if (mdDropZone && mdFileInput) {
-    mdDropZone.addEventListener('click', () => mdFileInput.click());
-    mdFileInput.addEventListener('change', handleMultiDocFileSelect);
-    
-    mdDropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      mdDropZone.classList.add('border-blue-500', 'bg-blue-50');
-    });
-    
-    mdDropZone.addEventListener('dragleave', () => {
-      mdDropZone.classList.remove('border-blue-500', 'bg-blue-50');
-    });
-    
-    mdDropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      mdDropZone.classList.remove('border-blue-500', 'bg-blue-50');
-      if (e.dataTransfer.files.length > 0) {
-        mdFileInput.files = e.dataTransfer.files;
-        handleMultiDocFileSelect();
+    modeMeetingBtn.addEventListener('click', () => {
+      modeMeetingBtn.classList.add('active');
+      modeMultiDocBtn.classList.remove('active');
+      if (modeDescription) {
+        modeDescription.textContent = 'Extract action items and issues from meeting transcripts';
       }
     });
   }
   
-  if (mdClearFile) {
-    mdClearFile.addEventListener('click', clearMultiDocFile);
-  }
-  
-  if (mdAnalyzeBtn) {
-    mdAnalyzeBtn.addEventListener('click', startMultiDocAnalysis);
-  }
-  
-  if (mdResetBtn) {
-    mdResetBtn.addEventListener('click', resetMultiDocWorkflow);
-  }
-  
-  if (mdCancelBtn) {
-    mdCancelBtn.addEventListener('click', closeAIAnalysisModal);
-  }
-  
-  const mdCreateBtn = document.getElementById('md-create-btn');
-  if (mdCreateBtn) {
-    mdCreateBtn.addEventListener('click', createMultiDocItems);
+  if (modeMultiDocBtn) {
+    modeMultiDocBtn.addEventListener('click', () => {
+      if (!currentProject) {
+        alert('Please select a project first');
+        return;
+      }
+      // Navigate to multi-document processing page
+      window.location.href = `mode2-review.html?projectId=${currentProject.id}`;
+    });
   }
   
   // Transcripts modal event listeners

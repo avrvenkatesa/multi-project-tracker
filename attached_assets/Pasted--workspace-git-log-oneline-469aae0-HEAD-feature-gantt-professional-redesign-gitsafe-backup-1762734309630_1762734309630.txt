@@ -1,0 +1,106 @@
+~/workspace$ git log --oneline
+469aae0 (HEAD -> feature/gantt-professional-redesign, gitsafe-backup/main) Saved progress at the end of the loop
+77b1205 Add multi-document analysis mode with file upload and processing capabilities
+2d19caa Remove multi-document analysis mode from the interface
+c7eb4ed Restore previously removed file upload functionality
+acf0422 Saved progress at the end of the loop
+a52d212 Add functionality for multi-document analysis and restore missing view options
+afc0376 Add system to estimate AI issue effort based on complexity
+8e3cd4a Add AI-powered automatic effort estimation for AI-generated issues
+c892e3a Add AI-driven effort hour estimation for AI-created issues
+c662f20 Update AI-generated schedule with new visual elements
+cc44492 Improve documentation regarding system architecture and design
+2fa3c82 Organize schedule tasks by assignee and improve dependency highlighting
+0ab3aff Add a compact view option to the Gantt chart for better data density
+fd41c0a Improve Gantt chart appearance and layout for better readability
+3c93a58 Introduce design system for consistent UI and professional Gantt charts
+a5ebdf7 Refine visual styling and accessibility for a polished user interface
+b2a9716 Add a style tile page with design tokens and basic styling
+d08f04a Add visual HTML/CSS mockup for style tile options
+f2b6177 (origin/main, origin/HEAD, main) Enable accurate dependency mapping and resource assignment to project issues
+8cd7bd2 Add multi-document workflow integration test
+c0b9bd2 Improve user matching and fix resource parsing errors
+9af11a1 Update cost tracking for document analysis features
+d907b54 Add service to extract and parse resource assignments f
+rom documents
+dc5e196 Update dependency mapping to correctly invoke and proce
+ss results
+29adc22 Refactor how checklist generation cost is tracked
+7afb9ec Enhance document analysis by including project context 
+and refining import tracking
+d818934 Add service for orchestrating multi-document analysis a
+nd project creation
+bc57bbe Add integration test for multi-document analysis workfl
+ow
+c75b47f Merge feature/93-dependency-mapping - resolve db.js con
+flict
+b06847c (origin/feature/93-dependency-mapping, feature/93-depen
+dency-mapping) Add integration tests for dependency mapping dat
+abase operations
+e7efdf6 Add test script to verify dependency mapping functional
+ity
+e913d67 Add API endpoints for managing project dependencies and
+ visualizing them
+d8412cf Add a service to automatically map task dependencies to
+ project issues
+20327e1 (origin/feature/92-timeline-extraction, feature/92-time
+line-extraction) Improve date range parsing to handle plural ti
+meframes
+c9fef0b Add timeline extraction test and update service
+804d915 Saved progress at the end of the loop
+39e5311 Improve project timeline extraction endpoint input vali
+dation and access control
+26e0418 Add a new endpoint to extract project timeline informat
+ion from text
+8d71ec3 Add ability to extract project timelines from documents
+b8ce49b Update timeline extraction logic and pricing informatio
+n
+7ceaa47 Add a service to extract project timelines from text us
+ing AI
+e042bc5 Saved progress at the end of the loop
+70a4e50 Centralize AI cost tracking and usage logging across fe
+atures
+e6e0bf0 Add AI cost tracking service and database table for usa
+ge
+15045df Add timeline tracking to issue data management
+764a56a (origin/feature/95-multi-document-analyzer) Improve the
+ display of document category information on AI results
+3116b72 Improve document upload functionality for AI analysis
+01f2463 Improve AI analysis to properly handle uploaded documen
+ts
+3b996ca Improve user experience when creating AI analysis items
+c0cb15b Update application to include user authentication and a
+uthorization features
+95e718b Add visual feedback to prevent duplicate checklist save
+s
+c6b244f Add AI-powered document classification and categorizati
+on to the user interface
+f9b835f Add document classification and categorization based on
+ AI analysis
+3547dff Add document classification and categorization based on
+ AI analysis
+e5a2c92 Display document classifications and metadata in the ch
+ecklist preview
+9a85bf5 Update the system to more accurately display item detai
+ls
+2c403f3 Add AI-powered document classification for improved pro
+ject management routing
+9f7a9cf Add functionality to generate checklists from uploaded 
+documents
+92906b1 Allow multiple document uploads and display selected fi
+les
+5fa9226 Update model selection to use GPT 3.5 then switch to GP
+T 4o
+e2a9bc0 Add ability to automatically switch AI models based on 
+document length
+21b56d6 Update the system to handle longer text inputs for anal
+ysis
+8b4f131 Allow users to upload multiple files and prevent replac
+ements
+6e86817 Add PDF and DOCX file types to AI analysis uploads
+78af1e0 Add support for PDF and DOCX file uploads for AI analys
+is
+486912a Created a checkpoint
+be26b21 Enable multiple file uploads and display project comple
+xity information
+71880e2 Update application to include new user authorization a
