@@ -6769,10 +6769,9 @@ app.post('/api/multi-document/analyze',
       }
 
       // Use MultiDocumentAnalyzer service to process everything
-      const MultiDocumentAnalyzer = require('./services/multi-document-analyzer');
-      const analyzer = new MultiDocumentAnalyzer();
+      const multiDocumentAnalyzer = require('./services/multi-document-analyzer');
 
-      const result = await analyzer.analyzeMultipleDocuments(documents, {
+      const result = await multiDocumentAnalyzer.analyzeMultipleDocuments(documents, {
         projectId: parseInt(projectId),
         userId: req.user.id,
         projectStartDate: new Date().toISOString().split('T')[0]
