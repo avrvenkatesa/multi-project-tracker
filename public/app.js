@@ -4678,33 +4678,26 @@ document.addEventListener('DOMContentLoaded', function() {
     createBtn.addEventListener('click', createAllItems);
   }
   
-  // Mode selector buttons
-  const modeMeetingBtn = document.getElementById('mode-meeting-transcript');
-  const modeMultiDocBtn = document.getElementById('mode-multi-document');
-  const modeDescription = document.getElementById('mode-description');
+  // Mode selector radio buttons
+  const modeMeetingRadio = document.getElementById('mode-meeting-transcript');
+  const modeMultiDocRadio = document.getElementById('mode-multi-document');
   const meetingContent = document.getElementById('meeting-transcript-content');
   const multiDocContent = document.getElementById('multi-document-content');
   
-  if (modeMeetingBtn) {
-    modeMeetingBtn.addEventListener('click', () => {
-      modeMeetingBtn.classList.add('active');
-      modeMultiDocBtn.classList.remove('active');
-      meetingContent.classList.remove('hidden');
-      multiDocContent.classList.add('hidden');
-      if (modeDescription) {
-        modeDescription.textContent = 'Extract action items and issues from meeting transcripts';
+  if (modeMeetingRadio) {
+    modeMeetingRadio.addEventListener('change', () => {
+      if (modeMeetingRadio.checked) {
+        meetingContent.classList.remove('hidden');
+        multiDocContent.classList.add('hidden');
       }
     });
   }
   
-  if (modeMultiDocBtn) {
-    modeMultiDocBtn.addEventListener('click', () => {
-      modeMultiDocBtn.classList.add('active');
-      modeMeetingBtn.classList.remove('active');
-      multiDocContent.classList.remove('hidden');
-      meetingContent.classList.add('hidden');
-      if (modeDescription) {
-        modeDescription.textContent = 'Comprehensive multi-document project import and analysis';
+  if (modeMultiDocRadio) {
+    modeMultiDocRadio.addEventListener('change', () => {
+      if (modeMultiDocRadio.checked) {
+        multiDocContent.classList.remove('hidden');
+        meetingContent.classList.add('hidden');
       }
     });
   }
