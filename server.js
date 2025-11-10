@@ -14555,6 +14555,75 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
 
     const schedule = scheduleResult.rows[0];
 
+    // Get project deadline for warning calculation
+    const projectDeadlineResult = await pool.query(
+      'SELECT end_date FROM projects WHERE id = $1',
+      [schedule.project_id]
+    );
+    const projectDeadline = projectDeadlineResult.rows[0]?.end_date || null;
+
+    // Calculate deadline warning if project has a deadline
+    let deadlineWarning = null;
+    if (projectDeadline) {
+      const { countBusinessDays } = require('./services/schedule-calculation-service');
+      const scheduleEnd = new Date(schedule.end_date);
+      const deadline = new Date(projectDeadline);
+      const scheduleStart = new Date(schedule.start_date);
+      
+      if (scheduleEnd > deadline) {
+        // Calculate delay
+        const delayMs = scheduleEnd - deadline;
+        const delayDays = Math.ceil(delayMs / (1000 * 60 * 60 * 24));
+        const delayWeeks = Math.floor(delayDays / 7);
+        const remainingDays = delayDays % 7;
+        
+        let delayText = '';
+        if (delayWeeks > 0) {
+          delayText = delayWeeks === 1 ? '1 week' : `${delayWeeks} weeks`;
+          if (remainingDays > 0) {
+            delayText += ` and ${remainingDays} day${remainingDays > 1 ? 's' : ''}`;
+          }
+        } else {
+          delayText = `${delayDays} day${delayDays > 1 ? 's' : ''}`;
+        }
+        
+        // Generate suggestions
+        const suggestions = [];
+        const workingDaysToDeadline = countBusinessDays(scheduleStart, deadline, schedule.include_weekends);
+        
+        if (workingDaysToDeadline > 0) {
+          const requiredHoursPerDay = Math.ceil(schedule.total_hours / workingDaysToDeadline);
+          if (requiredHoursPerDay > schedule.hours_per_day && requiredHoursPerDay <= 12) {
+            suggestions.push(`Increase working hours to ${requiredHoursPerDay} hours/day`);
+          }
+        }
+        
+        if (!schedule.include_weekends) {
+          suggestions.push('Include weekends in the schedule');
+        }
+        
+        suggestions.push('Add more team members to distribute workload');
+        suggestions.push('Review and prioritize critical tasks only');
+        
+        deadlineWarning = {
+          hasOverrun: true,
+          projectDeadline: deadline.toISOString().split('T')[0],
+          calculatedEnd: scheduleEnd.toISOString().split('T')[0],
+          delayDays,
+          delayText,
+          message: `⚠️ Schedule extends ${delayText} beyond project deadline!`,
+          suggestions
+        };
+      } else {
+        deadlineWarning = {
+          hasOverrun: false,
+          projectDeadline: deadline.toISOString().split('T')[0],
+          calculatedEnd: scheduleEnd.toISOString().split('T')[0],
+          message: '✅ Schedule fits within project deadline'
+        };
+      }
+    }
+
     // Get task schedules with dependencies
     const tasks = await pool.query(
       `SELECT ts.*,
@@ -14580,7 +14649,10 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
     );
 
     res.json({
-      schedule,
+      schedule: {
+        ...schedule,
+        deadline_warning: deadlineWarning
+      },
       tasks: tasks.rows
     });
 

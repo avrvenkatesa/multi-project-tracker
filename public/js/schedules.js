@@ -2106,6 +2106,50 @@ function renderScheduleDetail(data) {
         </div>
       </div>
 
+      ${schedule.deadline_warning && schedule.deadline_warning.hasOverrun ? `
+        <!-- Deadline Warning -->
+        <div class="bg-amber-50 border-l-4 border-amber-500 p-6 rounded-lg">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <i class="fas fa-exclamation-triangle text-amber-500 text-2xl"></i>
+            </div>
+            <div class="ml-4 flex-1">
+              <h4 class="text-lg font-semibold text-amber-900 mb-2">Schedule Exceeds Project Deadline</h4>
+              <p class="text-amber-800 mb-3">
+                <strong>${schedule.deadline_warning.message}</strong>
+              </p>
+              <div class="grid grid-cols-2 gap-4 mb-4 text-sm">
+                <div>
+                  <p class="text-amber-700 font-medium">Project Deadline:</p>
+                  <p class="text-amber-900">${formatDate(schedule.deadline_warning.projectDeadline)}</p>
+                </div>
+                <div>
+                  <p class="text-amber-700 font-medium">Calculated End Date:</p>
+                  <p class="text-amber-900">${formatDate(schedule.deadline_warning.calculatedEnd)}</p>
+                </div>
+              </div>
+              <div class="bg-white rounded-lg p-4 border border-amber-200">
+                <p class="text-sm font-semibold text-gray-900 mb-2">💡 Suggestions to Meet Deadline:</p>
+                <ul class="list-disc list-inside space-y-1 text-sm text-gray-700">
+                  ${schedule.deadline_warning.suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      ` : schedule.deadline_warning && !schedule.deadline_warning.hasOverrun ? `
+        <!-- Deadline Met -->
+        <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg">
+          <div class="flex items-center">
+            <i class="fas fa-check-circle text-green-500 text-xl mr-3"></i>
+            <div>
+              <p class="text-green-900 font-medium">${schedule.deadline_warning.message}</p>
+              <p class="text-green-700 text-sm mt-1">Project deadline: ${formatDate(schedule.deadline_warning.projectDeadline)}</p>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
       <!-- Tabs -->
       <div class="border-b border-gray-200">
         <nav class="flex space-x-4">
