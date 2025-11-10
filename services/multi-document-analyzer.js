@@ -215,14 +215,18 @@ class MultiDocumentAnalyzer {
       console.log('Step 6/7: Parsing resource assignments...');
       if (this.resourceParser) {
         try {
-          const effortDoc = documents.find(d => 
-            d.classification === 'Effort' || 
-            d.filename.toLowerCase().includes('effort')
+          // Look for resources or effort documents
+          const resourceDoc = documents.find(d => 
+            d.classification === 'resources' || 
+            d.classification === 'effort-estimate' ||
+            d.filename.toLowerCase().includes('effort') ||
+            d.filename.toLowerCase().includes('resource')
           );
           
-          if (effortDoc) {
+          if (resourceDoc) {
+            console.log(`  Using "${resourceDoc.filename}" for resource assignment`);
             const resourceResult = await this.resourceParser.parseResources(
-              effortDoc.text,
+              resourceDoc.text,
               { 
                 projectId, 
                 issueIds: result.issues.ids,
@@ -236,8 +240,8 @@ class MultiDocumentAnalyzer {
             
             console.log(`✓ Assigned ${result.resourceAssignments.assigned} resources\n`);
           } else {
-            result.warnings.push('No Effort document found for resource parsing');
-            console.log('⚠️  No Effort document found - skipping resource assignment\n');
+            result.warnings.push('No resource/effort document found for resource parsing');
+            console.log('⚠️  No resource/effort document found - skipping resource assignment\n');
           }
         } catch (error) {
           result.warnings.push('Resource assignment failed: ' + error.message);

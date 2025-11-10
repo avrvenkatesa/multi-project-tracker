@@ -29,45 +29,73 @@ async function createDependencies(workstreams, projectId) {
   };
 
   try {
-    // Fetch all issues for this project
-    const issuesQuery = await pool.query(
-      `SELECT id, title, status FROM issues WHERE project_id = $1 ORDER BY id`,
-      [projectId]
-    );
-    const issues = issuesQuery.rows;
+    // Check if workstreams have issueId already (from multi-document import)
+    const hasDirectIssueIds = workstreams.every(ws => ws.issueId);
     
-    console.log(`  → Found ${issues.length} issues in project`);
-
-    if (issues.length === 0) {
-      result.warnings.push('No issues found in project - cannot create dependencies');
-      return result;
-    }
-
-    // Build workstream to issue mapping (by both name and ID)
-    const workstreamMapping = new Map();
-    const workstreamIdToName = new Map();
-    const unmatchedWorkstreams = [];
-
-    for (const workstream of workstreams) {
-      const matchedIssue = findMatchingIssue(workstream.name, issues);
+    let workstreamMapping = new Map();
+    let workstreamIdToIssueId = new Map();
+    
+    if (hasDirectIssueIds) {
+      // Direct mapping: workstreams already have issueId
+      console.log(`  → Using direct issue IDs from workstreams`);
       
-      if (matchedIssue) {
-        workstreamMapping.set(workstream.name, matchedIssue);
-        // Also map by workstream ID for dependency resolution
-        if (workstream.id) {
-          workstreamIdToName.set(workstream.id, workstream.name);
-        }
-        console.log(`  ✓ Mapped "${workstream.name}" → Issue #${matchedIssue.id} "${matchedIssue.title}"`);
-      } else {
-        unmatchedWorkstreams.push(workstream.name);
-        console.log(`  ⚠ No match found for workstream "${workstream.name}"`);
-      }
-    }
-
-    if (unmatchedWorkstreams.length > 0) {
-      result.warnings.push(
-        `Could not match ${unmatchedWorkstreams.length} workstream(s) to issues: ${unmatchedWorkstreams.join(', ')}`
+      // Fetch issue details for logging and validation
+      const issueIds = workstreams.map(ws => ws.issueId);
+      const issuesQuery = await pool.query(
+        `SELECT id, title FROM issues WHERE id = ANY($1::int[])`,
+        [issueIds]
       );
+      const issuesById = new Map(issuesQuery.rows.map(i => [i.id, i]));
+      
+      for (const workstream of workstreams) {
+        const issue = issuesById.get(workstream.issueId);
+        if (issue) {
+          workstreamMapping.set(workstream.name, issue);
+          if (workstream.id) {
+            workstreamIdToIssueId.set(workstream.id, issue);
+          }
+          console.log(`  ✓ Mapped "${workstream.name}" → Issue #${issue.id} "${issue.title}"`);
+        }
+      }
+    } else {
+      // Fuzzy matching: need to match workstreams to existing issues
+      console.log(`  → Using fuzzy matching to find issues`);
+      
+      const issuesQuery = await pool.query(
+        `SELECT id, title, status FROM issues WHERE project_id = $1 ORDER BY id`,
+        [projectId]
+      );
+      const issues = issuesQuery.rows;
+      
+      console.log(`  → Found ${issues.length} issues in project`);
+
+      if (issues.length === 0) {
+        result.warnings.push('No issues found in project - cannot create dependencies');
+        return result;
+      }
+
+      const unmatchedWorkstreams = [];
+
+      for (const workstream of workstreams) {
+        const matchedIssue = findMatchingIssue(workstream.name, issues);
+        
+        if (matchedIssue) {
+          workstreamMapping.set(workstream.name, matchedIssue);
+          if (workstream.id) {
+            workstreamIdToIssueId.set(workstream.id, matchedIssue);
+          }
+          console.log(`  ✓ Mapped "${workstream.name}" → Issue #${matchedIssue.id} "${matchedIssue.title}"`);
+        } else {
+          unmatchedWorkstreams.push(workstream.name);
+          console.log(`  ⚠ No match found for workstream "${workstream.name}"`);
+        }
+      }
+
+      if (unmatchedWorkstreams.length > 0) {
+        result.warnings.push(
+          `Could not match ${unmatchedWorkstreams.length} workstream(s) to issues: ${unmatchedWorkstreams.join(', ')}`
+        );
+      }
     }
 
     // Extract and create dependencies
@@ -82,14 +110,24 @@ async function createDependencies(workstreams, projectId) {
 
       // Process each dependency
       if (workstream.dependencies && Array.isArray(workstream.dependencies)) {
-        for (const dependencyName of workstream.dependencies) {
-          // Resolve workstream ID to name if needed (e.g., "workstream-1" → actual name)
-          const resolvedName = workstreamIdToName.get(dependencyName) || dependencyName;
-          const sourceIssue = workstreamMapping.get(resolvedName);
+        for (const dependencyRef of workstream.dependencies) {
+          // Resolve dependency reference to source issue
+          // dependencyRef can be:
+          // 1. A workstream ID (e.g., "workstream-1")
+          // 2. A workstream name
+          let sourceIssue = null;
+          
+          // Try to resolve by workstream ID first
+          if (workstreamIdToIssueId.has(dependencyRef)) {
+            sourceIssue = workstreamIdToIssueId.get(dependencyRef);
+          } else {
+            // Try direct name match
+            sourceIssue = workstreamMapping.get(dependencyRef);
+          }
           
           if (!sourceIssue) {
             result.warnings.push(
-              `Dependency "${dependencyName}" (resolved to: ${resolvedName}) for "${workstream.name}" not found in issues`
+              `Dependency "${dependencyRef}" for "${workstream.name}" not found in issues`
             );
             continue;
           }
