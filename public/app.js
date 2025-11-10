@@ -10460,9 +10460,21 @@ async function processMultiDocuments() {
     mdSelectedFiles.forEach(file => formData.append('documents', file));
     formData.append('projectId', currentProject.id);
     
-    // Simulate steps to show progress
+    // Show upload progress
     updateMultiDocStep(1);
-    addConsoleLog('Step 1/7: Uploading and extracting text from documents...', 'step');
+    addConsoleLog('Uploading documents to server...', 'step');
+    
+    // Start progress animation through steps during processing
+    let currentStep = 1;
+    const progressInterval = setInterval(() => {
+      if (currentStep < 7) {
+        currentStep++;
+        updateMultiDocStep(currentStep);
+        const stepLabels = ['', 'Combine Docs', 'Detect Workstreams', 'Create Issues', 
+                           'Extract Timeline', 'Dependencies', 'Parse Resources', 'Gen Checklists'];
+        if (progressText) progressText.textContent = `Processing: ${stepLabels[currentStep]}...`;
+      }
+    }, 2000); // Update every 2 seconds
     
     const response = await axios.post('/api/multi-document/analyze', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -10473,96 +10485,69 @@ async function processMultiDocuments() {
       }
     });
     
-    // Simulate processing steps with console output
-    if (progressText) progressText.textContent = 'Processing documents...';
+    // Stop progress animation
+    clearInterval(progressInterval);
+    if (progressText) progressText.textContent = 'Processing complete!';
     
-    // Step 1: Combine documents
-    updateMultiDocStep(1);
-    addConsoleLog('Step 1/7: Combining document text...', 'step');
-    await sleep(300);
-    addConsoleLog('✓ Combined documents successfully', 'success');
+    // Mark all steps complete
+    updateMultiDocStep(8);
     
-    // Step 2: Detect workstreams
-    updateMultiDocStep(2);
-    addConsoleLog('Step 2/7: Detecting workstreams with AI...', 'step');
-    await sleep(400);
-    if (response.data.result?.workstreams) {
-      addConsoleLog(`✓ Found ${response.data.result.workstreams.length} workstreams`, 'success');
-      response.data.result.workstreams.forEach((ws, idx) => {
-        addConsoleLog(`  ${idx + 1}. ${ws.name || ws.title}`, 'info');
-      });
-    }
-    
-    // Step 3: Create issues
-    updateMultiDocStep(3);
-    addConsoleLog('Step 3/7: Creating issues from workstreams...', 'step');
-    await sleep(400);
-    if (response.data.result?.issuesCreated) {
-      addConsoleLog(`✓ Created ${response.data.result.issuesCreated.length} issues with AI effort estimates`, 'success');
-      response.data.result.issuesCreated.forEach((issue, idx) => {
-        const effort = issue.effort_estimate_hours ? `${issue.effort_estimate_hours}h` : 'N/A';
-        addConsoleLog(`  ✓ Issue #${issue.id}: ${issue.title} (${effort})`, 'success');
-      });
-    }
-    
-    // Step 4: Extract timeline
-    updateMultiDocStep(4);
-    addConsoleLog('Step 4/7: Extracting project timeline...', 'step');
-    await sleep(300);
-    if (response.data.result?.timeline) {
-      const timeline = response.data.result.timeline;
-      addConsoleLog(`✓ Extracted ${timeline.phases?.length || 0} phases, ${timeline.milestones?.length || 0} milestones`, 'success');
-    } else {
-      addConsoleLog('✓ Timeline extraction completed', 'success');
-    }
-    
-    // Step 5: Create dependencies
-    updateMultiDocStep(5);
-    addConsoleLog('Step 5/7: Creating dependencies between issues...', 'step');
-    await sleep(400);
-    if (response.data.result?.dependenciesCreated !== undefined) {
-      addConsoleLog(`✓ Created ${response.data.result.dependenciesCreated} dependencies`, 'success');
-    } else {
-      addConsoleLog('✓ Dependencies processed', 'success');
-    }
-    
-    // Step 6: Parse resources
-    updateMultiDocStep(6);
-    addConsoleLog('Step 6/7: Parsing resource assignments...', 'step');
-    await sleep(300);
-    if (response.data.result?.resourcesAssigned !== undefined) {
-      addConsoleLog(`✓ Assigned ${response.data.result.resourcesAssigned} resources to issues`, 'success');
-    } else {
-      addConsoleLog('✓ Resource parsing completed', 'success');
-    }
-    
-    // Step 7: Generate checklists
-    updateMultiDocStep(7);
-    addConsoleLog('Step 7/7: Generating comprehensive checklists...', 'step');
-    await sleep(500);
-    if (response.data.result?.checklistsCreated) {
-      addConsoleLog(`✓ Generated ${response.data.result.checklistsCreated.length} checklists`, 'success');
-      let totalItems = 0;
-      response.data.result.checklistsCreated.forEach(cl => {
-        const itemCount = cl.items?.length || 0;
-        totalItems += itemCount;
-      });
-      addConsoleLog(`  Total checklist items: ${totalItems}`, 'info');
-    }
-    
-    // Schedule auto-creation
+    // Display results in console based on actual API response
+    addConsoleLog('✓ Upload complete', 'success');
     addConsoleLog('', 'info');
-    addConsoleLog('📅 Auto-generating project schedule...', 'step');
-    await sleep(300);
-    if (response.data.schedule?.created) {
-      addConsoleLog(`✓ Schedule #${response.data.schedule.scheduleId} created successfully`, 'success');
-      addConsoleLog(`  ${response.data.schedule.message}`, 'info');
-      addConsoleLog('  Includes: Gantt chart, dependencies, critical path analysis', 'info');
-    } else if (response.data.schedule?.message) {
-      addConsoleLog(`⚠️  ${response.data.schedule.message}`, 'warning');
+    
+    // Show summary from API
+    const summary = response.data.summary;
+    if (summary) {
+      addConsoleLog('╔════════════════════════════════════════════════╗', 'step');
+      addConsoleLog('║   PROCESSING COMPLETE - RESULTS SUMMARY        ║', 'step');
+      addConsoleLog('╚════════════════════════════════════════════════╝', 'step');
+      addConsoleLog('', 'info');
+      
+      addConsoleLog(`📄 Documents Processed: ${summary.documentsProcessed}`, 'info');
+      
+      if (summary.workstreamsDetected > 0) {
+        addConsoleLog(`🔹 Workstreams Detected: ${summary.workstreamsDetected}`, 'success');
+        if (response.data.workstreams) {
+          response.data.workstreams.forEach((ws, idx) => {
+            addConsoleLog(`   ${idx + 1}. ${ws.name || ws.title}`, 'info');
+          });
+        }
+      }
+      
+      if (summary.issuesCreated > 0) {
+        addConsoleLog(`✓ Issues Created: ${summary.issuesCreated} (with AI effort estimates)`, 'success');
+      }
+      
+      if (summary.timelineExtracted) {
+        addConsoleLog(`✓ Timeline Extracted: Phases and milestones identified`, 'success');
+      }
+      
+      if (summary.dependenciesCreated > 0) {
+        addConsoleLog(`✓ Dependencies Created: ${summary.dependenciesCreated}`, 'success');
+      }
+      
+      if (summary.checklistsCreated > 0) {
+        addConsoleLog(`✓ Checklists Generated: ${summary.checklistsCreated} checklists, ${summary.checklistItemsTotal} items`, 'success');
+      }
+      
+      if (summary.scheduleCreated) {
+        addConsoleLog('', 'info');
+        addConsoleLog(`📅 Schedule Auto-Created: ${response.data.schedule?.message}`, 'success');
+        addConsoleLog('   Includes: Gantt chart, dependencies, critical path analysis', 'info');
+      }
+      
+      addConsoleLog('', 'info');
+      addConsoleLog(`💰 Total AI Cost: $${response.data.totalCost?.toFixed(4) || '0.0000'}`, 'info');
     }
     
-    updateMultiDocStep(8); // All complete
+    // Show warnings if any
+    if (response.data.warnings && response.data.warnings.length > 0) {
+      addConsoleLog('', 'info');
+      addConsoleLog('⚠️  Warnings:', 'warning');
+      response.data.warnings.forEach(w => addConsoleLog(`   ${w}`, 'warning'));
+    }
+    
     addConsoleLog('', 'info');
     addConsoleLog('╔════════════════════════════════════════════════╗', 'success');
     addConsoleLog('║   ✅ MULTI-DOCUMENT ANALYSIS COMPLETE           ║', 'success');
