@@ -10560,16 +10560,33 @@ function displayMultiDocResults(results) {
   const schedule = results.schedule || { created: false };
   
   // Build schedule card HTML if schedule was created
+  const deadlineWarning = schedule.deadlineWarning || null;
+  const hasWarning = deadlineWarning && deadlineWarning.hasOverrun;
+  
   const scheduleCard = schedule.created ? `
     <div class="col-span-3 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-300 rounded-lg">
       <div class="flex items-center justify-between">
-        <div>
+        <div class="flex-1">
           <div class="text-sm font-semibold text-indigo-900">📅 Schedule Auto-Created</div>
           <div class="text-xs text-indigo-700 mt-1">${schedule.message || 'Project schedule with Gantt chart ready to view'}</div>
+          ${hasWarning ? `
+            <div class="mt-2 flex items-start gap-2 p-2 bg-amber-50 border border-amber-300 rounded text-xs">
+              <i class="fas fa-exclamation-triangle text-amber-600 mt-0.5"></i>
+              <div class="flex-1">
+                <div class="font-semibold text-amber-900">${deadlineWarning.message}</div>
+                <div class="text-amber-700 mt-1">View schedule for suggestions to meet deadline</div>
+              </div>
+            </div>
+          ` : deadlineWarning && !deadlineWarning.hasOverrun ? `
+            <div class="mt-2 flex items-center gap-2 text-xs text-green-700">
+              <i class="fas fa-check-circle"></i>
+              <span>Fits within project deadline</span>
+            </div>
+          ` : ''}
         </div>
         <button id="view-auto-schedule-btn" 
                 data-schedule-id="${schedule.scheduleId}"
-                class="btn-primary text-xs px-4 py-2">
+                class="btn-primary text-xs px-4 py-2 ml-4 flex-shrink-0">
           View Schedule & Gantt Chart →
         </button>
       </div>
