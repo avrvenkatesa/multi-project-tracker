@@ -10472,7 +10472,7 @@ async function createMultiDocResults() {
   btn.textContent = 'Importing...';
   
   try {
-    await loadProjectDetails(currentProject.id);
+    await loadProjectData(currentProject.id);
     closeAIAnalysisModal();
     showToast('Multi-document import complete!', 'success');
   } catch (error) {
