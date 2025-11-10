@@ -1,0 +1,195 @@
+🔹 Multi-Document Analysis Started
+📁 Project ID: 39
+📄 Files: 3
+👤 User: demo@multiproject.com
+   Processing: APPENDICES - AD MIGRATION PATH FORWARD (3).pdf
+📄 Extracting text from: APPENDICES - AD MIGRATION PATH FORWARD (3).pdf (application/pdf)
+
+🔍 Classifying document: [object Object]
+   Text length: 26445 characters
+   ✅ Classification: migration-procedure
+   📊 Confidence: 0.9
+   🆕 Custom category: true
+   💭 Reasoning: The document is a comprehensive guide related to the migration of Active Directory to AWS, including...
+   ✓ APPENDICES - AD MIGRATION PATH FORWARD (3).pdf: migration-procedure (90% confidence)
+   Processing: Active Directory Migration  to AWS Effort Estimates (1).pdf
+📄 Extracting text from: Active Directory Migration  to AWS Effort Estimates (1).pdf (application/pdf)
+
+🔍 Classifying document: [object Object]
+   Text length: 22863 characters
+   ✅ Classification: resources
+   📊 Confidence: 0.75
+   🆕 Custom category: false
+   💭 Reasoning: The document provides a detailed breakdown of effort estimates by resource, including roles and hour...
+   ✓ Active Directory Migration  to AWS Effort Estimates (1).pdf: resources (75% confidence)
+   Processing: Active Directory Migration Path Forward (2).pdf
+📄 Extracting text from: Active Directory Migration Path Forward (2).pdf (application/pdf)
+
+🔍 Classifying document: [object Object]
+   Text length: 40648 characters
+   ✅ Classification: migration-procedure
+   📊 Confidence: 0.9
+   🆕 Custom category: true
+   💭 Reasoning: The document is a detailed plan for a cloud migration project, specifically focusing on the migratio...
+   ✓ Active Directory Migration Path Forward (2).pdf: migration-procedure (90% confidence)
+╔════════════════════════════════════════════════════╗
+║   MULTI-DOCUMENT PROJECT IMPORT STARTING           ║
+╚════════════════════════════════════════════════════╝
+📁 Project ID: 39
+📄 Documents: 3
+📅 Start Date: 2025-11-10
+
+Step 1/7: Combining document text...
+✓ Combined 90231 characters
+
+Step 2/7: Detecting workstreams...
+🔍 Analyzing document for workstreams...
+📄 Raw AI response length: 3961
+🔢 Tokens used: 9915
+✅ Identified 5 workstreams
+✓ Found 5 workstreams
+  1. Backup Validation and Verification (unknown complexity)
+  2. Decision and Approval Process (unknown complexity)
+  3. Active Directory Migration Execution (unknown complexity)
+  4. Monitoring and Post-Migration Validation (unknown complexity)
+  5. Resource Allocation and Effort Estimation (unknown complexity)
+
+Step 3/7: Creating issues from workstreams...
+  ✓ Created issue #204: Backup Validation and Verification (50h, 0.85 confidence)
+  ✓ Created issue #205: Decision and Approval Process (25h, 0.85 confidence)
+  ✓ Created issue #206: Active Directory Migration Execution (100h, 0.85 confidence)
+  ✓ Created issue #207: Monitoring and Post-Migration Validation (50h, 0.85 confidence)
+  ✓ Created issue #208: Resource Allocation and Effort Estimation (50h, 0.85 confidence)
+✓ Created 5 issues with AI effort estimates
+
+Step 4/7: Extracting timeline...
+✓ Extracted 6 phases, 4 milestones
+
+Step 5/7: Creating dependencies...
+🔗 Creating dependencies for 5 workstreams in project 39
+  → Using direct issue IDs from workstreams
+  ✓ Mapped "Backup Validation and Verification" → Issue #204 "Backup Validation and Verification"
+  ✓ Mapped "Decision and Approval Process" → Issue #205 "Decision and Approval Process"
+  ✓ Mapped "Active Directory Migration Execution" → Issue #206 "Active Directory Migration Execution"
+  ✓ Mapped "Monitoring and Post-Migration Validation" → Issue #207 "Monitoring and Post-Migration Validation"
+  ✓ Mapped "Resource Allocation and Effort Estimation" → Issue #208 "Resource Allocation and Effort Estimation"
+  → 3 dependencies to create
+  🔍 Checking for circular dependencies...
+  ✓ No circular dependencies detected
+  ✓ Created: "Backup Validation and Verification" → "Decision and Approval Process"
+  ✓ Created: "Decision and Approval Process" → "Active Directory Migration Execution"
+  ✓ Created: "Active Directory Migration Execution" → "Monitoring and Post-Migration Validation"
+✅ Created 3 dependencies
+✓ Created 3 dependencies
+
+Step 6/7: Parsing resource assignments...
+  Using "Active Directory Migration  to AWS Effort Estimates (1).pdf" for resource assignment
+🔍 RESOURCE PARSER - Starting extraction
+
+Strategy 1: Parsing tables...
+
+Strategy 2: Parsing lists...
+
+Strategy 3: Parsing paragraphs...
+
+📊 Total resources extracted: 0
+
+Deduplicating resources...
+✓ Unique resources: 0
+
+Fetching project users...
+👥 Found 1 users in project 39
+
+Matching resources to users...
+🔍 Matching 0 resources to 1 users
+
+Assigning resources to issues...
+📝 Assigning 0 resources to issues in project 39
+
+✅ Resource parsing complete!
+   Resources: 0
+   Matched: 0
+   Need review: 0
+✓ Assigned 0 resources
+
+Step 7/7: Generating checklists...
+  Processing 5 of 5 workstreams
+🤖 Generating standalone checklists from document (90231 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 5
+Checklist: "Backup Validation Process"
+  Section: "Tier 1 Backup Validation" - 10 items
+  Section: "Tier 2 Backup Validation" - 10 items
+  ✅ Valid: 20 total items
+Checklist: "Pre-Migration Activities"
+  Section: "Functional Level Upgrade" - 11 items
+  ✅ Valid: 11 total items
+Checklist: "AWS Infrastructure Setup"
+  Section: "Infrastructure Deployment" - 8 items
+  ✅ Valid: 8 total items
+Checklist: "Domain Controller Deployment"
+  Section: "Deploy DC3 Instance" - 7 items
+  Section: "Promote DC3 to Domain Controller" - 6 items
+  ✅ Valid: 13 total items
+Checklist: "FSMO Role Transfer"
+  Section: "Transfer FSMO Roles" - 10 items
+  ✅ Valid: 10 total items
+✅ Generated 5 valid checklists with 62 total items
+🤖 Generating standalone checklists from document (90231 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 4
+Checklist: "Backup Validation and Pre-Migration"
+  Section: "Tier 1 Backup Validation" - 9 items
+  Section: "Pre-Migration Preparation" - 5 items
+  ✅ Valid: 14 total items
+Checklist: "AWS Infrastructure Setup"
+  Section: "VPC and Networking" - 7 items
+  Section: "Infrastructure Validation" - 4 items
+  ✅ Valid: 11 total items
+Checklist: "Domain Controller Deployment"
+  Section: "EC2 Deployment" - 7 items
+  Section: "Promotion to Domain Controller" - 5 items
+  ✅ Valid: 12 total items
+Checklist: "FSMO Role Transfer"
+  Section: "Infrastructure Master Transfer" - 5 items
+  Section: "Remaining FSMO Roles" - 6 items
+  ✅ Valid: 11 total items
+✅ Generated 4 valid checklists with 48 total items
+🤖 Generating standalone checklists from document (90231 chars)
+[AI] Starting document analysis (provider: OpenAI GPT-4o)
+[AI] Document analysis complete, parsing response...
+=== AI RESPONSE DEBUG ===
+Result keys: [ 'checklists' ]
+Checklists count: 5
+Checklist: "Backup Validation and Preparation"
+  Section: "Initial Preparations" - 3 items
+  Section: "Backup Validation" - 4 items
+  Section: "Review and Documentation" - 4 items
+  ✅ Valid: 11 total items
+Checklist: "Functional Level Upgrade"
+  Section: "Pre-Upgrade Preparations" - 4 items
+  Section: "Upgrade Execution" - 4 items
+  Section: "Documentation and Review" - 3 items
+  ✅ Valid: 11 total items
+Checklist: "AWS Infrastructure Setup"
+  Section: "Network Preparations" - 3 items
+  Section: "Security and Connectivity" - 4 items
+  Section: "Validation and Testing" - 4 items
+  ✅ Valid: 11 total items
+Checklist: "Domain Controller Deployment"
+  Section: "EC2 Instance Deployment" - 4 items
+  Section: "Domain Controller Promotion" - 4 items
+  Section: "Post-Promotion Validation" - 4 items
+  ✅ Valid: 12 total items
+Checklist: "FSMO Role Transfer and Monitoring"
+  Section: "FSMO Role Transfer" - 3 items
+  Section: "48-Hour Monitoring" - 3 items
+  ✅ Valid: 6 total items
+✅ Generated 5 valid checklists with 51 total items
+🤖 Generating standalone checklists from document (90231 chars)
