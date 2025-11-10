@@ -145,7 +145,7 @@ class MultiDocumentAnalyzer {
             userId,
             effortEstimate.hours,
             effortEstimate.confidence,
-            1
+            0  // Version 0 = heuristic estimate (can be upgraded to detailed AI later)
           ]
         );
         const issueId = issueResult.rows[0].id;
@@ -321,9 +321,13 @@ class MultiDocumentAnalyzer {
             // Fetch created issues with estimates and dependencies
             const issuesData = await pool.query(
               `SELECT i.id, i.title, i.assignee, i.due_date,
-                      e.estimated_hours, e.source as estimate_source
+                      i.ai_effort_estimate_hours as estimated_hours,
+                      CASE
+                        WHEN i.ai_estimate_version = 0 THEN 'heuristic'
+                        WHEN i.ai_estimate_version > 0 THEN 'ai'
+                        ELSE 'manual'
+                      END as estimate_source
                FROM issues i
-               LEFT JOIN effort_estimates e ON i.id = e.issue_id AND e.is_active = TRUE
                WHERE i.id = ANY($1)
                ORDER BY i.id`,
               [result.issues.ids]

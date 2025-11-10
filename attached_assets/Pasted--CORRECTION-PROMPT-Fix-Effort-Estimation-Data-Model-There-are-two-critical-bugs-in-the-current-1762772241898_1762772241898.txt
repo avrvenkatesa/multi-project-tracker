@@ -1,0 +1,58 @@
+ CORRECTION PROMPT: Fix Effort Estimation Data Model
+
+  There are two critical bugs in the current implementation that need to be fixed:
+
+  BUG 1: Wrong ai_estimate_version value (Line 151)
+
+  Change line 151 from:
+  1
+  To:
+  0  // Version 0 = heuristic estimate (can be upgraded to detailed AI later)
+
+  This is critical because:
+  - Version 0 = Quick complexity-based heuristic (30h/60h/120h)
+  - Version 1+ = Detailed AI task decomposition
+  - The current code uses heuristic estimation, so it must be version 0
+
+  BUG 2: Wrong database table in schedule generation (Lines 322-328)
+
+  Replace the ENTIRE query from lines 322-328:
+  const issuesData = await pool.query(
+    `SELECT i.id, i.title, i.assignee, i.due_date,
+            e.estimated_hours, e.source as estimate_source
+     FROM issues i
+     LEFT JOIN effort_estimates e ON i.id = e.issue_id AND e.is_active = TRUE
+     WHERE i.id = ANY($1)
+     ORDER BY i.id`,
+    [result.issues.ids]
+  );
+
+  With this corrected query:
+  const issuesData = await pool.query(
+    `SELECT i.id, i.title, i.assignee, i.due_date,
+            i.ai_effort_estimate_hours as estimated_hours,
+            CASE
+              WHEN i.ai_estimate_version = 0 THEN 'heuristic'
+              WHEN i.ai_estimate_version > 0 THEN 'ai'
+              ELSE 'manual'
+            END as estimate_source
+     FROM issues i
+     WHERE i.id = ANY($1)
+     ORDER BY i.id`,
+    [result.issues.ids]
+  );
+
+  Why this is critical:
+  - The effort_estimates table does NOT exist in the database schema
+  - All effort estimates are stored in issues.ai_effort_estimate_hours column
+  - The old query would cause a database error when trying to auto-generate schedules
+
+  After making these changes:
+  1. The implementation will correctly mark estimates as heuristic (version 0)
+  2. Users can later upgrade individual issues to detailed AI estimates (version 1+)
+  3. Schedule generation will work correctly using the existing columns
+  4. The system maintains a single source of truth for effort data
+
+  Please make these two changes and confirm when complete.
+
+  ---
