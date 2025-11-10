@@ -3350,6 +3350,7 @@ async function deleteRelationship(relationshipId) {
 let currentAIAnalysis = null;
 let selectedFile = null;
 let accumulatedFiles = []; // Array to store multiple files as user selects them
+let mdSelectedFiles = []; // Multi-document selected files
 
 // Show AI analysis modal
 function showAIAnalysisModal() {
@@ -4777,8 +4778,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const mdProcessBtn = document.getElementById('multi-doc-process-btn');
   const mdResetBtn = document.getElementById('multi-doc-reset-btn');
   const mdImportBtn = document.getElementById('multi-doc-import-btn');
-  
-  let mdSelectedFiles = [];
   
   if (mdFileInput) {
     mdFileInput.addEventListener('change', (e) => {
