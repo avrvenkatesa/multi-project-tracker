@@ -1236,13 +1236,29 @@ function populateFilters() {
 
 function showLoadingState() {
   const grid = document.getElementById('checklistsGrid');
-  if (grid) {
+  if (grid && window.SharedLoadingSpinner) {
+    grid.innerHTML = '';
+    const loadingContainer = document.createElement('div');
+    loadingContainer.className = 'col-span-full';
+    grid.appendChild(loadingContainer);
+    window.SharedLoadingSpinner.render(loadingContainer, {
+      variant: 'spinner',
+      message: 'Loading checklists...',
+      size: 'large'
+    });
+  } else if (grid) {
     grid.innerHTML = '<div class="loading-spinner">Loading checklists...</div>';
   }
 }
 
 function hideLoadingState() {
-  // Grid will be updated with content
+  const grid = document.getElementById('checklistsGrid');
+  if (grid) {
+    grid.innerHTML = '';
+  }
+  // Also hide any standalone loading containers
+  const loadingContainers = grid?.querySelectorAll('[data-loading-container]');
+  loadingContainers?.forEach(container => container.remove());
 }
 
 function showSaveIndicator() {

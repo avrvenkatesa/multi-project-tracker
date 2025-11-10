@@ -366,15 +366,32 @@ async function loadLinkedChecklists() {
 
 function renderLinkedChecklists() {
   const container = document.getElementById('linkedChecklistsList');
-  const emptyState = document.getElementById('linkedEmptyState');
+  const emptyStateEl = document.getElementById('linkedEmptyState');
   
   if (linkedChecklists.length === 0) {
     container.innerHTML = '';
-    emptyState?.classList.remove('hidden');
+    if (emptyStateEl && window.SharedEmptyState) {
+      emptyStateEl.classList.remove('hidden');
+      window.SharedEmptyState.render(emptyStateEl, {
+        icon: 'clipboard',
+        title: 'No Linked Checklists',
+        message: 'Create a checklist or link a standalone checklist to an issue',
+        actionText: 'Create Checklist',
+        onAction: () => {
+          // Trigger create checklist modal or action
+          document.getElementById('create-dropdown-btn')?.click();
+        }
+      });
+    } else if (emptyStateEl) {
+      emptyStateEl.classList.remove('hidden');
+    }
     return;
   }
   
-  emptyState?.classList.add('hidden');
+  if (emptyStateEl) {
+    emptyStateEl.classList.add('hidden');
+    emptyStateEl.innerHTML = '';
+  }
   
   container.innerHTML = linkedChecklists.map(checklist => `
     <div class="bg-white border rounded-lg shadow-sm hover:shadow-md transition-shadow p-6">
@@ -390,7 +407,7 @@ function renderLinkedChecklists() {
             class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             title="View checklist"
           >
-            👁️ View
+            <i class="fas fa-eye mr-1"></i>View
           </button>
           <button 
             data-action="delete-linked"
@@ -398,7 +415,7 @@ function renderLinkedChecklists() {
             class="px-3 py-1 text-sm text-red-600 hover:text-red-800"
             title="Delete"
           >
-            🗑️
+            <i class="fas fa-trash"></i>
           </button>
         </div>
       </div>
@@ -469,15 +486,31 @@ function updateStandaloneStats() {
 
 function renderStandaloneChecklists() {
   const container = document.getElementById('standaloneChecklistsList');
-  const emptyState = document.getElementById('standaloneEmptyState');
+  const emptyStateEl = document.getElementById('standaloneEmptyState');
   
   if (standaloneChecklists.length === 0) {
     container.innerHTML = '';
-    emptyState?.classList.remove('hidden');
+    if (emptyStateEl && window.SharedEmptyState) {
+      emptyStateEl.classList.remove('hidden');
+      window.SharedEmptyState.render(emptyStateEl, {
+        icon: 'book',
+        title: 'No Standalone Checklists',
+        message: 'Upload documents to generate standalone checklists that can be linked to issues later',
+        actionText: 'Upload Document',
+        onAction: () => {
+          document.getElementById('upload-document-btn')?.click();
+        }
+      });
+    } else if (emptyStateEl) {
+      emptyStateEl.classList.remove('hidden');
+    }
     return;
   }
   
-  emptyState?.classList.add('hidden');
+  if (emptyStateEl) {
+    emptyStateEl.classList.add('hidden');
+    emptyStateEl.innerHTML = '';
+  }
   
   container.innerHTML = standaloneChecklists.map(checklist => `
     <div class="bg-white border rounded-lg shadow-sm hover:shadow-md transition-shadow p-6">
@@ -493,7 +526,7 @@ function renderStandaloneChecklists() {
             class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             title="View checklist"
           >
-            👁️ View
+            <i class="fas fa-eye mr-1"></i>View
           </button>
           <button 
             data-action="link-standalone"
@@ -501,7 +534,7 @@ function renderStandaloneChecklists() {
             class="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
             title="Link to issue or action"
           >
-            🔗 Link
+            <i class="fas fa-link mr-1"></i>Link
           </button>
           <button 
             data-action="delete-standalone"
@@ -509,7 +542,7 @@ function renderStandaloneChecklists() {
             class="px-3 py-1 text-sm text-red-600 hover:text-red-800"
             title="Delete"
           >
-            🗑️
+            <i class="fas fa-trash"></i>
           </button>
         </div>
       </div>
@@ -599,15 +632,28 @@ async function loadTemplates() {
 
 function renderTemplates() {
   const container = document.getElementById('templatesList');
-  const emptyState = document.getElementById('templatesEmptyState');
+  const emptyStateEl = document.getElementById('templatesEmptyState');
   
   if (templates.length === 0) {
     container.innerHTML = '';
-    emptyState?.classList.remove('hidden');
+    if (emptyStateEl && window.SharedEmptyState) {
+      emptyStateEl.classList.remove('hidden');
+      window.SharedEmptyState.render(emptyStateEl, {
+        icon: 'bookmark',
+        title: 'No Templates',
+        message: 'Save a checklist as a template to reuse it across multiple issues',
+        actionText: null
+      });
+    } else if (emptyStateEl) {
+      emptyStateEl.classList.remove('hidden');
+    }
     return;
   }
   
-  emptyState?.classList.add('hidden');
+  if (emptyStateEl) {
+    emptyStateEl.classList.add('hidden');
+    emptyStateEl.innerHTML = '';
+  }
   
   container.innerHTML = templates.map(template => `
     <div class="bg-white border rounded-lg shadow-sm hover:shadow-md transition-shadow p-6">
@@ -623,7 +669,7 @@ function renderTemplates() {
             class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             title="View template"
           >
-            👁️ View
+            <i class="fas fa-eye mr-1"></i>View
           </button>
           <button 
             data-action="use-template"
