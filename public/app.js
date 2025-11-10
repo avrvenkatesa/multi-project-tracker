@@ -4697,14 +4697,31 @@ document.addEventListener('DOMContentLoaded', function() {
   if (modeMultiDocRadio) {
     modeMultiDocRadio.addEventListener('change', () => {
       console.log('Multi-document mode selected');
+      console.log('Multi-doc element:', multiDocContent);
+      console.log('Meeting element:', meetingContent);
+      
       if (modeMultiDocRadio.checked) {
-        multiDocContent.classList.remove('hidden');
-        meetingContent.classList.add('hidden');
+        console.log('Showing multi-doc content...');
+        if (multiDocContent) {
+          multiDocContent.classList.remove('hidden');
+          multiDocContent.style.display = 'block';
+          console.log('Multi-doc classes after:', multiDocContent.className);
+        }
+        if (meetingContent) {
+          meetingContent.classList.add('hidden');
+        }
         // Update complexity info for multi-document mode
         updateMultiDocComplexityInfo();
       }
     });
   }
+  
+  // Also log initial state
+  console.log('Initial state:');
+  console.log('- Meeting content element:', meetingContent);
+  console.log('- Multi-doc content element:', multiDocContent);
+  console.log('- MD upload section:', document.getElementById('md-upload-section'));
+  console.log('- MD file input:', document.getElementById('md-file-input'));
   
   // Multi-document event listeners
   const mdFileInput = document.getElementById('md-file-input');
