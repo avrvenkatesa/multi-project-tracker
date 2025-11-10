@@ -1,0 +1,123 @@
+ ---
+  PROMPT 1: Create Multi-Document Analyzer Service (CORRECTED)
+
+  File: services/multi-document-analyzer.js
+
+  Create a comprehensive multi-document analyzer service that orchestrates the entire "one pass" processing pipeline. This
+  service should:
+
+  Core Functionality:
+
+  1. Document Classification
+    - Use GPT-4o-mini to classify each uploaded document
+    - Determine document type: project_plan, requirements, sow, technical_spec, timeline, resource_list, other
+    - Extract confidence scores for classification
+  2. Workstream Detection
+    - Analyze ALL documents together to extract project phases/workstreams
+    - For each workstream, extract: name, description, complexity (low/medium/high)
+    - Use GPT-4o for intelligent extraction
+    - Return structured array of workstreams
+  3. Hybrid Effort Estimation (CRITICAL - UPDATED)
+    - Create helper function estimateByComplexity(complexity):
+  function estimateByComplexity(complexity) {
+    const hours = { low: 30, medium: 60, high: 120 }[complexity] || 60;
+    return {
+      hours,
+      confidence: 'low',
+      source: 'complexity_heuristic',
+      version: 0  // Indicates quick heuristic, not detailed AI
+    };
+  }
+    - During issue creation, store estimates in EXISTING columns:
+        - ai_effort_estimate_hours = calculated hours
+      - ai_estimate_confidence = 'low'
+      - ai_estimate_version = 0
+    - DO NOT create new effort_estimates table
+    - Document in code comments: "Version 0 = heuristic estimate; can be upgraded to detailed AI estimation (version 1+) later"
+  4. Timeline Extraction
+    - Extract project phases with start/end dates from timeline documents
+    - Match timeline phases to created workstream issues (fuzzy matching)
+    - Update issues.start_date and issues.end_date for matched issues
+  5. Dependency Detection
+    - Extract dependency relationships between workstreams
+    - Format: "Workstream A depends on Workstream B"
+    - Return array for use by dependency-mapper service
+  6. Resource Assignment
+    - Extract team member names and roles from documents
+    - Match to existing users in database (email/name matching)
+    - Assign to issues.assignee field
+  7. Checklist Generation
+    - For each workstream, generate 5-10 actionable checklist items
+    - Use GPT-4o to create contextually relevant tasks
+    - Store in checklist_items table linked to parent issue
+
+  Database Integration:
+
+  - Use EXISTING columns in issues table:
+    - ai_effort_estimate_hours (NOT new estimated_hours column)
+    - ai_estimate_confidence
+    - ai_estimate_version (set to 0 for heuristic)
+    - start_date, end_date, assignee
+  - Insert into checklist_items table
+  - Track AI costs in ai_usage_tracking table
+
+  Function Signature:
+
+  async function analyzeMultipleDocuments(projectId, documents, userId) {
+    // documents = [{ filename, extractedText, filePath }]
+
+    // Step 1: Classify documents
+    const classifications = await classifyDocuments(documents);
+
+    // Step 2: Extract workstreams with complexity
+    const workstreams = await extractWorkstreams(documents, classifications);
+
+    // Step 3: Create issues with HYBRID effort estimates
+    const issues = [];
+    for (const ws of workstreams) {
+      const quickEstimate = estimateByComplexity(ws.complexity);
+      const issueId = await pool.query(
+        `INSERT INTO issues (project_id, title, description, status, created_by,
+                             ai_effort_estimate_hours, ai_estimate_confidence, ai_estimate_version)
+         VALUES ($1, $2, $3, 'open', $4, $5, 'low', 0) RETURNING id`,
+        [projectId, ws.name, ws.description, userId, quickEstimate.hours]
+      );
+      issues.push({ id: issueId.rows[0].id, ...ws });
+    }
+
+    // Step 4: Extract and update timeline
+    const timeline = await extractTimeline(documents, issues);
+    await updateIssuesWithTimeline(issues, timeline);
+
+    // Step 5: Extract dependencies
+    const dependencies = await extractDependencies(documents, issues);
+
+    // Step 6: Assign resources
+    await assignResources(documents, issues);
+
+    // Step 7: Generate checklists
+    await generateChecklists(issues);
+
+    return {
+      summary: {
+        documentsProcessed: documents.length,
+        workstreamsCreated: issues.length,
+        dependenciesDetected: dependencies.length,
+        totalEstimatedHours: issues.reduce((sum, i) => sum + i.effort_hours, 0),
+        estimateQuality: 'heuristic'  // Version 0 = quick estimate
+      },
+      issues,
+      dependencies,
+      aiCostEstimate: 0.28  // Approximate total AI cost
+    };
+  }
+
+  Error Handling:
+
+  - Wrap all AI calls in try-catch
+  - Log errors to console and ai_usage_tracking
+  - Return partial results if some steps fail
+  - Provide clear error messages to frontend
+
+  Important: Use the EXISTING ai_effort_estimate_hours column with version = 0 to indicate heuristic estimates. Users can later
+  upgrade individual issues to detailed AI estimates (version 1+) using the effort-estimation-service.js.
