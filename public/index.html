@@ -5,6 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Multi-Project Tracker</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     </head>
     <body class="bg-gray-50">
@@ -424,7 +425,7 @@
                                         id="has-planning-filter"
                                         class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                                     />
-                                    <span class="text-sm font-medium text-gray-700">📊 Has Planning Estimate</span>
+                                    <span class="text-sm font-medium text-gray-700"><i class="fas fa-chart-bar mr-1"></i>Has Planning Estimate</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input 
@@ -432,7 +433,7 @@
                                         id="has-circular-dependency-filter"
                                         class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-2 focus:ring-red-500"
                                     />
-                                    <span class="text-sm font-medium text-gray-700">⚠️ Has Circular Dependency</span>
+                                    <span class="text-sm font-medium text-gray-700"><i class="fas fa-exclamation-triangle mr-1"></i>Has Circular Dependency</span>
                                 </label>
                             </div>
                             
@@ -738,7 +739,7 @@
                     <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
                         <div class="flex items-center justify-between mb-3">
                             <h3 class="text-lg font-semibold text-purple-900 flex items-center gap-2">
-                                📋 Review Queue
+                                <i class="fas fa-clipboard mr-2"></i>Review Queue
                                 <span id="review-queue-count" class="text-sm bg-purple-200 px-2 py-1 rounded">0</span>
                             </h3>
                             <button id="toggle-review-queue-btn" class="text-purple-600 hover:text-purple-800 text-sm">
@@ -873,7 +874,7 @@
                             <!-- Project complexity info -->
                             <div id="transcript-complexity-info" class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                 <div class="flex items-center gap-2">
-                                    <span class="text-sm font-medium text-blue-900">📊 Project Complexity:</span>
+                                    <span class="text-sm font-medium text-blue-900"><i class="fas fa-chart-bar mr-1"></i>Project Complexity:</span>
                                     <span id="transcript-complexity-badge" class="text-sm font-semibold">Loading...</span>
                                     <span class="text-sm text-blue-700">|</span>
                                     <span class="text-sm text-blue-700">Max files: <strong id="transcript-max-files">-</strong></span>
@@ -947,7 +948,7 @@
                             <!-- Status Updates Section -->
                             <div id="status-updates-section" class="mb-6 hidden">
                                 <h5 class="font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                    <span class="text-xl">🔄</span>
+                                    <i class="fas fa-sync-alt text-xl"></i>
                                     Status Updates
                                     <span id="status-updates-count" class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">0</span>
                                 </h5>
@@ -962,7 +963,7 @@
                             <!-- Relationships Section -->
                             <div id="relationships-section" class="mb-6 hidden">
                                 <h5 class="font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                    <span class="text-xl">🔗</span>
+                                    <i class="fas fa-link text-xl"></i>
                                     Detected Relationships
                                     <span id="relationships-count" class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">0</span>
                                 </h5>
@@ -1173,7 +1174,7 @@
                                 Details
                             </button>
                             <button class="item-detail-tab-btn py-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900" data-tab="effort-estimates">
-                                📊 Effort Estimates
+                                <i class="fas fa-chart-bar mr-2"></i>Effort Estimates
                             </button>
                             <button class="item-detail-tab-btn py-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900" data-tab="relationships">
                                 Relationships
@@ -1210,7 +1211,7 @@
                                 <div class="bg-white rounded-lg border border-gray-200">
                                     <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                                         <h3 class="text-lg font-semibold flex items-center gap-2">
-                                            <span>📝</span>
+                                            <i class="fas fa-edit"></i>
                                             Estimate Version History
                                         </h3>
                                         <button 
@@ -1240,7 +1241,7 @@
                                 <div class="bg-white rounded-lg border border-gray-200">
                                     <div class="p-4 border-b border-gray-200">
                                         <h3 class="text-lg font-semibold flex items-center gap-2">
-                                            <span>🎯</span>
+                                            <i class="fas fa-bullseye"></i>
                                             Current Estimation
                                         </h3>
                                     </div>
@@ -1254,7 +1255,7 @@
                         <!-- Relationships Tab -->
                         <div id="relationships-tab" class="item-detail-tab-panel hidden">
                             <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                                <span>🔗</span>
+                                <i class="fas fa-link"></i>
                                 Relationships
                                 <span id="item-detail-relationship-count" class="text-sm text-gray-500">(0)</span>
                             </h3>
@@ -1291,7 +1292,7 @@
                                 <!-- Related Issues Section -->
                                 <div class="relationship-section border-t pt-6">
                                     <h4 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                        <span>🔄</span>
+                                        <i class="fas fa-sync-alt"></i>
                                         <span>Related Issues</span>
                                     </h4>
                                     <div id="related-issues-list" class="relationship-list pl-6">
@@ -1305,7 +1306,7 @@
                                 <!-- Parent Issue Section -->
                                 <div class="relationship-section border-t pt-6">
                                     <h4 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                        <span>📊</span>
+                                        <i class="fas fa-chart-bar"></i>
                                         <span>Parent Issue</span>
                                     </h4>
                                     <div id="parent-issue" class="relationship-list pl-6">
@@ -1335,7 +1336,7 @@
                         <!-- Comments Tab -->
                         <div id="comments-tab" class="item-detail-tab-panel hidden">
                             <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                                <span>💬</span>
+                                <i class="fas fa-comments"></i>
                                 Comments
                                 <span id="item-detail-comment-count" class="text-sm text-gray-500">(0)</span>
                             </h3>
@@ -1523,7 +1524,7 @@
                         <!-- Source Selection State -->
                         <div id="ai-checklist-source-selection" class="hidden">
                             <div class="mb-6">
-                                <h4 class="font-semibold text-gray-800 mb-3">📋 Select Analysis Sources</h4>
+                                <h4 class="font-semibold text-gray-800 mb-3"><i class="fas fa-clipboard mr-2"></i>Select Analysis Sources</h4>
                                 <p class="text-sm text-gray-600 mb-4">Choose what information the AI should analyze:</p>
                                 
                                 <!-- Description Option -->
@@ -1655,7 +1656,7 @@
                                 <div class="relative inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600"></div>
                                 <!-- Center sparkle icon -->
                                 <div class="absolute inset-0 flex items-center justify-center">
-                                    <span class="text-3xl animate-pulse">✨</span>
+                                    <i class="fas fa-magic text-3xl animate-pulse"></i>
                                 </div>
                             </div>
                             
@@ -1698,7 +1699,7 @@
                                         
                                         <!-- Helpful suggestions -->
                                         <div id="ai-checklist-error-suggestions" class="mt-3 bg-white rounded-md p-3 border border-red-100">
-                                            <p class="text-xs font-medium text-gray-700 mb-2">💡 Try these solutions:</p>
+                                            <p class="text-xs font-medium text-gray-700 mb-2"><i class="fas fa-lightbulb mr-1"></i>Try these solutions:</p>
                                             <ul class="text-xs text-gray-600 space-y-1 list-disc list-inside">
                                                 <li>Check your internet connection</li>
                                                 <li>Make sure the issue/action has a clear description</li>
@@ -2026,7 +2027,7 @@
                                 </div>
                             </div>
                             <button type="button" id="edit-issue-view-timesheet" class="text-sm px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                                📋 View Timesheet
+                                <i class="fas fa-clipboard mr-2"></i>View Timesheet
                             </button>
                         </div>
                     </div>
@@ -2061,7 +2062,7 @@
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            📊 Open Effort Estimates
+                            <i class="fas fa-chart-bar mr-2"></i>Open Effort Estimates
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                             </svg>
@@ -2184,7 +2185,7 @@
                                 </div>
                             </div>
                             <button type="button" id="edit-action-item-view-timesheet" class="text-sm px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                                📋 View Timesheet
+                                <i class="fas fa-clipboard mr-2"></i>View Timesheet
                             </button>
                         </div>
                     </div>
@@ -2211,7 +2212,7 @@
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            📊 Open Effort Estimates
+                            <i class="fas fa-chart-bar mr-2"></i>Open Effort Estimates
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                             </svg>
@@ -2253,7 +2254,7 @@
         <div id="estimateBreakdownModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div class="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 id="estimateBreakdownModalTitle" class="text-2xl font-bold">📊 Effort Estimate Breakdown</h2>
+                    <h2 id="estimateBreakdownModalTitle" class="text-2xl font-bold"><i class="fas fa-chart-bar mr-2"></i>Effort Estimate Breakdown</h2>
                     <button id="closeBreakdownModal" class="text-gray-500 hover:text-gray-700">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -2310,7 +2311,7 @@
         <div id="batchResultsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div class="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-bold">✅ Batch Estimation Complete</h2>
+                    <h2 class="text-2xl font-bold"><i class="fas fa-check-circle mr-2"></i>Batch Estimation Complete</h2>
                     <button id="closeBatchResultsModal" class="text-gray-500 hover:text-gray-700">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -2375,8 +2376,8 @@
                 
                 <div id="bulkApplyResults" class="mb-4 hidden">
                     <div class="text-sm space-y-1">
-                        <div class="text-green-600 font-medium">✅ Successful: <span id="successCount">0</span></div>
-                        <div class="text-red-600 font-medium">❌ Failed: <span id="failCount">0</span></div>
+                        <div class="text-green-600 font-medium"><i class="fas fa-check-circle mr-1"></i>Successful: <span id="successCount">0</span></div>
+                        <div class="text-red-600 font-medium"><i class="fas fa-times-circle mr-1"></i>Failed: <span id="failCount">0</span></div>
                     </div>
                 </div>
                 
