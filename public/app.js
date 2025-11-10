@@ -4688,9 +4688,11 @@ document.addEventListener('DOMContentLoaded', function() {
     modeMeetingRadio.addEventListener('change', () => {
       if (modeMeetingRadio.checked) {
         if (meetingContent) {
+          meetingContent.classList.remove('hidden');
           meetingContent.style.display = 'block';
         }
         if (multiDocContent) {
+          multiDocContent.classList.add('hidden');
           multiDocContent.style.display = 'none';
         }
       }
@@ -4701,9 +4703,11 @@ document.addEventListener('DOMContentLoaded', function() {
     modeMultiDocRadio.addEventListener('change', () => {
       if (modeMultiDocRadio.checked) {
         if (multiDocContent) {
+          multiDocContent.classList.remove('hidden');
           multiDocContent.style.display = 'block';
         }
         if (meetingContent) {
+          meetingContent.classList.add('hidden');
           meetingContent.style.display = 'none';
         }
         // Update complexity info for multi-document mode
