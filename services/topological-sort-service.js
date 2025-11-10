@@ -79,7 +79,7 @@ async function loadDependencies(items) {
         OR
         (target_type = 'action-item' AND target_id = ANY($2::int[]))
       )
-      AND relationship_type IN ('blocks', 'blocked_by', 'depends_on')
+      AND relationship_type IN ('blocks', 'blocked_by', 'depends_on', 'dependency')
   `;
 
   const relationshipsResult = await pool.query(relationshipsQuery, [issueIds, actionItemIds]);
@@ -138,8 +138,8 @@ function buildDependencyGraph(items, dependencies) {
         graph.edges.set(targetKey, edges);
         graph.inDegree.set(sourceKey, (graph.inDegree.get(sourceKey) || 0) + 1);
       }
-    } else if (dep.relationship_type === 'depends_on') {
-      // Source depends on target
+    } else if (dep.relationship_type === 'depends_on' || dep.relationship_type === 'dependency') {
+      // Source depends on target (both 'depends_on' and 'dependency' mean the same thing)
       // Edge: target -> source (source must wait for target)
       const edges = graph.edges.get(targetKey) || [];
       if (!edges.includes(sourceKey)) {

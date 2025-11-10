@@ -147,7 +147,7 @@ async function createDependencies(workstreams, projectId) {
             target_type: 'issue',
             source_name: sourceIssue.title,
             target_name: targetIssue.title,
-            relationship_type: 'dependency'
+            relationship_type: 'dependency' // Allowed by DB constraint
           });
         }
       }
@@ -421,7 +421,7 @@ async function getDependencyGraph(projectId) {
        WHERE si.project_id = $1 
          AND ir.source_type = 'issue'
          AND ir.target_type = 'issue'
-         AND ir.relationship_type = 'dependency'
+         AND ir.relationship_type IN ('depends_on', 'dependency')
        ORDER BY ir.created_at DESC`,
       [projectId]
     );

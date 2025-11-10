@@ -14547,7 +14547,7 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
 
     const schedule = scheduleResult.rows[0];
 
-    // Get task schedules
+    // Get task schedules with dependencies
     const tasks = await pool.query(
       `SELECT ts.*,
         CASE 
@@ -14557,7 +14557,12 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
         CASE 
           WHEN ts.item_type = 'issue' THEN i.status
           ELSE ai.status
-        END as status
+        END as status,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.assignee
+          ELSE ai.assignee
+        END as assignee,
+        COALESCE(ts.dependencies, '[]'::jsonb) as dependencies
        FROM task_schedules ts
        LEFT JOIN issues i ON ts.item_type = 'issue' AND ts.item_id = i.id
        LEFT JOIN action_items ai ON ts.item_type = 'action-item' AND ts.item_id = ai.id
