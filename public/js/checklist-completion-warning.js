@@ -84,7 +84,7 @@ async function showChecklistWarningModal(itemId, itemType, checklistInfo) {
     modal.innerHTML = `
       <div class="bg-white rounded-lg shadow-xl p-6 max-w-md mx-4 animate-fadeIn">
         <div class="flex items-center gap-3 mb-4">
-          <span class="text-3xl">⚠️</span>
+          <i class="fas fa-exclamation-triangle text-3xl text-yellow-600"></i>
           <h3 class="text-xl font-bold text-gray-900">Incomplete Checklist</h3>
         </div>
         
@@ -257,7 +257,7 @@ function generateChecklistBadge(checklistInfo) {
   if (checklistInfo && checklistInfo.error) {
     return `
       <div class="text-xs bg-gray-100 text-gray-600 border border-gray-300 px-2 py-1 rounded flex items-center gap-1 mt-2">
-        <span>⚠️</span>
+        <i class="fas fa-exclamation-triangle"></i>
         <span>Checklist status unavailable</span>
       </div>
     `;
@@ -275,13 +275,13 @@ function generateChecklistBadge(checklistInfo) {
       let badgeClass, icon;
       if (cl.percentage === 100) {
         badgeClass = 'bg-green-100 text-green-700 border-green-300';
-        icon = '✓';
+        icon = '<i class="fas fa-check"></i>';
       } else if (cl.percentage >= 50) {
         badgeClass = 'bg-yellow-100 text-yellow-700 border-yellow-300';
-        icon = '📋';
+        icon = '<i class="fas fa-clipboard"></i>';
       } else {
         badgeClass = 'bg-red-100 text-red-700 border-red-300';
-        icon = '⚠️';
+        icon = '<i class="fas fa-exclamation-triangle"></i>';
       }
       
       const abbrevName = abbreviateChecklistName(cl.name, 18);
@@ -304,13 +304,13 @@ function generateChecklistBadge(checklistInfo) {
   let badgeClass, icon;
   if (percentage === 100) {
     badgeClass = 'bg-green-100 text-green-700 border-green-300';
-    icon = '✓';
+    icon = '<i class="fas fa-check"></i>';
   } else if (percentage >= 50) {
     badgeClass = 'bg-yellow-100 text-yellow-700 border-yellow-300';
-    icon = '📋';
+    icon = '<i class="fas fa-clipboard"></i>';
   } else {
     badgeClass = 'bg-red-100 text-red-700 border-red-300';
-    icon = '⚠️';
+    icon = '<i class="fas fa-exclamation-triangle"></i>';
   }
   
   return `
