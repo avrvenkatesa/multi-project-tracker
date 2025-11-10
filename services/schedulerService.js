@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { Pool } = require('@neondatabase/serverless');
 const notificationService = require('./notificationService');
+const { calculateProjectSchedule } = require('./schedule-calculation-service');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -238,6 +239,141 @@ ${issues.length} issue(s) and ${actionItems.length} action item(s)`;
   stop() {
     this.jobs.forEach(job => job.stop());
     console.log('⏰ Scheduler service stopped');
+  }
+
+  /**
+   * Create a project schedule from issues with dependencies
+   * @param {Object} params - Parameters
+   * @param {number} params.projectId - Project ID
+   * @param {string} params.name - Schedule name
+   * @param {Array} params.items - Array of items with {type, id, title, assignee, estimate, estimateSource, dueDate, dependencies}
+   * @param {string} params.startDate - Schedule start date (ISO format)
+   * @param {number} params.hoursPerDay - Working hours per day (default 8)
+   * @param {boolean} params.includeWeekends - Include weekends in schedule (default false)
+   * @param {number} params.userId - User creating the schedule
+   * @param {string} params.notes - Optional notes
+   * @returns {Promise<Object>} Schedule object with id and summary
+   */
+  async createScheduleFromIssues({
+    projectId,
+    name,
+    items,
+    startDate,
+    hoursPerDay = 8,
+    includeWeekends = false,
+    userId,
+    notes = null
+  }) {
+    console.log(`📅 Auto-creating schedule "${name}" for project ${projectId} with ${items.length} items...`);
+
+    // Validation
+    if (!projectId || !name || !items || !Array.isArray(items) || items.length === 0) {
+      throw new Error('Invalid schedule parameters: projectId, name, and items array required');
+    }
+
+    if (!startDate) {
+      throw new Error('Start date is required for schedule creation');
+    }
+
+    // Calculate schedule
+    const scheduleResult = await calculateProjectSchedule({
+      items,
+      startDate,
+      hoursPerDay,
+      includeWeekends
+    });
+
+    console.log('✓ Schedule calculated:', {
+      totalTasks: scheduleResult.summary.totalTasks,
+      hasCycle: scheduleResult.hasCycle,
+      endDate: scheduleResult.summary.endDate
+    });
+
+    // Start transaction to persist schedule
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Insert schedule
+      const scheduleInsert = await client.query(
+        `INSERT INTO project_schedules 
+         (project_id, name, version, start_date, end_date, hours_per_day, include_weekends,
+          total_tasks, total_hours, critical_path_tasks, critical_path_hours, risks_count,
+          is_active, is_published, created_by, notes)
+         VALUES ($1, $2, 1, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE, FALSE, $12, $13)
+         RETURNING id`,
+        [
+          projectId,
+          name,
+          scheduleResult.summary.startDate,
+          scheduleResult.summary.endDate,
+          hoursPerDay,
+          includeWeekends,
+          scheduleResult.summary.totalTasks,
+          scheduleResult.summary.totalHours,
+          scheduleResult.summary.criticalPathTasks,
+          scheduleResult.summary.criticalPathHours,
+          scheduleResult.summary.risksCount,
+          userId,
+          notes
+        ]
+      );
+
+      const scheduleId = scheduleInsert.rows[0].id;
+
+      // Insert schedule items
+      for (const item of items) {
+        await client.query(
+          `INSERT INTO schedule_items (schedule_id, item_type, item_id)
+           VALUES ($1, $2, $3)`,
+          [scheduleId, item.type, item.id]
+        );
+      }
+
+      // Insert task schedules
+      for (const task of scheduleResult.tasks) {
+        await client.query(
+          `INSERT INTO task_schedules 
+           (schedule_id, item_type, item_id, assignee, estimated_hours, estimate_source,
+            scheduled_start, scheduled_end, duration_days, due_date,
+            is_critical_path, has_risk, risk_reason, days_late, dependencies)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+          [
+            scheduleId,
+            task.itemType,
+            task.itemId,
+            task.assignee,
+            task.estimatedHours,
+            task.estimateSource,
+            task.scheduledStart,
+            task.scheduledEnd,
+            task.durationDays,
+            task.dueDate,
+            task.isCriticalPath,
+            task.hasRisk,
+            task.riskReason,
+            task.daysLate,
+            JSON.stringify(task.dependencies)
+          ]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      console.log(`✅ Schedule #${scheduleId} created successfully`);
+
+      return {
+        scheduleId,
+        version: 1,
+        ...scheduleResult.summary
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 
