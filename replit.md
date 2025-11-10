@@ -1,5 +1,22 @@
 # Multi-Project Tracker
 
+## Recent Changes
+
+### November 10, 2025 - Gantt Dependency Rendering Fix
+**Issue**: Gantt charts from multi-document imports showed no dependency arrows despite dependencies existing in the database.
+
+**Root Cause**: Multi-document import creates dependencies with `relationship_type='dependency'` (allowed by DB constraint), but `topological-sort-service.js` only processed `['blocks', 'blocked_by', 'depends_on']`. Dependencies were filtered out at TWO points:
+1. `loadDependencies()` query excluded 'dependency' relationships  
+2. `buildDependencyGraph()` didn't process 'dependency' relationships into graph edges
+
+**Fixes Applied**:
+- Updated `loadDependencies()` to accept 'dependency' relationship type
+- Updated `buildDependencyGraph()` to process 'dependency' the same as 'depends_on'
+- Enhanced schedule detail API to explicitly return dependencies and assignee
+- Updated `dependency-mapper.js` for compatibility with both relationship types
+
+**Impact**: All future schedules from multi-document imports will now correctly display dependency arrows in Gantt charts. Existing schedules need to be regenerated.
+
 ## Overview
 The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include: AI Meeting Analysis, AI Checklist Generation, Checklist Validation, comprehensive PDF and CSV reporting, and an enhanced comment system with markdown support and @mention autocomplete. The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
 
