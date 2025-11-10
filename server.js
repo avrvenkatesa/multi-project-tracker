@@ -6698,6 +6698,137 @@ IMPORTANT: Extract ALL action items, issues, status updates, and relationships. 
     }
 });
 
+// Multi-Document Analysis (Comprehensive Project Import)
+app.post('/api/multi-document/analyze',
+  authenticateToken,
+  requireRole('Team Member'),
+  documentUpload.array('documents', 20), // Max 20 files (enterprise limit)
+  async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
+      }
+
+      const { projectId } = req.body;
+      if (!projectId) {
+        return res.status(400).json({ error: 'Project ID required' });
+      }
+
+      // PERMISSION CHECK: Can user upload documents to this project?
+      const canUpload = await canUploadTranscript(req.user.id, parseInt(projectId));
+      if (!canUpload) {
+        return res.status(403).json({ 
+          error: 'Insufficient permissions',
+          message: 'Only Project Managers and System Administrators can upload documents and run multi-document analysis'
+        });
+      }
+
+      console.log(`\n🔹 Multi-Document Analysis Started`);
+      console.log(`📁 Project ID: ${projectId}`);
+      console.log(`📄 Files: ${req.files.length}`);
+      console.log(`👤 User: ${req.user.email}`);
+
+      // Extract text from all uploaded documents
+      const documentService = require('./services/document-service.js');
+      const documentClassifier = require('./services/document-classifier');
+      const documents = [];
+
+      for (const file of req.files) {
+        try {
+          console.log(`   Processing: ${file.originalname}`);
+          
+          const extractedText = await documentService.extractTextFromDocument(
+            file.buffer,
+            file.mimetype,
+            file.originalname
+          );
+
+          // Classify the document
+          const classification = await documentClassifier.classifyDocument(extractedText.text, {
+            filename: file.originalname,
+            projectId: parseInt(projectId)
+          });
+
+          documents.push({
+            filename: file.originalname,
+            text: extractedText.text,
+            classification: classification.category,
+            confidence: classification.confidence
+          });
+
+          console.log(`   ✓ ${file.originalname}: ${classification.category} (${Math.round(classification.confidence * 100)}% confidence)`);
+        } catch (extractError) {
+          console.error(`   ✗ Failed to process ${file.originalname}:`, extractError.message);
+          return res.status(500).json({ 
+            error: `Failed to process file: ${file.originalname}`,
+            details: extractError.message
+          });
+        }
+      }
+
+      // Use MultiDocumentAnalyzer service to process everything
+      const MultiDocumentAnalyzer = require('./services/multi-document-analyzer');
+      const analyzer = new MultiDocumentAnalyzer();
+
+      const result = await analyzer.analyzeMultipleDocuments(documents, {
+        projectId: parseInt(projectId),
+        userId: req.user.id,
+        projectStartDate: new Date().toISOString().split('T')[0]
+      });
+
+      const duration = Date.now() - startTime;
+      console.log(`\n✅ Multi-Document Analysis Complete (${(duration / 1000).toFixed(1)}s)`);
+      console.log(`📊 Workstreams: ${result.workstreams.length}`);
+      console.log(`📝 Issues Created: ${result.issues.created}`);
+      console.log(`✅ Checklists: ${result.checklists.created}`);
+      console.log(`💰 Total Cost: $${result.totalCost.toFixed(4)}\n`);
+
+      res.json({
+        success: result.success,
+        workstreams: result.workstreams,
+        issues: result.issues.ids,
+        totalItems: result.issues.created + result.checklists.items,
+        totalCost: result.totalCost,
+        duration: duration,
+        summary: {
+          documentsProcessed: result.documents.processed,
+          workstreamsDetected: result.workstreams.length,
+          issuesCreated: result.issues.created,
+          checklistsCreated: result.checklists.created,
+          checklistItemsTotal: result.checklists.items,
+          dependenciesCreated: result.dependencies.created,
+          timelineExtracted: result.timeline.phases.length > 0
+        },
+        warnings: result.warnings,
+        errors: result.errors
+      });
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`\n❌ Multi-Document Analysis Failed (${(duration / 1000).toFixed(1)}s)`);
+      console.error(error);
+
+      if (error.message?.includes('API key')) {
+        return res.status(500).json({ 
+          error: 'OpenAI API not configured. Please add OPENAI_API_KEY to Replit Secrets.' 
+        });
+      }
+
+      if (error.code === 'insufficient_quota') {
+        return res.status(500).json({ 
+          error: 'OpenAI API quota exceeded. Please check your OpenAI account.' 
+        });
+      }
+
+      res.status(500).json({ 
+        error: 'Failed to analyze documents',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+});
+
 // Batch create items from AI suggestions (with transcript linking)
 app.post('/api/meetings/create-items', 
   authenticateToken,
