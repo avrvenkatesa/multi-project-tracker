@@ -4383,32 +4383,6 @@ document.addEventListener('DOMContentLoaded', function() {
     createBtn.addEventListener('click', createAllItems);
   }
   
-  // Mode selector buttons for AI Analysis modal
-  const modeMeetingBtn = document.getElementById('mode-meeting-transcript');
-  const modeMultiDocBtn = document.getElementById('mode-multi-document');
-  const modeDescription = document.getElementById('mode-description');
-  
-  if (modeMeetingBtn) {
-    modeMeetingBtn.addEventListener('click', () => {
-      modeMeetingBtn.classList.add('active');
-      modeMultiDocBtn.classList.remove('active');
-      if (modeDescription) {
-        modeDescription.textContent = 'Extract action items and issues from meeting transcripts';
-      }
-    });
-  }
-  
-  if (modeMultiDocBtn) {
-    modeMultiDocBtn.addEventListener('click', () => {
-      if (!currentProject) {
-        alert('Please select a project first');
-        return;
-      }
-      // Navigate to multi-document processing page with project context
-      window.location.href = `mode2-review.html?projectId=${currentProject.id}`;
-    });
-  }
-  
   // Transcripts modal event listeners
   const closeTranscriptsBtn = document.getElementById('close-transcripts-modal-btn');
   if (closeTranscriptsBtn) {
