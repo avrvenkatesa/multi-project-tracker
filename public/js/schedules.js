@@ -212,9 +212,20 @@ async function loadProjectTeam() {
 }
 
 async function loadProjectItems() {
+  const loadingContainer = document.getElementById('items-loading');
+  const itemsContainer = document.getElementById('items-container');
+  
   try {
-    document.getElementById('items-loading').classList.remove('hidden');
-    document.getElementById('items-container').classList.add('hidden');
+    // Show loading with SharedLoadingSpinner
+    if (typeof window.SharedLoadingSpinner !== 'undefined') {
+      loadingContainer.innerHTML = '';
+      new window.SharedLoadingSpinner(loadingContainer, {
+        message: 'Loading project items...',
+        size: 'large'
+      });
+    }
+    loadingContainer.classList.remove('hidden');
+    itemsContainer.classList.add('hidden');
 
     // Load issues
     const issuesResponse = await fetch(`/api/issues?projectId=${currentProjectId}`);
@@ -248,12 +259,12 @@ async function loadProjectItems() {
     // Apply initial filter based on default checkbox state
     filterItems();
 
-    document.getElementById('items-loading').classList.add('hidden');
-    document.getElementById('items-container').classList.remove('hidden');
+    loadingContainer.classList.add('hidden');
+    itemsContainer.classList.remove('hidden');
 
   } catch (error) {
     console.error('Error loading items:', error);
-    document.getElementById('items-loading').innerHTML = '<p class="text-red-500">Failed to load items</p>';
+    loadingContainer.innerHTML = '<p class="text-red-500">Failed to load items. Please try again.</p>';
   }
 }
 
@@ -271,10 +282,22 @@ function getEstimate(item) {
 }
 
 async function loadSchedules() {
+  const loadingContainer = document.getElementById('schedules-loading');
+  const schedulesContainer = document.getElementById('schedules-container');
+  const emptyContainer = document.getElementById('no-schedules-container');
+  
   try {
-    document.getElementById('schedules-loading').classList.remove('hidden');
-    document.getElementById('schedules-container').classList.add('hidden');
-    document.getElementById('no-schedules-message').classList.add('hidden');
+    // Show loading with SharedLoadingSpinner
+    if (typeof window.SharedLoadingSpinner !== 'undefined') {
+      loadingContainer.innerHTML = '';
+      new window.SharedLoadingSpinner(loadingContainer, {
+        message: 'Loading schedules...',
+        size: 'large'
+      });
+    }
+    loadingContainer.classList.remove('hidden');
+    schedulesContainer.classList.add('hidden');
+    emptyContainer.classList.add('hidden');
 
     const response = await fetch(`/api/projects/${currentProjectId}/schedules`);
     if (!response.ok) throw new Error('Failed to load schedules');
@@ -282,19 +305,29 @@ async function loadSchedules() {
     const schedules = await response.json();
 
     if (schedules.length === 0) {
-      document.getElementById('schedules-loading').classList.add('hidden');
-      document.getElementById('no-schedules-message').classList.remove('hidden');
+      // Show empty state with SharedEmptyState
+      if (typeof window.SharedEmptyState !== 'undefined') {
+        emptyContainer.innerHTML = '';
+        new window.SharedEmptyState(emptyContainer, {
+          icon: 'calendar',
+          title: 'No Schedules Yet',
+          message: 'Create your first schedule to get started!',
+          actionText: null
+        });
+      }
+      loadingContainer.classList.add('hidden');
+      emptyContainer.classList.remove('hidden');
       return;
     }
 
     renderSchedules(schedules);
 
-    document.getElementById('schedules-loading').classList.add('hidden');
-    document.getElementById('schedules-container').classList.remove('hidden');
+    loadingContainer.classList.add('hidden');
+    schedulesContainer.classList.remove('hidden');
 
   } catch (error) {
     console.error('Error loading schedules:', error);
-    document.getElementById('schedules-loading').innerHTML = '<p class="text-red-500">Failed to load schedules</p>';
+    loadingContainer.innerHTML = '<p class="text-red-500">Failed to load schedules. Please try again.</p>';
   }
 }
 
@@ -304,14 +337,25 @@ async function loadSchedules() {
 
 function renderItems() {
   const container = document.getElementById('items-container');
+  const emptyContainer = document.getElementById('no-items-container');
   
   if (filteredItems.length === 0) {
+    // Show empty state with SharedEmptyState
+    if (typeof window.SharedEmptyState !== 'undefined') {
+      emptyContainer.innerHTML = '';
+      new window.SharedEmptyState(emptyContainer, {
+        icon: 'tasks',
+        title: 'No Items Found',
+        message: 'No issues or action items match your current filters. Try adjusting your search criteria.',
+        actionText: null
+      });
+    }
     container.classList.add('hidden');
-    document.getElementById('no-items-message').classList.remove('hidden');
+    emptyContainer.classList.remove('hidden');
     return;
   }
 
-  document.getElementById('no-items-message').classList.add('hidden');
+  emptyContainer.classList.add('hidden');
   container.classList.remove('hidden');
 
   container.innerHTML = filteredItems.map(item => {

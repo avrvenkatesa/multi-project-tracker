@@ -12,6 +12,10 @@
   <!-- Frappe Gantt -->
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.css">
+  <!-- Shared Components -->
+  <script src="/components/shared-header.js"></script>
+  <script src="/components/shared-loading.js"></script>
+  <script src="/components/shared-empty-state.js"></script>
   <style>
     .tab-button {
       @apply px-6 py-3 font-medium text-gray-600 border-b-2 border-transparent hover:border-gray-300 transition-colors;
@@ -404,16 +408,15 @@
             </div>
 
             <!-- Items List -->
-            <div id="items-loading" class="text-center py-8 text-gray-500">
-              <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-              <p>Loading project items...</p>
-            </div>
+            <!-- Loading State - Using SharedLoadingSpinner -->
+            <div id="items-loading"></div>
+            
             <div id="items-container" class="hidden max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
               <!-- Items will be populated here -->
             </div>
-            <p id="no-items-message" class="hidden text-center py-8 text-gray-500">
-              No items found matching your criteria.
-            </p>
+            
+            <!-- Empty State - Using SharedEmptyState -->
+            <div id="no-items-container" class="hidden"></div>
 
             <!-- AI Dependency Suggestion -->
             <div id="dependency-suggestion-section" class="hidden mt-4">
@@ -453,18 +456,15 @@
 
       <!-- View Schedules Tab -->
       <div id="view-tab" class="tab-content p-6 hidden">
-        <div id="schedules-loading" class="text-center py-8 text-gray-500">
-          <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-          <p>Loading schedules...</p>
-        </div>
+        <!-- Loading State - Using SharedLoadingSpinner -->
+        <div id="schedules-loading"></div>
+        
         <div id="schedules-container" class="hidden space-y-4">
           <!-- Schedules will be populated here -->
         </div>
-        <p id="no-schedules-message" class="hidden text-center py-12 text-gray-500">
-          <i class="fas fa-calendar-times text-4xl mb-4"></i>
-          <br>
-          No schedules created yet. Create your first schedule to get started!
-        </p>
+        
+        <!-- Empty State - Using SharedEmptyState -->
+        <div id="no-schedules-container" class="hidden"></div>
       </div>
     </div>
   </div>
