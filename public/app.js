@@ -10567,7 +10567,8 @@ function displayMultiDocResults(results) {
           <div class="text-sm font-semibold text-indigo-900">📅 Schedule Auto-Created</div>
           <div class="text-xs text-indigo-700 mt-1">${schedule.message || 'Project schedule with Gantt chart ready to view'}</div>
         </div>
-        <button onclick="window.location.href='schedules.html?projectId=${currentProject.id}&scheduleId=${schedule.scheduleId}'" 
+        <button id="view-auto-schedule-btn" 
+                data-schedule-id="${schedule.scheduleId}"
                 class="btn-primary text-xs px-4 py-2">
           View Schedule & Gantt Chart →
         </button>
@@ -10610,6 +10611,17 @@ function displayMultiDocResults(results) {
   
   if (importBtn) importBtn.disabled = false;
   window.mdProcessingResults = results;
+  
+  // Add event listener for schedule view button (CSP-compliant)
+  setTimeout(() => {
+    const viewScheduleBtn = document.getElementById('view-auto-schedule-btn');
+    if (viewScheduleBtn) {
+      viewScheduleBtn.addEventListener('click', () => {
+        const scheduleId = viewScheduleBtn.dataset.scheduleId;
+        window.location.href = `schedules.html?projectId=${currentProject.id}&scheduleId=${scheduleId}`;
+      });
+    }
+  }, 0);
 }
 
 async function createMultiDocResults() {
@@ -10618,7 +10630,7 @@ async function createMultiDocResults() {
   if (!btn) return;
   
   btn.disabled = true;
-  btn.textContent = 'Importing...';
+  btn.textContent = 'Closing...';
   
   try {
     await loadProjectData(currentProject.id);
@@ -10628,7 +10640,7 @@ async function createMultiDocResults() {
     alert('Error: ' + (error.response?.data?.error || error.message));
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Import Selected Items';
+    btn.textContent = 'Close & View Project';
   }
 }
 
