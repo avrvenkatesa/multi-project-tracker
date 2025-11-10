@@ -320,6 +320,7 @@ ${issues.length} issue(s) and ${actionItems.length} action item(s)`;
       );
 
       const scheduleId = scheduleInsert.rows[0].id;
+      console.log(`[SCHEDULE] Created schedule #${scheduleId}, totalHours=${scheduleResult.summary.totalHours} (type: ${typeof scheduleResult.summary.totalHours})`);
 
       // Insert schedule items
       for (const item of items) {
@@ -332,6 +333,9 @@ ${issues.length} issue(s) and ${actionItems.length} action item(s)`;
 
       // Insert task schedules
       for (const task of scheduleResult.tasks) {
+        const estimatedHoursValue = parseFloat(task.estimatedHours) || 0;
+        console.log(`[SCHEDULE INSERT] Task ${task.itemId}: estimatedHours raw="${task.estimatedHours}" type=${typeof task.estimatedHours}, parsed=${estimatedHoursValue}`);
+        
         await client.query(
           `INSERT INTO task_schedules 
            (schedule_id, item_type, item_id, assignee, estimated_hours, estimate_source,
@@ -343,7 +347,7 @@ ${issues.length} issue(s) and ${actionItems.length} action item(s)`;
             task.itemType,
             task.itemId,
             task.assignee || null,
-            parseFloat(task.estimatedHours) || 0,
+            estimatedHoursValue,
             task.estimateSource || 'unknown',
             task.scheduledStart,
             task.scheduledEnd,
