@@ -1,0 +1,142 @@
+
+                closeDropdown(btn, menu);
+                btn?.focus();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                items[0]?.focus();
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                items[items.length - 1]?.focus();
+            }
+        });
+    });
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!viewDropdownBtn?.contains(e.target) && !viewDropdownMenu?.contains(e.target)) {
+            closeDropdown(viewDropdownBtn, viewDropdownMenu);
+        }
+        if (!createDropdownBtn?.contains(e.target) && !createDropdownMenu?.contains(e.target)) {
+            closeDropdown(createDropdownBtn, createDropdownMenu);
+        }
+    });
+    
+    // AI Analysis and Transcripts buttons (CSP-compliant event delegation)
+    document.getElementById('ai-analysis-btn')?.addEventListener('click', showAIAnalysisModal);
+    document.getElementById('transcripts-btn')?.addEventListener('click', openTranscriptsModal);
+
+    initializeAIAnalysisModeToggle();
+    
+    // Export button
+    document.getElementById('copy-clipboard-btn')?.addEventListener('click', copyToClipboard);
+    
+    // Close dropdowns when a menu item is clicked
+    viewDropdownMenu?.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            closeDropdown(viewDropdownBtn, viewDropdownMenu);
+        });
+    });
+    
+    createDropdownMenu?.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            closeDropdown(createDropdownBtn, createDropdownMenu);
+        });
+    });
+    
+    // Relationship modal buttons
+    document.getElementById('close-relationship-modal-btn')?.addEventListener('click', closeRelationshipModal);
+    document.getElementById('add-relationship-btn')?.addEventListener('click', addRelationship);
+    
+    // Relationship target type change listener (bind once)
+    document.getElementById('relationship-target-type')?.addEventListener('change', populateTargetDropdown);
+    
+    // Add event listeners after DOM is loaded
+@@ -713,50 +715,89 @@ function setupEventListeners() {
+        }
+        
+        // Handle add relationship buttons
+        const relationshipBtn = e.target.closest('[data-action="add-relationship"]');
+        if (relationshipBtn) {
+            const relationshipType = relationshipBtn.getAttribute('data-type');
+            if (relationshipType && currentDetailItem) {
+                // Pre-fill the relationship type in the modal
+                document.getElementById('relationship-type').value = relationshipType;
+                showRelationshipModal(currentDetailItem.id, currentDetailItem.type, currentDetailItem.title);
+            }
+        }
+    });
+
+    // Handle form submissions
+    document.addEventListener("submit", function (e) {
+        if (e.target.onsubmit) {
+            e.preventDefault();
+            if (e.target.querySelector("#project-name")) {
+                createProject(e);
+            }
+        }
+    });
+}
+
+function initializeAIAnalysisModeToggle() {
+    const transcriptModeRadio = document.getElementById('ai-mode-meeting-transcript');
+    const multiDocumentModeRadio = document.getElementById('ai-mode-multi-document');
+    const meetingTranscriptContent = document.getElementById('meeting-transcript-content');
+    const multiDocumentContent = document.getElementById('multi-document-content');
+
+    if (!transcriptModeRadio || !multiDocumentModeRadio || !meetingTranscriptContent || !multiDocumentContent) {
+        return;
+    }
+
+    const showTranscriptMode = () => {
+        meetingTranscriptContent.classList.remove('hidden');
+        multiDocumentContent.classList.add('hidden');
+    };
+
+    const showMultiDocumentMode = () => {
+        meetingTranscriptContent.classList.add('hidden');
+        multiDocumentContent.classList.remove('hidden');
+    };
+
+    transcriptModeRadio.addEventListener('change', () => {
+        if (transcriptModeRadio.checked) {
+            showTranscriptMode();
+        }
+    });
+
+    multiDocumentModeRadio.addEventListener('change', () => {
+        if (multiDocumentModeRadio.checked) {
+            showMultiDocumentMode();
+        }
+    });
+
+    if (multiDocumentModeRadio.checked) {
+        showMultiDocumentMode();
+    } else {
+        showTranscriptMode();
+    }
+}
+
+// Rest of your JavaScript functions remain the same...
+// (Keep all the other functions: loadProjects, renderProjects, etc.)
+
+// Load projects
+async function loadProjects() {
+    try {
+        const response = await axios.get("/api/projects");
+        projects = response.data;
+        renderProjects();
+
+        if (projects.length === 0) {
+            showWelcomeMessage();
+        }
+    } catch (error) {
+        console.error("Error loading projects:", error);
+        showErrorMessage("Failed to load projects");
+    }
+}
+
+// Helper function to determine if description is long (more than ~5 lines of text)
+function isLongDescription(text) {
+    if (!text) return false;
+    return text.length > 280;
+}
