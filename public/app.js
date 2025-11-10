@@ -10388,97 +10388,122 @@ function displayMultiDocFiles() {
 async function processMultiDocuments() {
   if (!currentProject || mdSelectedFiles.length === 0) return;
   
-  document.getElementById('md-upload-section').classList.add('hidden');
-  document.getElementById('md-processing-section').classList.remove('hidden');
-  document.getElementById('md-step-indicator-2').classList.remove('bg-gray-200', 'text-gray-500');
-  document.getElementById('md-step-indicator-2').classList.add('bg-blue-600', 'text-white');
+  const processBtn = document.getElementById('multi-doc-process-btn');
+  const progress = document.getElementById('multi-doc-progress');
+  const reviewSection = document.getElementById('multi-doc-review');
+  const resultsDiv = document.getElementById('multi-doc-results');
   
-  const progressLog = document.getElementById('md-progress-log');
+  if (processBtn) processBtn.disabled = true;
+  if (progress) progress.classList.remove('hidden');
   
   try {
     const formData = new FormData();
     mdSelectedFiles.forEach(file => formData.append('documents', file));
     formData.append('projectId', currentProject.id);
     
-    progressLog.innerHTML = '<div>📤 Uploading...</div>';
     const response = await axios.post('/api/multi-document/analyze', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       withCredentials: true
     });
     
-    progressLog.innerHTML += '<div>✓ Processing complete</div>';
+    if (progress) progress.classList.add('hidden');
     displayMultiDocResults(response.data);
   } catch (error) {
     console.error('Error:', error);
+    if (progress) progress.classList.add('hidden');
+    if (processBtn) processBtn.disabled = false;
     alert('Error: ' + (error.response?.data?.error || error.message));
-    resetMultiDocWorkflow();
   }
 }
 
 function displayMultiDocResults(results) {
-  document.getElementById('md-processing-section').classList.add('hidden');
-  document.getElementById('md-review-section').classList.remove('hidden');
-  document.getElementById('md-step-indicator-3').classList.remove('bg-gray-200', 'text-gray-500');
-  document.getElementById('md-step-indicator-3').classList.add('bg-blue-600', 'text-white');
+  const reviewSection = document.getElementById('multi-doc-review');
+  const resultsDiv = document.getElementById('multi-doc-results');
+  const importBtn = document.getElementById('multi-doc-import-btn');
+  
+  if (reviewSection) reviewSection.classList.remove('hidden');
   
   const workstreams = results.workstreams || results.issues || [];
-  document.getElementById('md-results-summary').innerHTML = `
-    <div class="text-center p-2 bg-blue-50 rounded">
-      <div class="text-xl font-bold text-blue-600">${workstreams.length}</div>
-      <div class="text-gray-600">Workstreams</div>
-    </div>
-    <div class="text-center p-2 bg-green-50 rounded">
-      <div class="text-xl font-bold text-green-600">${results.totalItems || 0}</div>
-      <div class="text-gray-600">Items</div>
-    </div>
-    <div class="text-center p-2 bg-purple-50 rounded">
-      <div class="text-xl font-bold text-purple-600">$${(results.totalCost || 0).toFixed(3)}</div>
-      <div class="text-gray-600">Cost</div>
-    </div>
-  `;
+  const totalItems = results.totalItems || 0;
+  const totalCost = results.totalCost || 0;
   
-  document.getElementById('md-results-list').innerHTML = workstreams.map(ws => `
-    <div class="p-3 border rounded hover:bg-gray-50">
-      <h5 class="font-semibold text-sm">${ws.title || ws.name}</h5>
-      <p class="text-xs text-gray-600">${ws.description || ''}</p>
-    </div>
-  `).join('');
+  if (resultsDiv) {
+    resultsDiv.innerHTML = `
+      <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="text-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div class="text-2xl font-bold text-blue-600">${workstreams.length}</div>
+          <div class="text-xs text-gray-600">Workstreams</div>
+        </div>
+        <div class="text-center p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div class="text-2xl font-bold text-green-600">${totalItems}</div>
+          <div class="text-xs text-gray-600">Total Items</div>
+        </div>
+        <div class="text-center p-3 bg-purple-50 border border-purple-200 rounded-lg">
+          <div class="text-2xl font-bold text-purple-600">$${totalCost.toFixed(3)}</div>
+          <div class="text-xs text-gray-600">AI Cost</div>
+        </div>
+      </div>
+      <div class="space-y-2">
+        ${workstreams.map(ws => `
+          <div class="p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <h5 class="font-semibold text-sm text-gray-900">${ws.title || ws.name}</h5>
+                <p class="text-xs text-gray-600 mt-1">${ws.description || ''}</p>
+              </div>
+              <input type="checkbox" checked class="mt-1" data-workstream-id="${ws.id || ''}">
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
   
+  if (importBtn) importBtn.disabled = false;
   window.mdProcessingResults = results;
 }
 
 async function createMultiDocResults() {
   if (!window.mdProcessingResults) return;
-  const btn = document.getElementById('md-create-btn');
+  const btn = document.getElementById('multi-doc-import-btn');
+  if (!btn) return;
+  
   btn.disabled = true;
-  btn.textContent = 'Creating...';
+  btn.textContent = 'Importing...';
+  
   try {
     await loadProjectDetails(currentProject.id);
     closeAIAnalysisModal();
-    alert('Processing complete!');
+    showToast('Multi-document import complete!', 'success');
   } catch (error) {
     alert('Error: ' + (error.response?.data?.error || error.message));
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Create All';
+    btn.textContent = 'Import Selected Items';
   }
 }
 
 function resetMultiDocWorkflow() {
   mdSelectedFiles = [];
-  const fileInput = document.getElementById('md-file-input');
-  const fileList = document.getElementById('md-file-list');
-  const fileNames = document.getElementById('md-file-names');
-  const processBtn = document.getElementById('md-process-btn');
-  const uploadSection = document.getElementById('md-upload-section');
-  const resultsStep = document.getElementById('md-results-step');
+  const fileInput = document.getElementById('multi-doc-file-input');
+  const fileList = document.getElementById('multi-doc-file-list');
+  const fileNames = document.getElementById('multi-doc-files');
+  const processBtn = document.getElementById('multi-doc-process-btn');
+  const progress = document.getElementById('multi-doc-progress');
+  const reviewSection = document.getElementById('multi-doc-review');
+  const resultsDiv = document.getElementById('multi-doc-results');
+  const importBtn = document.getElementById('multi-doc-import-btn');
   
   if (fileInput) fileInput.value = '';
   if (fileList) fileList.classList.add('hidden');
   if (fileNames) fileNames.innerHTML = '';
   if (processBtn) processBtn.disabled = true;
-  if (uploadSection) uploadSection.classList.remove('hidden');
-  if (resultsStep) resultsStep.classList.add('hidden');
+  if (progress) progress.classList.add('hidden');
+  if (reviewSection) reviewSection.classList.add('hidden');
+  if (importBtn) importBtn.disabled = true;
+  if (resultsDiv) {
+    resultsDiv.innerHTML = '<p class="text-sm text-gray-500">Upload documents to view AI results.</p>';
+  }
   
   window.mdProcessingResults = null;
 }
