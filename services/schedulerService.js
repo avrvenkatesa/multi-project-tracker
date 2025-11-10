@@ -342,18 +342,18 @@ ${issues.length} issue(s) and ${actionItems.length} action item(s)`;
             scheduleId,
             task.itemType,
             task.itemId,
-            task.assignee,
-            task.estimatedHours,
-            task.estimateSource,
+            task.assignee || null,
+            parseFloat(task.estimatedHours) || 0,
+            task.estimateSource || 'unknown',
             task.scheduledStart,
             task.scheduledEnd,
-            task.durationDays,
-            task.dueDate,
-            task.isCriticalPath,
-            task.hasRisk,
-            task.riskReason,
-            task.daysLate,
-            JSON.stringify(task.dependencies)
+            parseInt(task.durationDays) || 0,
+            task.dueDate || null,
+            task.isCriticalPath || false,
+            task.hasRisk || false,
+            task.riskReason || null,
+            parseInt(task.daysLate) || 0,
+            JSON.stringify(task.dependencies || [])
           ]
         );
       }
