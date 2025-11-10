@@ -4701,15 +4701,31 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (modeMultiDocRadio) {
     modeMultiDocRadio.addEventListener('change', () => {
+      console.log('=== Multi-document radio changed ===');
+      console.log('Checked:', modeMultiDocRadio.checked);
+      console.log('multiDocContent element:', multiDocContent);
+      
       if (modeMultiDocRadio.checked) {
         if (multiDocContent) {
-          multiDocContent.classList.remove('hidden');
+          console.log('Before - multiDocContent className:', multiDocContent.className);
+          console.log('Before - multiDocContent display:', multiDocContent.style.display);
+          
+          multiDocContent.className = '';  // Remove all classes
           multiDocContent.style.display = 'block';
+          multiDocContent.style.visibility = 'visible';
+          multiDocContent.style.opacity = '1';
+          
+          console.log('After - multiDocContent className:', multiDocContent.className);
+          console.log('After - multiDocContent display:', multiDocContent.style.display);
+        } else {
+          console.error('multiDocContent is NULL!');
         }
+        
         if (meetingContent) {
-          meetingContent.classList.add('hidden');
+          meetingContent.className = 'hidden';
           meetingContent.style.display = 'none';
         }
+        
         // Update complexity info for multi-document mode
         updateMultiDocComplexityInfo();
       }
