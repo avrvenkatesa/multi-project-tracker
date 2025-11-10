@@ -77,6 +77,44 @@ function calculateDurationDays(hours, hoursPerDay = 8) {
 }
 
 /**
+ * Count business days between two dates
+ * @param {Date} startDate - Start date (inclusive)
+ * @param {Date} endDate - End date (inclusive)
+ * @param {boolean} includeWeekends - Whether to count weekends
+ * @returns {number} - Number of working days
+ */
+function countBusinessDays(startDate, endDate, includeWeekends = false) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  // Handle invalid or negative ranges
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
+    return 0;
+  }
+  
+  if (includeWeekends) {
+    // Count all days (inclusive)
+    const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    return Math.max(1, days);
+  }
+  
+  // Count business days (skip weekends)
+  let count = 0;
+  const current = new Date(start);
+  
+  while (current <= end) {
+    const dayOfWeek = current.getDay();
+    // Count Monday-Friday (1-5)
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return Math.max(1, count);
+}
+
+/**
  * Detect risks for a task
  * @param {Object} task - Task object with schedule data
  * @param {Date} projectEndDate - Expected project end date
@@ -168,6 +206,7 @@ function calculateResourceAllocation(scheduledTasks) {
  * @param {Date|string} config.startDate - Project start date
  * @param {number} config.hoursPerDay - Working hours per day (default 8)
  * @param {boolean} config.includeWeekends - Whether to include weekends (default false)
+ * @param {Date|string} config.projectDeadline - Optional project deadline for overrun detection
  * @returns {Object} - Complete schedule with calculated dates
  */
 async function calculateProjectSchedule(config) {
@@ -175,7 +214,8 @@ async function calculateProjectSchedule(config) {
     items,
     startDate,
     hoursPerDay = 8,
-    includeWeekends = false
+    includeWeekends = false,
+    projectDeadline = null
   } = config;
 
   if (!items || items.length === 0) {
@@ -322,6 +362,77 @@ async function calculateProjectSchedule(config) {
   // Calculate resource allocation
   const resourceAllocation = calculateResourceAllocation(scheduledTasks);
 
+  // Detect deadline overrun
+  let deadlineWarning = null;
+  if (projectDeadline) {
+    const deadline = new Date(projectDeadline);
+    if (!isNaN(deadline.getTime()) && projectEndDate > deadline) {
+      // Calculate delay
+      const delayMs = projectEndDate - deadline;
+      const delayDays = Math.ceil(delayMs / (1000 * 60 * 60 * 24));
+      const delayWeeks = Math.floor(delayDays / 7);
+      const remainingDays = delayDays % 7;
+      
+      // Format delay message
+      let delayText = '';
+      if (delayWeeks > 0) {
+        delayText = delayWeeks === 1 ? '1 week' : `${delayWeeks} weeks`;
+        if (remainingDays > 0) {
+          delayText += ` and ${remainingDays} day${remainingDays > 1 ? 's' : ''}`;
+        }
+      } else {
+        delayText = `${delayDays} day${delayDays > 1 ? 's' : ''}`;
+      }
+      
+      // Generate suggestions
+      const suggestions = [];
+      
+      // Suggestion 1: Increase working hours
+      // Count actual working days from project start to deadline
+      const workingDaysToDeadline = countBusinessDays(projectStart, deadline, includeWeekends);
+      
+      // Calculate required hours per day to meet deadline
+      if (workingDaysToDeadline > 0) {
+        const requiredHoursPerDay = Math.ceil(totalHours / workingDaysToDeadline);
+        if (requiredHoursPerDay > hoursPerDay && requiredHoursPerDay <= 12) {
+          suggestions.push(`Increase working hours to ${requiredHoursPerDay} hours/day`);
+        }
+      }
+      
+      // Suggestion 2: Add weekend work
+      if (!includeWeekends) {
+        suggestions.push('Include weekends in the schedule');
+      }
+      
+      // Suggestion 3: Add more resources
+      const uniqueAssignees = new Set(scheduledTasks.map(t => t.assignee).filter(a => a && a !== 'Unassigned'));
+      if (uniqueAssignees.size > 0) {
+        suggestions.push(`Add ${Math.ceil(delayDays / 7)} more team member${delayDays / 7 > 1 ? 's' : ''} to distribute workload`);
+      }
+      
+      // Suggestion 4: Reduce scope
+      suggestions.push('Review and prioritize critical tasks only');
+      
+      deadlineWarning = {
+        hasOverrun: true,
+        projectDeadline: deadline.toISOString().split('T')[0],
+        calculatedEnd: projectEndDate.toISOString().split('T')[0],
+        delayDays,
+        delayText,
+        message: `⚠️ Schedule extends ${delayText} beyond project deadline!`,
+        suggestions
+      };
+    } else {
+      // No overrun - schedule fits within deadline
+      deadlineWarning = {
+        hasOverrun: false,
+        projectDeadline: deadline.toISOString().split('T')[0],
+        calculatedEnd: projectEndDate.toISOString().split('T')[0],
+        message: '✅ Schedule fits within project deadline'
+      };
+    }
+  }
+
   return {
     summary: {
       startDate: projectStart.toISOString().split('T')[0],
@@ -332,7 +443,8 @@ async function calculateProjectSchedule(config) {
       criticalPathHours,
       risksCount,
       hoursPerDay,
-      includeWeekends
+      includeWeekends,
+      deadlineWarning
     },
     tasks: scheduledTasks,
     resourceAllocation,
@@ -348,6 +460,7 @@ module.exports = {
   addBusinessDays,
   skipWeekend,
   calculateDurationDays,
+  countBusinessDays,
   detectTaskRisks,
   calculateResourceAllocation
 };

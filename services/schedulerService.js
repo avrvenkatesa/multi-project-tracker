@@ -275,12 +275,22 @@ ${issues.length} issue(s) and ${actionItems.length} action item(s)`;
       throw new Error('Start date is required for schedule creation');
     }
 
+    // Fetch project details to get deadline
+    const projectResult = await pool.query(
+      'SELECT end_date FROM projects WHERE id = $1',
+      [projectId]
+    );
+    
+    const projectDeadline = projectResult.rows[0]?.end_date || null;
+    console.log(`📅 Project deadline: ${projectDeadline || 'Not set'}`);
+
     // Calculate schedule
     const scheduleResult = await calculateProjectSchedule({
       items,
       startDate,
       hoursPerDay,
-      includeWeekends
+      includeWeekends,
+      projectDeadline
     });
 
     console.log('✓ Schedule calculated:', {

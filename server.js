@@ -14370,6 +14370,13 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
       return res.status(400).json({ error: 'No valid items found' });
     }
 
+    // Fetch project deadline
+    const projectDeadlineResult = await pool.query(
+      'SELECT end_date FROM projects WHERE id = $1',
+      [projectId]
+    );
+    const projectDeadline = projectDeadlineResult.rows[0]?.end_date || null;
+
     // Calculate schedule
     console.log('Items being scheduled:', items.map(i => ({ 
       key: `${i.type}:${i.id}`, 
@@ -14381,7 +14388,8 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
       items,
       startDate,
       hoursPerDay,
-      includeWeekends
+      includeWeekends,
+      projectDeadline
     });
     
     console.log('Schedule calculation result:', {
