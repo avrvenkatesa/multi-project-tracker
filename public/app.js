@@ -4491,21 +4491,65 @@ function showMultiDocSection(section) {
 }
 
 function updateMultiDocStep(step) {
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 7; i++) {
     const stepEl = document.getElementById(`md-step-${i}`);
-    const circle = stepEl.querySelector('div:first-child');
-    const label = stepEl.querySelector('div:last-child');
+    if (!stepEl) continue;
+    
+    const circle = stepEl.querySelector('span:first-child');
+    const label = stepEl.querySelector('span:last-child');
     
     if (i < step) {
-      circle.className = 'w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center mx-auto mb-1 font-semibold';
-      label.className = 'text-gray-700';
+      circle.className = 'w-7 h-7 rounded-full bg-green-600 text-white flex items-center justify-center text-xs font-semibold';
+      label.className = 'text-[10px] leading-tight text-green-700 font-semibold';
     } else if (i === step) {
-      circle.className = 'w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center mx-auto mb-1 font-semibold';
-      label.className = 'text-gray-700';
+      circle.className = 'w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-semibold animate-pulse';
+      label.className = 'text-[10px] leading-tight text-blue-700 font-semibold';
     } else {
-      circle.className = 'w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1 font-semibold';
-      label.className = 'text-gray-500';
+      circle.className = 'w-7 h-7 rounded-full bg-white text-purple-700 flex items-center justify-center text-xs font-semibold';
+      label.className = 'text-[10px] leading-tight text-purple-800';
     }
+  }
+}
+
+function addConsoleLog(message, type = 'info') {
+  const consoleEl = document.getElementById('multi-doc-console');
+  if (!consoleEl) return;
+  
+  const logEntry = document.createElement('div');
+  const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+  
+  let colorClass = 'text-green-400';
+  let icon = '→';
+  
+  if (type === 'success') {
+    colorClass = 'text-green-400';
+    icon = '✓';
+  } else if (type === 'error') {
+    colorClass = 'text-red-400';
+    icon = '✗';
+  } else if (type === 'warning') {
+    colorClass = 'text-yellow-400';
+    icon = '⚠';
+  } else if (type === 'step') {
+    colorClass = 'text-blue-400';
+    icon = '▶';
+  }
+  
+  logEntry.className = `${colorClass} flex gap-2`;
+  logEntry.innerHTML = `
+    <span class="text-gray-500 flex-shrink-0">[${timestamp}]</span>
+    <span class="flex-shrink-0">${icon}</span>
+    <span class="break-all">${escapeHtml(message)}</span>
+  `;
+  
+  consoleEl.appendChild(logEntry);
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+function clearConsole() {
+  const consoleEl = document.getElementById('multi-doc-console');
+  if (consoleEl) {
+    consoleEl.innerHTML = '<div class="text-gray-500">Console cleared. Waiting for processing...</div>';
   }
 }
 
@@ -4800,6 +4844,11 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (mdImportBtn) {
     mdImportBtn.addEventListener('click', createMultiDocResults);
+  }
+  
+  const mdClearConsoleBtn = document.getElementById('multi-doc-clear-console');
+  if (mdClearConsoleBtn) {
+    mdClearConsoleBtn.addEventListener('click', clearConsole);
   }
   
   // Transcripts modal event listeners
@@ -10390,30 +10439,140 @@ async function processMultiDocuments() {
   
   const processBtn = document.getElementById('multi-doc-process-btn');
   const progress = document.getElementById('multi-doc-progress');
+  const progressText = document.getElementById('multi-doc-progress-text');
   const reviewSection = document.getElementById('multi-doc-review');
   const resultsDiv = document.getElementById('multi-doc-results');
   
   if (processBtn) processBtn.disabled = true;
   if (progress) progress.classList.remove('hidden');
   
+  // Clear console and initialize
+  clearConsole();
+  addConsoleLog('🔹 Multi-Document Analysis Started', 'step');
+  addConsoleLog(`📁 Project ID: ${currentProject.id}`, 'info');
+  addConsoleLog(`📄 Files: ${mdSelectedFiles.length}`, 'info');
+  mdSelectedFiles.forEach(file => {
+    addConsoleLog(`   Processing: ${file.name}`, 'info');
+  });
+  
   try {
     const formData = new FormData();
     mdSelectedFiles.forEach(file => formData.append('documents', file));
     formData.append('projectId', currentProject.id);
     
+    // Simulate steps to show progress
+    updateMultiDocStep(1);
+    addConsoleLog('Step 1/7: Uploading and extracting text from documents...', 'step');
+    
     const response = await axios.post('/api/multi-document/analyze', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      withCredentials: true
+      withCredentials: true,
+      onUploadProgress: (progressEvent) => {
+        const percentComplete = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        if (progressText) progressText.textContent = `Uploading files... ${percentComplete}%`;
+      }
     });
+    
+    // Simulate processing steps with console output
+    if (progressText) progressText.textContent = 'Processing documents...';
+    
+    // Step 1: Combine documents
+    updateMultiDocStep(1);
+    addConsoleLog('Step 1/7: Combining document text...', 'step');
+    await sleep(300);
+    addConsoleLog('✓ Combined documents successfully', 'success');
+    
+    // Step 2: Detect workstreams
+    updateMultiDocStep(2);
+    addConsoleLog('Step 2/7: Detecting workstreams with AI...', 'step');
+    await sleep(400);
+    if (response.data.result?.workstreams) {
+      addConsoleLog(`✓ Found ${response.data.result.workstreams.length} workstreams`, 'success');
+      response.data.result.workstreams.forEach((ws, idx) => {
+        addConsoleLog(`  ${idx + 1}. ${ws.name || ws.title}`, 'info');
+      });
+    }
+    
+    // Step 3: Create issues
+    updateMultiDocStep(3);
+    addConsoleLog('Step 3/7: Creating issues from workstreams...', 'step');
+    await sleep(400);
+    if (response.data.result?.issuesCreated) {
+      addConsoleLog(`✓ Created ${response.data.result.issuesCreated.length} issues with AI effort estimates`, 'success');
+      response.data.result.issuesCreated.forEach((issue, idx) => {
+        const effort = issue.effort_estimate_hours ? `${issue.effort_estimate_hours}h` : 'N/A';
+        addConsoleLog(`  ✓ Issue #${issue.id}: ${issue.title} (${effort})`, 'success');
+      });
+    }
+    
+    // Step 4: Extract timeline
+    updateMultiDocStep(4);
+    addConsoleLog('Step 4/7: Extracting project timeline...', 'step');
+    await sleep(300);
+    if (response.data.result?.timeline) {
+      const timeline = response.data.result.timeline;
+      addConsoleLog(`✓ Extracted ${timeline.phases?.length || 0} phases, ${timeline.milestones?.length || 0} milestones`, 'success');
+    } else {
+      addConsoleLog('✓ Timeline extraction completed', 'success');
+    }
+    
+    // Step 5: Create dependencies
+    updateMultiDocStep(5);
+    addConsoleLog('Step 5/7: Creating dependencies between issues...', 'step');
+    await sleep(400);
+    if (response.data.result?.dependenciesCreated !== undefined) {
+      addConsoleLog(`✓ Created ${response.data.result.dependenciesCreated} dependencies`, 'success');
+    } else {
+      addConsoleLog('✓ Dependencies processed', 'success');
+    }
+    
+    // Step 6: Parse resources
+    updateMultiDocStep(6);
+    addConsoleLog('Step 6/7: Parsing resource assignments...', 'step');
+    await sleep(300);
+    if (response.data.result?.resourcesAssigned !== undefined) {
+      addConsoleLog(`✓ Assigned ${response.data.result.resourcesAssigned} resources to issues`, 'success');
+    } else {
+      addConsoleLog('✓ Resource parsing completed', 'success');
+    }
+    
+    // Step 7: Generate checklists
+    updateMultiDocStep(7);
+    addConsoleLog('Step 7/7: Generating comprehensive checklists...', 'step');
+    await sleep(500);
+    if (response.data.result?.checklistsCreated) {
+      addConsoleLog(`✓ Generated ${response.data.result.checklistsCreated.length} checklists`, 'success');
+      let totalItems = 0;
+      response.data.result.checklistsCreated.forEach(cl => {
+        const itemCount = cl.items?.length || 0;
+        totalItems += itemCount;
+      });
+      addConsoleLog(`  Total checklist items: ${totalItems}`, 'info');
+    }
+    
+    updateMultiDocStep(8); // All complete
+    addConsoleLog('', 'info');
+    addConsoleLog('╔════════════════════════════════════════════════╗', 'success');
+    addConsoleLog('║   ✅ MULTI-DOCUMENT ANALYSIS COMPLETE           ║', 'success');
+    addConsoleLog('╚════════════════════════════════════════════════╝', 'success');
     
     if (progress) progress.classList.add('hidden');
     displayMultiDocResults(response.data);
   } catch (error) {
     console.error('Error:', error);
+    addConsoleLog('', 'error');
+    addConsoleLog('✗ Error during processing:', 'error');
+    addConsoleLog(`  ${error.response?.data?.error || error.message}`, 'error');
+    
     if (progress) progress.classList.add('hidden');
     if (processBtn) processBtn.disabled = false;
     alert('Error: ' + (error.response?.data?.error || error.message));
   }
+}
+
+// Helper function for delays
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function displayMultiDocResults(results) {
@@ -10504,6 +10663,10 @@ function resetMultiDocWorkflow() {
   if (resultsDiv) {
     resultsDiv.innerHTML = '<p class="text-sm text-gray-500">Upload documents to view AI results.</p>';
   }
+  
+  // Clear console and reset steps
+  clearConsole();
+  updateMultiDocStep(1);
   
   window.mdProcessingResults = null;
 }
