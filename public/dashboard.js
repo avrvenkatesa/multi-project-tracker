@@ -5,7 +5,8 @@ let dashboardData = {
   stats: null,
   activity: null,
   teamMetrics: null,
-  trends: null
+  trends: null,
+  aiCostStats: null
 };
 let charts = {};
 
@@ -192,7 +193,8 @@ async function loadDashboard() {
       loadStats(),
       loadActivity(),
       loadTeamMetrics(),
-      loadTrends()
+      loadTrends(),
+      loadAICostStats()
     ]);
     
     // Render the dashboard
@@ -284,6 +286,37 @@ async function loadTrends() {
   console.log('Trends loaded:', dashboardData.trends);
 }
 
+// Load AI Cost Statistics
+async function loadAICostStats() {
+  try {
+    const response = await fetch(`/api/ai-usage/stats?projectId=${currentProjectId}&timeRange=month`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      console.warn('AI cost stats not available');
+      dashboardData.aiCostStats = {
+        totalCost: 0,
+        totalRequests: 0,
+        byFeature: [],
+        recentUsage: []
+      };
+      return;
+    }
+    
+    dashboardData.aiCostStats = await response.json();
+    console.log('AI cost stats loaded:', dashboardData.aiCostStats);
+  } catch (error) {
+    console.warn('Error loading AI cost stats:', error);
+    dashboardData.aiCostStats = {
+      totalCost: 0,
+      totalRequests: 0,
+      byFeature: [],
+      recentUsage: []
+    };
+  }
+}
+
 // Render complete dashboard
 function renderDashboard() {
   const container = document.getElementById('dashboardContent');
@@ -331,6 +364,9 @@ function renderDashboard() {
         <canvas id="velocityTrendChart" class="w-full" style="max-height: 300px;"></canvas>
       </div>
     </div>
+    
+    <!-- AI Cost Tracker -->
+    ${renderAICostTracker()}
     
     <!-- Activity Feed and Team Metrics -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -594,6 +630,93 @@ function renderTeamMetrics() {
       <div style="max-height: 500px; overflow-y: auto;">
         ${tableHtml}
       </div>
+    </div>
+  `;
+}
+
+// Render AI Cost Tracker
+function renderAICostTracker() {
+  const aiStats = dashboardData.aiCostStats;
+  
+  if (!aiStats || (aiStats.totalCost === 0 && aiStats.totalRequests === 0)) {
+    return `
+      <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow-md p-6 mb-8">
+        <h3 class="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
+          <span class="text-2xl">🤖</span>
+          AI Cost Tracker
+        </h3>
+        <p class="text-sm text-gray-600 mb-4">Track AI feature usage and costs across your project</p>
+        <div class="bg-white rounded-lg p-6 text-center">
+          <p class="text-gray-500">No AI usage recorded yet for this project</p>
+          <p class="text-xs text-gray-400 mt-2">AI features will appear here once you use AI Analysis, Checklist Generation, or Multi-Document Processing</p>
+        </div>
+      </div>
+    `;
+  }
+  
+  const byFeature = aiStats.byFeature || [];
+  const featureRows = byFeature.length > 0 ? byFeature.map(feature => `
+    <tr class="border-b border-gray-100 hover:bg-purple-50 transition">
+      <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(feature.feature_name || feature.feature)}</td>
+      <td class="px-4 py-3 text-sm text-center text-gray-700">${feature.request_count || 0}</td>
+      <td class="px-4 py-3 text-sm text-center text-gray-600">${feature.total_tokens ? feature.total_tokens.toLocaleString() : '0'}</td>
+      <td class="px-4 py-3 text-sm text-center font-semibold text-purple-600">$${(feature.total_cost || 0).toFixed(4)}</td>
+    </tr>
+  `).join('') : `
+    <tr>
+      <td colspan="4" class="px-4 py-8 text-center text-gray-500">No AI feature usage recorded</td>
+    </tr>
+  `;
+  
+  return `
+    <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow-md p-6 mb-8">
+      <h3 class="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
+        <span class="text-2xl">🤖</span>
+        AI Cost Tracker
+      </h3>
+      <p class="text-sm text-gray-600 mb-4">AI feature usage and costs for this project (Last 30 days)</p>
+      
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-lg p-4 shadow-sm">
+          <p class="text-xs text-gray-600 uppercase tracking-wide mb-1">Total Requests</p>
+          <p class="text-2xl font-bold text-blue-600">${aiStats.totalRequests || 0}</p>
+        </div>
+        <div class="bg-white rounded-lg p-4 shadow-sm">
+          <p class="text-xs text-gray-600 uppercase tracking-wide mb-1">Total Tokens</p>
+          <p class="text-2xl font-bold text-green-600">${(aiStats.totalTokens || 0).toLocaleString()}</p>
+        </div>
+        <div class="bg-white rounded-lg p-4 shadow-sm">
+          <p class="text-xs text-gray-600 uppercase tracking-wide mb-1">Total Cost</p>
+          <p class="text-2xl font-bold text-purple-600">$${(aiStats.totalCost || 0).toFixed(4)}</p>
+        </div>
+      </div>
+      
+      <!-- Feature Breakdown -->
+      <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <h4 class="text-sm font-semibold text-gray-700">Usage by Feature</h4>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feature</th>
+                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Requests</th>
+                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Tokens</th>
+                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white">
+              ${featureRows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <p class="text-xs text-gray-500 mt-4">
+        💡 Tip: AI costs are tracked per project to help you monitor usage and optimize your AI feature utilization.
+      </p>
     </div>
   `;
 }
