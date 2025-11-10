@@ -61,6 +61,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load initial data
   await loadProjectItems();
+  
+  // Auto-open schedule if scheduleId is in URL
+  const scheduleId = urlParams.get('scheduleId');
+  if (scheduleId) {
+    // Switch to View Schedules tab (triggers loadSchedules automatically)
+    switchTab('view');
+    // Small delay to ensure schedules are loaded before opening detail
+    setTimeout(() => {
+      viewScheduleDetails(scheduleId);
+    }, 500);
+  }
 });
 
 // ============================================
