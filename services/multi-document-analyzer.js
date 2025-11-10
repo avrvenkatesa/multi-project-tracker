@@ -19,6 +19,7 @@
 
 const { pool } = require('../db');
 const aiCostTracker = require('./ai-cost-tracker');
+const schedulerService = require('./schedulerService');
 
 class MultiDocumentAnalyzer {
   constructor() {
@@ -297,6 +298,114 @@ class MultiDocumentAnalyzer {
       // It's included in the overall OpenAI API usage tracked by ai-cost-tracker
       
       console.log(`✓ Generated ${result.checklists.created} checklists with ${result.checklists.items} items\n`);
+
+      // Auto-create project schedule if we have issues with estimates and dependencies
+      result.schedule = { created: false, scheduleId: null, message: null };
+      
+      if (result.issues.created > 0 && result.issues.ids.length > 0) {
+        try {
+          console.log('📅 Auto-generating project schedule...');
+          
+          // Check if a schedule already exists for this project
+          const existingSchedule = await pool.query(
+            'SELECT id FROM project_schedules WHERE project_id = $1 LIMIT 1',
+            [projectId]
+          );
+          
+          if (existingSchedule.rows.length > 0) {
+            result.schedule.created = false;
+            result.schedule.message = 'Schedule already exists for this project';
+            result.warnings.push('Schedule creation skipped: Schedule already exists');
+            console.log('⚠️  Schedule already exists - skipping auto-creation\n');
+          } else {
+            // Fetch created issues with estimates and dependencies
+            const issuesData = await pool.query(
+              `SELECT i.id, i.title, i.assignee, i.due_date,
+                      e.estimated_hours, e.source as estimate_source
+               FROM issues i
+               LEFT JOIN effort_estimates e ON i.id = e.issue_id AND e.is_active = TRUE
+               WHERE i.id = ANY($1)
+               ORDER BY i.id`,
+              [result.issues.ids]
+            );
+
+            // Fetch dependencies from issue_relationships table
+            const depsData = await pool.query(
+              `SELECT source_id, source_type, target_id, target_type, relationship_type
+               FROM issue_relationships
+               WHERE (source_id = ANY($1) OR target_id = ANY($1))
+               AND source_type = 'issue' AND target_type = 'issue'`,
+              [result.issues.ids]
+            );
+
+            // Build dependency map (issue -> prerequisites)
+            const dependencyMap = new Map();
+            for (const dep of depsData.rows) {
+              if (dep.relationship_type === 'blocks') {
+                // A blocks B means B depends on A
+                const dependent = `issue:${dep.target_id}`;
+                const prerequisite = `issue:${dep.source_id}`;
+                if (!dependencyMap.has(dependent)) {
+                  dependencyMap.set(dependent, []);
+                }
+                dependencyMap.get(dependent).push(prerequisite);
+              } else if (dep.relationship_type === 'depends_on') {
+                // A depends_on B means A depends on B
+                const dependent = `issue:${dep.source_id}`;
+                const prerequisite = `issue:${dep.target_id}`;
+                if (!dependencyMap.has(dependent)) {
+                  dependencyMap.set(dependent, []);
+                }
+                dependencyMap.get(dependent).push(prerequisite);
+              }
+            }
+
+            // Prepare items for schedule calculation
+            const scheduleItems = issuesData.rows.map(issue => ({
+              type: 'issue',
+              id: issue.id,
+              title: issue.title,
+              assignee: issue.assignee || 'Unassigned',
+              estimate: issue.estimated_hours || 0,
+              estimateSource: issue.estimate_source || 'ai',
+              dueDate: issue.due_date,
+              dependencies: dependencyMap.get(`issue:${issue.id}`) || []
+            }));
+
+            // Determine schedule start date
+            const scheduleStartDate = projectStartDate || 
+              result.timeline.phases?.[0]?.startDate || 
+              new Date().toISOString().split('T')[0];
+
+            // Create schedule using reusable service
+            const scheduleResult = await schedulerService.createScheduleFromIssues({
+              projectId,
+              name: 'AI-Generated Schedule (Multi-Document Import)',
+              items: scheduleItems,
+              startDate: scheduleStartDate,
+              hoursPerDay: 8,
+              includeWeekends: false,
+              userId,
+              notes: `Auto-generated from multi-document import (${documents.length} documents)`
+            });
+
+            result.schedule.created = true;
+            result.schedule.scheduleId = scheduleResult.scheduleId;
+            result.schedule.message = `Schedule created with ${scheduleResult.totalTasks} tasks`;
+            
+            console.log(`✅ Schedule #${scheduleResult.scheduleId} auto-created with ${scheduleResult.totalTasks} tasks\n`);
+          }
+        } catch (scheduleError) {
+          result.schedule.created = false;
+          result.schedule.message = `Schedule creation failed: ${scheduleError.message}`;
+          result.warnings.push(`Auto-schedule creation failed: ${scheduleError.message}`);
+          console.log(`⚠️  Schedule auto-creation failed: ${scheduleError.message}\n`);
+        }
+      } else {
+        result.schedule.created = false;
+        result.schedule.message = 'No issues created to schedule';
+        console.log('⚠️  No issues to schedule - skipping schedule creation\n');
+      }
 
       // Store import metadata
       const importResult = await pool.query(
