@@ -4686,15 +4686,22 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (modeMeetingRadio) {
     modeMeetingRadio.addEventListener('change', () => {
+      console.log('=== Meeting transcript radio changed ===');
+      console.log('Checked:', modeMeetingRadio.checked);
+      
       if (modeMeetingRadio.checked) {
+        console.log('Showing meeting transcript, hiding multi-document');
+        
         if (meetingContent) {
           meetingContent.classList.remove('hidden');
-          meetingContent.style.display = 'block';
         }
+        
         if (multiDocContent) {
           multiDocContent.classList.add('hidden');
-          multiDocContent.style.display = 'none';
         }
+        
+        // Update complexity info for meeting transcript mode
+        updateTranscriptComplexityInfo();
       }
     });
   }
@@ -4706,51 +4713,14 @@ document.addEventListener('DOMContentLoaded', function() {
       console.log('multiDocContent element:', multiDocContent);
       
       if (modeMultiDocRadio.checked) {
+        console.log('Showing multi-document, hiding meeting transcript');
+        
         if (multiDocContent) {
-          console.log('Before - multiDocContent className:', multiDocContent.className);
-          console.log('Before - multiDocContent display:', multiDocContent.style.display);
-          
-          multiDocContent.className = '';  // Remove all classes
-          multiDocContent.style.display = 'block';
-          multiDocContent.style.visibility = 'visible';
-          multiDocContent.style.opacity = '1';
-          multiDocContent.style.minHeight = '400px';
-          multiDocContent.style.backgroundColor = '#f9fafb';  // Light gray for debugging
-          
-          console.log('After - multiDocContent className:', multiDocContent.className);
-          console.log('After - multiDocContent display:', multiDocContent.style.display);
-          
-          // Also check child elements
-          const uploadSection = document.getElementById('md-upload-section');
-          console.log('md-upload-section element:', uploadSection);
-          if (uploadSection) {
-            console.log('Upload section display:', uploadSection.style.display);
-            console.log('Upload section class:', uploadSection.className);
-            
-            // Force everything to be visible
-            uploadSection.style.display = 'block';
-            uploadSection.style.visibility = 'visible';
-            uploadSection.style.opacity = '1';
-            
-            // Force all children to be visible too
-            const allChildren = uploadSection.querySelectorAll('*');
-            console.log('Found child elements:', allChildren.length);
-            allChildren.forEach((child, index) => {
-              child.style.display = child.style.display === 'none' ? 'block' : (child.style.display || '');
-              child.style.visibility = 'visible';
-              child.style.opacity = '1';
-              if (index < 5) {
-                console.log(`Child ${index}:`, child.tagName, child.className, child.id);
-              }
-            });
-          }
-        } else {
-          console.error('multiDocContent is NULL!');
+          multiDocContent.classList.remove('hidden');
         }
         
         if (meetingContent) {
-          meetingContent.className = 'hidden';
-          meetingContent.style.display = 'none';
+          meetingContent.classList.add('hidden');
         }
         
         // Update complexity info for multi-document mode
