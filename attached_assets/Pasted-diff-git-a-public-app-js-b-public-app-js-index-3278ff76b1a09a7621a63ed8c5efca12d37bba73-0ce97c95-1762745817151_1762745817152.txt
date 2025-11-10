@@ -1,0 +1,272 @@
+diff --git a/public/app.js b/public/app.js
+index 3278ff76b1a09a7621a63ed8c5efca12d37bba73..0ce97c95f226581609eaa215b68710e60616f73c 100644
+--- a/public/app.js
++++ b/public/app.js
+@@ -646,50 +646,52 @@ function setupEventListeners() {
+                 closeDropdown(btn, menu);
+                 btn?.focus();
+             } else if (e.key === 'Home') {
+                 e.preventDefault();
+                 items[0]?.focus();
+             } else if (e.key === 'End') {
+                 e.preventDefault();
+                 items[items.length - 1]?.focus();
+             }
+         });
+     });
+     
+     // Close dropdowns when clicking outside
+     document.addEventListener('click', (e) => {
+         if (!viewDropdownBtn?.contains(e.target) && !viewDropdownMenu?.contains(e.target)) {
+             closeDropdown(viewDropdownBtn, viewDropdownMenu);
+         }
+         if (!createDropdownBtn?.contains(e.target) && !createDropdownMenu?.contains(e.target)) {
+             closeDropdown(createDropdownBtn, createDropdownMenu);
+         }
+     });
+     
+     // AI Analysis and Transcripts buttons (CSP-compliant event delegation)
+     document.getElementById('ai-analysis-btn')?.addEventListener('click', showAIAnalysisModal);
+     document.getElementById('transcripts-btn')?.addEventListener('click', openTranscriptsModal);
++
++    initializeAIAnalysisModeToggle();
+     
+     // Export button
+     document.getElementById('copy-clipboard-btn')?.addEventListener('click', copyToClipboard);
+     
+     // Close dropdowns when a menu item is clicked
+     viewDropdownMenu?.querySelectorAll('button').forEach(btn => {
+         btn.addEventListener('click', () => {
+             closeDropdown(viewDropdownBtn, viewDropdownMenu);
+         });
+     });
+     
+     createDropdownMenu?.querySelectorAll('button').forEach(btn => {
+         btn.addEventListener('click', () => {
+             closeDropdown(createDropdownBtn, createDropdownMenu);
+         });
+     });
+     
+     // Relationship modal buttons
+     document.getElementById('close-relationship-modal-btn')?.addEventListener('click', closeRelationshipModal);
+     document.getElementById('add-relationship-btn')?.addEventListener('click', addRelationship);
+     
+     // Relationship target type change listener (bind once)
+     document.getElementById('relationship-target-type')?.addEventListener('change', populateTargetDropdown);
+     
+     // Add event listeners after DOM is loaded
+@@ -713,50 +715,96 @@ function setupEventListeners() {
+         }
+         
+         // Handle add relationship buttons
+         const relationshipBtn = e.target.closest('[data-action="add-relationship"]');
+         if (relationshipBtn) {
+             const relationshipType = relationshipBtn.getAttribute('data-type');
+             if (relationshipType && currentDetailItem) {
+                 // Pre-fill the relationship type in the modal
+                 document.getElementById('relationship-type').value = relationshipType;
+                 showRelationshipModal(currentDetailItem.id, currentDetailItem.type, currentDetailItem.title);
+             }
+         }
+     });
+ 
+     // Handle form submissions
+     document.addEventListener("submit", function (e) {
+         if (e.target.onsubmit) {
+             e.preventDefault();
+             if (e.target.querySelector("#project-name")) {
+                 createProject(e);
+             }
+         }
+     });
+ }
+ 
++function setAIAnalysisMode(mode) {
++    const meetingTranscriptContent = document.getElementById('meeting-transcript-content');
++    const multiDocumentContent = document.getElementById('multi-document-content');
++    const transcriptModeRadio = document.getElementById('ai-mode-meeting-transcript');
++    const multiDocumentModeRadio = document.getElementById('ai-mode-multi-document');
++
++    if (!meetingTranscriptContent || !multiDocumentContent) {
++        return;
++    }
++
++    const showTranscript = mode !== 'multi-doc';
++
++    meetingTranscriptContent.classList.toggle('hidden', !showTranscript);
++    meetingTranscriptContent.setAttribute('aria-hidden', (!showTranscript).toString());
++
++    multiDocumentContent.classList.toggle('hidden', showTranscript);
++    multiDocumentContent.setAttribute('aria-hidden', showTranscript.toString());
++
++    if (transcriptModeRadio) {
++        transcriptModeRadio.checked = showTranscript;
++    }
++
++    if (multiDocumentModeRadio) {
++        multiDocumentModeRadio.checked = !showTranscript;
++    }
++}
++
++function initializeAIAnalysisModeToggle() {
++    const modeRadios = document.querySelectorAll('input[name="ai-analysis-mode"]');
++
++    if (!modeRadios.length) {
++        return;
++    }
++
++    modeRadios.forEach((radio) => {
++        radio.addEventListener('change', (event) => {
++            const selectedMode = event.target.value === 'multi-doc' ? 'multi-doc' : 'transcript';
++            setAIAnalysisMode(selectedMode);
++        });
++    });
++
++    const checkedRadio = document.querySelector('input[name="ai-analysis-mode"]:checked');
++    const initialMode = checkedRadio?.value === 'multi-doc' ? 'multi-doc' : 'transcript';
++    setAIAnalysisMode(initialMode);
++}
++
+ // Rest of your JavaScript functions remain the same...
+ // (Keep all the other functions: loadProjects, renderProjects, etc.)
+ 
+ // Load projects
+ async function loadProjects() {
+     try {
+         const response = await axios.get("/api/projects");
+         projects = response.data;
+         renderProjects();
+ 
+         if (projects.length === 0) {
+             showWelcomeMessage();
+         }
+     } catch (error) {
+         console.error("Error loading projects:", error);
+         showErrorMessage("Failed to load projects");
+     }
+ }
+ 
+ // Helper function to determine if description is long (more than ~5 lines of text)
+ function isLongDescription(text) {
+     if (!text) return false;
+     return text.length > 280;
+ }
+ 
+@@ -3319,72 +3367,115 @@ function showAIAnalysisModal() {
+     AuthManager.showNotification('Insufficient permissions - Only Project Managers and System Administrators can upload transcripts and run AI analysis', 'error');
+     return;
+   }
+ 
+   document.getElementById('ai-analysis-modal').classList.remove('hidden');
+   resetAnalysis();
+ }
+ 
+ // Close AI analysis modal
+ function closeAIAnalysisModal() {
+   document.getElementById('ai-analysis-modal').classList.add('hidden');
+   resetAnalysis();
+ }
+ 
+ // Reset to upload step
+ function resetAnalysis() {
+   document.getElementById('upload-step').classList.remove('hidden');
+   document.getElementById('review-step').classList.add('hidden');
+   document.getElementById('transcript-file').value = '';
+   document.getElementById('file-name-list')?.classList.add('hidden');
+   document.getElementById('analyze-btn').disabled = true;
+   document.getElementById('analysis-progress').classList.add('hidden');
+   selectedFile = null;
+   accumulatedFiles = [];
+   currentAIAnalysis = null;
+-  
++
++  setAIAnalysisMode('transcript');
++
++  const multiDocFileInput = document.getElementById('multi-doc-file-input');
++  if (multiDocFileInput) {
++    multiDocFileInput.value = '';
++  }
++
++  document.getElementById('multi-doc-file-list')?.classList.add('hidden');
++  const multiDocFilesList = document.getElementById('multi-doc-files');
++  if (multiDocFilesList) {
++    multiDocFilesList.innerHTML = '';
++  }
++  const multiDocProcessBtn = document.getElementById('multi-doc-process-btn');
++  if (multiDocProcessBtn) {
++    multiDocProcessBtn.disabled = true;
++  }
++
++  const multiDocImportBtn = document.getElementById('multi-doc-import-btn');
++  if (multiDocImportBtn) {
++    multiDocImportBtn.disabled = true;
++  }
++  document.getElementById('multi-doc-progress')?.classList.add('hidden');
++  document.getElementById('multi-doc-review')?.classList.add('hidden');
++
++  const multiDocResults = document.getElementById('multi-doc-results');
++  if (multiDocResults) {
++    multiDocResults.innerHTML = '<p class="text-sm text-gray-500">Upload documents to view AI results.</p>';
++  }
++
+   // Update project complexity display
+   if (currentProject) {
+     const complexityLevel = currentProject.complexity_level || 'standard';
+     const maxFiles = currentProject.max_file_uploads || 5;
+     
+     const badgeColors = {
+       'standard': 'bg-green-100 text-green-800',
+       'complex': 'bg-yellow-100 text-yellow-800',
+       'enterprise': 'bg-purple-100 text-purple-800'
+     };
+     
++    const transcriptBadgeClass = `px-2 py-1 rounded text-sm font-semibold ${badgeColors[complexityLevel] || badgeColors.standard}`;
++    const multiDocBadgeClass = `px-2 py-1 rounded-full text-sm font-semibold ${badgeColors[complexityLevel] || badgeColors.standard}`;
++
+     const badge = document.getElementById('transcript-complexity-badge');
+     if (badge) {
+-      badge.className = `px-2 py-1 rounded text-sm font-semibold ${badgeColors[complexityLevel] || badgeColors.standard}`;
++      badge.className = transcriptBadgeClass;
+       badge.textContent = complexityLevel.charAt(0).toUpperCase() + complexityLevel.slice(1);
+     }
+     
+     const maxFilesDisplay = document.getElementById('transcript-max-files');
+     if (maxFilesDisplay) {
+       maxFilesDisplay.textContent = maxFiles;
+     }
++
++    const multiDocBadge = document.getElementById('multi-doc-complexity-badge');
++    if (multiDocBadge) {
++      multiDocBadge.className = multiDocBadgeClass;
++      multiDocBadge.textContent = complexityLevel.charAt(0).toUpperCase() + complexityLevel.slice(1);
++    }
++
++    const multiDocMaxFiles = document.getElementById('multi-doc-max-files');
++    if (multiDocMaxFiles) {
++      multiDocMaxFiles.textContent = maxFiles;
++    }
+   }
+ }
+ 
+ // Handle file selection - accumulates files instead of replacing
+ function handleFileSelect(event) {
+   const newFiles = event.target.files;
+   if (!newFiles || newFiles.length === 0) return;
+ 
+   // Get project's max file limit
+   const maxFiles = currentProject?.max_file_uploads || 5;
+   
+   // Add new files to accumulated list
+   Array.from(newFiles).forEach(file => {
+     // Check if we've reached the limit
+     if (accumulatedFiles.length >= maxFiles) {
+       alert(`Maximum ${maxFiles} files allowed for ${currentProject?.complexity_level || 'standard'} complexity projects`);
+       return;
+     }
+     
+     // Check for duplicate filenames
+     const isDuplicate = accumulatedFiles.some(f => f.name === file.name);
+     if (!isDuplicate) {
+       accumulatedFiles.push(file);
+     }
+   });

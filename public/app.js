@@ -508,45 +508,52 @@ document.addEventListener("DOMContentLoaded", async function () {
     initializeTableView();
 });
 
-// Initialize AI Analysis mode toggle between Meeting Transcript and Multi-Document Processing
-function initializeAIAnalysisModeToggle() {
-    const transcriptModeRadio = document.getElementById('mode-meeting-transcript');
-    const multiDocumentModeRadio = document.getElementById('mode-multi-document');
+// Set AI Analysis mode with proper accessibility
+function setAIAnalysisMode(mode) {
     const meetingTranscriptContent = document.getElementById('meeting-transcript-content');
     const multiDocumentContent = document.getElementById('multi-document-content');
+    const transcriptModeRadio = document.getElementById('ai-mode-meeting-transcript');
+    const multiDocumentModeRadio = document.getElementById('ai-mode-multi-document');
 
-    if (!transcriptModeRadio || !multiDocumentModeRadio || !meetingTranscriptContent || !multiDocumentContent) {
+    if (!meetingTranscriptContent || !multiDocumentContent) {
         return;
     }
 
-    const showTranscriptMode = () => {
-        meetingTranscriptContent.classList.remove('hidden');
-        multiDocumentContent.classList.add('hidden');
-    };
+    const showTranscript = mode !== 'multi-doc';
 
-    const showMultiDocumentMode = () => {
-        meetingTranscriptContent.classList.add('hidden');
-        multiDocumentContent.classList.remove('hidden');
-    };
+    meetingTranscriptContent.classList.toggle('hidden', !showTranscript);
+    meetingTranscriptContent.setAttribute('aria-hidden', (!showTranscript).toString());
 
-    transcriptModeRadio.addEventListener('change', () => {
-        if (transcriptModeRadio.checked) {
-            showTranscriptMode();
-        }
-    });
+    multiDocumentContent.classList.toggle('hidden', showTranscript);
+    multiDocumentContent.setAttribute('aria-hidden', showTranscript.toString());
 
-    multiDocumentModeRadio.addEventListener('change', () => {
-        if (multiDocumentModeRadio.checked) {
-            showMultiDocumentMode();
-        }
-    });
-
-    // Initialize correct state on page load
-    if (multiDocumentModeRadio.checked) {
-        showMultiDocumentMode();
-    } else {
-        showTranscriptMode();
+    if (transcriptModeRadio) {
+        transcriptModeRadio.checked = showTranscript;
     }
+
+    if (multiDocumentModeRadio) {
+        multiDocumentModeRadio.checked = !showTranscript;
+    }
+}
+
+// Initialize AI Analysis mode toggle between Meeting Transcript and Multi-Document Processing
+function initializeAIAnalysisModeToggle() {
+    const modeRadios = document.querySelectorAll('input[name="ai-analysis-mode"]');
+
+    if (!modeRadios.length) {
+        return;
+    }
+
+    modeRadios.forEach((radio) => {
+        radio.addEventListener('change', (event) => {
+            const selectedMode = event.target.value === 'multi-doc' ? 'multi-doc' : 'transcript';
+            setAIAnalysisMode(selectedMode);
+        });
+    });
+
+    const checkedRadio = document.querySelector('input[name="ai-analysis-mode"]:checked');
+    const initialMode = checkedRadio?.value === 'multi-doc' ? 'multi-doc' : 'transcript';
+    setAIAnalysisMode(initialMode);
 }
 
 // Setup event listeners (replaces inline onclick handlers)
@@ -3384,6 +3391,35 @@ function resetAnalysis() {
   selectedFile = null;
   accumulatedFiles = [];
   currentAIAnalysis = null;
+
+  setAIAnalysisMode('transcript');
+
+  const multiDocFileInput = document.getElementById('multi-doc-file-input');
+  if (multiDocFileInput) {
+    multiDocFileInput.value = '';
+  }
+
+  document.getElementById('multi-doc-file-list')?.classList.add('hidden');
+  const multiDocFilesList = document.getElementById('multi-doc-files');
+  if (multiDocFilesList) {
+    multiDocFilesList.innerHTML = '';
+  }
+  const multiDocProcessBtn = document.getElementById('multi-doc-process-btn');
+  if (multiDocProcessBtn) {
+    multiDocProcessBtn.disabled = true;
+  }
+
+  const multiDocImportBtn = document.getElementById('multi-doc-import-btn');
+  if (multiDocImportBtn) {
+    multiDocImportBtn.disabled = true;
+  }
+  document.getElementById('multi-doc-progress')?.classList.add('hidden');
+  document.getElementById('multi-doc-review')?.classList.add('hidden');
+
+  const multiDocResults = document.getElementById('multi-doc-results');
+  if (multiDocResults) {
+    multiDocResults.innerHTML = '<p class="text-sm text-gray-500">Upload documents to view AI results.</p>';
+  }
   
   // Update project complexity display
   if (currentProject) {
@@ -3396,15 +3432,29 @@ function resetAnalysis() {
       'enterprise': 'bg-purple-100 text-purple-800'
     };
     
+    const transcriptBadgeClass = `px-2 py-1 rounded text-sm font-semibold ${badgeColors[complexityLevel] || badgeColors.standard}`;
+    const multiDocBadgeClass = `px-2 py-1 rounded-full text-sm font-semibold ${badgeColors[complexityLevel] || badgeColors.standard}`;
+
     const badge = document.getElementById('transcript-complexity-badge');
     if (badge) {
-      badge.className = `px-2 py-1 rounded text-sm font-semibold ${badgeColors[complexityLevel] || badgeColors.standard}`;
+      badge.className = transcriptBadgeClass;
       badge.textContent = complexityLevel.charAt(0).toUpperCase() + complexityLevel.slice(1);
     }
     
     const maxFilesDisplay = document.getElementById('transcript-max-files');
     if (maxFilesDisplay) {
       maxFilesDisplay.textContent = maxFiles;
+    }
+
+    const multiDocBadge = document.getElementById('multi-doc-complexity-badge');
+    if (multiDocBadge) {
+      multiDocBadge.className = multiDocBadgeClass;
+      multiDocBadge.textContent = complexityLevel.charAt(0).toUpperCase() + complexityLevel.slice(1);
+    }
+
+    const multiDocMaxFiles = document.getElementById('multi-doc-max-files');
+    if (multiDocMaxFiles) {
+      multiDocMaxFiles.textContent = maxFiles;
     }
   }
 }

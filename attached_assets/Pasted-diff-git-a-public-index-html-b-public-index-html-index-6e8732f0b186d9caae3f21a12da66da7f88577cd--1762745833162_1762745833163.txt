@@ -1,0 +1,212 @@
+diff --git a/public/index.html b/public/index.html
+index 6e8732f0b186d9caae3f21a12da66da7f88577cd..65a12d2462e07332c5bfd8c3cccacc47389d1627 100644
+--- a/public/index.html
++++ b/public/index.html
+@@ -823,50 +823,71 @@
+                         </div>
+                         
+                         <!-- Existing Relationships -->
+                         <div>
+                             <h4 class="font-semibold mb-3">Existing Relationships</h4>
+                             <div id="relationships-list" class="space-y-2">
+                                 <!-- Relationships will be listed here -->
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+ 
+             <!-- AI Meeting Analysis Modal -->
+             <div id="ai-analysis-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+                 <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+                     <div class="flex items-center justify-between p-6 border-b">
+                         <div>
+                             <h3 class="text-xl font-semibold text-gray-800">AI Meeting Analysis</h3>
+                             <p class="text-xs text-gray-500 mt-1">Powered by GPT-3.5-Turbo (~$0.001 per analysis)</p>
+                         </div>
+                         <button id="close-ai-analysis-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                     </div>
+                     
+                     <div class="p-6">
++                        <div class="mb-6">
++                            <h4 class="font-semibold text-gray-800 mb-2">Select Analysis Mode:</h4>
++                            <div class="grid gap-3 md:grid-cols-2">
++                                <label class="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:border-blue-400 transition-colors">
++                                    <input type="radio" name="ai-analysis-mode" id="ai-mode-meeting-transcript" value="transcript" aria-controls="meeting-transcript-content" class="mt-1" checked>
++                                    <div>
++                                        <div class="font-medium text-gray-900">Meeting Transcript</div>
++                                        <p class="text-xs text-gray-600">Extract action items and issues from meeting transcripts</p>
++                                    </div>
++                                </label>
++                                <label class="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:border-blue-400 transition-colors">
++                                    <input type="radio" name="ai-analysis-mode" id="ai-mode-multi-document" value="multi-doc" aria-controls="multi-document-content" class="mt-1">
++                                    <div>
++                                        <div class="font-medium text-gray-900">Multi-Document Processing</div>
++                                        <p class="text-xs text-gray-600">Comprehensive multi-document project import and analysis</p>
++                                    </div>
++                                </label>
++                            </div>
++                        </div>
++
++                        <div id="meeting-transcript-content" class="space-y-6" aria-hidden="false">
+                         <!-- Step 1: Upload -->
+                         <div id="upload-step" class="mb-6">
+                             <h4 class="font-semibold mb-3">Step 1: Upload Meeting Transcript(s)</h4>
+                             
+                             <!-- Project complexity info -->
+                             <div id="transcript-complexity-info" class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                 <div class="flex items-center gap-2">
+                                     <span class="text-sm font-medium text-blue-900">📊 Project Complexity:</span>
+                                     <span id="transcript-complexity-badge" class="text-sm font-semibold">Loading...</span>
+                                     <span class="text-sm text-blue-700">|</span>
+                                     <span class="text-sm text-blue-700">Max files: <strong id="transcript-max-files">-</strong></span>
+                                 </div>
+                             </div>
+                             
+                             <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+                                 <input type="file" id="transcript-file" accept=".txt,.pdf,.docx" multiple class="hidden">
+                                 <label for="transcript-file" class="cursor-pointer">
+                                     <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                     </svg>
+                                     <p class="text-sm text-gray-600 font-medium">Click to upload or drag and drop</p>
+                                     <p class="text-xs text-gray-500 mt-1">PDF, Word (.docx), or Text files, up to 10MB each</p>
+                                     <p class="text-xs text-gray-400 mt-1">Upload limit based on project complexity</p>
+                                 </label>
+                                 <div id="file-name-list" class="mt-3 text-sm text-green-600 hidden">
+@@ -946,50 +967,135 @@
+                                     <span id="relationships-count" class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">0</span>
+                                 </h5>
+                                 
+                                 <!-- Created Relationships -->
+                                 <div id="created-relationships" class="mb-3"></div>
+                                 
+                                 <!-- Failed Relationships -->
+                                 <div id="failed-relationships"></div>
+                             </div>
+ 
+                             <!-- Actions -->
+                             <div class="flex justify-between items-center pt-4 border-t">
+                                 <button id="reset-analysis-btn" class="text-sm text-gray-600 hover:text-gray-800">
+                                     ← Upload New Transcript
+                                 </button>
+                                 <div class="space-x-3">
+                                     <button id="cancel-ai-modal-btn" class="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
+                                         Cancel
+                                     </button>
+                                     <button id="create-all-items-btn" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+                                         Create Selected Items
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
++                        </div>
++
++                        <div id="multi-document-content" class="hidden space-y-6" aria-hidden="true">
++                            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
++                                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
++                                    <div class="flex items-center gap-2 text-sm font-medium text-purple-900">
++                                        <span class="text-lg">📁</span>
++                                        <span>Multi-Document Workflow</span>
++                                    </div>
++                                    <div class="flex items-center gap-2 text-xs text-purple-700">
++                                        <span id="multi-doc-complexity-badge" class="px-2 py-1 rounded-full bg-purple-100 font-semibold">Standard</span>
++                                        <span>|</span>
++                                        <span>Max files: <strong id="multi-doc-max-files">5</strong></span>
++                                    </div>
++                                </div>
++                                <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-medium text-purple-800">
++                                    <div class="flex items-center gap-2">
++                                        <span class="w-6 h-6 rounded-full bg-white text-purple-700 flex items-center justify-center text-xs font-semibold">1</span>
++                                        Upload
++                                    </div>
++                                    <div class="flex items-center gap-2">
++                                        <span class="w-6 h-6 rounded-full bg-white text-purple-700 flex items-center justify-center text-xs font-semibold">2</span>
++                                        Analyze
++                                    </div>
++                                    <div class="flex items-center gap-2">
++                                        <span class="w-6 h-6 rounded-full bg-white text-purple-700 flex items-center justify-center text-xs font-semibold">3</span>
++                                        Review
++                                    </div>
++                                    <div class="flex items-center gap-2">
++                                        <span class="w-6 h-6 rounded-full bg-white text-purple-700 flex items-center justify-center text-xs font-semibold">4</span>
++                                        Import
++                                    </div>
++                                </div>
++                            </div>
++
++                            <div class="grid gap-6 lg:grid-cols-[2fr,3fr]">
++                                <div class="space-y-4">
++                                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-400 transition-colors">
++                                        <input type="file" id="multi-doc-file-input" accept=".pdf,.docx,.txt" multiple class="hidden">
++                                        <label for="multi-doc-file-input" class="cursor-pointer block">
++                                            <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
++                                            </svg>
++                                            <p class="text-sm text-gray-600 font-medium">Click to upload or drag and drop</p>
++                                            <p class="text-xs text-gray-500 mt-1">PDF, Word (.docx), or Text files, up to 10MB each</p>
++                                            <p class="text-xs text-gray-400 mt-1">Upload limit based on project complexity</p>
++                                        </label>
++                                        <div id="multi-doc-file-list" class="hidden mt-4 text-left">
++                                            <p class="text-sm font-medium text-gray-700 mb-2">Selected files</p>
++                                            <ul id="multi-doc-files" class="space-y-1 text-sm text-gray-600"></ul>
++                                        </div>
++                                    </div>
++
++                                    <button id="multi-doc-process-btn" class="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium" disabled>
++                                        Process Documents
++                                    </button>
++
++                                    <div id="multi-doc-progress" class="hidden bg-purple-50 border border-purple-200 rounded-lg p-4 text-sm text-purple-800 space-y-2">
++                                        <div class="flex items-center gap-2">
++                                            <div class="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
++                                            <span>Analyzing documents...</span>
++                                        </div>
++                                        <p class="text-xs text-purple-600">This may take a few minutes for large uploads.</p>
++                                    </div>
++                                </div>
++
++                                <div id="multi-doc-review" class="hidden space-y-4">
++                                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
++                                        <h5 class="text-sm font-semibold text-blue-900">AI Summary</h5>
++                                        <p class="text-xs text-blue-700 mt-1">Review extracted workstreams, checklist items, and matches before importing.</p>
++                                    </div>
++                                    <div id="multi-doc-results" class="space-y-3">
++                                        <p class="text-sm text-gray-500">Upload documents to view AI results.</p>
++                                    </div>
++                                    <div class="flex justify-end gap-3">
++                                        <button id="multi-doc-reset-btn" class="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50">
++                                            Start Over
++                                        </button>
++                                        <button id="multi-doc-import-btn" class="px-6 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>
++                                            Import Selected Items
++                                        </button>
++                                    </div>
++                                </div>
++                            </div>
++                        </div>
+                     </div>
+                 </div>
+             </div>
+ 
+             <!-- Item Detail Modal (for Issues and Action Items) -->
+             <div id="item-detail-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+                 <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+                     <div class="flex items-center justify-between p-6 border-b">
+                         <h3 id="item-detail-title" class="text-xl font-semibold text-gray-800"></h3>
+                         <div class="flex items-center gap-3">
+                             <!-- Action Buttons Group -->
+                             <div class="flex items-center gap-2 border-r pr-3">
+                                 <button 
+                                     id="item-detail-edit-btn" 
+                                     class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all flex items-center gap-2 text-sm font-medium shadow-sm"
+                                     title="Edit">
+                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                     </svg>
+                                     <span>Edit</span>
+                                 </button>
+                                 <button 
+                                     id="item-detail-delete-btn" 
+                                     class="px-4 py-2 bg-white border border-red-300 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-400 transition-all flex items-center gap-2 text-sm font-medium shadow-sm"
+                                     title="Delete">
