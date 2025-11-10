@@ -845,9 +845,29 @@
                     </div>
                     
                     <div class="p-6">
-                        <!-- Step 1: Upload -->
-                        <div id="upload-step" class="mb-6">
-                            <h4 class="font-semibold mb-3">Step 1: Upload Meeting Transcript(s)</h4>
+                        <!-- Mode Selector -->
+                        <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">Select Analysis Mode:</label>
+                            <div class="segmented-control-group">
+                                <button type="button" id="mode-meeting-transcript" class="segmented-control-button active">
+                                    <i class="fas fa-file-alt mr-2"></i>
+                                    <span>Meeting Transcript</span>
+                                </button>
+                                <button type="button" id="mode-multi-document" class="segmented-control-button">
+                                    <i class="fas fa-folder-open mr-2"></i>
+                                    <span>Multi-Document Processing</span>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2" id="mode-description">
+                                Extract action items and issues from meeting transcripts
+                            </p>
+                        </div>
+
+                        <!-- Meeting Transcript Content (Mode 1) -->
+                        <div id="meeting-transcript-content">
+                            <!-- Step 1: Upload -->
+                            <div id="upload-step" class="mb-6">
+                                <h4 class="font-semibold mb-3">Step 1: Upload Meeting Transcript(s)</h4>
                             
                             <!-- Project complexity info -->
                             <div id="transcript-complexity-info" class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -968,6 +988,150 @@
                                 </div>
                             </div>
                         </div>
+                        </div>
+                        <!-- End Meeting Transcript Content -->
+
+                        <!-- Multi-Document Processing Content (Mode 2) -->
+                        <div id="multi-document-content" class="hidden">
+                            <p class="text-sm text-blue-600 mb-4">
+                                <strong>📁 Multi-Document Processing:</strong> Upload large documents (SOW, requirements, specifications) 
+                                and AI will identify workstreams, generate comprehensive checklists, and match them to existing issues.
+                            </p>
+                            
+                            <!-- Step Indicator -->
+                            <div class="mb-6 bg-white border border-gray-200 rounded-lg p-4">
+                                <div class="flex items-center justify-between text-xs">
+                                    <div id="md-step-1" class="flex-1 text-center">
+                                        <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center mx-auto mb-1 font-semibold">1</div>
+                                        <div class="text-gray-700">Upload</div>
+                                    </div>
+                                    <div class="flex-1 border-t border-gray-300 mt-[-20px]"></div>
+                                    <div id="md-step-2" class="flex-1 text-center">
+                                        <div class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1 font-semibold">2</div>
+                                        <div class="text-gray-500">Detect</div>
+                                    </div>
+                                    <div class="flex-1 border-t border-gray-300 mt-[-20px]"></div>
+                                    <div id="md-step-3" class="flex-1 text-center">
+                                        <div class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1 font-semibold">3</div>
+                                        <div class="text-gray-500">Generate</div>
+                                    </div>
+                                    <div class="flex-1 border-t border-gray-300 mt-[-20px]"></div>
+                                    <div id="md-step-4" class="flex-1 text-center">
+                                        <div class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1 font-semibold">4</div>
+                                        <div class="text-gray-500">Match</div>
+                                    </div>
+                                    <div class="flex-1 border-t border-gray-300 mt-[-20px]"></div>
+                                    <div id="md-step-5" class="flex-1 text-center">
+                                        <div class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1 font-semibold">5</div>
+                                        <div class="text-gray-500">Review</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Upload Section -->
+                            <div id="md-upload-section">
+                                <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors" id="md-drop-zone">
+                                    <input type="file" id="md-file-input" class="hidden" accept=".pdf,.txt,.docx">
+                                    <label for="md-file-input" class="cursor-pointer">
+                                        <div class="text-5xl mb-3">📄</div>
+                                        <p class="text-sm text-gray-600 font-medium">Drop document here or click to browse</p>
+                                        <p class="text-xs text-gray-500 mt-1">PDF, Word (.docx), or Text files (max 10MB)</p>
+                                    </label>
+                                </div>
+                                
+                                <div id="md-file-preview" class="hidden mt-4 p-4 bg-blue-50 rounded-lg">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-3xl">📄</span>
+                                            <div>
+                                                <p class="font-medium text-gray-900" id="md-file-name"></p>
+                                                <p class="text-sm text-gray-600" id="md-file-size"></p>
+                                            </div>
+                                        </div>
+                                        <button id="md-clear-file" class="text-red-600 hover:text-red-800 text-sm">✕ Remove</button>
+                                    </div>
+                                </div>
+                                
+                                <button id="md-analyze-btn" disabled
+                                        class="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-colors">
+                                    Analyze Document →
+                                </button>
+                            </div>
+                            
+                            <!-- Processing Section -->
+                            <div id="md-processing-section" class="hidden text-center">
+                                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                                <h4 class="text-lg font-bold mb-2">Processing Document...</h4>
+                                <p class="text-sm text-gray-600 mb-6">This may take 1-2 minutes</p>
+                                
+                                <div class="space-y-2 text-left max-w-md mx-auto">
+                                    <div id="md-progress-1" class="flex items-center gap-2">
+                                        <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">⏳</div>
+                                        <span class="text-sm text-gray-600">Extracting document text...</span>
+                                    </div>
+                                    <div id="md-progress-2" class="flex items-center gap-2">
+                                        <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">⏳</div>
+                                        <span class="text-sm text-gray-600">Detecting workstreams...</span>
+                                    </div>
+                                    <div id="md-progress-3" class="flex items-center gap-2">
+                                        <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">⏳</div>
+                                        <span class="text-sm text-gray-600">Generating checklists...</span>
+                                    </div>
+                                    <div id="md-progress-4" class="flex items-center gap-2">
+                                        <div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">⏳</div>
+                                        <span class="text-sm text-gray-600">Matching to issues...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Review Section -->
+                            <div id="md-review-section" class="hidden">
+                                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                    <p class="text-sm text-green-800">
+                                        <strong>✓ Analysis Complete!</strong> Review the generated checklists below. 
+                                        Select which ones you want to create.
+                                    </p>
+                                </div>
+                                
+                                <div id="md-results-summary" class="grid grid-cols-4 gap-3 mb-4">
+                                    <div class="text-center p-3 bg-blue-50 rounded-lg">
+                                        <div class="text-2xl font-bold text-blue-600" id="md-stat-workstreams">0</div>
+                                        <div class="text-xs text-gray-600">Workstreams</div>
+                                    </div>
+                                    <div class="text-center p-3 bg-green-50 rounded-lg">
+                                        <div class="text-2xl font-bold text-green-600" id="md-stat-matched">0</div>
+                                        <div class="text-xs text-gray-600">Matched</div>
+                                    </div>
+                                    <div class="text-center p-3 bg-yellow-50 rounded-lg">
+                                        <div class="text-2xl font-bold text-yellow-600" id="md-stat-new">0</div>
+                                        <div class="text-xs text-gray-600">New Issues</div>
+                                    </div>
+                                    <div class="text-center p-3 bg-purple-50 rounded-lg">
+                                        <div class="text-2xl font-bold text-purple-600" id="md-stat-items">0</div>
+                                        <div class="text-xs text-gray-600">Total Items</div>
+                                    </div>
+                                </div>
+                                
+                                <div id="md-results-list" class="space-y-3 max-h-96 overflow-y-auto">
+                                    <!-- Results will be populated here -->
+                                </div>
+                                
+                                <div class="flex justify-between items-center pt-4 border-t mt-4">
+                                    <button id="md-reset-btn" class="text-sm text-gray-600 hover:text-gray-800">
+                                        ← Upload New Document
+                                    </button>
+                                    <div class="space-x-3">
+                                        <button id="md-cancel-btn" class="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
+                                            Cancel
+                                        </button>
+                                        <button id="md-create-btn" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+                                            Create Selected
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- End Multi-Document Processing Content -->
                     </div>
                 </div>
             </div>

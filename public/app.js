@@ -4231,6 +4231,301 @@ window.toggleReviewQueue = function() {
   panel.classList.toggle('hidden');
 }
 
+// ============= MODE SWITCHING =============
+
+// Global state for multi-document processing
+let multiDocFile = null;
+let multiDocResults = null;
+
+// Switch between analysis modes
+function switchAnalysisMode(mode) {
+  const meetingContent = document.getElementById('meeting-transcript-content');
+  const multiDocContent = document.getElementById('multi-document-content');
+  const meetingBtn = document.getElementById('mode-meeting-transcript');
+  const multiDocBtn = document.getElementById('mode-multi-document');
+  const modeDescription = document.getElementById('mode-description');
+  
+  if (mode === 'meeting') {
+    // Reset multi-document state before switching
+    resetMultiDocWorkflow();
+    
+    meetingContent.classList.remove('hidden');
+    multiDocContent.classList.add('hidden');
+    meetingBtn.classList.add('active');
+    multiDocBtn.classList.remove('active');
+    modeDescription.textContent = 'Extract action items and issues from meeting transcripts';
+  } else {
+    // Reset meeting transcript state before switching
+    resetAnalysis();
+    
+    meetingContent.classList.add('hidden');
+    multiDocContent.classList.remove('hidden');
+    meetingBtn.classList.remove('active');
+    multiDocBtn.classList.add('active');
+    modeDescription.textContent = 'AI-powered multi-document analysis with workstream detection and checklist generation';
+  }
+}
+
+// ============= MULTI-DOCUMENT PROCESSING =============
+
+function handleMultiDocFileSelect() {
+  const fileInput = document.getElementById('md-file-input');
+  const file = fileInput.files[0];
+  
+  if (!file) return;
+  
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  if (file.size > maxSize) {
+    alert('File too large. Maximum size is 10MB.');
+    return;
+  }
+  
+  const allowedTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|txt|docx)$/i)) {
+    alert('Invalid file type. Please upload PDF, TXT, or DOCX.');
+    return;
+  }
+  
+  multiDocFile = file;
+  
+  document.getElementById('md-file-preview').classList.remove('hidden');
+  document.getElementById('md-file-name').textContent = file.name;
+  document.getElementById('md-file-size').textContent = formatFileSize(file.size);
+  document.getElementById('md-analyze-btn').disabled = false;
+}
+
+function clearMultiDocFile() {
+  multiDocFile = null;
+  document.getElementById('md-file-input').value = '';
+  document.getElementById('md-file-preview').classList.add('hidden');
+  document.getElementById('md-analyze-btn').disabled = true;
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function startMultiDocAnalysis() {
+  if (!multiDocFile || !currentProject) {
+    alert('Please select a file and project first');
+    return;
+  }
+  
+  try {
+    showMultiDocSection('processing');
+    updateMultiDocStep(2);
+    
+    updateMultiDocProgress(1, 'processing', 'Extracting document text...');
+    const documentText = await extractMultiDocText(multiDocFile);
+    updateMultiDocProgress(1, 'complete', 'Document text extracted ✓');
+    
+    updateMultiDocProgress(2, 'processing', 'Detecting workstreams with AI...');
+    const workstreamsData = await detectWorkstreams(documentText);
+    updateMultiDocProgress(2, 'complete', `${workstreamsData.workstreams.length} workstreams detected ✓`);
+    updateMultiDocStep(3);
+    
+    updateMultiDocProgress(3, 'processing', 'Generating checklists...');
+    const checklistsData = await generateWorkstreamChecklists(workstreamsData.workstreams, documentText);
+    updateMultiDocProgress(3, 'complete', `${checklistsData.count} checklists generated ✓`);
+    updateMultiDocStep(4);
+    
+    updateMultiDocProgress(4, 'processing', 'Matching checklists to issues...');
+    const matchesData = await matchChecklistsToIssues(checklistsData.checklists);
+    updateMultiDocProgress(4, 'complete', 'Matching complete ✓');
+    updateMultiDocStep(5);
+    
+    multiDocResults = matchesData;
+    
+    setTimeout(() => {
+      showMultiDocResults(matchesData);
+    }, 500);
+    
+  } catch (error) {
+    console.error('Multi-doc analysis error:', error);
+    alert('Analysis failed: ' + (error.response?.data?.error || error.message));
+    resetMultiDocWorkflow();
+  }
+}
+
+async function extractMultiDocText(file) {
+  if (file.type === 'text/plain') {
+    return await file.text();
+  }
+  
+  const formData = new FormData();
+  formData.append('document', file);
+  
+  const response = await axios.post('/api/documents/extract', formData, {
+    withCredentials: true
+  });
+  
+  return response.data.extractedText;
+}
+
+async function detectWorkstreams(text) {
+  const response = await axios.post(`/api/projects/${currentProject.id}/analyze-workstreams`, {
+    documentText: text,
+    filename: multiDocFile.name
+  }, { withCredentials: true });
+  
+  return response.data;
+}
+
+async function generateWorkstreamChecklists(workstreams, text) {
+  const response = await axios.post(`/api/projects/${currentProject.id}/generate-workstream-checklists`, {
+    workstreams: workstreams,
+    documentText: text
+  }, { withCredentials: true });
+  
+  return response.data;
+}
+
+async function matchChecklistsToIssues(checklists) {
+  const response = await axios.post(`/api/projects/${currentProject.id}/match-checklists-to-issues`, {
+    checklists: checklists
+  }, { withCredentials: true });
+  
+  return response.data;
+}
+
+function showMultiDocSection(section) {
+  document.getElementById('md-upload-section').classList.toggle('hidden', section !== 'upload');
+  document.getElementById('md-processing-section').classList.toggle('hidden', section !== 'processing');
+  document.getElementById('md-review-section').classList.toggle('hidden', section !== 'review');
+}
+
+function updateMultiDocStep(step) {
+  for (let i = 1; i <= 5; i++) {
+    const stepEl = document.getElementById(`md-step-${i}`);
+    const circle = stepEl.querySelector('div:first-child');
+    const label = stepEl.querySelector('div:last-child');
+    
+    if (i < step) {
+      circle.className = 'w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center mx-auto mb-1 font-semibold';
+      label.className = 'text-gray-700';
+    } else if (i === step) {
+      circle.className = 'w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center mx-auto mb-1 font-semibold';
+      label.className = 'text-gray-700';
+    } else {
+      circle.className = 'w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mx-auto mb-1 font-semibold';
+      label.className = 'text-gray-500';
+    }
+  }
+}
+
+function updateMultiDocProgress(step, status, message) {
+  const progressEl = document.getElementById(`md-progress-${step}`);
+  if (!progressEl) return;
+  
+  const icon = progressEl.querySelector('div');
+  const text = progressEl.querySelector('span');
+  
+  if (status === 'processing') {
+    icon.innerHTML = '<span class="text-xs">⏳</span>';
+    icon.className = 'w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center';
+    text.className = 'text-sm text-blue-700 font-medium';
+  } else if (status === 'complete') {
+    icon.innerHTML = '<span class="text-xs">✓</span>';
+    icon.className = 'w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center';
+    text.className = 'text-sm text-green-700';
+  }
+  
+  text.textContent = message;
+}
+
+function showMultiDocResults(data) {
+  showMultiDocSection('review');
+  
+  document.getElementById('md-stat-workstreams').textContent = data.summary?.workstreamsCount || 0;
+  document.getElementById('md-stat-matched').textContent = data.summary?.matchedCount || 0;
+  document.getElementById('md-stat-new').textContent = data.summary?.newIssuesCount || 0;
+  document.getElementById('md-stat-items').textContent = data.summary?.totalItems || 0;
+  
+  const resultsList = document.getElementById('md-results-list');
+  resultsList.innerHTML = '';
+  
+  if (data.matches && data.matches.length > 0) {
+    data.matches.forEach(match => {
+      const matchEl = document.createElement('div');
+      matchEl.className = 'p-4 border border-gray-200 rounded-lg bg-white';
+      matchEl.innerHTML = `
+        <div class="flex items-start gap-3">
+          <input type="checkbox" checked class="mt-1" data-match-id="${match.id}">
+          <div class="flex-1">
+            <h5 class="font-medium text-gray-900">${escapeHtml(match.title)}</h5>
+            <p class="text-sm text-gray-600 mt-1">${escapeHtml(match.description || '')}</p>
+            <div class="flex items-center gap-2 mt-2">
+              <span class="text-xs px-2 py-1 rounded ${match.isNew ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">
+                ${match.isNew ? 'New Issue' : 'Matched to: ' + escapeHtml(match.matchedTo)}
+              </span>
+              <span class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">
+                ${match.itemsCount || 0} checklist items
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+      resultsList.appendChild(matchEl);
+    });
+  }
+}
+
+function resetMultiDocWorkflow() {
+  clearMultiDocFile();
+  multiDocResults = null;
+  showMultiDocSection('upload');
+  updateMultiDocStep(1);
+}
+
+async function createMultiDocItems() {
+  if (!multiDocResults || !currentProject) {
+    alert('No results to create');
+    return;
+  }
+  
+  const createBtn = document.getElementById('md-create-btn');
+  const originalText = createBtn.innerHTML;
+  
+  try {
+    createBtn.disabled = true;
+    createBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+    
+    // Get selected matches
+    const checkboxes = document.querySelectorAll('#md-results-list input[type="checkbox"]:checked');
+    const selectedMatchIds = Array.from(checkboxes).map(cb => cb.dataset.matchId);
+    
+    if (selectedMatchIds.length === 0) {
+      alert('Please select at least one item to create');
+      return;
+    }
+    
+    // Filter results to only selected items
+    const selectedMatches = multiDocResults.matches.filter(m => 
+      selectedMatchIds.includes(String(m.id))
+    );
+    
+    // Submit to backend for creation
+    const response = await axios.post(`/api/projects/${currentProject.id}/create-from-matches`, {
+      matches: selectedMatches
+    }, { withCredentials: true });
+    
+    alert(`Successfully created ${response.data.created} items!`);
+    
+    // Close modal and refresh project data
+    closeAIAnalysisModal();
+    await loadProjectData(currentProject.id);
+    
+  } catch (error) {
+    console.error('Error creating multi-doc items:', error);
+    alert(error.response?.data?.error || 'Failed to create items');
+  } finally {
+    createBtn.disabled = false;
+    createBtn.innerHTML = originalText;
+  }
+}
+
 // Toggle all action items
 function toggleAllActionItems() {
   const checkboxes = document.querySelectorAll('#ai-action-items input[type="checkbox"]');
@@ -4381,6 +4676,70 @@ document.addEventListener('DOMContentLoaded', function() {
   const createBtn = document.getElementById('create-all-items-btn');
   if (createBtn) {
     createBtn.addEventListener('click', createAllItems);
+  }
+  
+  // Mode selector buttons
+  const modeMeetingBtn = document.getElementById('mode-meeting-transcript');
+  const modeMultiDocBtn = document.getElementById('mode-multi-document');
+  
+  if (modeMeetingBtn) {
+    modeMeetingBtn.addEventListener('click', () => switchAnalysisMode('meeting'));
+  }
+  
+  if (modeMultiDocBtn) {
+    modeMultiDocBtn.addEventListener('click', () => switchAnalysisMode('multi-document'));
+  }
+  
+  // Multi-document processing event listeners
+  const mdDropZone = document.getElementById('md-drop-zone');
+  const mdFileInput = document.getElementById('md-file-input');
+  const mdClearFile = document.getElementById('md-clear-file');
+  const mdAnalyzeBtn = document.getElementById('md-analyze-btn');
+  const mdResetBtn = document.getElementById('md-reset-btn');
+  const mdCancelBtn = document.getElementById('md-cancel-btn');
+  
+  if (mdDropZone && mdFileInput) {
+    mdDropZone.addEventListener('click', () => mdFileInput.click());
+    mdFileInput.addEventListener('change', handleMultiDocFileSelect);
+    
+    mdDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      mdDropZone.classList.add('border-blue-500', 'bg-blue-50');
+    });
+    
+    mdDropZone.addEventListener('dragleave', () => {
+      mdDropZone.classList.remove('border-blue-500', 'bg-blue-50');
+    });
+    
+    mdDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      mdDropZone.classList.remove('border-blue-500', 'bg-blue-50');
+      if (e.dataTransfer.files.length > 0) {
+        mdFileInput.files = e.dataTransfer.files;
+        handleMultiDocFileSelect();
+      }
+    });
+  }
+  
+  if (mdClearFile) {
+    mdClearFile.addEventListener('click', clearMultiDocFile);
+  }
+  
+  if (mdAnalyzeBtn) {
+    mdAnalyzeBtn.addEventListener('click', startMultiDocAnalysis);
+  }
+  
+  if (mdResetBtn) {
+    mdResetBtn.addEventListener('click', resetMultiDocWorkflow);
+  }
+  
+  if (mdCancelBtn) {
+    mdCancelBtn.addEventListener('click', closeAIAnalysisModal);
+  }
+  
+  const mdCreateBtn = document.getElementById('md-create-btn');
+  if (mdCreateBtn) {
+    mdCreateBtn.addEventListener('click', createMultiDocItems);
   }
   
   // Transcripts modal event listeners
