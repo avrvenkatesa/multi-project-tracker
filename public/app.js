@@ -4714,9 +4714,20 @@ document.addEventListener('DOMContentLoaded', function() {
           multiDocContent.style.display = 'block';
           multiDocContent.style.visibility = 'visible';
           multiDocContent.style.opacity = '1';
+          multiDocContent.style.minHeight = '400px';
+          multiDocContent.style.backgroundColor = '#f9fafb';  // Light gray for debugging
           
           console.log('After - multiDocContent className:', multiDocContent.className);
           console.log('After - multiDocContent display:', multiDocContent.style.display);
+          
+          // Also check child elements
+          const uploadSection = document.getElementById('md-upload-section');
+          console.log('md-upload-section element:', uploadSection);
+          if (uploadSection) {
+            console.log('Upload section display:', uploadSection.style.display);
+            console.log('Upload section class:', uploadSection.className);
+            uploadSection.style.display = 'block';
+          }
         } else {
           console.error('multiDocContent is NULL!');
         }
