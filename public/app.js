@@ -4772,12 +4772,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // Multi-document event listeners
-  const mdFileInput = document.getElementById('md-file-input');
-  const mdFileList = document.getElementById('md-file-list');
-  const mdProcessBtn = document.getElementById('md-process-btn');
-  const mdResetBtn = document.getElementById('md-reset-btn');
-  const mdCancelBtn = document.getElementById('md-cancel-btn');
-  const mdCreateBtn = document.getElementById('md-create-btn');
+  const mdFileInput = document.getElementById('multi-doc-file-input');
+  const mdFileList = document.getElementById('multi-doc-file-list');
+  const mdProcessBtn = document.getElementById('multi-doc-process-btn');
+  const mdResetBtn = document.getElementById('multi-doc-reset-btn');
+  const mdImportBtn = document.getElementById('multi-doc-import-btn');
   
   let mdSelectedFiles = [];
   
@@ -4800,12 +4799,8 @@ document.addEventListener('DOMContentLoaded', function() {
     mdResetBtn.addEventListener('click', resetMultiDocWorkflow);
   }
   
-  if (mdCancelBtn) {
-    mdCancelBtn.addEventListener('click', closeAIAnalysisModal);
-  }
-  
-  if (mdCreateBtn) {
-    mdCreateBtn.addEventListener('click', createMultiDocResults);
+  if (mdImportBtn) {
+    mdImportBtn.addEventListener('click', createMultiDocResults);
   }
   
   // Transcripts modal event listeners
@@ -10372,8 +10367,8 @@ window.deleteScheduleDependency = deleteScheduleDependency;
 // ============= MULTI-DOCUMENT PROCESSING =============
 
 function displayMultiDocFiles() {
-  const fileList = document.getElementById('md-file-list');
-  const fileNames = document.getElementById('md-file-names');
+  const fileList = document.getElementById('multi-doc-file-list');
+  const fileNames = document.getElementById('multi-doc-files');
   
   if (!fileList || mdSelectedFiles.length === 0) {
     if (fileList) fileList.classList.add('hidden');
@@ -10383,10 +10378,10 @@ function displayMultiDocFiles() {
   fileList.classList.remove('hidden');
   if (fileNames) {
     fileNames.innerHTML = mdSelectedFiles.map(file => `
-      <div class="text-xs py-1">
+      <li class="text-gray-600">
         <span class="font-medium">${file.name}</span>
-        <span class="text-gray-500 ml-2">(${(file.size / 1024).toFixed(1)} KB)</span>
-      </div>
+        <span class="text-xs text-gray-500 ml-2">(${(file.size / 1024).toFixed(1)} KB)</span>
+      </li>
     `).join('');
   }
 }
