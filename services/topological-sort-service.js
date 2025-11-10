@@ -356,7 +356,16 @@ async function sortItemsByDependencies(items) {
   const estimatesMap = new Map();
   items.forEach(item => {
     const key = `${item.type}:${item.id}`;
-    estimatesMap.set(key, item.estimate || 0);
+    // Defensive: Convert to number if string (PostgreSQL numeric columns)
+    let estimate = item.estimate || 0;
+    if (typeof estimate === 'string') {
+      estimate = parseFloat(estimate);
+      if (isNaN(estimate)) {
+        console.warn(`[TOPOLOGICAL-SORT] Invalid estimate for ${key}: "${item.estimate}", using 0`);
+        estimate = 0;
+      }
+    }
+    estimatesMap.set(key, estimate);
   });
 
   // Calculate critical path (only if no cycle)

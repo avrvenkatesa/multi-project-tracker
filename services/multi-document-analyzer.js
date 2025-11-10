@@ -408,7 +408,8 @@ class MultiDocumentAnalyzer {
               id: issue.id,
               title: issue.title,
               assignee: issue.assignee || 'Unassigned',
-              estimate: issue.estimated_hours || 0,
+              // Convert to number - PostgreSQL numeric columns return strings
+              estimate: parseFloat(issue.estimated_hours) || 0,
               estimateSource: issue.estimate_source || 'ai',
               dueDate: issue.due_date,
               dependencies: dependencyMap.get(`issue:${issue.id}`) || []
