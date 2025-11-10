@@ -14251,10 +14251,11 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
           selectedEstimate = row.hybrid_effort_estimate_hours;
         }
         
-        // Load dependencies for this item
+        // Load dependencies for this item from multiple sources
         const dependencyTable = item.type === 'issue' ? 'issue_dependencies' : 'action_item_dependencies';
         const dependencyColumn = item.type === 'issue' ? 'issue_id' : 'action_item_id';
         
+        // Query old-style dependencies table
         const depsResult = await pool.query(
           `SELECT prerequisite_item_type, prerequisite_item_id
            FROM ${dependencyTable}
@@ -14262,9 +14263,36 @@ app.post('/api/projects/:projectId/schedules', authenticateToken, async (req, re
           [item.id]
         );
         
-        const dependencies = depsResult.rows.map(dep => 
-          `${dep.prerequisite_item_type}:${dep.prerequisite_item_id}`
+        // Query issue_relationships table for dependencies
+        // Find prerequisites in two ways:
+        // 1. Where this item is the target of a "blocks" relationship (someone blocks it)
+        // 2. Where this item is the source of a "depends_on" relationship (it depends on someone)
+        const relationshipsResult = await pool.query(
+          `SELECT source_type as prerequisite_item_type, source_id as prerequisite_item_id
+           FROM issue_relationships
+           WHERE target_id = $1 
+             AND target_type = $2
+             AND relationship_type = 'blocks'
+           UNION
+           SELECT target_type as prerequisite_item_type, target_id as prerequisite_item_id
+           FROM issue_relationships
+           WHERE source_id = $1 
+             AND source_type = $2
+             AND relationship_type = 'depends_on'`,
+          [item.id, item.type]
         );
+        
+        // Combine dependencies from both sources
+        const allDeps = [
+          ...depsResult.rows,
+          ...relationshipsResult.rows
+        ];
+        
+        // Remove duplicates and format
+        const uniqueDeps = new Set(allDeps.map(dep => 
+          `${dep.prerequisite_item_type}:${dep.prerequisite_item_id}`
+        ));
+        const dependencies = Array.from(uniqueDeps);
         
         console.log(`Loading ${item.type}#${item.id} - Dependencies:`, dependencies);
         

@@ -36,7 +36,7 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 
 Projects include a `complexity_level` field (standard/complex/enterprise) with automatic `max_file_uploads` calculation via a database trigger.
 
-Project scheduling involves `project_schedules` (versioning), `schedule_items`, `task_schedules` (calculated dates, critical path, risk indicators), and `schedule_changes`. Schedules support multiple scenarios, topological sort-based task ordering, critical path identification, risk detection, and resource allocation analysis.
+Project scheduling involves `project_schedules` (versioning), `schedule_items`, `task_schedules` (calculated dates, critical path, risk indicators), and `schedule_changes`. Schedules support multiple scenarios, topological sort-based task ordering, critical path identification, risk detection, and resource allocation analysis. The schedule creation process queries dependencies from both legacy tables (`issue_dependencies`, `action_item_dependencies`) and the unified `issue_relationships` table, ensuring compatibility with AI-generated dependencies from multi-document processing.
 
 ### AI Features
 - **AI Meeting Analysis**: Two-phase processing for item extraction and status updates with a persistent review queue and automatic model fallback (GPT-3.5-Turbo to GPT-4o). Supports multi-file document upload with project-based complexity limits.
