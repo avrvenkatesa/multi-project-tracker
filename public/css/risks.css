@@ -296,7 +296,7 @@
   background: #fee2e2;
 }
 
-/* Empty State */
+/* Empty State (Legacy - now using SharedEmptyState) */
 .empty-state {
   text-align: center;
   padding: 80px 20px;
@@ -321,6 +321,15 @@
   font-size: 14px;
   color: #6b7280;
   margin-bottom: 24px;
+}
+
+/* Shared Empty State Container - ensures proper display */
+#emptyState {
+  background: white;
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  margin-top: 24px;
+  min-height: 200px;
 }
 
 /* Modals */
