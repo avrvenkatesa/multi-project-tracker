@@ -495,8 +495,8 @@ function renderTemplateCard(template) {
       
       <div class="flex items-center justify-between text-xs text-gray-500 mb-3">
         <span>${IconFactory.renderInline('chart', { tone: 'muted', size: 'text-xs' })} ${template.section_count} sections</span>
-        <span>✓ ${template.item_count} items</span>
-        <span>👤 ${template.usage_count} uses</span>
+        <span>${IconFactory.renderInline('check', { tone: 'success', size: 'text-xs' })} ${template.item_count} items</span>
+        <span>${IconFactory.renderInline('user', { tone: 'muted', size: 'text-xs' })} ${template.usage_count} uses</span>
       </div>
       
       <div class="flex items-center justify-between">
@@ -555,7 +555,7 @@ function renderTemplateDetailModal() {
           ${IconFactory.renderStarRating(avgRating)}
           <span class="text-gray-600">${avgRating.toFixed(1)} (${template.rating_count || 0} ratings)</span>
         </span>
-        <span class="text-gray-600">👤 ${template.usage_count} uses</span>
+        <span class="text-gray-600">${IconFactory.renderInline('user', { customClass: 'mr-1' })} ${template.usage_count} uses</span>
       </div>
       
       ${template.tags && template.tags.length > 0 ? `

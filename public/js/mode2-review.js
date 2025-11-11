@@ -148,21 +148,21 @@ async function startAnalysis() {
     
     updateProgress(1, 'processing', 'Extracting document text...');
     documentText = await extractDocumentText(uploadedFile);
-    updateProgress(1, 'complete', 'Document text extracted ✓');
+    updateProgress(1, 'complete', 'Document text extracted');
     
     updateProgress(2, 'processing', 'Detecting workstreams with AI...');
     workstreamsData = await detectWorkstreams(documentText);
-    updateProgress(2, 'complete', `${workstreamsData.workstreams.length} workstreams detected ✓`);
+    updateProgress(2, 'complete', `${workstreamsData.workstreams.length} workstreams detected`);
     updateStepIndicator(3);
     
     updateProgress(3, 'processing', 'Generating checklists...');
     checklistsData = await generateChecklists(workstreamsData.workstreams, documentText);
-    updateProgress(3, 'complete', `${checklistsData.count} checklists generated ✓`);
+    updateProgress(3, 'complete', `${checklistsData.count} checklists generated`);
     updateStepIndicator(4);
     
     updateProgress(4, 'processing', 'Matching checklists to issues...');
     matchesData = await matchToIssues(checklistsData.checklists);
-    updateProgress(4, 'complete', 'Matching complete ✓');
+    updateProgress(4, 'complete', 'Matching complete');
     updateStepIndicator(5);
     
     setTimeout(() => {
@@ -281,9 +281,9 @@ function renderMatchCards() {
     );
     
     const confidenceBadge = match.matchedIssue ? 
-      (match.confidence >= 80 ? '🟢 High' : 
-       match.confidence >= 50 ? '🟡 Medium' : '🟠 Low') : 
-      '⚪ No Match';
+      (match.confidence >= 80 ? 'High' : 
+       match.confidence >= 50 ? 'Medium' : 'Low') : 
+      'No Match';
     
     const confidenceColor = match.matchedIssue ?
       (match.confidence >= 80 ? 'bg-green-100 text-green-800' :

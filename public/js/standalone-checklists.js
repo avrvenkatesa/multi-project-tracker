@@ -170,43 +170,43 @@ function renderChecklists() {
             data-checklist-id="${checklist.id}"
             class="checklist-action-btn px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             title="View checklist"
-          >
-            👁️ View
+            aria-label="View checklist">
+            ${IconFactory.renderInline('eye', { customClass: 'mr-1' })} View
           </button>
           <button 
             data-action="link"
             data-checklist-id="${checklist.id}"
             class="checklist-action-btn px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
             title="Link to issue or action"
-          >
-            🔗 Link
+            aria-label="Link checklist to issue or action">
+            ${IconFactory.renderInline('link', { customClass: 'mr-1' })} Link
           </button>
           <button 
             data-action="delete"
             data-checklist-id="${checklist.id}"
             class="checklist-action-btn px-3 py-1 text-sm text-red-600 hover:text-red-800"
             title="Delete checklist"
-          >
-            🗑️
+            aria-label="Delete checklist">
+            ${IconFactory.renderInline('trash', { tone: 'error' })}
           </button>
         </div>
       </div>
       
       <div class="flex flex-wrap gap-4 text-sm text-gray-600">
         <div class="flex items-center gap-1">
-          <span>✓</span>
+          ${IconFactory.renderInline('check', { tone: 'success' })}
           <span>${checklist.item_count || 0} items</span>
         </div>
         <div class="flex items-center gap-1">
-          <span>📄</span>
+          ${IconFactory.renderInline('file', { customClass: '' })}
           <span>${escapeHtml(checklist.source_document || 'Unknown')}</span>
         </div>
         <div class="flex items-center gap-1">
-          <span>👤</span>
+          ${IconFactory.renderInline('user', { customClass: '' })}
           <span>${escapeHtml(checklist.creator_name || 'Unknown')}</span>
         </div>
         <div class="flex items-center gap-1">
-          <span>📅</span>
+          ${IconFactory.renderInline('calendar', { customClass: '' })}
           <span>${formatDate(checklist.created_at)}</span>
         </div>
       </div>
@@ -280,7 +280,7 @@ async function handleDocumentUpload() {
   
   const filesHTML = Array.from(files).map((file, index) => {
     const sizeKB = (file.size / 1024).toFixed(1);
-    return `<div class="text-sm py-1">📄 ${index + 1}. ${file.name} (${sizeKB} KB)</div>`;
+    return `<div class="text-sm py-1">${IconFactory.renderInline('file', { customClass: 'mr-1' })} ${index + 1}. ${file.name} (${sizeKB} KB)</div>`;
   }).join('');
   
   filesList.innerHTML = filesHTML;
@@ -432,7 +432,7 @@ async function saveStandaloneChecklists() {
       throw new Error('Failed to save checklists');
     }
     
-    showNotification(`✅ ${selected.length} checklist(s) saved successfully!`, 'success');
+    showNotification(`${selected.length} checklist(s) saved successfully!`, 'success');
     closeUploadModal();
     loadStandaloneChecklists();
     
@@ -508,7 +508,7 @@ async function loadActionsForLinking() {
     // Use the checklist's project_id, not the current page's project
     const checklistProjectId = currentChecklistForLinking?.project_id || currentProjectId;
     
-    console.log('🔍 Loading actions for linking:');
+    console.log('Loading actions for linking:');
     console.log('  Current checklist:', currentChecklistForLinking);
     console.log('  Checklist project_id:', currentChecklistForLinking?.project_id);
     console.log('  Current page project_id:', currentProjectId);
@@ -542,7 +542,7 @@ async function confirmLinking() {
   }
   
   try {
-    console.log('🔗 Linking checklist:');
+    console.log('Linking checklist:');
     console.log('  Checklist ID:', currentChecklistForLinking.id);
     console.log('  Checklist project_id:', currentChecklistForLinking.project_id);
     console.log('  Target ID:', targetId);
@@ -578,7 +578,7 @@ async function confirmLinking() {
     }
     
     const copyMode = keepStandalone ? ' (copy created)' : '';
-    showNotification(`✅ Checklist linked successfully${copyMode}!`, 'success');
+    showNotification(`Checklist linked successfully${copyMode}!`, 'success');
     closeLinkingModal();
     loadStandaloneChecklists();
     
@@ -612,7 +612,7 @@ async function deleteChecklist(checklistId) {
       throw new Error(error.message || 'Failed to delete checklist');
     }
     
-    showNotification('✅ Checklist deleted', 'success');
+    showNotification('Checklist deleted', 'success');
     loadStandaloneChecklists();
     
   } catch (error) {

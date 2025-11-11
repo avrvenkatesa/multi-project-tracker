@@ -22,7 +22,12 @@ window.IconFactory = (() => {
     edit: 'fa-edit',
     save: 'fa-save',
     download: 'fa-download',
-    upload: 'fa-upload'
+    upload: 'fa-upload',
+    clock: 'fa-clock',
+    link: 'fa-link',
+    file: 'fa-file-alt',
+    user: 'fa-user',
+    calendar: 'fa-calendar-alt'
   };
 
   // Color tone mapping to design token classes

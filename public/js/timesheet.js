@@ -10,7 +10,7 @@ async function openTimesheetModal(itemType, itemId, itemTitle, itemCreatedAt = n
   
   // Update modal title
   const modalTitle = document.getElementById('timesheetModalTitle');
-  modalTitle.textContent = `⏱️ Timesheet: ${itemTitle}`;
+  modalTitle.innerHTML = `${IconFactory.renderInline('clock', { customClass: 'mr-2' })} Timesheet: ${escapeHtml(itemTitle)}`;
   
   // Clear form
   document.getElementById('quick-log-hours').value = '';
@@ -85,8 +85,9 @@ async function loadTimesheetEntries() {
           <td class="px-4 py-3 text-center">
             <button onclick="deleteTimeEntry(${entry.id})" 
                     class="text-red-600 hover:text-red-800 text-sm px-2 py-1 rounded hover:bg-red-50"
-                    title="Delete entry">
-              🗑️
+                    title="Delete entry"
+                    aria-label="Delete time entry">
+              ${IconFactory.renderInline('trash', { tone: 'error' })}
             </button>
           </td>
         `;
@@ -144,12 +145,12 @@ async function quickLogTimeFromModal() {
     // Show success message with status change notification
     if (statusChanged) {
       if (typeof showToast === 'function') {
-        showToast(`✅ Logged ${hours}h successfully! Item automatically moved to "${newStatus}"`, 'success');
+        showToast(`Logged ${hours}h successfully! Item automatically moved to "${newStatus}"`, 'success');
       } else {
-        alert(`✅ Logged ${hours}h. Total: ${result.data.totalHours}h (${result.data.completionPercentage}%)\n\n🔄 Item automatically moved to "${newStatus}"`);
+        alert(`Logged ${hours}h. Total: ${result.data.totalHours}h (${result.data.completionPercentage}%)\n\nItem automatically moved to "${newStatus}"`);
       }
     } else {
-      console.log(`✅ Logged ${hours}h. Total: ${result.data.totalHours}h (${result.data.completionPercentage}%)`);
+      console.log(`Logged ${hours}h. Total: ${result.data.totalHours}h (${result.data.completionPercentage}%)`);
     }
     
     // Clear form
@@ -277,7 +278,7 @@ async function quickLogTimeFromCard(itemType, itemId) {
     const result = await response.json();
     
     // Show success notification
-    alert(`✅ Logged ${parsedHours}h\nTotal: ${result.totalHours}h (${result.completionPercentage}% complete)`);
+    alert(`Logged ${parsedHours}h\nTotal: ${result.totalHours}h (${result.completionPercentage}% complete)`);
     
     // Refresh kanban
     if (window.currentProject) {
