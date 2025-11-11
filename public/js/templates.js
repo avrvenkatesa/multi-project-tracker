@@ -342,7 +342,7 @@ function renderCategoryFilters() {
   
   container.innerHTML = `
     <button class="category-filter-btn active" data-category="">
-      📋 All Templates
+      ${IconFactory.renderInline('clipboard', { size: 'text-sm' })} All Templates
     </button>
     ${templateCategories.map(cat => `
       <button class="category-filter-btn" data-category="${cat.name}">
@@ -451,7 +451,7 @@ async function loadTemplates(filters = {}) {
     if (data.templates.length === 0) {
       grid.innerHTML = `
         <div class="col-span-full text-center py-12">
-          <div class="text-6xl mb-4">📋</div>
+          <div class="text-6xl mb-4">${IconFactory.renderInline('clipboard', { tone: 'muted', size: 'text-6xl' })}</div>
           <p class="text-gray-500">No templates found</p>
           <p class="text-sm text-gray-400 mt-2">Try a different filter or create your own template</p>
         </div>
@@ -469,7 +469,7 @@ async function loadTemplates(filters = {}) {
 
 function renderTemplateCard(template) {
   const avgRating = template.avg_rating ? Math.round(template.avg_rating * 10) / 10 : 0;
-  const stars = avgRating > 0 ? '⭐'.repeat(Math.round(avgRating)) : '☆☆☆☆☆';
+  const stars = IconFactory.renderStarRating(avgRating, { size: 'text-xs' });
   
   return `
     <div class="template-card bg-white rounded-lg border border-gray-200 p-5 hover:shadow-lg transition-all cursor-pointer"
@@ -479,7 +479,7 @@ function renderTemplateCard(template) {
           <h3 class="font-semibold text-gray-900 mb-1">${template.name}</h3>
           <p class="text-xs text-gray-500">${template.category}</p>
         </div>
-        ${template.is_featured ? '<span class="text-xl">⭐</span>' : ''}
+        ${template.is_featured ? `<span class="text-xl">${IconFactory.renderInline('star', { tone: 'warning', size: 'text-xl', assistiveText: 'Featured template' })}</span>` : ''}
       </div>
       
       <p class="text-sm text-gray-600 mb-3 line-clamp-2">${template.description || 'No description'}</p>
@@ -494,7 +494,7 @@ function renderTemplateCard(template) {
       ` : ''}
       
       <div class="flex items-center justify-between text-xs text-gray-500 mb-3">
-        <span>📊 ${template.section_count} sections</span>
+        <span>${IconFactory.renderInline('chart', { tone: 'muted', size: 'text-xs' })} ${template.section_count} sections</span>
         <span>✓ ${template.item_count} items</span>
         <span>👤 ${template.usage_count} uses</span>
       </div>
@@ -543,7 +543,7 @@ function renderTemplateDetailModal() {
       <div>
         <div class="flex items-start justify-between mb-2">
           <h3 class="text-2xl font-bold text-gray-900">${template.name}</h3>
-          ${template.is_featured ? '<span class="text-2xl">⭐</span>' : ''}
+          ${template.is_featured ? `<span class="text-2xl">${IconFactory.renderInline('star', { tone: 'warning', size: 'text-2xl', assistiveText: 'Featured template' })}</span>` : ''}
         </div>
         <p class="text-sm text-gray-500">${template.category} • by ${template.creator_name}</p>
       </div>
@@ -552,7 +552,7 @@ function renderTemplateDetailModal() {
       
       <div class="flex items-center gap-4 text-sm">
         <span class="flex items-center gap-1">
-          <span class="text-yellow-500">${'⭐'.repeat(Math.round(avgRating))}</span>
+          ${IconFactory.renderStarRating(avgRating)}
           <span class="text-gray-600">${avgRating.toFixed(1)} (${template.rating_count || 0} ratings)</span>
         </span>
         <span class="text-gray-600">👤 ${template.usage_count} uses</span>
@@ -788,8 +788,13 @@ async function rateTemplateModal(templateId) {
 
 function selectRating(rating) {
   document.querySelectorAll('.rating-star').forEach((star, idx) => {
-    star.textContent = idx < rating ? '⭐' : '☆';
-    star.dataset.selected = idx < rating ? 'true' : 'false';
+    if (idx < rating) {
+      star.innerHTML = IconFactory.renderInline('star', { tone: 'warning', style: 'solid' });
+      star.dataset.selected = 'true';
+    } else {
+      star.innerHTML = IconFactory.renderInline('starOutline', { tone: 'muted', style: 'regular' });
+      star.dataset.selected = 'false';
+    }
   });
 }
 

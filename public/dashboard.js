@@ -39,12 +39,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     userDisplay.textContent = `${currentUser.username} (${currentUser.role})`;
   }
   
+  // Initialize back button
+  initializeBackButton();
+  
   // Setup event listeners
   setupEventListeners();
   
   // Load dashboard data
   await loadDashboard();
 });
+
+// Initialize standardized back button
+function initializeBackButton() {
+  const container = document.getElementById('backButtonContainer');
+  if (!container) return;
+  
+  const backBtn = SharedBackButton.create({
+    href: `index.html?project=${currentProjectId}`,
+    text: 'Back to Projects',
+    variant: 'light'
+  });
+  container.appendChild(backBtn);
+}
 
 // Setup event listeners
 function setupEventListeners() {
@@ -53,17 +69,7 @@ function setupEventListeners() {
     retryBtn.addEventListener('click', () => loadDashboard());
   }
   
-  // Back to Projects button
-  const backToProjectsBtn = document.getElementById('backToProjectsBtn');
-  if (backToProjectsBtn) {
-    backToProjectsBtn.addEventListener('click', () => {
-      if (currentProjectId) {
-        window.location.href = `index.html?project=${currentProjectId}`;
-      } else {
-        window.location.href = 'index.html';
-      }
-    });
-  }
+  // Back button is now initialized by initializeBackButton() function
   
   // View dropdown navigation
   document.getElementById('dashboard-btn')?.addEventListener('click', () => {

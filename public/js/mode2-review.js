@@ -306,7 +306,7 @@ function renderMatchCards() {
               <h3 class="text-lg font-bold text-gray-900">${escapeHtml(match.checklist.workstreamName)}</h3>
               <p class="text-sm text-gray-600 mt-1">${escapeHtml(match.checklist.workstreamDescription)}</p>
               <div class="flex gap-3 mt-2 text-sm">
-                <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded">📋 ${itemCount} items</span>
+                <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded">${IconFactory.renderInline('clipboard', { customClass: 'mr-1' })} ${itemCount} items</span>
                 <span class="px-2 py-1 bg-purple-100 text-purple-700 rounded">${match.checklist.estimatedComplexity} complexity</span>
                 <span class="px-2 py-1 bg-indigo-100 text-indigo-700 rounded">${match.checklist.suggestedPhase}</span>
               </div>
@@ -341,7 +341,7 @@ function renderMatchCards() {
           </div>
         ` : `
           <div class="bg-yellow-50 rounded-lg p-4 mb-4">
-            <div class="text-sm text-gray-600 mb-2">💡 Suggested: Create New Issue</div>
+            <div class="text-sm text-gray-600 mb-2">${IconFactory.renderInline('lightbulb', { tone: 'info' })} Suggested: Create New Issue</div>
             <div class="font-medium text-gray-900 mb-1">${escapeHtml(match.suggestedNewIssue.title)}</div>
             <div class="text-sm text-gray-600 mb-2">
               Type: ${match.suggestedNewIssue.type} | Priority: ${match.suggestedNewIssue.priority}
@@ -365,14 +365,14 @@ function renderMatchCards() {
             data-match-index="${index}"
             class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
           >
-            👁️ Preview Items
+            ${IconFactory.renderInline('eye', { customClass: 'mr-1' })} Preview Items
           </button>
           <button 
             data-action="remove-match"
             data-match-index="${index}"
             class="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded"
           >
-            🗑️ Remove
+            ${IconFactory.renderInline('trash', { tone: 'error', customClass: 'mr-1' })} Remove
           </button>
         </div>
 

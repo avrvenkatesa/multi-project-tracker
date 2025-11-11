@@ -85,7 +85,7 @@ function displayValidationResults(validation) {
   // Score color
   const scoreColor = getScoreColor(validation.quality_score);
   const scoreTextClass = getScoreTextClass(validation.quality_score);
-  const statusIcon = validation.is_valid ? '✅' : '❌';
+  const statusIcon = IconFactory.renderStatusIcon(validation.is_valid, { size: 'text-xl' });
   const statusText = validation.is_valid ? 'Passed' : 'Failed';
   const statusClass = validation.is_valid ? 'text-green-600' : 'text-red-600';
   
@@ -142,17 +142,17 @@ Range: 0-100 points">
       
       <div class="flex space-x-4">
         <div class="text-center px-4 py-2 ${validation.error_count > 0 ? 'bg-red-50 border border-red-200' : 'bg-gray-50'} rounded-lg">
-          <div class="text-2xl mb-1">${validation.error_count > 0 ? '❌' : '✅'}</div>
+          <div class="text-2xl mb-1">${validation.error_count > 0 ? IconFactory.renderInline('times', { tone: 'error', size: 'text-2xl' }) : IconFactory.renderInline('check', { tone: 'success', size: 'text-2xl' })}</div>
           <div class="text-xl font-bold ${validation.error_count > 0 ? 'text-red-600' : 'text-gray-600'}">${validation.error_count}</div>
           <div class="text-xs text-gray-600">Errors</div>
         </div>
         <div class="text-center px-4 py-2 ${validation.warning_count > 0 ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'} rounded-lg">
-          <div class="text-2xl mb-1">${validation.warning_count > 0 ? '⚠️' : '✅'}</div>
+          <div class="text-2xl mb-1">${validation.warning_count > 0 ? IconFactory.renderInline('warning', { tone: 'warning', size: 'text-2xl' }) : IconFactory.renderInline('check', { tone: 'success', size: 'text-2xl' })}</div>
           <div class="text-xl font-bold ${validation.warning_count > 0 ? 'text-yellow-600' : 'text-gray-600'}">${validation.warning_count}</div>
           <div class="text-xs text-gray-600">Warnings</div>
         </div>
         <div class="text-center px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
-          <div class="text-2xl mb-1">💡</div>
+          <div class="text-2xl mb-1">${IconFactory.renderInline('lightbulb', { tone: 'info', size: 'text-2xl' })}</div>
           <div class="text-xl font-bold text-blue-600">${validation.recommendations.length}</div>
           <div class="text-xs text-gray-600">Tips</div>
         </div>
@@ -161,7 +161,7 @@ Range: 0-100 points">
     
     ${validation.error_count > 0 ? `
       <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-        <h4 class="font-semibold text-red-800 mb-3">❌ Errors (Must Fix)</h4>
+        <h4 class="font-semibold text-red-800 mb-3">${IconFactory.renderInline('times', { tone: 'error' })} Errors (Must Fix)</h4>
         <div class="space-y-2">
           ${validation.errors.map(error => `
             <div class="bg-white p-3 rounded border border-red-200">
@@ -170,7 +170,7 @@ Range: 0-100 points">
                   <div class="font-semibold text-red-900">${error.section}</div>
                   ${error.item ? `<div class="text-sm text-gray-700 mt-1">${error.item}</div>` : ''}
                   <div class="text-sm text-red-700 mt-1">${error.message}</div>
-                  <div class="text-sm text-blue-600 mt-1">💡 ${error.suggestion}</div>
+                  <div class="text-sm text-blue-600 mt-1">${IconFactory.renderInline('lightbulb', { tone: 'info', size: 'text-sm' })} ${error.suggestion}</div>
                 </div>
                 ${error.item_id ? `
                   <button class="jump-to-item text-blue-600 hover:text-blue-800 text-sm font-medium ml-2" data-item-id="${error.item_id}">
@@ -186,7 +186,7 @@ Range: 0-100 points">
     
     ${validation.warning_count > 0 ? `
       <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <h4 class="font-semibold text-yellow-800 mb-3">⚠️ Warnings (Should Review)</h4>
+        <h4 class="font-semibold text-yellow-800 mb-3">${IconFactory.renderInline('warning', { tone: 'warning' })} Warnings (Should Review)</h4>
         <div class="space-y-2">
           ${validation.warnings.map(warning => `
             <div class="bg-white p-3 rounded border border-yellow-200">
@@ -195,7 +195,7 @@ Range: 0-100 points">
                   <div class="font-semibold text-yellow-900">${warning.section}</div>
                   ${warning.item ? `<div class="text-sm text-gray-700 mt-1">${warning.item}</div>` : ''}
                   <div class="text-sm text-yellow-700 mt-1">${warning.message}</div>
-                  <div class="text-sm text-blue-600 mt-1">💡 ${warning.suggestion}</div>
+                  <div class="text-sm text-blue-600 mt-1">${IconFactory.renderInline('lightbulb', { tone: 'info', size: 'text-sm' })} ${warning.suggestion}</div>
                 </div>
                 ${warning.item_id ? `
                   <button class="jump-to-item text-blue-600 hover:text-blue-800 text-sm font-medium ml-2" data-item-id="${warning.item_id}">
@@ -211,7 +211,7 @@ Range: 0-100 points">
     
     ${validation.recommendations.length > 0 ? `
       <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h4 class="font-semibold text-blue-800 mb-3">💡 Recommendations</h4>
+        <h4 class="font-semibold text-blue-800 mb-3">${IconFactory.renderInline('lightbulb', { tone: 'info' })} Recommendations</h4>
         <ul class="space-y-1 text-sm text-gray-700">
           ${validation.recommendations.map(rec => `
             <li class="flex items-start">
@@ -226,19 +226,19 @@ Range: 0-100 points">
     ${!validation.is_valid ? `
       <div class="mt-4 p-4 bg-red-100 border border-red-300 rounded-lg">
         <p class="text-red-800 font-medium">
-          ❌ Cannot submit for approval. Quality score must be at least 60 and all errors must be fixed.
+          ${IconFactory.renderInline('times', { tone: 'error' })} Cannot submit for approval. Quality score must be at least 60 and all errors must be fixed.
         </p>
       </div>
     ` : validation.quality_score < 80 ? `
       <div class="mt-4 p-4 bg-yellow-100 border border-yellow-300 rounded-lg">
         <p class="text-yellow-800 font-medium">
-          ⚠️ Checklist can be submitted but consider addressing warnings for higher quality.
+          ${IconFactory.renderInline('warning', { tone: 'warning' })} Checklist can be submitted but consider addressing warnings for higher quality.
         </p>
       </div>
     ` : `
       <div class="mt-4 p-4 bg-green-100 border border-green-300 rounded-lg">
         <p class="text-green-800 font-medium">
-          ✅ Excellent! Checklist is ready for approval.
+          ${IconFactory.renderInline('check', { tone: 'success' })} Excellent! Checklist is ready for approval.
         </p>
       </div>
     `}
