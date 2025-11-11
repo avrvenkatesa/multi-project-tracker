@@ -32,14 +32,15 @@ function setupTemplatePageListeners() {
   const urlParams = new URLSearchParams(window.location.search);
   const currentProjectId = urlParams.get('project') || urlParams.get('projectId');
   
-  // Back to Projects button
-  document.getElementById('backToProjectsBtn')?.addEventListener('click', () => {
-    if (currentProjectId) {
-      window.location.href = `index.html?project=${currentProjectId}`;
-    } else {
-      window.location.href = 'index.html';
-    }
-  });
+  // Initialize standardized back button
+  const container = document.getElementById('backButtonContainer');
+  if (container) {
+    const backBtn = SharedBackButton.create({
+      href: currentProjectId ? `index.html?project=${currentProjectId}` : 'index.html',
+      text: 'Back to Projects'
+    });
+    container.appendChild(backBtn);
+  }
   
   // View dropdown navigation
   document.getElementById('dashboard-btn')?.addEventListener('click', () => {

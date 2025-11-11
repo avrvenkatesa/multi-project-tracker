@@ -30,6 +30,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  // Initialize back button
+  initializeBackButton();
+  
   // Setup event listeners
   setupEventListeners();
   
@@ -38,21 +41,24 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStandaloneChecklists();
 });
 
+// Initialize standardized back button
+function initializeBackButton() {
+  const container = document.getElementById('backButtonContainer');
+  if (!container) return;
+  
+  const backBtn = SharedBackButton.create({
+    href: currentProjectId ? `/index.html?project=${currentProjectId}` : '/index.html',
+    text: 'Back to Projects'
+  });
+  container.appendChild(backBtn);
+}
+
 // ============================================
 // Event Listeners Setup
 // ============================================
 
 function setupEventListeners() {
-  // Back to Projects button
-  document.getElementById('backToProjectsBtn')?.addEventListener('click', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const projectId = urlParams.get('project') || urlParams.get('project_id') || currentProjectId;
-    if (projectId) {
-      window.location.href = `/index.html?project=${projectId}`;
-    } else {
-      window.location.href = '/index.html';
-    }
-  });
+  // Back button is now initialized by initializeBackButton() function
   
   // Upload buttons
   document.getElementById('content-upload-btn')?.addEventListener('click', openUploadModal);

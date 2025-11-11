@@ -18,21 +18,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   
+  initializeBackButton();
   setupEventListeners();
   await loadProject();
   await loadTags();
 });
 
+// Initialize standardized back button
+function initializeBackButton() {
+  const container = document.getElementById('backButtonContainer');
+  if (!container) return;
+  
+  const backBtn = SharedBackButton.create({
+    href: `index.html?project=${currentProjectId}`,
+    text: 'Back to Projects'
+  });
+  container.appendChild(backBtn);
+}
+
 // Setup all event listeners
 function setupEventListeners() {
-  // Navigation buttons
-  document.getElementById('backToProjectsBtn')?.addEventListener('click', () => {
-    if (currentProjectId) {
-      window.location.href = `index.html?project=${currentProjectId}`;
-    } else {
-      window.location.href = 'index.html';
-    }
-  });
+  // Back button is now initialized by initializeBackButton() function
   
   // View dropdown navigation
   document.getElementById('dashboard-btn')?.addEventListener('click', () => {
