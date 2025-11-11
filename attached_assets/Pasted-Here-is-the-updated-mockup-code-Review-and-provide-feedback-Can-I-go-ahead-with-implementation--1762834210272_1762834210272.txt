@@ -1,0 +1,976 @@
+Here is the updated mockup code. Review and provide feedback. Can I go ahead with implementation?
+@DOCTYPE html
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Project Tracker - Style Tile Mockup</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ===== PHASE 1: DESIGN TOKENS ===== */
+        :root {
+            /* Brand Colors - Anchor points for theming */
+            --color-brand-primary: #5b7c99;
+            --color-brand-accent: #e8c555;  /* Deepened from #f5d76e for WCAG contrast */
+            
+            /* Neutral Palette */
+            --color-neutral-50: #f6f8fa;
+            --color-neutral-100: #e1e4e8;
+            --color-neutral-200: #d4dce5;
+            --color-neutral-300: #c6d0db;
+            --color-neutral-400: #9ba9b8;
+            --color-neutral-500: #6a7a8c;
+            --color-neutral-600: #4a5568;
+            --color-neutral-700: #2c3e50;
+            --color-neutral-800: #1a202c;
+            
+            /* Semantic Colors */
+            --color-success: #48bb78;
+            --color-warning: #d97706;  /* Deepened from #ed8936 for better contrast on light backgrounds */
+            --color-danger: #e8b4b8;
+            --color-info: #4299e1;
+            
+            /* Gantt-Specific Colors */
+            --gantt-bar-default: #d4dce5;
+            --gantt-bar-default-gradient-start: #dae2e9;
+            --gantt-bar-default-gradient-end: #d4dce5;
+            --gantt-bar-progress: #9ba9b8;
+            --gantt-bar-critical: #e8b4b8;
+            --gantt-bar-milestone: #e8c555;  /* Matches improved brand-accent */
+            --gantt-border: #e1e4e8;
+            --gantt-grid: #f6f8fa;
+            --gantt-text: #2c3e50;
+            --gantt-accent: #5b7c99;
+            
+            /* Typography */
+            --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-size-xs: 0.75rem;    /* 12px */
+            --font-size-sm: 0.875rem;   /* 14px */
+            --font-size-base: 1rem;     /* 16px */
+            --font-size-lg: 1.125rem;   /* 18px */
+            --font-size-xl: 1.25rem;    /* 20px */
+            --font-size-2xl: 1.5rem;    /* 24px */
+            --font-size-3xl: 1.75rem;   /* 28px - Reduced from 30px for better proportions */
+            
+            /* Spacing */
+            --spacing-xs: 0.25rem;   /* 4px */
+            --spacing-sm: 0.5rem;    /* 8px */
+            --spacing-md: 0.75rem;   /* 12px */
+            --spacing-lg: 1rem;      /* 16px */
+            --spacing-xl: 1.5rem;    /* 24px */
+            --spacing-2xl: 2rem;     /* 32px */
+            --spacing-3xl: 3rem;     /* 48px - Added for larger page sections */
+            
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-focus: 0 0 0 3px rgba(91, 124, 153, 0.3);  /* Added for accessibility focus states */
+            
+            /* Border Radius */
+            --radius-sm: 0.25rem;    /* 4px */
+            --radius-md: 0.375rem;   /* 6px */
+            --radius-lg: 0.5rem;     /* 8px */
+        }
+        
+        body {
+            font-family: var(--font-family-base);
+            color: var(--color-neutral-700);
+            background: #fafbfc;
+        }
+        
+        .section {
+            background: white;
+            border: 1px solid var(--color-neutral-100);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-2xl);
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        .section-title {
+            font-size: var(--font-size-xl);
+            font-weight: 600;
+            color: var(--color-neutral-800);
+            margin-bottom: var(--spacing-lg);
+            padding-bottom: var(--spacing-sm);
+            border-bottom: 2px solid var(--color-brand-primary);
+        }
+        
+        .subsection-title {
+            font-size: var(--font-size-base);
+            font-weight: 600;
+            color: var(--color-neutral-700);
+            margin-top: var(--spacing-lg);
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        /* Color Swatches */
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-lg);
+        }
+        
+        .color-swatch {
+            text-align: center;
+        }
+        
+        .color-box {
+            height: 80px;
+            border-radius: var(--radius-md);
+            margin-bottom: var(--spacing-sm);
+            border: 1px solid var(--color-neutral-100);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .color-label {
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            color: var(--color-neutral-700);
+        }
+        
+        .color-hex {
+            font-size: var(--font-size-xs);
+            color: var(--color-neutral-500);
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* Button Styles */
+        .btn {
+            padding: 0.5rem 1rem;
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary {
+            background: var(--color-brand-primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #4a6b85;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .btn-secondary {
+            background: var(--color-neutral-200);
+            color: var(--color-neutral-700);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--color-neutral-300);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .btn-danger {
+            background: var(--color-danger);
+            color: var(--color-neutral-800);
+        }
+        
+        .btn-danger:hover {
+            background: #dc9ea2;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .btn-ghost {
+            background: transparent;
+            color: var(--color-neutral-600);
+            border: 1px solid var(--color-neutral-200);
+        }
+        
+        .btn-ghost:hover {
+            background: var(--color-neutral-50);
+            border-color: var(--color-neutral-300);
+        }
+        
+        /* Segmented Control */
+        .btn-group-segmented {
+            display: inline-flex;
+            border: 1px solid var(--color-neutral-200);
+            border-radius: var(--radius-md);
+            background: white;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .btn-group-segmented button {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: var(--color-neutral-600);
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-right: 1px solid var(--color-neutral-200);
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            position: relative;
+        }
+        
+        .btn-group-segmented button:first-child {
+            border-top-left-radius: var(--radius-md);
+            border-bottom-left-radius: var(--radius-md);
+        }
+        
+        .btn-group-segmented button:last-child {
+            border-top-right-radius: var(--radius-md);
+            border-bottom-right-radius: var(--radius-md);
+            border-right: none;
+        }
+        
+        .btn-group-segmented button:hover {
+            background: var(--color-neutral-50);
+        }
+        
+        .btn-group-segmented button.active {
+            background: var(--color-brand-primary);
+            color: white;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-group-segmented button.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .btn-group-segmented button:focus {
+            outline: none;
+            box-shadow: var(--shadow-focus);
+            z-index: 1;
+        }
+        
+        /* Gantt Bars */
+        .gantt-demo {
+            background: var(--gantt-grid);
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--gantt-border);
+        }
+        
+        .gantt-bar {
+            height: 18px;
+            border-radius: 3px;
+            margin-bottom: var(--spacing-sm);
+            display: flex;
+            align-items: center;
+            padding: 0 var(--spacing-sm);
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+            box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .gantt-bar-default {
+            background: linear-gradient(to bottom, var(--gantt-bar-default-gradient-start) 0%, var(--gantt-bar-default-gradient-end) 100%);
+            color: var(--gantt-text);
+        }
+        
+        .gantt-bar-critical {
+            background: linear-gradient(to bottom, #edc0c4 0%, var(--gantt-bar-critical) 100%);
+            color: var(--gantt-text);
+        }
+        
+        .gantt-bar-milestone {
+            background: linear-gradient(to bottom, #f8dda0 0%, var(--gantt-bar-milestone) 100%);
+            color: var(--gantt-text);
+        }
+        
+        .gantt-bar-with-progress {
+            background: linear-gradient(to bottom, var(--gantt-bar-default-gradient-start) 0%, var(--gantt-bar-default-gradient-end) 100%);
+            color: var(--gantt-text);
+        }
+        
+        .gantt-bar-with-progress::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 60%;
+            background: var(--gantt-bar-progress);
+            opacity: 0.65;  /* Increased from 0.5 for better distinction */
+            border-radius: 3px 0 0 3px;
+        }
+        
+        .gantt-bar:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+        }
+        
+        /* Typography Scale */
+        .typo-example {
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .typo-h1 {
+            font-size: var(--font-size-3xl);
+            font-weight: 700;
+            color: var(--color-neutral-800);
+        }
+        
+        .typo-h2 {
+            font-size: var(--font-size-2xl);
+            font-weight: 600;
+            color: var(--color-neutral-800);
+        }
+        
+        .typo-h3 {
+            font-size: var(--font-size-xl);
+            font-weight: 600;
+            color: var(--color-neutral-700);
+        }
+        
+        .typo-body {
+            font-size: var(--font-size-base);
+            font-weight: 400;
+            color: var(--color-neutral-700);
+        }
+        
+        .typo-small {
+            font-size: var(--font-size-sm);
+            font-weight: 400;
+            color: var(--color-neutral-600);
+        }
+        
+        /* Before/After Comparison */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+        }
+        
+        .comparison-side {
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-neutral-200);
+        }
+        
+        .comparison-label {
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
+            text-align: center;
+            padding: var(--spacing-sm);
+            border-radius: var(--radius-sm);
+        }
+        
+        .before-label {
+            background: #fee;
+            color: #c33;
+        }
+        
+        .after-label {
+            background: #efe;
+            color: #3c3;
+        }
+        
+        /* Old styles (saturated) */
+        .gantt-bar-old-default {
+            background: #a7c7ff;
+            color: var(--gantt-text);
+        }
+        
+        .gantt-bar-old-critical {
+            background: #f7b0b0;
+            color: var(--gantt-text);
+        }
+        
+        .gantt-bar-old-milestone {
+            background: #ffe08a;
+            color: var(--gantt-text);
+        }
+        
+        /* Swim Lane Demo */
+        .swim-lane-demo {
+            background: white;
+            border: 1px solid var(--gantt-border);
+            border-radius: var(--radius-md);
+        }
+        
+        .swim-lane-group {
+            position: relative;
+            border-left: 3px solid var(--color-brand-primary);  /* Left accent bar */
+        }
+        
+        .swim-lane-header {
+            background: var(--color-neutral-50);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-bottom: 2px solid var(--gantt-border);
+            font-weight: 600;
+            font-size: var(--font-size-sm);
+            color: var(--color-neutral-700);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .swim-lane-content {
+            padding: var(--spacing-md);
+            background: var(--gantt-grid);
+        }
+        
+        .swim-lane-separator {
+            height: 1px;
+            background: var(--gantt-border);
+        }
+        
+        /* Icon Examples */
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: var(--spacing-lg);
+        }
+        
+        .icon-example {
+            text-align: center;
+            padding: var(--spacing-md);
+            border: 1px solid var(--color-neutral-100);
+            border-radius: var(--radius-md);
+        }
+        
+        .icon-example i {
+            font-size: var(--font-size-2xl);
+            color: var(--color-brand-primary);
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .icon-label {
+            font-size: var(--font-size-xs);
+            color: var(--color-neutral-600);
+        }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-7xl mx-auto">
+        @-- Header --
+        <div class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Multi-Project Tracker</h1>
+            <h2 class="text-2xl font-semibold text-gray-600 mb-4">UI/UX Style Tile Mockup</h2>
+            <p class="text-gray-500">Professional Gantt Chart Redesign - Phase 1 & 2 Design Tokens</p>
+        </div>
+
+        @-- Color Palette --
+        <div class="section">
+            <h2 class="section-title">Color Palette</h2>
+            
+            <h3 class="subsection-title">Brand Colors (Theming Anchors)</h3>
+            <div class="color-grid">
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-brand-primary);"></div>
+                    <div class="color-label">Brand Primary</div>
+                    <div class="color-hex">#5b7c99</div>
+                    <div class="text-xs text-gray-500 mt-1">Buttons, accents, highlights</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-brand-accent);"></div>
+                    <div class="color-label">Brand Accent</div>
+                    <div class="color-hex">#e8c555</div>
+                    <div class="text-xs text-gray-500 mt-1">Milestones, icon fills, badges<br>(WCAG compliant)</div>
+                </div>
+            </div>
+            
+            <h3 class="subsection-title">Neutral Palette</h3>
+            <div class="color-grid">
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-neutral-50);"></div>
+                    <div class="color-label">Neutral 50</div>
+                    <div class="color-hex">#f6f8fa</div>
+                    <div class="text-xs text-gray-500 mt-1">Grid backgrounds</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-neutral-200);"></div>
+                    <div class="color-label">Neutral 200</div>
+                    <div class="color-hex">#d4dce5</div>
+                    <div class="text-xs text-gray-500 mt-1">Default bars</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-neutral-400);"></div>
+                    <div class="color-label">Neutral 400</div>
+                    <div class="color-hex">#9ba9b8</div>
+                    <div class="text-xs text-gray-500 mt-1">Progress fill</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-neutral-700);"></div>
+                    <div class="color-label">Neutral 700</div>
+                    <div class="color-hex">#2c3e50</div>
+                    <div class="text-xs text-gray-500 mt-1">Text, labels</div>
+                </div>
+            </div>
+            
+            <h3 class="subsection-title">Semantic Colors</h3>
+            <div class="color-grid">
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-success);"></div>
+                    <div class="color-label">Success</div>
+                    <div class="color-hex">#48bb78</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-warning);"></div>
+                    <div class="color-label">Warning</div>
+                    <div class="color-hex">#d97706</div>
+                    <div class="text-xs text-gray-500 mt-1">Better contrast on light backgrounds</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-danger);"></div>
+                    <div class="color-label">Danger</div>
+                    <div class="color-hex">#e8b4b8</div>
+                    <div class="text-xs text-gray-500 mt-1">Critical path (muted)</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: var(--color-info);"></div>
+                    <div class="color-label">Info</div>
+                    <div class="color-hex">#4299e1</div>
+                </div>
+            </div>
+        </div>
+
+        @-- Typography --
+        <div class="section">
+            <h2 class="section-title">Typography Scale</h2>
+            <p class="text-sm text-gray-600 mb-4">System font stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif</p>
+            
+            <div class="typo-example">
+                <div class="typo-h1">Heading 1 - 28px / 700 weight</div>
+                <div class="text-xs text-gray-500 mt-1">Usage: Page titles (reduced from 30px for better proportions in modals)</div>
+            </div>
+            
+            <div class="typo-example">
+                <div class="typo-h2">Heading 2 - 24px / 600 weight</div>
+                <div class="text-xs text-gray-500 mt-1">Usage: Section titles, modal headers</div>
+            </div>
+            
+            <div class="typo-example">
+                <div class="typo-h3">Heading 3 - 20px / 600 weight</div>
+                <div class="text-xs text-gray-500 mt-1">Usage: Subsections, card headers</div>
+            </div>
+            
+            <div class="typo-example">
+                <div class="typo-body">Body Text - 16px / 400 weight</div>
+                <div class="text-xs text-gray-500 mt-1">Usage: Main content, descriptions</div>
+            </div>
+            
+            <div class="typo-example">
+                <div class="typo-small">Small Text - 14px / 400 weight</div>
+                <div class="text-xs text-gray-500 mt-1">Usage: Metadata, labels, captions</div>
+            </div>
+            
+            <div class="typo-example">
+                <div style="font-size: 10px; font-weight: 500; letter-spacing: 0.01em;">Gantt Bar Label - 10px / 500 weight / 0.01em spacing</div>
+                <div class="text-xs text-gray-500 mt-1">Usage: Task names on timeline bars</div>
+            </div>
+        </div>
+
+        @-- Button Styles --
+        <div class="section">
+            <h2 class="section-title">Button Styles</h2>
+            
+            <h3 class="subsection-title">Standard Buttons</h3>
+            <div class="flex flex-wrap gap-4 mb-6">
+                <button class="btn btn-primary">
+                    <i class="fas fa-plus"></i>
+                    Primary Action
+                </button>
+                <button class="btn btn-secondary">
+                    <i class="fas fa-edit"></i>
+                    Secondary Action
+                </button>
+                <button class="btn btn-danger">
+                    <i class="fas fa-trash"></i>
+                    Danger Action
+                </button>
+                <button class="btn btn-ghost">
+                    <i class="fas fa-times"></i>
+                    Ghost / Cancel
+                </button>
+            </div>
+            
+            <h3 class="subsection-title">Segmented Control (View Selector)</h3>
+            <div class="mb-4">
+                <div class="btn-group-segmented">
+                    <button class="active">
+                        <i class="fas fa-calendar-day"></i>
+                        Day
+                    </button>
+                    <button>
+                        <i class="fas fa-calendar-week"></i>
+                        Week
+                    </button>
+                    <button>
+                        <i class="fas fa-calendar"></i>
+                        Month
+                    </button>
+                </div>
+            </div>
+            <p class="text-sm text-gray-500">Unified control with hover states, focus indicators, and icon/text mix</p>
+        </div>
+
+        @-- Gantt Bars --
+        <div class="section">
+            <h2 class="section-title">Gantt Chart Elements</h2>
+            
+            <h3 class="subsection-title">Task Bars (New Neutral Palette)</h3>
+            <div class="gantt-demo">
+                <div class="gantt-bar gantt-bar-default">
+                    <span>Standard Task - Design Review</span>
+                </div>
+                <div class="gantt-bar gantt-bar-with-progress">
+                    <span>Task with Progress (60% complete)</span>
+                </div>
+                <div class="gantt-bar gantt-bar-critical">
+                    <span>Critical Path Task - Deploy to Production</span>
+                </div>
+                <div class="gantt-bar gantt-bar-milestone">
+                    <span>Milestone - Phase 1 Complete</span>
+                </div>
+            </div>
+            <p class="text-sm text-gray-500 mt-2">
+                • 18px height baseline (adaptive 16-20px per view)<br>
+                • Subtle gradients (3-5% lighter at top)<br>
+                • Soft shadows (1px blur, 8% opacity)<br>
+                • 10px text with 0.01em letter-spacing
+            </p>
+        </div>
+
+        @-- Before/After Comparison --
+        <div class="section">
+            <h2 class="section-title">Before/After Comparison</h2>
+            
+            <div class="comparison">
+                <div class="comparison-side">
+                    <div class="comparison-label before-label">BEFORE (Saturated)</div>
+                    <div class="gantt-demo">
+                        <div class="gantt-bar gantt-bar-old-default">
+                            <span>Standard Task</span>
+                        </div>
+                        <div class="gantt-bar gantt-bar-old-critical">
+                            <span>Critical Task</span>
+                        </div>
+                        <div class="gantt-bar gantt-bar-old-milestone">
+                            <span>Milestone</span>
+                        </div>
+                    </div>
+                    <ul class="text-sm text-gray-600 mt-3 space-y-1">
+                        <li>❌ Saturated blues/reds/yellows</li>
+                        <li>❌ Toy-like appearance</li>
+                        <li>❌ Flat colors, no depth</li>
+                        <li>❌ Hard to distinguish at scale</li>
+                    </ul>
+                </div>
+                
+                <div class="comparison-side">
+                    <div class="comparison-label after-label">AFTER (Neutral)</div>
+                    <div class="gantt-demo">
+                        <div class="gantt-bar gantt-bar-default">
+                            <span>Standard Task</span>
+                        </div>
+                        <div class="gantt-bar gantt-bar-critical">
+                            <span>Critical Task</span>
+                        </div>
+                        <div class="gantt-bar gantt-bar-milestone">
+                            <span>Milestone</span>
+                        </div>
+                    </div>
+                    <ul class="text-sm text-gray-600 mt-3 space-y-1">
+                        <li>✅ Restrained neutral palette</li>
+                        <li>✅ Professional, enterprise-grade</li>
+                        <li>✅ Subtle gradients + shadows</li>
+                        <li>✅ Scales well to 100+ tasks</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        @-- Swim Lanes Preview --
+        <div class="section">
+            <h2 class="section-title">Swim Lanes (Grouped by Assignee)</h2>
+            
+            <div class="swim-lane-demo">
+                <div class="swim-lane-group">
+                    <div class="swim-lane-header">
+                        <i class="fas fa-chevron-down text-gray-500"></i>
+                        <i class="fas fa-user text-blue-600"></i>
+                        <span>John Doe</span>
+                        <span class="text-xs text-gray-500">(5 tasks)</span>
+                    </div>
+                    <div class="swim-lane-content">
+                        <div class="gantt-bar gantt-bar-default mb-2">
+                            <span>Database Schema Design</span>
+                        </div>
+                        <div class="gantt-bar gantt-bar-with-progress mb-2">
+                            <span>API Endpoint Development</span>
+                        </div>
+                        <div class="gantt-bar gantt-bar-critical">
+                            <span>Production Deployment</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="swim-lane-separator"></div>
+                
+                <div class="swim-lane-group">
+                    <div class="swim-lane-header">
+                        <i class="fas fa-chevron-down text-gray-500"></i>
+                        <i class="fas fa-user text-green-600"></i>
+                        <span>Jane Smith</span>
+                        <span class="text-xs text-gray-500">(3 tasks)</span>
+                    </div>
+                    <div class="swim-lane-content">
+                        <div class="gantt-bar gantt-bar-default mb-2">
+                            <span>UI Component Library</span>
+                        </div>
+                        <div class="gantt-bar gantt-bar-milestone">
+                            <span>Design Review Complete</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <p class="text-sm text-gray-500 mt-3">
+                • 3px left accent bar in brand-primary emphasizes group boundaries<br>
+                • Collapsible sections reduce clutter<br>
+                • Visual separators between groups<br>
+                • Clear assignee identification<br>
+                • Task count for workload visibility
+            </p>
+        </div>
+
+        @-- Icon System --
+        <div class="section">
+            <h2 class="section-title">Icon System (Font Awesome)</h2>
+            <p class="text-sm text-gray-600 mb-4">Replacing emojis (🎯📋⚠️) with consistent Font Awesome icons</p>
+            
+            <div class="icon-grid">
+                <div class="icon-example">
+                    <i class="fas fa-bullseye"></i>
+                    <div class="icon-label">Target / Goal<br>(was 🎯)</div>
+                </div>
+                <div class="icon-example">
+                    <i class="fas fa-clipboard-list"></i>
+                    <div class="icon-label">Checklist<br>(was 📋)</div>
+                </div>
+                <div class="icon-example">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="icon-label">Warning<br>(was ⚠️)</div>
+                </div>
+                <div class="icon-example">
+                    <i class="fas fa-calendar-alt"></i>
+                    <div class="icon-label">Calendar / Timeline</div>
+                </div>
+                <div class="icon-example">
+                    <i class="fas fa-user"></i>
+                    <div class="icon-label">User / Assignee</div>
+                </div>
+                <div class="icon-example">
+                    <i class="fas fa-chart-gantt"></i>
+                    <div class="icon-label">Gantt Chart</div>
+                </div>
+            </div>
+        </div>
+
+        @-- Spacing & Layout --
+        <div class="section">
+            <h2 class="section-title">Spacing & Layout Tokens</h2>
+            
+            <div class="grid grid-cols-2 gap-6">
+                <div>
+                    <h3 class="subsection-title">Spacing Scale</h3>
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 text-xs text-gray-500">xs (4px)</div>
+                            <div style="width: 4px; height: 20px; background: var(--color-brand-primary);"></div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 text-xs text-gray-500">sm (8px)</div>
+                            <div style="width: 8px; height: 20px; background: var(--color-brand-primary);"></div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 text-xs text-gray-500">md (12px)</div>
+                            <div style="width: 12px; height: 20px; background: var(--color-brand-primary);"></div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 text-xs text-gray-500">lg (16px)</div>
+                            <div style="width: 16px; height: 20px; background: var(--color-brand-primary);"></div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 text-xs text-gray-500">xl (24px)</div>
+                            <div style="width: 24px; height: 20px; background: var(--color-brand-primary);"></div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 text-xs text-gray-500">2xl (32px)</div>
+                            <div style="width: 32px; height: 20px; background: var(--color-brand-primary);"></div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 text-xs text-gray-500">3xl (48px)</div>
+                            <div style="width: 48px; height: 20px; background: var(--color-brand-primary);"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="subsection-title">Shadow Tokens</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="text-xs text-gray-500 mb-2">shadow-sm</div>
+                            <div class="w-full h-12 bg-white rounded" style="box-shadow: var(--shadow-sm);"></div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 mb-2">shadow-md (Gantt bars)</div>
+                            <div class="w-full h-12 bg-white rounded" style="box-shadow: var(--shadow-md);"></div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500 mb-2">shadow-lg</div>
+                            <div class="w-full h-12 bg-white rounded" style="box-shadow: var(--shadow-lg);"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @-- Usage Guidelines --
+        <div class="section bg-amber-50 border-amber-200">
+            <h2 class="section-title text-amber-900">Design Token Usage Guidelines</h2>
+            <p class="text-sm text-amber-800 mb-6">Documentation for future contributors to ensure consistent application of design tokens</p>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="subsection-title text-amber-900">Color Usage</h3>
+                    <div class="text-sm text-amber-900 space-y-2">
+                        <p><strong>Neutral 50-100:</strong> Backgrounds, borders, grid lines. Use Neutral 50 for Gantt grid backgrounds only.</p>
+                        <p><strong>Neutral 200:</strong> Default Gantt bars, card backgrounds on dashboard views.</p>
+                        <p><strong>Neutral 400:</strong> Progress bar fills, disabled states.</p>
+                        <p><strong>Neutral 700:</strong> Primary text color across all views.</p>
+                        <p><strong>Brand Primary:</strong> Buttons, accent bars, active states, links. WCAG AA compliant on white.</p>
+                        <p><strong>Brand Accent (#e8c555):</strong> Milestone indicators, icon fills, badges only. Avoid using for small text due to contrast limitations.</p>
+                        <p><strong>Semantic Colors:</strong> Success (completed), Warning (in-progress on Neutral 50+ backgrounds), Danger (critical path - muted tone), Info (notifications).</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="subsection-title text-amber-900">Typography Guidelines</h3>
+                    <div class="text-sm text-amber-900 space-y-2">
+                        <p><strong>3xl (28px):</strong> Page titles only. Use sparingly to avoid overwhelming modals.</p>
+                        <p><strong>2xl (24px):</strong> Section titles, modal headers.</p>
+                        <p><strong>xl (20px):</strong> Subsections, card headers.</p>
+                        <p><strong>base (16px):</strong> Main body content, descriptions, form labels.</p>
+                        <p><strong>sm (14px):</strong> Metadata, captions, helper text.</p>
+                        <p><strong>xs (12px):</strong> Table headers, timestamps, minimized content.</p>
+                        <p><strong>Gantt bars (10px):</strong> Task names on timeline bars only. Always use tooltips for truncated text exceeding bar width.</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="subsection-title text-amber-900">Spacing Application</h3>
+                    <div class="text-sm text-amber-900 space-y-2">
+                        <p><strong>xs (4px):</strong> Tight icon spacing, inline badge gaps.</p>
+                        <p><strong>sm (8px):</strong> Between related elements (label + input).</p>
+                        <p><strong>md (12px):</strong> Card padding, Gantt container padding.</p>
+                        <p><strong>lg (16px):</strong> Section gaps, column spacing.</p>
+                        <p><strong>xl (24px):</strong> Page padding, modal content spacing.</p>
+                        <p><strong>2xl (32px):</strong> Major section dividers.</p>
+                        <p><strong>3xl (48px):</strong> Hero sections, large page headers only.</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="subsection-title text-amber-900">Shadow & Accessibility</h3>
+                    <div class="text-sm text-amber-900 space-y-2">
+                        <p><strong>shadow-sm:</strong> Cards, dropdowns, subtle elevation.</p>
+                        <p><strong>shadow-md:</strong> Gantt bars, popovers, interactive elements.</p>
+                        <p><strong>shadow-lg:</strong> Modals, high-priority overlays.</p>
+                        <p><strong>shadow-focus:</strong> All keyboard-focusable elements. Must be visible on white backgrounds.</p>
+                        <p><strong>Contrast Requirements:</strong> All text must meet WCAG AA (4.5:1 for body text, 3:1 for large text). Test Brand Accent on backgrounds before implementation.</p>
+                        <p><strong>Colorblind Consideration:</strong> Critical vs Milestone bars should have additional visual cues (top border, pattern) beyond color alone.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-6 p-4 bg-white rounded border border-amber-300">
+                <h3 class="font-semibold text-amber-900 mb-2">⚠️ Important Notes</h3>
+                <ul class="text-sm text-amber-900 space-y-1">
+                    <li>• Run contrast checks when applying Brand Accent or Warning colors to new surfaces</li>
+                    <li>• Test Gantt 10px labels at real data density; implement ellipsis + tooltips for overflow</li>
+                    <li>• When exporting to PNG/PDF, verify gradients and shadows remain crisp</li>
+                    <li>• Focus states must remain prominent when shadows are applied to white backgrounds</li>
+                    <li>• For milestone bars, consider adding thin top border or patterned fill for colorblind users</li>
+                </ul>
+            </div>
+        </div>
+
+        @-- Summary --
+        <div class="section bg-blue-50 border-blue-200">
+            <h2 class="section-title text-blue-900">Implementation Summary</h2>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="font-semibold text-blue-800 mb-2">Key Design Principles</h3>
+                    <ul class="text-sm text-blue-900 space-y-1">
+                        <li>✅ Neutral, restrained color palette</li>
+                        <li>✅ Professional, enterprise-grade appearance</li>
+                        <li>✅ Anchored to brand variables for easy theming</li>
+                        <li>✅ Consistent icon system (no emojis)</li>
+                        <li>✅ Scalable to 100+ tasks</li>
+                        <li>✅ Subtle depth with gradients & shadows</li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold text-blue-800 mb-2">Gantt-Specific Improvements</h3>
+                    <ul class="text-sm text-blue-900 space-y-1">
+                        <li>✅ 18px baseline bar height (16-20px adaptive)</li>
+                        <li>✅ Swim-lane grouping by Assignee</li>
+                        <li>✅ Segmented control for view selector</li>
+                        <li>✅ Compact view toggle (default ON)</li>
+                        <li>✅ Dependency chain highlighting</li>
+                        <li>✅ Full modal width utilization</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="mt-6 p-4 bg-white rounded border border-blue-200">
+                <p class="text-sm text-blue-900 mb-3">
+                    <strong>📋 Refinements Applied (v2):</strong>
+                </p>
+                <ul class="text-sm text-blue-900 space-y-1">
+                    <li>✅ Brand Accent deepened from #f5d76e to #e8c555 for WCAG compliance</li>
+                    <li>✅ Warning orange improved from #ed8936 to #d97706 for better contrast on light backgrounds</li>
+                    <li>✅ Heading 1 reduced from 30px to 28px for better modal proportions</li>
+                    <li>✅ Segmented control enhanced with inset shadow + subtle bottom border for active state</li>
+                    <li>✅ Focus shadow token added for consistent keyboard accessibility</li>
+                    <li>✅ Progress bar opacity increased from 0.5 to 0.65 for better distinction</li>
+                    <li>✅ Swim lane groups now feature 3px left accent bar in brand-primary</li>
+                    <li>✅ Spacing 3xl (48px) added for larger page sections</li>
+                    <li>✅ Comprehensive usage guidelines documented for future contributors</li>
+                </ul>
+                <p class="text-sm text-blue-900 mt-3">
+                    <strong>Next Steps:</strong> Final review for approval, then implement as CSS variables in Phase 1 and apply to Gantt chart in Phase 2.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Interactive demo: Click to toggle active state on segmented control
+        document.querySelectorAll('.btn-group-segmented button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                this.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>
