@@ -4873,9 +4873,17 @@ async function openTranscriptsModal() {
   const loading = document.getElementById('transcripts-loading');
   const listView = document.getElementById('transcripts-list-view');
   const detailView = document.getElementById('transcript-detail-view');
+  const noTranscripts = document.getElementById('no-transcripts');
   
-  // Show modal and loading
+  // Show modal and loading with SharedLoadingSpinner
   modal.classList.remove('hidden');
+  if (typeof window.SharedLoadingSpinner !== 'undefined') {
+    loading.innerHTML = '';
+    new window.SharedLoadingSpinner(loading, {
+      message: 'Loading transcripts...',
+      size: 'large'
+    });
+  }
   loading.classList.remove('hidden');
   listView.classList.add('hidden');
   detailView.classList.add('hidden');
@@ -4893,10 +4901,20 @@ async function openTranscriptsModal() {
     
     // Display transcripts
     if (transcripts.length === 0) {
-      document.getElementById('no-transcripts').classList.remove('hidden');
+      // Show empty state with SharedEmptyState
+      if (typeof window.SharedEmptyState !== 'undefined') {
+        noTranscripts.innerHTML = '';
+        new window.SharedEmptyState(noTranscripts, {
+          icon: 'file-alt',
+          title: 'No Transcripts Yet',
+          message: 'Upload meeting transcripts to get started with AI-powered analysis.',
+          actionText: null
+        });
+      }
+      noTranscripts.classList.remove('hidden');
       document.getElementById('transcripts-list').innerHTML = '';
     } else {
-      document.getElementById('no-transcripts').classList.add('hidden');
+      noTranscripts.classList.add('hidden');
       renderTranscriptsList(transcripts);
     }
     
@@ -7617,6 +7635,16 @@ function renderTableView() {
   const allItems = getAllItemsForTable();
   
   if (allItems.length === 0) {
+    // Show empty state with SharedEmptyState
+    if (tableEmptyState && typeof window.SharedEmptyState !== 'undefined') {
+      tableEmptyState.innerHTML = '';
+      new window.SharedEmptyState(tableEmptyState, {
+        icon: 'tasks',
+        title: 'No Items to Display',
+        message: 'Try adjusting your filters or create a new issue or action item.',
+        actionText: null
+      });
+    }
     tableBody.innerHTML = '';
     tableEmptyState?.classList.remove('hidden');
     document.getElementById('table-pagination-top')?.classList.add('hidden');

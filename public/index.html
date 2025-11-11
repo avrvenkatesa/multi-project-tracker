@@ -7,6 +7,15 @@
         <script src="https://cdn.tailwindcss.com"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+        
+        <!-- Design System -->
+        <link rel="stylesheet" href="css/design-tokens.css">
+        <link rel="stylesheet" href="css/buttons.css">
+        
+        <!-- Shared Components -->
+        <script src="components/shared-header.js"></script>
+        <script src="components/shared-loading.js"></script>
+        <script src="components/shared-empty-state.js"></script>
     </head>
     <body class="bg-gray-50">
         <div id="app">
@@ -716,14 +725,8 @@
                                     </table>
                                 </div>
                                 
-                                <!-- Empty State -->
-                                <div id="table-empty-state" class="hidden p-12 text-center">
-                                    <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                    </svg>
-                                    <p class="text-gray-500 text-lg">No items to display</p>
-                                    <p class="text-gray-400 text-sm mt-2">Try adjusting your filters</p>
-                                </div>
+                                <!-- Empty State - Using SharedEmptyState -->
+                                <div id="table-empty-state" class="hidden"></div>
                                 
                                 <!-- Bottom Pagination -->
                                 <div id="table-pagination-bottom" class="hidden">
@@ -1432,23 +1435,16 @@
                     </div>
                     
                     <div class="p-6">
-                        <!-- Loading State -->
-                        <div id="transcripts-loading" class="text-center py-8 hidden">
-                            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
-                            <p class="text-sm text-gray-600 mt-2">Loading transcripts...</p>
-                        </div>
+                        <!-- Loading State - Using SharedLoadingSpinner -->
+                        <div id="transcripts-loading" class="hidden"></div>
 
                         <!-- Transcripts List -->
                         <div id="transcripts-list-view" class="hidden">
                             <div id="transcripts-list" class="space-y-3">
                                 <!-- Transcripts will be listed here -->
                             </div>
-                            <div id="no-transcripts" class="text-center py-8 text-gray-500 hidden">
-                                <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                                <p>No transcripts yet</p>
-                            </div>
+                            <!-- Empty State - Using SharedEmptyState -->
+                            <div id="no-transcripts" class="hidden"></div>
                         </div>
 
                         <!-- Single Transcript View -->

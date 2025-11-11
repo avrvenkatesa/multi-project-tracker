@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tag Management - Multi-Project Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Design System -->
+  <link rel="stylesheet" href="css/design-tokens.css">
+  <link rel="stylesheet" href="css/buttons.css">
+  
+  <!-- Shared Components -->
+  <script src="components/shared-header.js"></script>
+  <script src="components/shared-loading.js"></script>
+  <script src="components/shared-empty-state.js"></script>
+  
   <style>
     .tag-card {
       transition: all 0.2s;
@@ -168,13 +179,8 @@
         <!-- Tags will be loaded here -->
       </div>
       
-      <div id="empty-state" class="hidden text-center py-12">
-        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-        </svg>
-        <p class="text-gray-500 text-lg">No tags found in this project</p>
-        <p class="text-gray-400 text-sm mt-2">Add tags to your issues and action items to see them here</p>
-      </div>
+      <!-- Empty State - Using SharedEmptyState -->
+      <div id="empty-state" class="hidden"></div>
     </div>
   </main>
 

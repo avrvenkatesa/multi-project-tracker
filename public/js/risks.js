@@ -84,7 +84,12 @@ function setupEventListeners() {
   
   // New risk buttons
   document.getElementById('btnNewRisk').addEventListener('click', openCreateModal);
-  document.getElementById('btnNewRiskEmpty').addEventListener('click', openCreateModal);
+  
+  // Empty state button (if exists - may be replaced by SharedEmptyState)
+  const btnNewRiskEmpty = document.getElementById('btnNewRiskEmpty');
+  if (btnNewRiskEmpty) {
+    btnNewRiskEmpty.addEventListener('click', openCreateModal);
+  }
   
   // Filters
   document.getElementById('filterStatus').addEventListener('change', applyFilters);
@@ -435,6 +440,14 @@ async function loadRisks() {
   const risksList = document.getElementById('risksList');
   const emptyState = document.getElementById('emptyState');
   
+  // Show loading with SharedLoadingSpinner
+  if (typeof window.SharedLoadingSpinner !== 'undefined') {
+    loadingState.innerHTML = '';
+    new window.SharedLoadingSpinner(loadingState, {
+      message: 'Loading risks...',
+      size: 'large'
+    });
+  }
   loadingState.style.display = 'block';
   risksList.innerHTML = '';
   emptyState.style.display = 'none';
@@ -465,6 +478,16 @@ async function loadRisks() {
     loadingState.style.display = 'none';
     
     if (allRisks.length === 0) {
+      // Show empty state with SharedEmptyState
+      if (typeof window.SharedEmptyState !== 'undefined') {
+        emptyState.innerHTML = '';
+        new window.SharedEmptyState(emptyState, {
+          icon: 'clipboard',
+          title: 'No Risks Found',
+          message: 'There are no risks matching your filters. Try adjusting your search criteria.',
+          actionText: null
+        });
+      }
       emptyState.style.display = 'block';
     } else {
       displayRisks(allRisks);

@@ -261,6 +261,16 @@ function renderTags() {
   const emptyState = document.getElementById('empty-state');
   
   if (filteredTags.length === 0) {
+    // Show empty state with SharedEmptyState
+    if (typeof window.SharedEmptyState !== 'undefined') {
+      emptyState.innerHTML = '';
+      new window.SharedEmptyState(emptyState, {
+        icon: 'tags',
+        title: 'No Tags Found',
+        message: 'No tags match your current filter. Try a different filter or create a new tag.',
+        actionText: null
+      });
+    }
     container.classList.add('hidden');
     emptyState.classList.remove('hidden');
     return;
