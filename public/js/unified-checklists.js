@@ -33,6 +33,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  // Initialize shared header component
+  const headerMount = document.getElementById('header-mount');
+  if (headerMount && window.SharedHeader) {
+    window.SharedHeader.render(headerMount, {
+      title: 'Checklists',
+      subtitle: 'Manage all your project checklists',
+      icon: 'clipboard',
+      showBackButton: true,
+      backButtonText: '<i class="fas fa-arrow-left mr-2"></i>Back to Projects',
+      onBackClick: () => {
+        window.location.href = currentProjectId ? `index.html?project=${currentProjectId}` : 'index.html';
+      }
+    });
+  }
+  
   // Check if URL has tab parameter
   const tab = urlParams.get('tab');
   
@@ -372,7 +387,8 @@ function renderLinkedChecklists() {
     container.innerHTML = '';
     if (emptyStateEl && window.SharedEmptyState) {
       emptyStateEl.classList.remove('hidden');
-      window.SharedEmptyState.render(emptyStateEl, {
+      emptyStateEl.innerHTML = '';
+      window.SharedEmptyState(emptyStateEl, {
         icon: 'clipboard',
         title: 'No Linked Checklists',
         message: 'Create a checklist or link a standalone checklist to an issue',
@@ -492,7 +508,8 @@ function renderStandaloneChecklists() {
     container.innerHTML = '';
     if (emptyStateEl && window.SharedEmptyState) {
       emptyStateEl.classList.remove('hidden');
-      window.SharedEmptyState.render(emptyStateEl, {
+      emptyStateEl.innerHTML = '';
+      window.SharedEmptyState(emptyStateEl, {
         icon: 'book',
         title: 'No Standalone Checklists',
         message: 'Upload documents to generate standalone checklists that can be linked to issues later',
@@ -638,7 +655,8 @@ function renderTemplates() {
     container.innerHTML = '';
     if (emptyStateEl && window.SharedEmptyState) {
       emptyStateEl.classList.remove('hidden');
-      window.SharedEmptyState.render(emptyStateEl, {
+      emptyStateEl.innerHTML = '';
+      window.SharedEmptyState(emptyStateEl, {
         icon: 'bookmark',
         title: 'No Templates',
         message: 'Save a checklist as a template to reuse it across multiple issues',

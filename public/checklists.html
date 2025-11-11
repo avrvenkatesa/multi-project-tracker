@@ -337,26 +337,5 @@
   
   <!-- Page Scripts -->
   <script src="js/unified-checklists.js"></script>
-  
-  <script>
-    // Initialize shared header component
-    document.addEventListener('DOMContentLoaded', () => {
-      const headerMount = document.getElementById('header-mount');
-      if (headerMount && window.SharedHeader) {
-        window.SharedHeader.render(headerMount, {
-          title: 'Checklists',
-          subtitle: 'Manage all your project checklists',
-          icon: 'clipboard',
-          showBackButton: true,
-          backButtonText: '<i class="fas fa-arrow-left mr-2"></i>Back to Projects',
-          onBackClick: () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const projectId = urlParams.get('project');
-            window.location.href = projectId ? `index.html?project=${projectId}` : 'index.html';
-          }
-        });
-      }
-    });
-  </script>
 </body>
 </html>
