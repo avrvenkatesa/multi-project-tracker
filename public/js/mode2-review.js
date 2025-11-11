@@ -788,10 +788,10 @@ function updateProgress(progressNum, status, message) {
   const text = progressEl.querySelector('span:last-child');
   
   if (status === 'processing') {
-    icon.innerHTML = '<span class="text-xs animate-spin">⏳</span>';
+    icon.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-600"></i>';
     icon.className = 'w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center';
   } else if (status === 'complete') {
-    icon.innerHTML = '<span class="text-xs">✓</span>';
+    icon.innerHTML = '<i class="fas fa-check text-white"></i>';
     icon.className = 'w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white';
   }
   

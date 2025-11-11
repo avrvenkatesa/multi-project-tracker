@@ -557,7 +557,7 @@ function createChecklistCard(checklist) {
   
   const statusBadge = getStatusBadge(checklist.status);
   const dueDateDisplay = checklist.due_date 
-    ? `<span class="text-sm text-gray-600">📅 Due: ${formatDate(checklist.due_date)}</span>`
+    ? `<span class="text-sm text-gray-600">${IconFactory.renderInline('calendar', { tone: 'muted', customClass: 'mr-1' })} Due: ${formatDate(checklist.due_date)}</span>`
     : '';
   
   return `
@@ -565,7 +565,7 @@ function createChecklistCard(checklist) {
       <div class="checklist-card-header">
         <div class="flex items-start justify-between">
           <div class="flex items-center gap-2">
-            <span class="text-2xl">${checklist.template_icon || '📋'}</span>
+            <span class="text-2xl">${checklist.template_icon || IconFactory.renderInline('clipboard', { tone: 'info', size: 'text-2xl' })}</span>
             <div>
               <h3 class="font-semibold text-gray-900">${escapeHtml(checklist.title)}</h3>
               <p class="text-sm text-gray-600">${escapeHtml(checklist.template_name)}</p>
@@ -588,13 +588,13 @@ function createChecklistCard(checklist) {
         </div>
         
         <div class="flex items-center justify-between mt-3 text-sm text-gray-600">
-          <span>📁 ${escapeHtml(checklist.project_name)}</span>
+          <span>${IconFactory.renderInline('folder', { tone: 'muted', customClass: 'mr-1' })} ${escapeHtml(checklist.project_name)}</span>
           ${dueDateDisplay}
         </div>
         
         ${checklist.assigned_to_name ? `
           <div class="text-sm text-gray-600 mt-2">
-            👤 Assigned to: ${escapeHtml(checklist.assigned_to_name)}
+            ${IconFactory.renderInline('user', { tone: 'muted', customClass: 'mr-1' })} Assigned to: ${escapeHtml(checklist.assigned_to_name)}
           </div>
         ` : ''}
       </div>
@@ -770,10 +770,10 @@ function displayChecklistForFilling(checklist) {
   // Update header
   document.getElementById('checklistTitle').textContent = checklist.title;
   document.getElementById('checklistId').textContent = `ID: ${checklist.id}`;
-  document.getElementById('projectName').textContent = `📁 ${checklist.project_name}`;
+  document.getElementById('projectName').innerHTML = `${IconFactory.renderInline('folder', { tone: 'muted', customClass: 'mr-1' })} ${escapeHtml(checklist.project_name)}`;
   
   if (checklist.assigned_to_name) {
-    document.getElementById('assignedTo').textContent = `👤 ${checklist.assigned_to_name}`;
+    document.getElementById('assignedTo').innerHTML = `${IconFactory.renderInline('user', { tone: 'muted', customClass: 'mr-1' })} ${escapeHtml(checklist.assigned_to_name)}`;
   }
   
   // Update progress
@@ -781,7 +781,7 @@ function displayChecklistForFilling(checklist) {
   
   // Display due date
   if (checklist.due_date) {
-    document.getElementById('dueDate').textContent = `📅 Due: ${formatDate(checklist.due_date)}`;
+    document.getElementById('dueDate').innerHTML = `${IconFactory.renderInline('calendar', { tone: 'muted', customClass: 'mr-1' })} Due: ${escapeHtml(formatDate(checklist.due_date))}`;
   }
   
   // Render sections
@@ -870,7 +870,7 @@ function renderItem(item) {
           ${isBlocked ? `
             <div class="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm">
               <p class="font-medium text-red-800 mb-1 flex items-center gap-2">
-                <span>⚠️</span>
+                ${IconFactory.renderInline('warning', { tone: 'error' })}
                 <span>Cannot complete - blocked by ${blockedBy.length} item(s)</span>
               </p>
               <ul class="text-red-700 ml-6 space-y-1 text-xs">
@@ -885,7 +885,7 @@ function renderItem(item) {
           ${totalDeps > 0 && !isBlocked ? `
             <div class="mt-2">
               <span class="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
-                ✅ ${completedDeps}/${totalDeps} dependencies met
+                ${IconFactory.renderInline('check', { tone: 'success' })} ${completedDeps}/${totalDeps} dependencies met
               </span>
             </div>
           ` : ''}
@@ -900,8 +900,8 @@ function renderItem(item) {
           data-response-id="${responseId}"
           class="manage-deps-btn flex-shrink-0 px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap border border-blue-300 rounded hover:bg-blue-50"
           title="Manage dependencies"
-        >
-          🔗 ${totalDeps > 0 ? `(${totalDeps})` : 'Deps'}
+          aria-label="Manage dependencies">
+          ${IconFactory.renderInline('link', { customClass: 'mr-1' })} ${totalDeps > 0 ? `(${totalDeps})` : 'Deps'}
         </button>
       </div>
     </div>
@@ -1174,7 +1174,7 @@ function updateFeedbackUI(feedbackType) {
     
     allMessages.forEach(msg => {
       msg.className = 'mt-4 p-3 rounded-lg bg-green-50 text-green-800 text-sm';
-      msg.textContent = '✓ Thank you! Your positive feedback helps us improve our checklists.';
+      msg.textContent = 'Thank you! Your positive feedback helps us improve our checklists.';
       msg.classList.remove('hidden');
     });
   } else if (feedbackType === 'negative') {
@@ -1264,7 +1264,7 @@ function hideLoadingState() {
 function showSaveIndicator() {
   const indicator = document.createElement('div');
   indicator.className = 'save-indicator';
-  indicator.textContent = '✓ Saved';
+  indicator.textContent = 'Saved';
   document.body.appendChild(indicator);
   
   setTimeout(() => {
@@ -1519,7 +1519,7 @@ async function loadChecklistWithDependencies(checklistId) {
       });
     }
     
-    console.log(`📊 Loading dependencies for ${allItems.length} items from checklist ${checklistId}...`);
+    console.log(`Loading dependencies for ${allItems.length} items from checklist ${checklistId}...`);
     
     // Fetch dependency status for all items in parallel
     const itemsWithDeps = await Promise.all(
@@ -1546,8 +1546,8 @@ async function loadChecklistWithDependencies(checklistId) {
     // Store globally for use in dependency modal (clear previous checklist's items)
     checklistItemsWithDeps = itemsWithDeps;
     
-    console.log(`✅ Stored ${itemsWithDeps.length} items from checklist ${checklistId}`);
-    console.log(`✅ ${itemsWithDeps.filter(i => i.totalDeps > 0).length} items have dependencies`);
+    console.log(`Stored ${itemsWithDeps.length} items from checklist ${checklistId}`);
+    console.log(`${itemsWithDeps.filter(i => i.totalDeps > 0).length} items have dependencies`);
     
     // Update sections with enhanced items
     if (checklist.sections) {
@@ -1606,8 +1606,8 @@ async function openDependencyModal(responseId, event) {
       throw new Error(`Current item ${responseId} not found in loaded items`);
     }
     
-    console.log(`📝 Managing dependencies for item ${responseId} from checklist ${currentItem.checklist_id}`);
-    console.log(`📦 Available items pool: ${checklistItemsWithDeps.length} total items`);
+    console.log(`Managing dependencies for item ${responseId} from checklist ${currentItem.checklist_id}`);
+    console.log(`Available items pool: ${checklistItemsWithDeps.length} total items`);
     
     // Filter available items - MUST be from same checklist
     const availableItems = checklistItemsWithDeps.filter(item => 
@@ -1616,7 +1616,7 @@ async function openDependencyModal(responseId, event) {
       !depsData.dependencies.some(d => d.depends_on_item_id == item.id) // Not already a dependency
     );
     
-    console.log(`✅ Filtered to ${availableItems.length} available items from checklist ${currentItem.checklist_id}`);
+    console.log(`Filtered to ${availableItems.length} available items from checklist ${currentItem.checklist_id}`);
     
     // Render modal content
     content.innerHTML = `
@@ -1646,7 +1646,7 @@ async function openDependencyModal(responseId, event) {
                   <div class="flex-1">
                     <p class="font-medium">${escapeHtml(dep.depends_on_title || 'Item ' + dep.depends_on_item_id)}</p>
                     <p class="text-sm mt-1 ${dep.depends_on_completed ? 'text-green-600' : 'text-orange-600'}">
-                      ${dep.depends_on_completed ? '✅ Complete' : '⏳ Incomplete - blocking completion'}
+                      ${dep.depends_on_completed ? 'Complete' : 'Incomplete - blocking completion'}
                     </p>
                   </div>
                   <button 
@@ -1677,7 +1677,7 @@ async function openDependencyModal(responseId, event) {
             ${availableItems.map(item => `
               <option value="${item.response_id}" data-item-text="${escapeHtml(item.item_text || item.title || '')}">
                 ${escapeHtml(item.item_text || item.title || 'Item ' + item.id)}
-                ${item.is_completed ? ' (✅ Complete)' : ' (⏳ Incomplete)'}
+                ${item.is_completed ? ' (Complete)' : ' (Incomplete)'}
               </option>
             `).join('')}
           </select>
@@ -1743,7 +1743,7 @@ async function addNewDependency() {
   const selectedOption = select.options[select.selectedIndex];
   const selectedText = selectedOption?.dataset?.itemText || selectedOption?.text || 'unknown';
   
-  console.log(`➕ Adding dependency: Item ${dependencyModalItemId} depends on Item ${dependsOnItemId} (${selectedText})`);
+  console.log(`Adding dependency: Item ${dependencyModalItemId} depends on Item ${dependsOnItemId} (${selectedText})`);
   
   try {
     const response = await fetch(`/api/checklist-items/${dependencyModalItemId}/dependencies`, {
@@ -1766,7 +1766,7 @@ async function addNewDependency() {
       return;
     }
     
-    showToast('✅ Dependency added successfully', 'success');
+    showToast('Dependency added successfully', 'success');
     
     // Reload modal
     openDependencyModal(dependencyModalItemId);
@@ -1800,7 +1800,7 @@ async function removeDependency(dependencyId) {
       throw new Error('Failed to remove dependency');
     }
     
-    showToast('✅ Dependency removed', 'success');
+    showToast('Dependency removed', 'success');
     
     // Reload modal
     if (dependencyModalItemId) {

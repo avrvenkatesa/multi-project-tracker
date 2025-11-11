@@ -439,19 +439,19 @@ function renderLinkedChecklists() {
       <div class="flex flex-wrap gap-4 text-sm text-gray-600">
         ${checklist.completion_percentage ? `
           <div class="flex items-center gap-1">
-            <span>✓</span>
+            ${IconFactory.renderInline('check', { tone: 'success' })}
             <span>${checklist.completion_percentage}% complete</span>
           </div>
         ` : ''}
         ${checklist.related_issue_title ? `
           <div class="flex items-center gap-1">
-            <span>🎯</span>
+            ${IconFactory.renderInline('target', { tone: 'info' })}
             <span>Issue: ${escapeHtml(checklist.related_issue_title)}</span>
           </div>
         ` : ''}
         ${checklist.related_action_title ? `
           <div class="flex items-center gap-1">
-            <span>📌</span>
+            ${IconFactory.renderInline('target', { tone: 'primary' })}
             <span>Action: ${escapeHtml(checklist.related_action_title)}</span>
           </div>
         ` : ''}
@@ -566,15 +566,15 @@ function renderStandaloneChecklists() {
       
       <div class="flex flex-wrap gap-4 text-sm text-gray-600">
         <div class="flex items-center gap-1">
-          <span>📋</span>
+          ${IconFactory.renderInline('clipboard', { tone: 'info' })}
           <span>${checklist.item_count || 0} items</span>
         </div>
         <div class="flex items-center gap-1">
-          <span>📄</span>
+          ${IconFactory.renderInline('file', { tone: 'muted' })}
           <span>${escapeHtml(checklist.source_document || 'No document')}</span>
         </div>
         <div class="flex items-center gap-1">
-          <span>📅</span>
+          ${IconFactory.renderInline('calendar', { tone: 'muted' })}
           <span>${new Date(checklist.created_at).toLocaleDateString()}</span>
         </div>
       </div>
@@ -694,8 +694,8 @@ function renderTemplates() {
             data-template-id="${template.id}"
             class="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200"
             title="Use template"
-          >
-            ✨ Use
+            aria-label="Use template">
+            ${IconFactory.renderInline('star', { customClass: 'mr-1' })} Use
           </button>
         </div>
       </div>
@@ -703,13 +703,13 @@ function renderTemplates() {
       <div class="flex flex-wrap gap-4 text-sm text-gray-600">
         ${template.section_count ? `
           <div class="flex items-center gap-1">
-            <span>📂</span>
+            ${IconFactory.renderInline('folder', { tone: 'muted' })}
             <span>${template.section_count} sections</span>
           </div>
         ` : ''}
         ${template.usage_count ? `
           <div class="flex items-center gap-1">
-            <span>📊</span>
+            ${IconFactory.renderInline('chart', { tone: 'info' })}
             <span>Used ${template.usage_count} times</span>
           </div>
         ` : ''}
@@ -752,7 +752,7 @@ async function deleteChecklist(checklistId) {
       throw new Error('Failed to delete checklist');
     }
     
-    showNotification('✅ Checklist deleted', 'success');
+    showNotification('Checklist deleted', 'success');
     loadLinkedChecklists();
     
   } catch (error) {
@@ -777,7 +777,7 @@ async function deleteStandaloneChecklist(checklistId) {
       throw new Error(error.message || 'Failed to delete checklist');
     }
     
-    showNotification('✅ Checklist deleted', 'success');
+    showNotification('Checklist deleted', 'success');
     loadStandaloneChecklists();
     
   } catch (error) {
@@ -860,7 +860,7 @@ function updateDocumentFilesList() {
     return `
       <div class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded border-b last:border-b-0">
         <div class="text-sm flex-1">
-          <span class="font-medium">📄 ${file.name}</span>
+          <span class="font-medium">${IconFactory.renderInline('file', { customClass: 'mr-1' })} ${file.name}</span>
           <span class="text-gray-500 ml-2">(${fileSizeMB} MB)</span>
         </div>
         <button 
@@ -966,7 +966,7 @@ function displayChecklistsPreview(checklists, sourceDocuments = []) {
     const classificationsHTML = `
       <div class="document-classifications bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
         <h4 class="font-semibold text-blue-900 mb-3 flex items-center">
-          <span class="mr-2">🏷️</span>
+          ${IconFactory.renderInline('tag', { tone: 'info', customClass: 'mr-2' })}
           Document Classifications
         </h4>
         <div class="space-y-2">
@@ -990,7 +990,7 @@ function displayChecklistsPreview(checklists, sourceDocuments = []) {
             return `
               <div class="flex items-start justify-between bg-white rounded p-3 text-sm">
                 <div class="flex-1">
-                  <div class="font-medium text-gray-900 mb-1">📄 ${escapeHtml(doc.filename)}</div>
+                  <div class="font-medium text-gray-900 mb-1">${IconFactory.renderInline('file', { customClass: 'mr-1' })} ${escapeHtml(doc.filename)}</div>
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="px-2 py-1 bg-gray-100 text-gray-800 rounded font-medium">Document Category: ${escapeHtml(capitalizedCategory)}</span>
                     ${categoryBadge}
@@ -1057,7 +1057,7 @@ async function saveStandaloneChecklists() {
   try {
     // Disable button and show loading state
     saveButton.disabled = true;
-    saveButton.innerHTML = '⏳ Saving...';
+    saveButton.innerHTML = `${IconFactory.renderInline('hourglass', { customClass: 'mr-1' })} Saving...`;
     
     const response = await fetch(`/api/projects/${currentProjectId}/save-standalone-checklists`, {
       method: 'POST',
@@ -1075,8 +1075,8 @@ async function saveStandaloneChecklists() {
     }
     
     // Show success immediately
-    saveButton.innerHTML = '✅ Saved!';
-    showNotification('✅ Checklists saved successfully!', 'success');
+    saveButton.innerHTML = `${IconFactory.renderInline('check', { tone: 'success', customClass: 'mr-1' })} Saved!`;
+    showNotification('Checklists saved successfully!', 'success');
     
     // Close modal after short delay
     setTimeout(() => {

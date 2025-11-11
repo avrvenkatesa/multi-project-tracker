@@ -531,9 +531,9 @@ function createRiskCard(risk) {
   const levelClass = `risk-level-${risk.risk_level?.toLowerCase() || 'low'}`;
   const statusClass = `status-${risk.status?.toLowerCase() || 'identified'}`;
   
-  // Get category emoji
+  // Get category icon
   const category = categories.find(c => c.name === risk.category);
-  const categoryEmoji = category?.icon || '📋';
+  const categoryEmoji = category?.icon || '<i class="fas fa-clipboard-list"></i>';
   
   // Format dates
   const targetDate = risk.target_resolution_date 

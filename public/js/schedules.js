@@ -810,7 +810,7 @@ async function applyDependencies() {
       
       // Handle circular dependency errors with detailed message
       if (errorData.error === 'Circular dependency detected') {
-        alert('❌ ' + errorData.message + '\n\nPlease deselect some of the suggested dependencies and try again.');
+        alert(errorData.message + '\n\nPlease deselect some of the suggested dependencies and try again.');
       } else {
         throw new Error(errorData.message || 'Failed to save dependencies');
       }
@@ -2173,7 +2173,10 @@ function renderScheduleDetail(data) {
                 </div>
               </div>
               <div class="bg-white rounded-lg p-4 border border-amber-200">
-                <p class="text-sm font-semibold text-gray-900 mb-2">💡 Suggestions to Meet Deadline:</p>
+                <p class="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  <i class="fas fa-lightbulb text-yellow-500"></i>
+                  Suggestions to Meet Deadline:
+                </p>
                 <ul class="list-disc list-inside space-y-1 text-sm text-gray-700">
                   ${schedule.deadline_warning.suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
                 </ul>
@@ -2568,7 +2571,7 @@ function renderGanttChart(tasks, schedule) {
                     <td class="px-4 py-3 text-sm text-gray-700">${formatDate(task.scheduled_end)}</td>
                     <td class="px-4 py-3 text-sm text-gray-700">${task.estimated_hours || 0} hrs</td>
                     <td class="px-4 py-3 text-sm">
-                      ${task.is_critical_path ? '<span class="text-red-600 font-semibold">⚠️ Yes</span>' : '<span class="text-gray-400">No</span>'}
+                      ${task.is_critical_path ? '<span class="text-red-600 font-semibold"><i class="fas fa-exclamation-triangle mr-1"></i>Yes</span>' : '<span class="text-gray-400">No</span>'}
                     </td>
                   </tr>
                 `;

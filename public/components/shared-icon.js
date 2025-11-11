@@ -27,7 +27,11 @@ window.IconFactory = (() => {
     link: 'fa-link',
     file: 'fa-file-alt',
     user: 'fa-user',
-    calendar: 'fa-calendar-alt'
+    calendar: 'fa-calendar-alt',
+    folder: 'fa-folder',
+    target: 'fa-bullseye',
+    tag: 'fa-tag',
+    hourglass: 'fa-hourglass-half'
   };
 
   // Color tone mapping to design token classes

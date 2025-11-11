@@ -199,8 +199,9 @@ async function loadArchivedProjects() {
         
         <button 
           class="restore-project-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm"
-          data-project-id="${project.id}">
-          🔄 Restore Project
+          data-project-id="${project.id}"
+          aria-label="Restore project">
+          <i class="fas fa-undo mr-2"></i>Restore Project
         </button>
       </div>
     `).join('');
