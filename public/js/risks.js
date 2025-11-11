@@ -10,9 +10,35 @@ let editingRiskId = null;
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuth();
+  initializeBackButtons();
   await loadProjects();
   setupEventListeners();
 });
+
+// Initialize standardized back buttons
+function initializeBackButtons() {
+  const container = document.getElementById('backButtonsContainer');
+  if (!container) return;
+  
+  // Back to Project button (shown only when viewing a specific project)
+  const backToProjectBtn = SharedBackButton.create({
+    href: 'dashboard.html',
+    text: 'Back to Project',
+    onClick: goBackToProject
+  });
+  backToProjectBtn.id = 'backToProjectBtn';
+  backToProjectBtn.classList.add('hidden');
+  
+  // Back to Projects button (always visible)
+  const backToProjectsBtn = SharedBackButton.create({
+    href: 'index.html',
+    text: 'Back to Projects'
+  });
+  backToProjectsBtn.id = 'backToProjectsBtn';
+  
+  container.appendChild(backToProjectBtn);
+  container.appendChild(backToProjectsBtn);
+}
 
 // Check authentication
 async function checkAuth() {
@@ -134,21 +160,7 @@ function setupEventListeners() {
     }
   });
   
-  // Back to Project button - add event listener as backup
-  const backToProjectBtn = document.getElementById('backToProjectBtn');
-  if (backToProjectBtn) {
-    backToProjectBtn.addEventListener('click', function() {
-      goBackToProject();
-    });
-  }
-  
-  // Back to Projects button
-  const backToProjectsBtn = document.getElementById('backToProjectsBtn');
-  if (backToProjectsBtn) {
-    backToProjectsBtn.addEventListener('click', function() {
-      window.location.href = 'index.html';
-    });
-  }
+  // Back buttons are now initialized by initializeBackButtons() function
   
   // View dropdown navigation
   document.getElementById('dashboard-btn')?.addEventListener('click', () => {

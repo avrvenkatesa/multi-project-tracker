@@ -16,6 +16,7 @@
   <script src="components/shared-header.js"></script>
   <script src="components/shared-loading.js"></script>
   <script src="components/shared-empty-state.js"></script>
+  <script src="components/shared-back-button.js"></script>
 </head>
 <body class="bg-gray-50">
   <!-- Header -->
@@ -24,13 +25,8 @@
       <p class="text-sm text-blue-100 mb-1">Multi-Project Tracker</p>
       <div class="flex justify-between items-center mb-2">
         <h1 class="text-3xl font-bold">Risks</h1>
-        <div class="flex gap-2">
-          <button id="backToProjectBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all hidden" onclick="goBackToProject()">
-            <i class="fas fa-arrow-left mr-2"></i>Back to Project
-          </button>
-          <button id="backToProjectsBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all" onclick="window.location.href='index.html'">
-            <i class="fas fa-arrow-left mr-2"></i>Back to Projects
-          </button>
+        <div id="backButtonsContainer" class="flex gap-2">
+          <!-- Back buttons will be inserted here by JavaScript -->
         </div>
       </div>
       <p class="text-sm text-blue-100">Identify, assess, and monitor project risks</p>
