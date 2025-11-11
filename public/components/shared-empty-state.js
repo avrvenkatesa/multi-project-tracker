@@ -183,7 +183,35 @@ const EmptyState = {
   }
 };
 
-// Export for use in other modules
+// Browser-compatible constructor wrapper
+if (typeof window !== 'undefined') {
+  /**
+   * SharedEmptyState constructor for browser usage
+   * Supports both HTMLElement and selector string
+   * @param {HTMLElement|string} container - Target container element or selector
+   * @param {Object} options - Empty state configuration options
+   */
+  window.SharedEmptyState = function(container, options = {}) {
+    if (typeof container === 'string') {
+      // If container is a selector string, use show()
+      EmptyState.show(container, options);
+    } else if (container instanceof HTMLElement) {
+      // If container is an HTMLElement, create and append
+      const emptyStateElement = EmptyState.create(options);
+      container.innerHTML = '';
+      container.appendChild(emptyStateElement);
+    } else {
+      console.warn('SharedEmptyState: Invalid container type. Expected HTMLElement or selector string.', container);
+    }
+  };
+  
+  // Expose static methods for advanced usage
+  window.SharedEmptyState.create = EmptyState.create.bind(EmptyState);
+  window.SharedEmptyState.show = EmptyState.show.bind(EmptyState);
+  window.SharedEmptyState.templates = EmptyState.templates;
+}
+
+// Export for use in other modules (Node.js)
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = EmptyState;
 }
