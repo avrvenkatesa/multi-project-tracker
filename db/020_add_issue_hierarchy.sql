@@ -130,7 +130,7 @@ BEGIN
       i.status,
       i.assignee,
       i.id::TEXT AS path,
-      NOT EXISTS (SELECT 1 FROM issues WHERE parent_issue_id = i.id) AS is_leaf
+      NOT EXISTS (SELECT 1 FROM issues child WHERE child.parent_issue_id = i.id) AS is_leaf
     FROM issues i
     WHERE i.parent_issue_id = issue_id_param
     
@@ -147,7 +147,7 @@ BEGIN
       i.status,
       i.assignee,
       c.path || '.' || i.id::TEXT,
-      NOT EXISTS (SELECT 1 FROM issues WHERE parent_issue_id = i.id) AS is_leaf
+      NOT EXISTS (SELECT 1 FROM issues child WHERE child.parent_issue_id = i.id) AS is_leaf
     FROM issues i
     INNER JOIN children c ON i.parent_issue_id = c.id
     WHERE c.depth < 10

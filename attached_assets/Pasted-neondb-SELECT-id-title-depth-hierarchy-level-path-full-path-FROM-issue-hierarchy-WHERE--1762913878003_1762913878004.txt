@@ -1,0 +1,127 @@
+neondb=> SELECT id, title, depth, hierarchy_level, path, full_path
+  FROM issue_hierarchy
+  WHERE project_id = 1
+  ORDER BY path;
+neondb=> SELECT * FROM get_issue_children(257)
+neondb-> ;
+FATAL:  terminating connection due to administrator command
+SSL connection has been closed unexpectedly
+The connection to the server was lost. Attempting reset: Succeeded.
+SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
+neondb=> SELECT * FROM get_issue_children(257)
+;
+ERROR:  column reference "parent_issue_id" is ambiguous
+LINE 13:       NOT EXISTS (SELECT 1 FROM issues WHERE parent_issue_id...
+                                                      ^
+DETAIL:  It could refer to either a PL/pgSQL variable or a table column.
+QUERY:  WITH RECURSIVE children AS (
+    -- Direct children
+    SELECT 
+      i.id,
+      i.title,
+      i.parent_issue_id,
+      1 AS depth,
+      i.estimated_effort_hours,
+      i.actual_effort_hours,
+      i.status,
+      i.assignee,
+      i.id::TEXT AS path,
+      NOT EXISTS (SELECT 1 FROM issues WHERE parent_issue_id = i.id) AS is_leaf
+    FROM issues i
+    WHERE i.parent_issue_id = issue_id_param
+    
+    UNION ALL
+    
+    -- Recursive descendants
+    SELECT 
+      i.id,
+      i.title,
+      i.parent_issue_id,
+      c.depth + 1,
+      i.estimated_effort_hours,
+      i.actual_effort_hours,
+      i.status,
+      i.assignee,
+      c.path || '.' || i.id::TEXT,
+      NOT EXISTS (SELECT 1 FROM issues WHERE parent_issue_id = i.id) AS is_leaf
+    FROM issues i
+    INNER JOIN children c ON i.parent_issue_id = c.id
+    WHERE c.depth < 10
+  )
+  SELECT * FROM children
+  ORDER BY path
+CONTEXT:  PL/pgSQL function get_issue_children(integer) line 3 at RETURN QUERY
+neondb=> SELECT calculate_issue_rollup_effort(257);
+FATAL:  terminating connection due to administrator command
+SSL connection has been closed unexpectedly
+The connection to the server was lost. Attempting reset: Succeeded.
+SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
+neondb=> SELECT calculate_issue_rollup_effort(257);
+ERROR:  column reference "parent_issue_id" is ambiguous
+LINE 13:       NOT EXISTS (SELECT 1 FROM issues WHERE parent_issue_id...
+                                                      ^
+DETAIL:  It could refer to either a PL/pgSQL variable or a table column.
+QUERY:  WITH RECURSIVE children AS (
+    -- Direct children
+    SELECT 
+      i.id,
+      i.title,
+      i.parent_issue_id,
+      1 AS depth,
+      i.estimated_effort_hours,
+      i.actual_effort_hours,
+      i.status,
+      i.assignee,
+      i.id::TEXT AS path,
+      NOT EXISTS (SELECT 1 FROM issues WHERE parent_issue_id = i.id) AS is_leaf
+    FROM issues i
+    WHERE i.parent_issue_id = issue_id_param
+    
+    UNION ALL
+    
+    -- Recursive descendants
+    SELECT 
+      i.id,
+      i.title,
+      i.parent_issue_id,
+      c.depth + 1,
+      i.estimated_effort_hours,
+      i.actual_effort_hours,
+      i.status,
+      i.assignee,
+      c.path || '.' || i.id::TEXT,
+      NOT EXISTS (SELECT 1 FROM issues WHERE parent_issue_id = i.id) AS is_leaf
+    FROM issues i
+    INNER JOIN children c ON i.parent_issue_id = c.id
+    WHERE c.depth < 10
+  )
+  SELECT * FROM children
+  ORDER BY path
+CONTEXT:  PL/pgSQL function get_issue_children(integer) line 3 at RETURN QUERY
+SQL statement "WITH children_effort AS (
+    SELECT 
+      COALESCE(SUM(c.estimated_effort_hours), 0) AS child_estimated,
+      COALESCE(SUM(c.actual_effort_hours), 0) AS child_actual,
+      COUNT(c.id) AS child_cnt
+    FROM get_issue_children(issue_id_param) c
+  ),
+  issue_effort AS (
+    SELECT 
+      COALESCE(i.estimated_effort_hours, 0) AS own_estimated,
+      COALESCE(i.actual_effort_hours, 0) AS own_actual
+    FROM issues i
+    WHERE i.id = issue_id_param
+  )
+  SELECT 
+    CASE 
+      WHEN ce.child_cnt > 0 THEN ce.child_estimated 
+      ELSE ie.own_estimated 
+    END AS total_estimated_hours,
+    CASE 
+      WHEN ce.child_cnt > 0 THEN ce.child_actual 
+      ELSE ie.own_actual 
+    END AS total_actual_hours,
+    ce.child_cnt::INTEGER,
+    (ce.child_cnt = 0) AS is_leaf_issue
+  FROM children_effort ce, issue_effort ie"
+PL/pgSQL function calculate_issue_rollup_effort(integer) line 3 at RETURN QUERY
