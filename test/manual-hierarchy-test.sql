@@ -25,23 +25,24 @@ DELETE FROM issues WHERE title LIKE 'TEST:%';
 \echo '=========================================='
 \echo ''
 
--- Step 1.1: Create the Epic (parent issue)
+-- Step 1.1: Create the Epic (parent issue) and store its ID
 -- Expected: Returns the epic's ID
-INSERT INTO issues 
-  (project_id, title, description, status, priority, 
-   parent_issue_id, hierarchy_level, is_epic, created_at, updated_at)
-VALUES 
-  (1, 'TEST: Cloud Migration Epic', 
-   'Migrate all infrastructure to cloud', 
-   'In Progress', 'high', 
-   NULL, 0, TRUE, NOW(), NOW())
-RETURNING id, title, is_epic, hierarchy_level;
-
--- Store the epic ID for later (replace XXX with actual ID from above)
-\set epic_id 282
+WITH new_epic AS (
+  INSERT INTO issues 
+    (project_id, title, description, status, priority, 
+     parent_issue_id, hierarchy_level, is_epic, created_at, updated_at)
+  VALUES 
+    (1, 'TEST: Cloud Migration Epic', 
+     'Migrate all infrastructure to cloud', 
+     'In Progress', 'high', 
+     NULL, 0, TRUE, NOW(), NOW())
+  RETURNING id, title, is_epic, hierarchy_level
+)
+SELECT id, title, is_epic, hierarchy_level FROM new_epic
+\gset epic_
 
 \echo ''
-\echo 'Epic created! Note the ID and update \\set epic_id XXX above if running interactively'
+\echo 'Epic created with ID: ' :epic_id
 \echo ''
 
 -- Step 1.2: Create child task 1
@@ -49,33 +50,33 @@ RETURNING id, title, is_epic, hierarchy_level;
 INSERT INTO issues 
   (project_id, title, description, status, priority, 
    parent_issue_id, hierarchy_level, is_epic, estimated_effort_hours, created_at, updated_at)
-VALUES 
-  (1, 'TEST: Setup Cloud Infrastructure', 
-   'Configure VPC, networking, and security groups', 
-   'In Progress', 'high', 
-   :epic_id, 1, FALSE, 24, NOW(), NOW())
+SELECT 
+  1, 'TEST: Setup Cloud Infrastructure', 
+  'Configure VPC, networking, and security groups', 
+  'In Progress', 'high', 
+  :'epic_id'::INTEGER, 1, FALSE, 24, NOW(), NOW()
 RETURNING id, title, parent_issue_id, estimated_effort_hours;
 
 -- Step 1.3: Create child task 2
 INSERT INTO issues 
   (project_id, title, description, status, priority, 
    parent_issue_id, hierarchy_level, is_epic, estimated_effort_hours, created_at, updated_at)
-VALUES 
-  (1, 'TEST: Database Migration', 
-   'Migrate PostgreSQL database to managed service', 
-   'To Do', 'high', 
-   :epic_id, 1, FALSE, 16, NOW(), NOW())
+SELECT 
+  1, 'TEST: Database Migration', 
+  'Migrate PostgreSQL database to managed service', 
+  'To Do', 'high', 
+  :'epic_id'::INTEGER, 1, FALSE, 16, NOW(), NOW()
 RETURNING id, title, parent_issue_id, estimated_effort_hours;
 
 -- Step 1.4: Create child task 3
 INSERT INTO issues 
   (project_id, title, description, status, priority, 
    parent_issue_id, hierarchy_level, is_epic, estimated_effort_hours, created_at, updated_at)
-VALUES 
-  (1, 'TEST: Application Deployment', 
-   'Deploy applications to cloud platform', 
-   'To Do', 'medium', 
-   :epic_id, 1, FALSE, 12, NOW(), NOW())
+SELECT 
+  1, 'TEST: Application Deployment', 
+  'Deploy applications to cloud platform', 
+  'To Do', 'medium', 
+  :'epic_id'::INTEGER, 1, FALSE, 12, NOW(), NOW()
 RETURNING id, title, parent_issue_id, estimated_effort_hours;
 
 \echo ''
@@ -138,7 +139,7 @@ SELECT
   assignee,
   path,
   is_leaf
-FROM get_issue_children(:epic_id)
+FROM get_issue_children(:'epic_id'::INTEGER)
 ORDER BY id;
 
 \echo ''
@@ -167,7 +168,7 @@ SELECT
   total_actual_hours,
   child_count,
   is_leaf_issue
-FROM calculate_issue_rollup_effort(:epic_id);
+FROM calculate_issue_rollup_effort(:'epic_id'::INTEGER);
 
 \echo ''
 \echo 'Expected: total_estimated_hours = 52 (24+16+12)'
@@ -179,9 +180,9 @@ FROM calculate_issue_rollup_effort(:epic_id);
 UPDATE issues 
 SET effort_hours = (
   SELECT total_estimated_hours 
-  FROM calculate_issue_rollup_effort(:epic_id)
+  FROM calculate_issue_rollup_effort(:'epic_id'::INTEGER)
 )
-WHERE id = :epic_id
+WHERE id = :'epic_id'::INTEGER
 RETURNING id, title, effort_hours;
 
 \echo ''
@@ -210,7 +211,7 @@ SELECT
   COUNT(children.id) as child_count
 FROM issues i
 LEFT JOIN issues children ON children.parent_issue_id = i.id
-WHERE i.id = :epic_id
+WHERE i.id = :'epic_id'::INTEGER
 GROUP BY i.id, i.title, i.is_epic, i.hierarchy_level, i.effort_hours;
 
 \echo ''
@@ -226,7 +227,7 @@ SELECT
   estimated_effort_hours,
   status
 FROM issues
-WHERE parent_issue_id = :epic_id
+WHERE parent_issue_id = :'epic_id'::INTEGER
 ORDER BY id;
 
 \echo ''
@@ -264,21 +265,42 @@ ORDER BY hierarchy_level, id;
 
 -- Step 6.1: Try to make epic its own parent (should FAIL)
 \echo 'Test 6.1: Attempting self-reference (should fail)...'
-UPDATE issues 
-SET parent_issue_id = id 
-WHERE id = :epic_id;
+DO $$
+BEGIN
+  UPDATE issues 
+  SET parent_issue_id = id 
+  WHERE id = :'epic_id'::INTEGER;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE NOTICE '  ✓ Correctly prevented: %', SQLERRM;
+END $$;
 -- Expected: ERROR: Issue cannot be its own parent
 
 \echo ''
 
--- Step 6.2: Get a child task ID for next test
-\set child_id (SELECT id FROM issues WHERE parent_issue_id = :epic_id LIMIT 1)
-
--- Try to make the parent a child of its own child (should FAIL)
+-- Step 6.2: Try to make the parent a child of its own child (should FAIL)
 \echo 'Test 6.2: Attempting circular reference (should fail)...'
-UPDATE issues 
-SET parent_issue_id = :child_id 
-WHERE id = :epic_id;
+DO $$
+DECLARE
+  v_child_id INTEGER;
+  v_epic_id INTEGER := :'epic_id'::INTEGER;
+BEGIN
+  -- Get a child task ID
+  SELECT id INTO v_child_id 
+  FROM issues 
+  WHERE parent_issue_id = v_epic_id 
+  LIMIT 1;
+  
+  IF v_child_id IS NOT NULL THEN
+    -- Try to make the parent a child of its own child
+    UPDATE issues 
+    SET parent_issue_id = v_child_id 
+    WHERE id = v_epic_id;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE NOTICE '  ✓ Correctly prevented: %', SQLERRM;
+END $$;
 -- Expected: ERROR: Circular hierarchy detected
 
 \echo ''
@@ -298,31 +320,33 @@ WHERE id = :epic_id;
 \echo ''
 
 -- Step 7.1: Create a regular task (not an epic)
-INSERT INTO issues 
-  (project_id, title, description, status, priority, 
-   parent_issue_id, hierarchy_level, is_epic, created_at, updated_at)
-VALUES 
-  (1, 'TEST: Standalone Task', 
-   'This starts as a regular task', 
-   'To Do', 'low', 
-   NULL, 0, FALSE, NOW(), NOW())
-RETURNING id, title, is_epic;
-
-\set standalone_id (SELECT id FROM issues WHERE title = 'TEST: Standalone Task')
+WITH new_standalone AS (
+  INSERT INTO issues 
+    (project_id, title, description, status, priority, 
+     parent_issue_id, hierarchy_level, is_epic, created_at, updated_at)
+  VALUES 
+    (1, 'TEST: Standalone Task', 
+     'This starts as a regular task', 
+     'To Do', 'low', 
+     NULL, 0, FALSE, NOW(), NOW())
+  RETURNING id, title, is_epic
+)
+SELECT id, title, is_epic FROM new_standalone
+\gset standalone_
 
 \echo ''
-\echo 'Created standalone task with is_epic=FALSE'
+\echo 'Created standalone task with is_epic=FALSE (ID: ' :standalone_id ')'
 \echo ''
 
 -- Step 7.2: Add a child to it (should auto-set is_epic=TRUE)
 INSERT INTO issues 
   (project_id, title, description, status, priority, 
    parent_issue_id, hierarchy_level, is_epic, created_at, updated_at)
-VALUES 
-  (1, 'TEST: Child of Standalone', 
-   'Adding this child should make parent an epic', 
-   'To Do', 'low', 
-   :standalone_id, 1, FALSE, NOW(), NOW())
+SELECT 
+  1, 'TEST: Child of Standalone', 
+  'Adding this child should make parent an epic', 
+  'To Do', 'low', 
+  :'standalone_id'::INTEGER, 1, FALSE, NOW(), NOW()
 RETURNING id, title, parent_issue_id;
 
 \echo ''
@@ -334,9 +358,9 @@ SELECT
   id,
   title,
   is_epic,
-  (SELECT COUNT(*) FROM issues WHERE parent_issue_id = :standalone_id) as child_count
+  (SELECT COUNT(*) FROM issues WHERE parent_issue_id = :'standalone_id'::INTEGER) as child_count
 FROM issues
-WHERE id = :standalone_id;
+WHERE id = :'standalone_id'::INTEGER;
 
 \echo ''
 \echo 'Expected: is_epic should now be TRUE (auto-updated by trigger)'
