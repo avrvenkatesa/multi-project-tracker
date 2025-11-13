@@ -94,34 +94,30 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
     alert('Project updated successfully!');
     document.getElementById('editProjectModal').classList.add('hidden');
     
-    // Update the current project data if this is the active project
+    // Update the current project in the global projects array
+    if (window.projects && Array.isArray(window.projects)) {
+      const projectIndex = window.projects.findIndex(p => p.id === parseInt(projectId));
+      if (projectIndex !== -1) {
+        window.projects[projectIndex].timesheet_entry_required = timesheet_entry_required;
+        window.projects[projectIndex].checklist_completion_enabled = checklist_completion_enabled;
+        window.projects[projectIndex].complexity_level = complexity_level;
+        window.projects[projectIndex].teams_notifications_enabled = teams_notifications_enabled;
+        window.projects[projectIndex].teams_webhook_url = teams_webhook_url;
+      }
+    }
+    
+    // Update currentProject if it exists and matches
     if (window.currentProject && window.currentProject.id === parseInt(projectId)) {
-      console.log('[PROJECT SETTINGS] Updating currentProject:', {
-        oldTimesheetSetting: window.currentProject.timesheet_entry_required,
-        newTimesheetSetting: timesheet_entry_required
-      });
-      
       window.currentProject.timesheet_entry_required = timesheet_entry_required;
       window.currentProject.checklist_completion_enabled = checklist_completion_enabled;
       window.currentProject.complexity_level = complexity_level;
       window.currentProject.teams_notifications_enabled = teams_notifications_enabled;
       window.currentProject.teams_webhook_url = teams_webhook_url;
-      
-      console.log('[PROJECT SETTINGS] Updated currentProject.timesheet_entry_required:', window.currentProject.timesheet_entry_required);
-      
-      // Re-render Kanban board to update badges
-      if (typeof renderKanbanBoard === 'function') {
-        console.log('[PROJECT SETTINGS] Calling renderKanbanBoard()');
-        renderKanbanBoard();
-      } else {
-        console.error('[PROJECT SETTINGS] renderKanbanBoard function not found!');
-      }
-    } else {
-      console.log('[PROJECT SETTINGS] Not updating - project mismatch or no current project:', {
-        hasCurrentProject: !!window.currentProject,
-        currentProjectId: window.currentProject?.id,
-        editedProjectId: parseInt(projectId)
-      });
+    }
+    
+    // Re-render Kanban board if the function exists (we're on Kanban view)
+    if (typeof renderKanbanBoard === 'function') {
+      await renderKanbanBoard();
     }
     
     if (typeof loadProjects === 'function') {
