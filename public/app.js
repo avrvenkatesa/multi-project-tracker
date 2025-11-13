@@ -1564,25 +1564,28 @@ function handleDragOver(e) {
 }
 
 // Time Tracking Functions
-function doesStatusChangeRequireTime(fromStatus, toStatus) {
-    // Normalize statuses (case insensitive)
-    const from = fromStatus.toLowerCase();
-    const to = toStatus.toLowerCase();
+function doesStatusChangeRequireTime(fromStatus, toStatus, item, project) {
+    // NEW LOGIC: Only require time for transitions to Done when project/item settings dictate
+    // Note: To Do → In Progress no longer requires timesheet entry
     
-    // Status changes that require time entry
-    const requiresTime = [
-        'to do_in progress',
-        'open_in progress',
-        'todo_in progress',
-        'to do_done',
-        'in progress_done',
-        'open_done',
-        'todo_done',
-        'in progress_done'
-    ];
+    // Only check timesheet requirement for transitions to Done
+    if (toStatus.toLowerCase() !== 'done') {
+        return false;
+    }
     
-    const transitionKey = `${from}_${to}`;
-    return requiresTime.includes(transitionKey);
+    // Check if timesheet is required based on project setting + item override
+    // Override = true: always required
+    if (item?.timesheet_required_override === true) {
+        return true;
+    }
+    
+    // Override = false: never required
+    if (item?.timesheet_required_override === false) {
+        return false;
+    }
+    
+    // Override = null/undefined: inherit from project setting
+    return project?.timesheet_entry_required || false;
 }
 
 async function showTimeEntryModal(item, fromStatus, toStatus) {
@@ -1800,8 +1803,8 @@ async function handleDrop(e) {
         return;
     }
     
-    // Check if this status change requires time entry
-    const requiresTime = doesStatusChangeRequireTime(currentStatus, newStatus);
+    // Check if this status change requires time entry (based on project/item settings)
+    const requiresTime = doesStatusChangeRequireTime(currentStatus, newStatus, currentItem, currentProject);
     
     if (requiresTime) {
         // Show time entry modal
