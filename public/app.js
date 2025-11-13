@@ -6,6 +6,15 @@ let issues = [];
 let actionItems = [];
 let teamMembers = [];
 
+// Expose currentProject to window so it can be updated from project-management.js
+Object.defineProperty(window, 'currentProject', {
+  get: () => currentProject,
+  set: (value) => { 
+    currentProject = value;
+    console.log('[GLOBAL] currentProject updated:', currentProject?.id, 'timesheet_entry_required:', currentProject?.timesheet_entry_required);
+  }
+});
+
 // Filter state
 let currentFilters = {
   search: '',
