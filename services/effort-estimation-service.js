@@ -1,6 +1,6 @@
 const { OpenAI } = require('openai');
 const aiCostTracker = require('./ai-cost-tracker');
-const pool = require('../db');
+const { pool } = require('../db');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
