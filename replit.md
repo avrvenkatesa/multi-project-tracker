@@ -2,6 +2,26 @@
 
 ## Recent Changes
 
+### November 13, 2025 - Timesheet Entry Configuration Enhancement
+**Feature**: Project-level timesheet entry configuration with item-level overrides and improved UX.
+
+**Implementation**:
+- **Database (Migration 021)**: Added `timesheet_entry_required` boolean to projects table (default: FALSE), `timesheet_required_override` to issues/action_items (TRUE/FALSE/NULL pattern), `project_settings_audit` table for change tracking, `is_timesheet_required()` helper function, and `v_timesheet_requirements` view.
+- **Backend Services**: Updated `time-tracking-service.js` to remove To Do→In Progress timesheet requirement and add project/item-level validation for →Done transitions. Updated server.js PATCH endpoints to handle timesheet setting changes with audit logging.
+- **Frontend UI**: Added "Timesheet Entry Settings" section to project settings modal with toggle checkbox. Added "Timesheet Override Setting" checkbox to issue and action item edit modals for item-level control.
+- **Kanban Enhancements**: Added ⏱️ badge on Kanban cards when timesheet entry is required for completion (respects project setting and item overrides). Updated drag-and-drop logic to check timesheet requirements and show friendly time entry modal instead of errors.
+- **UX Improvements**: When a user attempts to move an item to Done without logging time (and timesheet is required), the system now shows a friendly inline time entry modal instead of blocking with an error message. This allows users to log time and complete the status change in one action.
+
+**Key Features**:
+1. **Project-level control**: Enable/disable timesheet requirement at project level (default: optional)
+2. **Item-level overrides**: Individual items can override project setting (always require, never require, or inherit)
+3. **Audit trail**: All project setting changes are logged to `project_settings_audit` table
+4. **Visual indicators**: Kanban cards display ⏱️ badge when timesheet will be required for completion
+5. **Friendly error recovery**: Backend rejection triggers inline time entry modal instead of generic error
+6. **Removed To Do→In Progress constraint**: Timesheet entry now only enforced for →Done transitions
+
+**Override Logic**: TRUE=always require, FALSE=never require, NULL=inherit from project setting
+
 ### November 10, 2025 - Gantt Dependency Rendering Fix
 **Issue**: Gantt charts from multi-document imports showed no dependency arrows despite dependencies existing in the database.
 

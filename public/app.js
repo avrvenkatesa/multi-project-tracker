@@ -1843,7 +1843,26 @@ async function handleDrop(e) {
             showSuccessMessage('Status updated successfully!');
         } catch (error) {
             console.error('Error updating status:', error);
-            showErrorMessage('Failed to update status');
+            
+            // Check if this is a timesheet requirement error
+            if (error.response?.data?.requiresHours || error.response?.data?.timesheetRequired) {
+                // Backend requires timesheet entry - show time entry modal as recovery
+                const timeData = await showTimeEntryModal(currentItem, currentStatus, newStatus);
+                
+                if (timeData) {
+                    // Retry with time tracking
+                    await updateItemStatusWithTime(draggedItem, newStatus, timeData);
+                } else {
+                    // User cancelled - reset state
+                    draggedItem = null;
+                    document.querySelectorAll('.kanban-card').forEach(card => {
+                        card.style.opacity = '1';
+                    });
+                }
+            } else {
+                // Generic error - show error message
+                showErrorMessage(error.response?.data?.message || 'Failed to update status');
+            }
         }
     }
     
