@@ -17,6 +17,36 @@
         <script src="components/shared-loading.js"></script>
         <script src="components/shared-empty-state.js"></script>
         <script src="components/shared-icon.js"></script>
+        
+        <!-- Kanban Loading State Styles -->
+        <style>
+            .kanban-card {
+                position: relative;
+            }
+            
+            .kanban-card-updating {
+                position: relative;
+            }
+            
+            .card-loading-spinner {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(255, 255, 255, 0.95);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 0.5rem;
+                z-index: 10;
+            }
+            
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+        </style>
     </head>
     <body class="bg-gray-50">
         <div id="app">

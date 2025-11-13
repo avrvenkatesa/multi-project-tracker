@@ -1764,6 +1764,46 @@ async function updateItemStatusWithTime(draggedItem, newStatus, timeData) {
     }
 }
 
+// Helper function to show loading state on a card
+function showCardLoadingState(itemId, itemType) {
+    const cardElement = document.querySelector(`[data-item-id="${itemId}"][data-item-type="${itemType}"]`);
+    if (cardElement) {
+        // Add loading class and spinner
+        cardElement.classList.add('kanban-card-updating');
+        cardElement.style.opacity = '0.6';
+        cardElement.style.pointerEvents = 'none';
+        
+        // Add loading spinner overlay
+        const spinner = document.createElement('div');
+        spinner.className = 'card-loading-spinner';
+        spinner.innerHTML = `
+            <div class="flex items-center justify-center gap-2 text-sm text-blue-600 font-medium">
+                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Updating...</span>
+            </div>
+        `;
+        cardElement.appendChild(spinner);
+    }
+}
+
+// Helper function to clear loading state
+function clearCardLoadingState(itemId, itemType) {
+    const cardElement = document.querySelector(`[data-item-id="${itemId}"][data-item-type="${itemType}"]`);
+    if (cardElement) {
+        cardElement.classList.remove('kanban-card-updating');
+        cardElement.style.opacity = '1';
+        cardElement.style.pointerEvents = 'auto';
+        
+        const spinner = cardElement.querySelector('.card-loading-spinner');
+        if (spinner) {
+            spinner.remove();
+        }
+    }
+}
+
 async function handleDrop(e) {
     e.preventDefault();
     
@@ -1803,10 +1843,16 @@ async function handleDrop(e) {
         return;
     }
     
+    // Show loading state on the card
+    showCardLoadingState(draggedItem.id, draggedItem.type);
+    
     // Check if this status change requires time entry (based on project/item settings)
     const requiresTime = doesStatusChangeRequireTime(currentStatus, newStatus, currentItem, currentProject);
     
     if (requiresTime) {
+        // Clear loading state before showing modal
+        clearCardLoadingState(draggedItem.id, draggedItem.type);
+        
         // Show time entry modal
         const timeData = await showTimeEntryModal(currentItem, currentStatus, newStatus);
         
@@ -1819,8 +1865,14 @@ async function handleDrop(e) {
             return;
         }
         
+        // Show loading state again before API call
+        showCardLoadingState(draggedItem.id, draggedItem.type);
+        
         // Update status with time tracking
         await updateItemStatusWithTime(draggedItem, newStatus, timeData);
+        
+        // Clear loading state after completion
+        clearCardLoadingState(draggedItem.id, draggedItem.type);
     } else {
         // Simple status update without time tracking
         try {
@@ -1839,6 +1891,9 @@ async function handleDrop(e) {
                 if (item) item.status = newStatus;
             }
             
+            // Clear loading state
+            clearCardLoadingState(draggedItem.id, draggedItem.type);
+            
             renderKanbanBoard();
             showSuccessMessage('Status updated successfully!');
         } catch (error) {
@@ -1846,12 +1901,21 @@ async function handleDrop(e) {
             
             // Check if this is a timesheet requirement error
             if (error.response?.data?.requiresHours || error.response?.data?.timesheetRequired) {
+                // Clear loading before showing modal
+                clearCardLoadingState(draggedItem.id, draggedItem.type);
+                
                 // Backend requires timesheet entry - show time entry modal as recovery
                 const timeData = await showTimeEntryModal(currentItem, currentStatus, newStatus);
                 
                 if (timeData) {
+                    // Show loading again for retry
+                    showCardLoadingState(draggedItem.id, draggedItem.type);
+                    
                     // Retry with time tracking
                     await updateItemStatusWithTime(draggedItem, newStatus, timeData);
+                    
+                    // Clear loading after retry
+                    clearCardLoadingState(draggedItem.id, draggedItem.type);
                 } else {
                     // User cancelled - reset state
                     draggedItem = null;
@@ -1860,7 +1924,8 @@ async function handleDrop(e) {
                     });
                 }
             } else {
-                // Generic error - show error message
+                // Generic error - clear loading and show error message
+                clearCardLoadingState(draggedItem.id, draggedItem.type);
                 showErrorMessage(error.response?.data?.message || 'Failed to update status');
             }
         }
