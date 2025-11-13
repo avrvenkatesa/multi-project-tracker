@@ -103,22 +103,27 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
     console.log('[SAVE] Starting project update sequence');
     document.getElementById('editProjectModal').classList.add('hidden');
     
-    // First, reload projects to get fresh data from server
-    console.log('[SAVE] Calling loadProjects()...');
-    if (typeof loadProjects === 'function') {
-      await loadProjects();
-      console.log('[SAVE] loadProjects() completed, projects array length:', window.projects?.length);
-    }
-    
-    // Then update currentProject with the fresh data from the projects array
-    console.log('[SAVE] Before update - currentProject:', window.currentProject?.id, window.currentProject?.timesheet_entry_required);
-    if (window.projects && Array.isArray(window.projects)) {
-      const updatedProject = window.projects.find(p => p.id === parseInt(projectId));
-      console.log('[SAVE] Found updated project:', updatedProject?.id, updatedProject?.timesheet_entry_required);
+    // Fetch fresh project data directly from the server
+    console.log('[SAVE] Fetching fresh project data from server...');
+    const projectResponse = await fetch('/api/projects', { credentials: 'include' });
+    if (projectResponse.ok) {
+      const allProjects = await projectResponse.json();
+      console.log('[SAVE] Fetched', allProjects.length, 'projects from server');
+      
+      // Find and update currentProject with fresh data
+      const updatedProject = allProjects.find(p => p.id === parseInt(projectId));
+      console.log('[SAVE] Found updated project:', updatedProject?.id, 'timesheet_entry_required:', updatedProject?.timesheet_entry_required);
+      
       if (updatedProject && window.currentProject && window.currentProject.id === parseInt(projectId)) {
-        // Update currentProject reference to the freshly loaded project
+        console.log('[SAVE] Before update - currentProject.timesheet_entry_required:', window.currentProject.timesheet_entry_required);
         window.currentProject = updatedProject;
-        console.log('[SAVE] After update - currentProject:', window.currentProject.id, window.currentProject.timesheet_entry_required);
+        console.log('[SAVE] After update - currentProject.timesheet_entry_required:', window.currentProject.timesheet_entry_required);
+      }
+      
+      // Also update the global projects array if it exists (for the main dashboard)
+      if (typeof loadProjects === 'function') {
+        await loadProjects();
+        console.log('[SAVE] Refreshed main projects list');
       }
     }
     
