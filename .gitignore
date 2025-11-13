@@ -137,3 +137,11 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Accidentally created shell output files
+UPDATE
+^C
+q
+
+# Temporary pasted content
+attached_assets/Pasted-*.txt
