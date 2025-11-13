@@ -2069,6 +2069,16 @@
                         <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
                     </div>
                     
+                    <!-- Timesheet Override Setting -->
+                    <div class="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="edit-issue-timesheet-override" 
+                                   class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                            <span class="text-sm font-medium text-gray-700">Override: Always require timesheet entry for completion</span>
+                        </label>
+                        <p class="text-xs text-gray-500 mt-1 ml-6">When checked, this item will always require timesheet entry on completion, regardless of project settings.</p>
+                    </div>
+                    
                     <!-- Effort Estimation Link -->
                     <div class="mb-6 border-t pt-4">
                         <button type="button" 
@@ -2214,9 +2224,19 @@
                         <select id="edit-action-item-tags" multiple
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                                 style="min-height: 100px;">
-                            <option value="" disabled>Loading tags...</option>
+                            <option value="" disabled">Loading tags...</option>
                         </select>
                         <small class="text-gray-500">Hold Ctrl/Cmd to select multiple tags</small>
+                    </div>
+                    
+                    <!-- Timesheet Override Setting -->
+                    <div class="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="edit-action-item-timesheet-override" 
+                                   class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                            <span class="text-sm font-medium text-gray-700">Override: Always require timesheet entry for completion</span>
+                        </label>
+                        <p class="text-xs text-gray-500 mt-1 ml-6">When checked, this item will always require timesheet entry on completion, regardless of project settings.</p>
                     </div>
                     
                     <!-- Effort Estimation Link -->

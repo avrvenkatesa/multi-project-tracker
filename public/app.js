@@ -5090,6 +5090,9 @@ async function openEditModal(itemId, itemType) {
       // Set item ID for "Open Effort Estimates" button
       document.getElementById('edit-issue-open-estimates').setAttribute('data-issue-id', item.id);
       
+      // Set timesheet override checkbox
+      document.getElementById('edit-issue-timesheet-override').checked = item.timesheet_required_override || false;
+      
       // Show modal
       document.getElementById('editIssueModal').classList.remove('hidden');
     } else {
@@ -5118,6 +5121,9 @@ async function openEditModal(itemId, itemType) {
       
       // Set item ID for "Open Effort Estimates" button
       document.getElementById('edit-action-item-open-estimates').setAttribute('data-action-item-id', item.id);
+      
+      // Set timesheet override checkbox
+      document.getElementById('edit-action-item-timesheet-override').checked = item.timesheet_required_override || false;
       
       // Show modal
       document.getElementById('editActionItemModal').classList.remove('hidden');
@@ -5481,7 +5487,8 @@ document.getElementById('editIssueForm').addEventListener('submit', async functi
     due_date: document.getElementById('edit-issue-due-date').value,
     priority: document.getElementById('edit-issue-priority').value,
     status: document.getElementById('edit-issue-status').value,
-    category: document.getElementById('edit-issue-category').value
+    category: document.getElementById('edit-issue-category').value,
+    timesheet_required_override: document.getElementById('edit-issue-timesheet-override').checked ? true : null
   };
   
   // Get selected tag IDs
@@ -5534,7 +5541,8 @@ document.getElementById('editActionItemForm').addEventListener('submit', async f
     due_date: document.getElementById('edit-action-item-due-date').value,
     priority: document.getElementById('edit-action-item-priority').value,
     status: document.getElementById('edit-action-item-status').value,
-    progress: parseInt(document.getElementById('edit-action-item-progress').value) || 0
+    progress: parseInt(document.getElementById('edit-action-item-progress').value) || 0,
+    timesheet_required_override: document.getElementById('edit-action-item-timesheet-override').checked ? true : null
   };
   
   // Get selected tag IDs
