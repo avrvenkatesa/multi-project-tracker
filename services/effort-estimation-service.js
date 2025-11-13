@@ -1,5 +1,6 @@
 const { OpenAI } = require('openai');
 const aiCostTracker = require('./ai-cost-tracker');
+const pool = require('../db');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -465,10 +466,439 @@ async function getEstimateHistory(pool, itemType, itemId) {
   }
 }
 
+/**
+ * Calculate rolled-up effort for a parent issue from all children
+ * @param {number} parentIssueId - Parent issue ID
+ * @param {Object} options - Options object
+ * @param {boolean} options.updateParent - Whether to update parent issue effort_hours (default: true)
+ * @returns {Object} Rollup calculation results
+ */
+async function calculateRollupEffort(parentIssueId, options = {}) {
+  const { updateParent = true } = options;
+  
+  console.log(`[Rollup] Calculating effort for parent issue ${parentIssueId}`);
+  
+  try {
+    // Get all children using database function
+    const childrenResult = await pool.query(
+      'SELECT * FROM get_issue_children($1)',
+      [parentIssueId]
+    );
+    
+    const children = childrenResult.rows;
+    console.log(`[Rollup] Found ${children.length} descendant(s) for issue ${parentIssueId}`);
+    
+    if (children.length === 0) {
+      console.log(`[Rollup] No children found - issue ${parentIssueId} is a leaf node`);
+      return {
+        parentIssueId,
+        totalHours: 0,
+        childCount: 0,
+        children: [],
+        breakdown: [],
+        byAssignee: {},
+        metadata: {
+          isLeafNode: true,
+          calculatedAt: new Date().toISOString()
+        }
+      };
+    }
+    
+    // Sum effort hours from all children
+    let totalHours = 0;
+    const breakdown = [];
+    const byAssignee = {};
+    
+    children.forEach(child => {
+      const effort = parseFloat(child.estimated_effort_hours) || 0;
+      totalHours += effort;
+      
+      // Build breakdown
+      breakdown.push({
+        id: child.id,
+        title: child.title,
+        depth: child.depth,
+        effort: Math.round(effort * 10) / 10,
+        assignee: child.assignee,
+        status: child.status,
+        isLeaf: child.is_leaf
+      });
+      
+      // Group by assignee
+      const assignee = child.assignee || 'Unassigned';
+      if (!byAssignee[assignee]) {
+        byAssignee[assignee] = {
+          assignee,
+          totalHours: 0,
+          taskCount: 0,
+          tasks: []
+        };
+      }
+      byAssignee[assignee].totalHours += effort;
+      byAssignee[assignee].taskCount += 1;
+      byAssignee[assignee].tasks.push({
+        id: child.id,
+        title: child.title,
+        hours: Math.round(effort * 10) / 10
+      });
+    });
+    
+    // Round total hours
+    totalHours = Math.round(totalHours * 10) / 10;
+    
+    // Round assignee totals
+    Object.values(byAssignee).forEach(assigneeData => {
+      assigneeData.totalHours = Math.round(assigneeData.totalHours * 10) / 10;
+    });
+    
+    console.log(`[Rollup] Total effort for issue ${parentIssueId}: ${totalHours} hours from ${children.length} children`);
+    
+    // Update parent issue if requested
+    if (updateParent && totalHours > 0) {
+      await pool.query(
+        'UPDATE issues SET effort_hours = $1, updated_at = NOW() WHERE id = $2',
+        [totalHours, parentIssueId]
+      );
+      console.log(`[Rollup] Updated parent issue ${parentIssueId} with rolled-up effort: ${totalHours} hours`);
+    }
+    
+    return {
+      parentIssueId,
+      totalHours,
+      childCount: children.length,
+      children: breakdown,
+      breakdown,
+      byAssignee,
+      metadata: {
+        isLeafNode: false,
+        updatedParent: updateParent,
+        calculatedAt: new Date().toISOString()
+      }
+    };
+  } catch (error) {
+    console.error(`[Rollup] Error calculating rollup effort for issue ${parentIssueId}:`, error);
+    throw new Error(`Failed to calculate rollup effort: ${error.message}`);
+  }
+}
+
+/**
+ * Update all parent efforts in a project hierarchy (bottom-up)
+ * @param {number} projectId - Project ID
+ * @returns {Object} Summary of updates
+ */
+async function updateAllParentEfforts(projectId) {
+  console.log(`[Rollup] Updating all parent efforts for project ${projectId}`);
+  
+  try {
+    // Find all distinct parent_issue_id values for the project (bottom-up order)
+    const parentsResult = await pool.query(
+      `SELECT DISTINCT parent_issue_id
+       FROM issues
+       WHERE project_id = $1 
+       AND parent_issue_id IS NOT NULL
+       ORDER BY parent_issue_id`,
+      [projectId]
+    );
+    
+    const parentIds = parentsResult.rows.map(row => row.parent_issue_id);
+    console.log(`[Rollup] Found ${parentIds.length} parent issue(s) to update in project ${projectId}`);
+    
+    if (parentIds.length === 0) {
+      return {
+        success: true,
+        projectId,
+        updatedCount: 0,
+        totalHours: 0,
+        parents: [],
+        message: 'No parent issues found in project'
+      };
+    }
+    
+    // Calculate rollup for each parent (bottom-up to handle nested hierarchies)
+    const results = [];
+    let totalHoursAcrossAll = 0;
+    
+    for (const parentId of parentIds) {
+      try {
+        const rollup = await calculateRollupEffort(parentId, { updateParent: true });
+        results.push({
+          parentId,
+          totalHours: rollup.totalHours,
+          childCount: rollup.childCount
+        });
+        totalHoursAcrossAll += rollup.totalHours;
+      } catch (error) {
+        console.error(`[Rollup] Error updating parent ${parentId}:`, error);
+        results.push({
+          parentId,
+          error: error.message,
+          totalHours: 0,
+          childCount: 0
+        });
+      }
+    }
+    
+    const updatedCount = results.filter(r => !r.error).length;
+    
+    console.log(`[Rollup] Updated ${updatedCount}/${parentIds.length} parent issue(s) in project ${projectId}`);
+    
+    return {
+      success: true,
+      projectId,
+      updatedCount,
+      totalHours: Math.round(totalHoursAcrossAll * 10) / 10,
+      parents: results,
+      message: `Updated ${updatedCount} parent issue(s)`
+    };
+  } catch (error) {
+    console.error(`[Rollup] Error updating all parent efforts for project ${projectId}:`, error);
+    throw new Error(`Failed to update parent efforts: ${error.message}`);
+  }
+}
+
+/**
+ * Get base effort estimate with dependency buffer adjustment
+ * @param {number} issueId - Issue ID
+ * @param {Object} options - Options object
+ * @param {string} options.itemType - 'issue' or 'action-item' (default: 'issue')
+ * @returns {Object} Adjusted estimate with dependency buffer
+ */
+async function estimateWithDependencies(issueId, options = {}) {
+  const { itemType = 'issue' } = options;
+  const tableName = itemType === 'issue' ? 'issues' : 'action_items';
+  
+  console.log(`[Dependency Estimate] Calculating estimate with dependencies for ${itemType} ${issueId}`);
+  
+  try {
+    // Get base effort from table
+    const itemResult = await pool.query(
+      `SELECT id, title, estimated_effort_hours, effort_hours, status
+       FROM ${tableName}
+       WHERE id = $1`,
+      [issueId]
+    );
+    
+    if (itemResult.rows.length === 0) {
+      throw new Error(`${itemType} with ID ${issueId} not found`);
+    }
+    
+    const item = itemResult.rows[0];
+    const baseEffort = parseFloat(item.estimated_effort_hours || item.effort_hours || 0);
+    
+    console.log(`[Dependency Estimate] Base effort for ${itemType} ${issueId}: ${baseEffort} hours`);
+    
+    // Query dependencies
+    const depsResult = await pool.query(
+      `SELECT 
+        d.id,
+        d.source_item_id,
+        d.dependent_item_id,
+        d.dependency_type,
+        i.title as prerequisite_title,
+        i.status as prerequisite_status,
+        i.estimated_effort_hours as prerequisite_effort
+       FROM issue_dependencies d
+       LEFT JOIN ${tableName} i ON d.source_item_id = i.id
+       WHERE d.dependent_item_id = $1 AND d.item_type = $2`,
+      [issueId, itemType]
+    );
+    
+    const dependencies = depsResult.rows;
+    console.log(`[Dependency Estimate] Found ${dependencies.length} prerequisite(s) for ${itemType} ${issueId}`);
+    
+    if (dependencies.length === 0) {
+      return {
+        issueId,
+        itemType,
+        baseEffort: Math.round(baseEffort * 10) / 10,
+        adjustedEffort: Math.round(baseEffort * 10) / 10,
+        bufferHours: 0,
+        bufferPercentage: 0,
+        dependencies: [],
+        breakdown: {
+          baseEffort: Math.round(baseEffort * 10) / 10,
+          dependencyBuffer: 0,
+          total: Math.round(baseEffort * 10) / 10
+        }
+      };
+    }
+    
+    // Calculate dependency buffer (10% per incomplete dependency)
+    const incompleteDeps = dependencies.filter(d => 
+      d.prerequisite_status && !['Done', 'Closed', 'Completed'].includes(d.prerequisite_status)
+    );
+    
+    const bufferPercentage = incompleteDeps.length * 10; // 10% per incomplete dependency
+    const bufferHours = baseEffort * (bufferPercentage / 100);
+    const adjustedEffort = baseEffort + bufferHours;
+    
+    console.log(`[Dependency Estimate] Buffer: ${incompleteDeps.length} incomplete deps = ${bufferPercentage}% (+${Math.round(bufferHours * 10) / 10}h)`);
+    
+    return {
+      issueId,
+      itemType,
+      baseEffort: Math.round(baseEffort * 10) / 10,
+      adjustedEffort: Math.round(adjustedEffort * 10) / 10,
+      bufferHours: Math.round(bufferHours * 10) / 10,
+      bufferPercentage,
+      dependencies: dependencies.map(d => ({
+        id: d.id,
+        prerequisiteId: d.source_item_id,
+        prerequisiteTitle: d.prerequisite_title,
+        prerequisiteStatus: d.prerequisite_status,
+        prerequisiteEffort: parseFloat(d.prerequisite_effort) || 0,
+        type: d.dependency_type,
+        isComplete: ['Done', 'Closed', 'Completed'].includes(d.prerequisite_status)
+      })),
+      breakdown: {
+        baseEffort: Math.round(baseEffort * 10) / 10,
+        dependencyBuffer: Math.round(bufferHours * 10) / 10,
+        total: Math.round(adjustedEffort * 10) / 10
+      }
+    };
+  } catch (error) {
+    console.error(`[Dependency Estimate] Error calculating estimate with dependencies:`, error);
+    throw new Error(`Failed to estimate with dependencies: ${error.message}`);
+  }
+}
+
+/**
+ * Get hierarchical breakdown with tree structure
+ * @param {number} issueId - Root issue ID
+ * @returns {Object} Tree structure and flat list with paths
+ */
+async function getHierarchicalBreakdown(issueId) {
+  console.log(`[Hierarchical Breakdown] Building tree for issue ${issueId}`);
+  
+  try {
+    // Use issue_hierarchy view to get full tree
+    const hierarchyResult = await pool.query(
+      `SELECT 
+        id, title, parent_issue_id, hierarchy_level, depth, path, full_path,
+        estimated_effort_hours, effort_hours, status, assignee, is_epic
+       FROM issue_hierarchy
+       WHERE id = $1 OR $1 = ANY(ancestor_ids) OR id IN (
+         SELECT unnest(ancestor_ids) FROM issue_hierarchy WHERE id = $1
+       )
+       ORDER BY path`,
+      [issueId]
+    );
+    
+    const flatList = hierarchyResult.rows;
+    console.log(`[Hierarchical Breakdown] Found ${flatList.length} issue(s) in hierarchy`);
+    
+    if (flatList.length === 0) {
+      // Issue might be a leaf node with no hierarchy
+      const issueResult = await pool.query(
+        'SELECT id, title, estimated_effort_hours, effort_hours, status, assignee FROM issues WHERE id = $1',
+        [issueId]
+      );
+      
+      if (issueResult.rows.length === 0) {
+        throw new Error(`Issue with ID ${issueId} not found`);
+      }
+      
+      const issue = issueResult.rows[0];
+      const effort = parseFloat(issue.estimated_effort_hours || issue.effort_hours || 0);
+      
+      return {
+        issueId,
+        tree: {
+          id: issue.id,
+          title: issue.title,
+          effort: Math.round(effort * 10) / 10,
+          status: issue.status,
+          assignee: issue.assignee,
+          children: []
+        },
+        flatList: [{
+          id: issue.id,
+          title: issue.title,
+          path: issue.id.toString(),
+          depth: 1,
+          effort: Math.round(effort * 10) / 10,
+          status: issue.status,
+          assignee: issue.assignee
+        }],
+        totalEffort: Math.round(effort * 10) / 10
+      };
+    }
+    
+    // Build nested tree structure
+    const buildTree = (parentId = null, items = flatList) => {
+      const children = items.filter(item => item.parent_issue_id === parentId);
+      
+      return children.map(item => {
+        const effort = parseFloat(item.estimated_effort_hours || item.effort_hours || 0);
+        const node = {
+          id: item.id,
+          title: item.title,
+          effort: Math.round(effort * 10) / 10,
+          status: item.status,
+          assignee: item.assignee,
+          isEpic: item.is_epic,
+          depth: item.depth,
+          path: item.path,
+          children: buildTree(item.id, items)
+        };
+        
+        // Calculate total including descendants
+        if (node.children.length > 0) {
+          node.totalEffort = node.children.reduce((sum, child) => 
+            sum + (child.totalEffort || child.effort), 0
+          );
+          node.totalEffort = Math.round(node.totalEffort * 10) / 10;
+        }
+        
+        return node;
+      });
+    };
+    
+    // Find root of this hierarchy
+    const root = flatList.find(item => item.id === issueId);
+    const rootParent = root ? root.parent_issue_id : null;
+    const tree = buildTree(rootParent, flatList);
+    
+    // Calculate total effort across all items
+    const totalEffort = flatList.reduce((sum, item) => {
+      const effort = parseFloat(item.estimated_effort_hours || item.effort_hours || 0);
+      return sum + effort;
+    }, 0);
+    
+    console.log(`[Hierarchical Breakdown] Built tree with ${flatList.length} nodes, total effort: ${Math.round(totalEffort * 10) / 10}h`);
+    
+    return {
+      issueId,
+      tree: tree.length === 1 ? tree[0] : { children: tree },
+      flatList: flatList.map(item => ({
+        id: item.id,
+        title: item.title,
+        path: item.path,
+        fullPath: item.full_path,
+        depth: item.depth,
+        hierarchyLevel: item.hierarchy_level,
+        effort: Math.round(parseFloat(item.estimated_effort_hours || item.effort_hours || 0) * 10) / 10,
+        status: item.status,
+        assignee: item.assignee,
+        isEpic: item.is_epic,
+        parentId: item.parent_issue_id
+      })),
+      totalEffort: Math.round(totalEffort * 10) / 10
+    };
+  } catch (error) {
+    console.error(`[Hierarchical Breakdown] Error building tree for issue ${issueId}:`, error);
+    throw new Error(`Failed to get hierarchical breakdown: ${error.message}`);
+  }
+}
+
 module.exports = {
   generateEffortEstimate,
   generateEstimateFromItem,
   getEstimateBreakdown,
   getEstimateHistory,
-  calculateCost
+  calculateCost,
+  calculateRollupEffort,
+  updateAllParentEfforts,
+  estimateWithDependencies,
+  getHierarchicalBreakdown
 };
