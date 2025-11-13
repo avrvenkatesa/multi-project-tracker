@@ -469,11 +469,195 @@ async function deleteDependency(dependencyId) {
   }
 }
 
+/**
+ * Create hierarchical issues from workstreams
+ * Separates workstreams into epics and tasks, creating parent-child relationships
+ * 
+ * @param {Array} workstreams - Array of workstream objects
+ * @param {number} projectId - Project ID
+ * @param {number} userId - User ID creating the issues
+ * @returns {Object} Result object with created, epics, tasks, and errors
+ */
+async function createHierarchicalIssues(workstreams, projectId, userId) {
+  console.log(`🏗️  Creating hierarchical issues from ${workstreams.length} workstreams in project ${projectId}`);
+  
+  const result = {
+    created: [],
+    epics: [],
+    tasks: [],
+    errors: []
+  };
+
+  if (!workstreams || workstreams.length === 0) {
+    console.log('  ⚠ No workstreams provided');
+    return result;
+  }
+
+  try {
+    // Separate workstreams into epics and tasks
+    const epics = [];
+    const tasks = [];
+
+    for (const workstream of workstreams) {
+      // Determine if this is an epic based on multiple criteria
+      const isEpic = workstream.isEpic || 
+                     workstream.hierarchyLevel === 0 || 
+                     (workstream.children && workstream.children.length > 0);
+      
+      if (isEpic) {
+        epics.push(workstream);
+      } else {
+        tasks.push(workstream);
+      }
+    }
+
+    console.log(`  → Identified ${epics.length} epic(s) and ${tasks.length} task(s)`);
+
+    // Map to store epic IDs keyed by epic name
+    const epicIdsByName = new Map();
+
+    // PHASE 1: Create epics first
+    if (epics.length > 0) {
+      console.log(`🏗️  Creating ${epics.length} epic(s)...`);
+      
+      for (const epic of epics) {
+        try {
+          const title = epic.title || epic.name;
+          const description = epic.description || '';
+          const priority = epic.priority || 'medium';
+          const effortHours = epic.effort || null;
+          const assignee = epic.assignee || epic.createdBy || 'Demo User';
+
+          const insertResult = await pool.query(
+            `INSERT INTO issues 
+             (project_id, title, description, status, priority, 
+              parent_issue_id, hierarchy_level, is_epic, effort_hours, 
+              created_via_ai_by, assignee, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NULL, 0, TRUE, $6, $7, $8, NOW(), NOW())
+             RETURNING id, title`,
+            [projectId, title, description, 'To Do', priority, effortHours, userId, assignee]
+          );
+
+          const createdEpic = insertResult.rows[0];
+          
+          // Store in map for later reference
+          epicIdsByName.set(epic.name, createdEpic.id);
+          epicIdsByName.set(epic.title, createdEpic.id);
+          
+          result.created.push({
+            id: createdEpic.id,
+            title: createdEpic.title,
+            type: 'epic',
+            isEpic: true
+          });
+          
+          result.epics.push({
+            id: createdEpic.id,
+            title: createdEpic.title,
+            name: epic.name
+          });
+          
+          console.log(`  ✓ Created epic #${createdEpic.id}: "${createdEpic.title}"`);
+        } catch (error) {
+          const errorMsg = `Failed to create epic "${epic.name}": ${error.message}`;
+          result.errors.push(errorMsg);
+          console.error(`  ❌ ${errorMsg}`);
+        }
+      }
+    }
+
+    // PHASE 2: Create tasks with parent references
+    if (tasks.length > 0) {
+      console.log(`🏗️  Creating ${tasks.length} task(s)...`);
+      
+      for (const task of tasks) {
+        try {
+          const title = task.title || task.name;
+          const description = task.description || '';
+          const priority = task.priority || 'medium';
+          const effortHours = task.effort || null;
+          const assignee = task.assignee || task.createdBy || 'Demo User';
+          
+          // Determine parent issue ID
+          let parentIssueId = null;
+          const parentRef = task.parent || task.parentName;
+          
+          if (parentRef) {
+            parentIssueId = epicIdsByName.get(parentRef);
+            
+            if (!parentIssueId) {
+              const warning = `Parent "${parentRef}" not found for task "${task.name}" - adding to root level`;
+              result.errors.push(warning);
+              console.log(`  ⚠ ${warning}`);
+            }
+          }
+          
+          // Determine hierarchy level (1 if has parent, 0 if root)
+          const hierarchyLevel = parentIssueId ? 1 : 0;
+          const isEpic = hierarchyLevel === 0; // Root-level tasks might be considered epics
+
+          const insertResult = await pool.query(
+            `INSERT INTO issues 
+             (project_id, title, description, status, priority, 
+              parent_issue_id, hierarchy_level, is_epic, effort_hours, 
+              created_via_ai_by, assignee, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+             RETURNING id, title, parent_issue_id`,
+            [projectId, title, description, 'To Do', priority, 
+             parentIssueId, hierarchyLevel, isEpic, effortHours, userId, assignee]
+          );
+
+          const createdTask = insertResult.rows[0];
+          
+          result.created.push({
+            id: createdTask.id,
+            title: createdTask.title,
+            type: 'task',
+            parentId: createdTask.parent_issue_id,
+            isEpic: false
+          });
+          
+          result.tasks.push({
+            id: createdTask.id,
+            title: createdTask.title,
+            name: task.name,
+            parentId: createdTask.parent_issue_id
+          });
+          
+          if (createdTask.parent_issue_id) {
+            console.log(`  ✓ Created task #${createdTask.id}: "${createdTask.title}" (parent: #${createdTask.parent_issue_id})`);
+          } else {
+            console.log(`  ✓ Created task #${createdTask.id}: "${createdTask.title}" (root level)`);
+          }
+        } catch (error) {
+          const errorMsg = `Failed to create task "${task.name}": ${error.message}`;
+          result.errors.push(errorMsg);
+          console.error(`  ❌ ${errorMsg}`);
+        }
+      }
+    }
+
+    console.log(`✅ Created ${result.created.length} hierarchical issue(s): ${result.epics.length} epic(s), ${result.tasks.length} task(s)`);
+    
+    if (result.errors.length > 0) {
+      console.log(`⚠ ${result.errors.length} error(s) occurred during creation`);
+    }
+
+    return result;
+
+  } catch (error) {
+    console.error('❌ Error in createHierarchicalIssues:', error);
+    result.errors.push(`Fatal error: ${error.message}`);
+    return result;
+  }
+}
+
 module.exports = {
   createDependencies,
   findMatchingIssue,
   levenshteinDistance,
   detectCircularDependencies,
   getDependencyGraph,
-  deleteDependency
+  deleteDependency,
+  createHierarchicalIssues
 };
