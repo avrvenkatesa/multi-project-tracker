@@ -1,0 +1,75 @@
+[INIT] Setting up editProjectForm submit listener
+project-management.js:59 [INIT] editProjectForm element found, attaching listener
+app.js?v=47:489 Multi-Project Tracker initialized
+auth.js?v=10:18 AuthManager initializing...
+auth.js?v=10:57 User authenticated: {id: 1, username: 'Demo User', email: 'demo@multiproject.com', role: 'System Administrator'}
+auth.js?v=10:58 User role: System Administrator
+auth.js?v=10:315 Updating UI, isAuthenticated: true
+app.js?v=47:1264 [KANBAN] renderKanbanBoard called, currentProject: {id: 43, name: 'One Pass Project Management Retest 4', timesheet_entry_required: true}
+app.js?v=47:1230 [BADGE] Creating badge for item: 246 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 245 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 244 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 243 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 242 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 241 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 240 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 239 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 238 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 230 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 229 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 228 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 227 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 226 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:994 ✅ Page loaded in 3035ms
+project-management.js:64 [FORM] Edit project form submitted!
+project-management.js:103 [SAVE] Starting project update sequence
+project-management.js:107 [SAVE] Fetching fresh project data from server...
+project-management.js:111 [SAVE] Fetched 12 projects from server
+project-management.js:115 [SAVE] Found updated project: 43 timesheet_entry_required: false
+project-management.js:126 [SAVE] Refreshed main projects list
+project-management.js:131 [SAVE] Calling renderKanbanBoard()...
+app.js?v=47:1264 [KANBAN] renderKanbanBoard called, currentProject: {id: 43, name: 'One Pass Project Management Retest 4', timesheet_entry_required: true}
+app.js?v=47:1230 [BADGE] Creating badge for item: 246 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 245 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 244 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 243 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 242 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 241 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 240 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 239 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 238 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 230 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 229 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 228 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 227 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+app.js?v=47:1230 [BADGE] Creating badge for item: 226 {itemOverride: null, projectSetting: true, projectId: 43}
+app.js?v=47:1252 [BADGE] Showing badge - project setting is TRUE
+project-management.js:134 [SAVE] renderKanbanBoard() completed
+project-management.js:140 [SAVE] Update sequence complete

@@ -113,11 +113,24 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
       // Find and update currentProject with fresh data
       const updatedProject = allProjects.find(p => p.id === parseInt(projectId));
       console.log('[SAVE] Found updated project:', updatedProject?.id, 'timesheet_entry_required:', updatedProject?.timesheet_entry_required);
+      console.log('[SAVE] Checking conditions - updatedProject:', !!updatedProject, 'window.currentProject:', !!window.currentProject, 'currentProject.id:', window.currentProject?.id, 'projectId:', parseInt(projectId));
       
       if (updatedProject && window.currentProject && window.currentProject.id === parseInt(projectId)) {
+        console.log('[SAVE] ✅ Conditions passed - updating currentProject');
         console.log('[SAVE] Before update - currentProject.timesheet_entry_required:', window.currentProject.timesheet_entry_required);
         window.currentProject = updatedProject;
         console.log('[SAVE] After update - currentProject.timesheet_entry_required:', window.currentProject.timesheet_entry_required);
+      } else {
+        console.error('[SAVE] ❌ Condition failed! Cannot update currentProject');
+        console.error('[SAVE] - updatedProject exists?', !!updatedProject);
+        console.error('[SAVE] - window.currentProject exists?', !!window.currentProject);
+        console.error('[SAVE] - IDs match?', window.currentProject?.id, '===', parseInt(projectId));
+        // Force update anyway
+        console.log('[SAVE] 🔧 Forcing currentProject update...');
+        if (updatedProject) {
+          window.currentProject = updatedProject;
+          console.log('[SAVE] Forced update complete - currentProject.timesheet_entry_required:', window.currentProject.timesheet_entry_required);
+        }
       }
       
       // Also update the global projects array if it exists (for the main dashboard)
