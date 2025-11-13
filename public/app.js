@@ -1227,8 +1227,15 @@ function createCircularDependencyBadge(item, cycleWith) {
 
 // Create timesheet requirement badge
 function createTimesheetRequiredBadge(item, project) {
+  console.log('[BADGE] Creating badge for item:', item.id, {
+    itemOverride: item.timesheet_required_override,
+    projectSetting: project?.timesheet_entry_required,
+    projectId: project?.id
+  });
+  
   // Override = true: always required
   if (item.timesheet_required_override === true) {
+    console.log('[BADGE] Showing badge - item override is TRUE');
     return `<div class="mt-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 flex items-center gap-1">
       ⏱️ <span>Timesheet required</span>
     </div>`;
@@ -1236,21 +1243,30 @@ function createTimesheetRequiredBadge(item, project) {
   
   // Override = false: never required
   if (item.timesheet_required_override === false) {
+    console.log('[BADGE] Hiding badge - item override is FALSE');
     return '';
   }
   
   // Override = null/undefined: inherit from project setting
   if (project?.timesheet_entry_required) {
+    console.log('[BADGE] Showing badge - project setting is TRUE');
     return `<div class="mt-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 flex items-center gap-1">
       ⏱️ <span>Timesheet required</span>
     </div>`;
   }
   
+  console.log('[BADGE] Hiding badge - no requirement');
   return '';
 }
 
 // Render Kanban board
 async function renderKanbanBoard() {
+    console.log('[KANBAN] renderKanbanBoard called, currentProject:', {
+      id: currentProject?.id,
+      name: currentProject?.name,
+      timesheet_entry_required: currentProject?.timesheet_entry_required
+    });
+    
     // Filter by type if selected
     let itemsToDisplay = [];
     if (currentFilters.type === 'issue') {
