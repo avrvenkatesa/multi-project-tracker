@@ -1,0 +1,57 @@
+📋 Story 4.2 Overview
+
+  Goal: Enhance backend services to support hierarchical issue management with rollup calculations and issue
+  creation from workstreams.
+
+  Files to modify:
+  - services/effort-estimation-service.js
+  - services/dependency-mapper.js
+
+  ---
+  🔧 Prompt 1: Enhance Effort Estimation Service
+
+  I'm working on Story 4.2 of the multi-project-tracker project. I need to add hierarchical effort estimation
+  functions to the effort-estimation-service.js file.
+
+  Please add the following four functions to services/effort-estimation-service.js (add them before the
+  module.exports at the end):
+
+  1. calculateRollupEffort(parentIssueId, options = {})
+     - Calculate rolled-up effort for a parent issue from all children
+     - Use the get_issue_children() database function to fetch all descendants
+     - Sum effort_hours from all children
+     - Group effort by assignee for resource allocation
+     - If updateParent option is true (default), update the parent issue's effort_hours
+     - Return object with: parentIssueId, totalHours, childCount, children array, breakdown, byAssignee, metadata
+
+  2. updateAllParentEfforts(projectId)
+     - Update all parent efforts in a project hierarchy (bottom-up)
+     - Find all distinct parent_issue_id values for the project
+     - Call calculateRollupEffort for each parent
+     - Return summary with updated count and total hours
+
+  3. estimateWithDependencies(issueId, options = {})
+     - Get base effort from issues table
+     - Query issue_dependencies table for prerequisites
+     - Calculate dependency buffer (10% per incomplete dependency)
+     - Return adjusted estimate with breakdown
+
+  4. getHierarchicalBreakdown(issueId)
+     - Use issue_hierarchy view to get full tree
+     - Build nested tree structure using recursive function
+     - Calculate total effort including descendants
+     - Return tree and flat list with paths
+
+  Requirements:
+  - Import pool from '../db' at the top
+  - Add comprehensive error handling and console logging
+  - Use async/await pattern
+  - Export all four functions in module.exports
+  - Round decimal values to 1 decimal place
+  - Include JSDoc comments for each function
+
+  The database already has these available:
+  - get_issue_children(issue_id) function
+  - issue_hierarchy view
+  - issue_dependencies table
+  - calculate_issue_rollup_effort(issue_id) function
