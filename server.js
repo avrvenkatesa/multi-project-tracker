@@ -1239,7 +1239,7 @@ app.post("/api/projects", authenticateToken, requireRole('Project Manager'), asy
 app.put("/api/projects/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, template, start_date, end_date, teams_webhook_url, teams_notifications_enabled, checklist_completion_enabled, complexity_level } = req.body;
+    const { name, description, template, start_date, end_date, teams_webhook_url, teams_notifications_enabled, checklist_completion_enabled, timesheet_entry_required, complexity_level } = req.body;
     
     const [membership] = await sql`
       SELECT role FROM project_members 
@@ -1281,6 +1281,7 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
     const finalWebhookUrl = teams_webhook_url !== undefined ? teams_webhook_url : currentProject.teams_webhook_url;
     const finalNotificationsEnabled = teams_notifications_enabled !== undefined ? teams_notifications_enabled : (currentProject.teams_notifications_enabled !== undefined ? currentProject.teams_notifications_enabled : true);
     const finalChecklistCompletionEnabled = checklist_completion_enabled !== undefined ? checklist_completion_enabled : (currentProject.checklist_completion_enabled !== undefined ? currentProject.checklist_completion_enabled : true);
+    const finalTimesheetRequired = timesheet_entry_required !== undefined ? timesheet_entry_required : (currentProject.timesheet_entry_required !== undefined ? currentProject.timesheet_entry_required : false);
     
     const [updatedProject] = await sql`
       UPDATE projects 
@@ -1293,6 +1294,7 @@ app.put("/api/projects/:id", authenticateToken, async (req, res) => {
         teams_webhook_url = ${finalWebhookUrl || null},
         teams_notifications_enabled = ${finalNotificationsEnabled},
         checklist_completion_enabled = ${finalChecklistCompletionEnabled},
+        timesheet_entry_required = ${finalTimesheetRequired},
         complexity_level = ${finalComplexityLevel},
         updated_by = ${req.user.id}
       WHERE id = ${id}
@@ -3690,7 +3692,8 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
       hybrid_effort_estimate_hours,
       planning_estimate_source,
       actual_hours_added,  // NEW: Hours to add during status change
-      completion_percentage  // NEW: Manual completion percentage
+      completion_percentage,  // NEW: Manual completion percentage
+      timesheet_required_override  // NEW: Item-level timesheet override
     } = req.body;
     
     console.log('PATCH /api/issues/:id - Request body:', req.body);
@@ -3725,6 +3728,11 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     if (status !== undefined && status !== issue.status) {
       console.log(`Status changing from "${issue.status}" to "${status}"`);
       
+      // Determine timesheet override: use new value if being updated, otherwise use current
+      const effectiveTimesheetOverride = timesheet_required_override !== undefined 
+        ? timesheet_required_override 
+        : issue.timesheet_required_override;
+      
       timeTrackingResult = await logTimeWithStatusChange(
         'issue',
         parseInt(id),
@@ -3733,14 +3741,17 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
         actual_hours_added,
         completion_percentage,
         req.user.id,
-        `Status changed from ${issue.status} to ${status}`
+        `Status changed from ${issue.status} to ${status}`,
+        issue.project_id,  // NEW: Pass project ID
+        effectiveTimesheetOverride  // NEW: Pass item-level override
       );
       
       if (!timeTrackingResult.valid) {
         return res.status(400).json({
           error: timeTrackingResult.error,
           message: timeTrackingResult.message,
-          requiresHours: timeTrackingResult.requiresHours
+          requiresHours: timeTrackingResult.requiresHours,
+          timesheetRequired: timeTrackingResult.timesheetRequired
         });
       }
       
@@ -3795,6 +3806,10 @@ app.patch('/api/issues/:id', authenticateToken, requireRole('Team Member'), asyn
     if (planning_estimate_source !== undefined) {
       updates.push(`planning_estimate_source = $${valueIndex++}`);
       values.push(planning_estimate_source || null);
+    }
+    if (timesheet_required_override !== undefined) {
+      updates.push(`timesheet_required_override = $${valueIndex++}`);
+      values.push(timesheet_required_override);
     }
     
     if (updates.length === 0) {
@@ -4753,7 +4768,8 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
       hybrid_effort_estimate_hours,
       planning_estimate_source,
       actual_hours_added,  // NEW: Hours to add during status change
-      completion_percentage  // NEW: Manual completion percentage
+      completion_percentage,  // NEW: Manual completion percentage
+      timesheet_required_override  // NEW: Item-level timesheet override
     } = req.body;
     
     console.log('PATCH /api/action-items/:id - Request body:', req.body);
@@ -4788,6 +4804,11 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     if (status !== undefined && status !== item.status) {
       console.log(`Status changing from "${item.status}" to "${status}"`);
       
+      // Determine timesheet override: use new value if being updated, otherwise use current
+      const effectiveTimesheetOverride = timesheet_required_override !== undefined 
+        ? timesheet_required_override 
+        : item.timesheet_required_override;
+      
       timeTrackingResult = await logTimeWithStatusChange(
         'action-item',
         parseInt(id),
@@ -4796,14 +4817,17 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
         actual_hours_added,
         completion_percentage,
         req.user.id,
-        `Status changed from ${item.status} to ${status}`
+        `Status changed from ${item.status} to ${status}`,
+        item.project_id,  // NEW: Pass project ID
+        effectiveTimesheetOverride  // NEW: Pass item-level override
       );
       
       if (!timeTrackingResult.valid) {
         return res.status(400).json({
           error: timeTrackingResult.error,
           message: timeTrackingResult.message,
-          requiresHours: timeTrackingResult.requiresHours
+          requiresHours: timeTrackingResult.requiresHours,
+          timesheetRequired: timeTrackingResult.timesheetRequired
         });
       }
       
@@ -4854,6 +4878,10 @@ app.patch('/api/action-items/:id', authenticateToken, requireRole('Team Member')
     if (planning_estimate_source !== undefined) {
       updates.push(`planning_estimate_source = $${valueIndex++}`);
       values.push(planning_estimate_source || null);
+    }
+    if (timesheet_required_override !== undefined) {
+      updates.push(`timesheet_required_override = $${valueIndex++}`);
+      values.push(timesheet_required_override);
     }
     
     if (updates.length === 0) {
