@@ -1225,6 +1225,30 @@ function createCircularDependencyBadge(item, cycleWith) {
   </div>`;
 }
 
+// Create timesheet requirement badge
+function createTimesheetRequiredBadge(item, project) {
+  // Override = true: always required
+  if (item.timesheet_required_override === true) {
+    return `<div class="mt-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 flex items-center gap-1">
+      ⏱️ <span>Timesheet required</span>
+    </div>`;
+  }
+  
+  // Override = false: never required
+  if (item.timesheet_required_override === false) {
+    return '';
+  }
+  
+  // Override = null/undefined: inherit from project setting
+  if (project?.timesheet_entry_required) {
+    return `<div class="mt-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 flex items-center gap-1">
+      ⏱️ <span>Timesheet required</span>
+    </div>`;
+  }
+  
+  return '';
+}
+
 // Render Kanban board
 async function renderKanbanBoard() {
     // Filter by type if selected
@@ -1441,6 +1465,7 @@ async function renderKanbanBoard() {
                                 </button>
                             ` : ''}
                         </div>
+                        ${createTimesheetRequiredBadge(item, currentProject)}
                             </div>
                         </div>
                     </div>
