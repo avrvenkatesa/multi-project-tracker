@@ -51,17 +51,8 @@ async function openEditProjectModal(projectId) {
 }
 
 // Handle Edit Project Form Submit
-console.log('[INIT] Setting up editProjectForm submit listener');
-const editProjectFormElement = document.getElementById('editProjectForm');
-if (!editProjectFormElement) {
-  console.error('[INIT] editProjectForm element not found! DOM may not be ready.');
-} else {
-  console.log('[INIT] editProjectForm element found, attaching listener');
-}
-
 document.getElementById('editProjectForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  console.log('[FORM] Edit project form submitted!');
   
   const projectId = document.getElementById('editProjectId').value;
   const name = document.getElementById('editProjectName').value;
@@ -100,57 +91,32 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
       throw new Error(data.error || 'Failed to update project');
     }
     
-    console.log('[SAVE] Starting project update sequence');
     document.getElementById('editProjectModal').classList.add('hidden');
     
     // Fetch fresh project data directly from the server
-    console.log('[SAVE] Fetching fresh project data from server...');
     const projectResponse = await fetch('/api/projects', { credentials: 'include' });
     if (projectResponse.ok) {
       const allProjects = await projectResponse.json();
-      console.log('[SAVE] Fetched', allProjects.length, 'projects from server');
       
       // Find and update currentProject with fresh data
       const updatedProject = allProjects.find(p => p.id === parseInt(projectId));
-      console.log('[SAVE] Found updated project:', updatedProject?.id, 'timesheet_entry_required:', updatedProject?.timesheet_entry_required);
-      console.log('[SAVE] Checking conditions - updatedProject:', !!updatedProject, 'window.currentProject:', !!window.currentProject, 'currentProject.id:', window.currentProject?.id, 'projectId:', parseInt(projectId));
       
-      if (updatedProject && window.currentProject && window.currentProject.id === parseInt(projectId)) {
-        console.log('[SAVE] ✅ Conditions passed - updating currentProject');
-        console.log('[SAVE] Before update - currentProject.timesheet_entry_required:', window.currentProject.timesheet_entry_required);
+      if (updatedProject) {
         window.currentProject = updatedProject;
-        console.log('[SAVE] After update - currentProject.timesheet_entry_required:', window.currentProject.timesheet_entry_required);
-      } else {
-        console.error('[SAVE] ❌ Condition failed! Cannot update currentProject');
-        console.error('[SAVE] - updatedProject exists?', !!updatedProject);
-        console.error('[SAVE] - window.currentProject exists?', !!window.currentProject);
-        console.error('[SAVE] - IDs match?', window.currentProject?.id, '===', parseInt(projectId));
-        // Force update anyway
-        console.log('[SAVE] 🔧 Forcing currentProject update...');
-        if (updatedProject) {
-          window.currentProject = updatedProject;
-          console.log('[SAVE] Forced update complete - currentProject.timesheet_entry_required:', window.currentProject.timesheet_entry_required);
-        }
       }
       
       // Also update the global projects array if it exists (for the main dashboard)
       if (typeof loadProjects === 'function') {
         await loadProjects();
-        console.log('[SAVE] Refreshed main projects list');
       }
     }
     
     // Re-render Kanban board with the updated currentProject
-    console.log('[SAVE] Calling renderKanbanBoard()...');
     if (typeof renderKanbanBoard === 'function') {
       await renderKanbanBoard();
-      console.log('[SAVE] renderKanbanBoard() completed');
-    } else {
-      console.error('[SAVE] renderKanbanBoard function not found!');
     }
     
     alert('Project updated successfully!');
-    console.log('[SAVE] Update sequence complete');
     
   } catch (error) {
     console.error('Error updating project:', error);

@@ -11,7 +11,6 @@ Object.defineProperty(window, 'currentProject', {
   get: () => currentProject,
   set: (value) => { 
     currentProject = value;
-    console.log('[GLOBAL] currentProject updated:', currentProject?.id, 'timesheet_entry_required:', currentProject?.timesheet_entry_required);
   }
 });
 
