@@ -1904,6 +1904,25 @@
                         </div>
                     </div>
                     
+                    <!-- Timesheet Entry Settings -->
+                    <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+                        <div class="flex items-center gap-2 mb-4">
+                            <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                            </svg>
+                            <h3 class="text-lg font-semibold text-gray-900">Timesheet Entry Settings</h3>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="editTimesheetEntryRequired" 
+                                       class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                <span class="text-sm font-medium text-gray-700">Require Timesheet Entry for Completion</span>
+                            </label>
+                            <p class="text-sm text-gray-500 mt-1 ml-6">When enabled, team members must log time when marking items as Done. This requirement can be overridden at the item level. <strong>Note:</strong> Timesheet entry is always optional when starting work (To Do → In Progress).</p>
+                        </div>
+                    </div>
+                    
                     <div class="flex justify-end gap-3">
                         <button type="button" id="cancelEditProject"
                                 class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">

@@ -40,6 +40,7 @@ async function openEditProjectModal(projectId) {
     document.getElementById('editTeamsNotificationsEnabled').checked = project.teams_notifications_enabled || false;
     document.getElementById('editTeamsWebhookUrl').value = project.teams_webhook_url || '';
     document.getElementById('editChecklistCompletionEnabled').checked = project.checklist_completion_enabled !== false;
+    document.getElementById('editTimesheetEntryRequired').checked = project.timesheet_entry_required || false;
     
     document.getElementById('editProjectModal').classList.remove('hidden');
     
@@ -63,6 +64,7 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
   const teams_notifications_enabled = document.getElementById('editTeamsNotificationsEnabled').checked;
   const teams_webhook_url = document.getElementById('editTeamsWebhookUrl').value || null;
   const checklist_completion_enabled = document.getElementById('editChecklistCompletionEnabled').checked;
+  const timesheet_entry_required = document.getElementById('editTimesheetEntryRequired').checked;
   
   try {
     const response = await fetch(`/api/projects/${projectId}`, {
@@ -78,7 +80,8 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
         end_date, 
         teams_notifications_enabled, 
         teams_webhook_url,
-        checklist_completion_enabled
+        checklist_completion_enabled,
+        timesheet_entry_required
       })
     });
     
