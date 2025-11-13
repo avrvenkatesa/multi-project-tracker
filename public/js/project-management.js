@@ -91,40 +91,28 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
       throw new Error(data.error || 'Failed to update project');
     }
     
-    alert('Project updated successfully!');
     document.getElementById('editProjectModal').classList.add('hidden');
     
-    // Update the current project in the global projects array
+    // First, reload projects to get fresh data from server
+    if (typeof loadProjects === 'function') {
+      await loadProjects();
+    }
+    
+    // Then update currentProject with the fresh data from the projects array
     if (window.projects && Array.isArray(window.projects)) {
-      const projectIndex = window.projects.findIndex(p => p.id === parseInt(projectId));
-      if (projectIndex !== -1) {
-        window.projects[projectIndex].timesheet_entry_required = timesheet_entry_required;
-        window.projects[projectIndex].checklist_completion_enabled = checklist_completion_enabled;
-        window.projects[projectIndex].complexity_level = complexity_level;
-        window.projects[projectIndex].teams_notifications_enabled = teams_notifications_enabled;
-        window.projects[projectIndex].teams_webhook_url = teams_webhook_url;
+      const updatedProject = window.projects.find(p => p.id === parseInt(projectId));
+      if (updatedProject && window.currentProject && window.currentProject.id === parseInt(projectId)) {
+        // Update currentProject reference to the freshly loaded project
+        window.currentProject = updatedProject;
       }
     }
     
-    // Update currentProject if it exists and matches
-    if (window.currentProject && window.currentProject.id === parseInt(projectId)) {
-      window.currentProject.timesheet_entry_required = timesheet_entry_required;
-      window.currentProject.checklist_completion_enabled = checklist_completion_enabled;
-      window.currentProject.complexity_level = complexity_level;
-      window.currentProject.teams_notifications_enabled = teams_notifications_enabled;
-      window.currentProject.teams_webhook_url = teams_webhook_url;
-    }
-    
-    // Re-render Kanban board if the function exists (we're on Kanban view)
+    // Re-render Kanban board with the updated currentProject
     if (typeof renderKanbanBoard === 'function') {
       await renderKanbanBoard();
     }
     
-    if (typeof loadProjects === 'function') {
-      await loadProjects();
-    } else {
-      location.reload();
-    }
+    alert('Project updated successfully!');
     
   } catch (error) {
     console.error('Error updating project:', error);
