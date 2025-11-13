@@ -11,14 +11,15 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 /**
  * Status transitions that require time logging
+ * NOTE: To Do -> In Progress NO LONGER requires hours (removed as per enhancement)
+ * Hours are only required when marking items as Done (subject to project/item settings)
  */
 const TIME_REQUIRED_TRANSITIONS = {
-  // Starting work
-  'To Do_In Progress': { requiresHours: true, allowExceeding: false, setCompletion: 'calculate' },
-  'Open_In Progress': { requiresHours: true, allowExceeding: false, setCompletion: 'calculate' },
-  'todo_in progress': { requiresHours: true, allowExceeding: false, setCompletion: 'calculate' },
+  // Starting work - NO LONGER REQUIRES HOURS
+  // 'To Do_In Progress' removed to reduce friction
+  // 'Open_In Progress' removed to reduce friction
   
-  // Completing work
+  // Completing work - REQUIRES HOURS (subject to project/item-level settings)
   'To Do_Done': { requiresHours: true, allowExceeding: true, setCompletion: 100 },
   'In Progress_Done': { requiresHours: true, allowExceeding: true, setCompletion: 100 },
   'Open_Done': { requiresHours: true, allowExceeding: true, setCompletion: 100 },
@@ -74,9 +75,54 @@ function calculateHoursFromPercent(completionPercent, planningEstimate) {
 }
 
 /**
- * Validate status change and calculate time tracking updates
+ * Determine if timesheet entry is required for an item
+ * Considers both project-level setting and item-level override
+ * 
+ * @param {number} projectId - Project ID
+ * @param {boolean|null} itemOverride - Item-level override (null = inherit from project)
+ * @returns {Promise<boolean>} - Whether timesheet is required
  */
-async function validateStatusChange(itemType, itemId, fromStatus, toStatus, hoursAdded, completionPercent) {
+async function isTimesheetRequired(projectId, itemOverride = null) {
+  try {
+    // If item has explicit override, use it
+    if (itemOverride !== null && itemOverride !== undefined) {
+      return Boolean(itemOverride);
+    }
+    
+    // Otherwise, get project-level setting
+    const result = await pool.query(
+      'SELECT timesheet_entry_required FROM projects WHERE id = $1',
+      [projectId]
+    );
+    
+    if (result.rows.length === 0) {
+      // Project not found, default to false (optional)
+      return false;
+    }
+    
+    return Boolean(result.rows[0].timesheet_entry_required);
+  } catch (error) {
+    console.error('[Timesheet] Error checking requirement:', error);
+    // On error, default to false (don't block user)
+    return false;
+  }
+}
+
+/**
+ * Validate status change and calculate time tracking updates
+ * Enhanced to support project-level and item-level timesheet requirements
+ * 
+ * @param {string} itemType - 'issue' or 'action-item'
+ * @param {number} itemId - Item ID
+ * @param {string} fromStatus - Current status
+ * @param {string} toStatus - New status
+ * @param {number} hoursAdded - Hours being added
+ * @param {number} completionPercent - Completion percentage
+ * @param {number} projectId - Project ID (for checking settings)
+ * @param {boolean|null} itemTimesheetOverride - Item-level override (null = inherit)
+ * @returns {Promise<object>} - Validation result
+ */
+async function validateStatusChange(itemType, itemId, fromStatus, toStatus, hoursAdded, completionPercent, projectId = null, itemTimesheetOverride = null) {
   // CRITICAL: Coerce inputs to numbers to prevent string concatenation
   const hoursAddedNum = hoursAdded ? parseFloat(hoursAdded) : 0;
   const completionPercentNum = completionPercent !== undefined && completionPercent !== null 
@@ -117,14 +163,31 @@ async function validateStatusChange(itemType, itemId, fromStatus, toStatus, hour
     };
   }
   
-  // Validate hours requirement
-  if (rule.requiresHours && hoursAddedNum === 0) {
-    return {
-      valid: false,
-      requiresHours: true,
-      error: 'Hours required',
-      message: `Please enter actual hours spent when changing status to "${toStatus}"`
-    };
+  // NEW: Enhanced validation with project/item-level settings
+  if (rule.requiresHours) {
+    // If projectId provided, check if timesheet is actually required
+    let timesheetActuallyRequired = true;
+    
+    if (projectId) {
+      timesheetActuallyRequired = await isTimesheetRequired(projectId, itemTimesheetOverride);
+      console.log(`[Timesheet Validation] Project ${projectId}, Override: ${itemTimesheetOverride}, Required: ${timesheetActuallyRequired}`);
+    }
+    
+    // Only enforce hours requirement if timesheet is required
+    if (timesheetActuallyRequired && hoursAddedNum === 0) {
+      return {
+        valid: false,
+        requiresHours: true,
+        timesheetRequired: true,
+        error: 'Hours required',
+        message: `This ${itemTimesheetOverride === true ? 'item' : 'project'} requires timesheet entry when marking work as complete. Please log your time.`
+      };
+    }
+    
+    // If timesheet not required, allow proceeding without hours
+    if (!timesheetActuallyRequired) {
+      console.log(`[Timesheet Validation] Timesheet not required - allowing status change without hours`);
+    }
   }
   
   // Get current item data
@@ -335,15 +398,25 @@ async function quickLogTime(itemType, itemId, hoursAdded, userId, notes = null, 
 
 /**
  * Log time during status change
+ * Enhanced with project/item-level timesheet requirement support
  */
-async function logTimeWithStatusChange(itemType, itemId, fromStatus, toStatus, hoursAdded, completionPercent, userId, notes = null) {
+async function logTimeWithStatusChange(itemType, itemId, fromStatus, toStatus, hoursAdded, completionPercent, userId, notes = null, projectId = null, itemTimesheetOverride = null) {
   const client = await pool.connect();
   
   try {
     await client.query('BEGIN');
     
-    // Validate the change
-    const validation = await validateStatusChange(itemType, itemId, fromStatus, toStatus, hoursAdded, completionPercent);
+    // Validate the change (with project/item-level settings)
+    const validation = await validateStatusChange(
+      itemType, 
+      itemId, 
+      fromStatus, 
+      toStatus, 
+      hoursAdded, 
+      completionPercent,
+      projectId,
+      itemTimesheetOverride
+    );
     
     if (!validation.valid) {
       await client.query('ROLLBACK');
@@ -482,5 +555,6 @@ module.exports = {
   getTimeTrackingHistory,
   getTimeTrackingSummary,
   calculateCompletionPercent,
-  calculateHoursFromPercent
+  calculateHoursFromPercent,
+  isTimesheetRequired
 };
