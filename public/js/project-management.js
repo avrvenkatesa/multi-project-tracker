@@ -94,6 +94,20 @@ document.getElementById('editProjectForm').addEventListener('submit', async (e) 
     alert('Project updated successfully!');
     document.getElementById('editProjectModal').classList.add('hidden');
     
+    // Update the current project data if this is the active project
+    if (window.currentProject && window.currentProject.id === parseInt(projectId)) {
+      window.currentProject.timesheet_entry_required = timesheet_entry_required;
+      window.currentProject.checklist_completion_enabled = checklist_completion_enabled;
+      window.currentProject.complexity_level = complexity_level;
+      window.currentProject.teams_notifications_enabled = teams_notifications_enabled;
+      window.currentProject.teams_webhook_url = teams_webhook_url;
+      
+      // Re-render Kanban board to update badges
+      if (typeof renderKanbanBoard === 'function') {
+        renderKanbanBoard();
+      }
+    }
+    
     if (typeof loadProjects === 'function') {
       await loadProjects();
     } else {
