@@ -51,8 +51,17 @@ async function openEditProjectModal(projectId) {
 }
 
 // Handle Edit Project Form Submit
+console.log('[INIT] Setting up editProjectForm submit listener');
+const editProjectFormElement = document.getElementById('editProjectForm');
+if (!editProjectFormElement) {
+  console.error('[INIT] editProjectForm element not found! DOM may not be ready.');
+} else {
+  console.log('[INIT] editProjectForm element found, attaching listener');
+}
+
 document.getElementById('editProjectForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  console.log('[FORM] Edit project form submitted!');
   
   const projectId = document.getElementById('editProjectId').value;
   const name = document.getElementById('editProjectName').value;
