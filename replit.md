@@ -41,6 +41,15 @@
 
 **Architect Review**: Passed as production-ready. Enhanced validation enforces positive-integer checks, confirms resource existence before service calls, and consistently returns descriptive error messages. Both functional suite (6/6) and validation suite (10/10) run clean with 100% pass rates.
 
+**API Documentation**: Comprehensive endpoint documentation created at `docs/api/hierarchy-endpoints.md` including:
+- Full endpoint specifications (HTTP method, path, parameters)
+- cURL request examples for all 7 endpoints (6 hierarchical + 1 enhanced creation)
+- JSON response examples with real data from test suite
+- Complete error handling documentation (400, 401, 403, 404, 500)
+- Example workflows for common use cases (creating hierarchies, viewing progress)
+- Best practices for performance optimization and error handling
+- Rate limiting information
+
 ## Overview
 The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include: AI Meeting Analysis, AI Checklist Generation, Checklist Validation, comprehensive PDF and CSV reporting, and an enhanced comment system with markdown support and @mention autocomplete. The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
 
