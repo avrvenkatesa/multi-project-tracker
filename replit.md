@@ -50,6 +50,14 @@
 - Best practices for performance optimization and error handling
 - Rate limiting information
 
+**Postman Collection**: Importable Postman collection for manual testing (`test/postman/hierarchy-endpoints.postman_collection.json`):
+- 11 requests across 3 folders (Authentication, Hierarchy Management, Error Scenarios)
+- Automatic test scripts validating response structure and business logic
+- Pre-request scripts for variable validation and authentication checks
+- 6 collection variables with auto-population from responses
+- Complete README with setup instructions and troubleshooting guide
+- Global test assertions for response time and content-type validation
+
 ## Overview
 The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include: AI Meeting Analysis, AI Checklist Generation, Checklist Validation, comprehensive PDF and CSV reporting, and an enhanced comment system with markdown support and @mention autocomplete. The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
 
