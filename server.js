@@ -12863,23 +12863,35 @@ app.get('/api/issues/:issueId/hierarchy', authenticateToken, async (req, res) =>
     const { issueId } = req.params;
     const id = parseInt(issueId);
     
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid issue ID' });
+    // Validate issue ID is a valid integer
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid issue ID',
+        details: 'Issue ID must be a positive integer'
+      });
     }
     
-    // Get issue's project and check access
+    // Verify issue exists and get project
     const issueCheck = await pool.query(
       'SELECT project_id FROM issues WHERE id = $1',
       [id]
     );
     
     if (issueCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Issue not found' });
+      return res.status(404).json({ 
+        error: 'Issue not found',
+        details: `No issue found with ID ${id}`
+      });
     }
     
-    const hasAccess = await checkProjectAccess(req.user.id, issueCheck.rows[0].project_id, req.user.role);
+    // Verify user has access to the project
+    const projectId = issueCheck.rows[0].project_id;
+    const hasAccess = await checkProjectAccess(req.user.id, projectId, req.user.role);
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied to this project' });
+      return res.status(403).json({ 
+        error: 'Access denied',
+        details: 'You do not have permission to access this project'
+      });
     }
     
     const breakdown = await getHierarchicalBreakdown(id);
@@ -12887,7 +12899,10 @@ app.get('/api/issues/:issueId/hierarchy', authenticateToken, async (req, res) =>
     
   } catch (error) {
     console.error('Error getting hierarchical breakdown:', error);
-    res.status(500).json({ error: 'Failed to get hierarchical breakdown' });
+    res.status(500).json({ 
+      error: 'Failed to get hierarchical breakdown',
+      details: error.message
+    });
   }
 });
 
@@ -12900,23 +12915,35 @@ app.get('/api/issues/:issueId/children', authenticateToken, async (req, res) => 
     const { issueId } = req.params;
     const id = parseInt(issueId);
     
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid issue ID' });
+    // Validate issue ID is a valid integer
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid issue ID',
+        details: 'Issue ID must be a positive integer'
+      });
     }
     
-    // Get issue's project and check access
+    // Verify issue exists and get project
     const issueCheck = await pool.query(
       'SELECT project_id FROM issues WHERE id = $1',
       [id]
     );
     
     if (issueCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Issue not found' });
+      return res.status(404).json({ 
+        error: 'Issue not found',
+        details: `No issue found with ID ${id}`
+      });
     }
     
-    const hasAccess = await checkProjectAccess(req.user.id, issueCheck.rows[0].project_id, req.user.role);
+    // Verify user has access to the project
+    const projectId = issueCheck.rows[0].project_id;
+    const hasAccess = await checkProjectAccess(req.user.id, projectId, req.user.role);
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied to this project' });
+      return res.status(403).json({ 
+        error: 'Access denied',
+        details: 'You do not have permission to access this project'
+      });
     }
     
     const result = await pool.query(
@@ -12928,7 +12955,10 @@ app.get('/api/issues/:issueId/children', authenticateToken, async (req, res) => 
     
   } catch (error) {
     console.error('Error getting issue children:', error);
-    res.status(500).json({ error: 'Failed to get issue children' });
+    res.status(500).json({ 
+      error: 'Failed to get issue children',
+      details: error.message
+    });
   }
 });
 
@@ -12943,23 +12973,43 @@ app.post('/api/issues/:issueId/calculate-rollup', authenticateToken, async (req,
     const { updateParent = true } = req.body;
     const id = parseInt(issueId);
     
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid issue ID' });
+    // Validate issue ID is a valid integer
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid issue ID',
+        details: 'Issue ID must be a positive integer'
+      });
     }
     
-    // Get issue's project and check access
+    // Validate updateParent is boolean if provided
+    if (updateParent !== undefined && typeof updateParent !== 'boolean') {
+      return res.status(400).json({ 
+        error: 'Invalid updateParent value',
+        details: 'updateParent must be a boolean (true or false)'
+      });
+    }
+    
+    // Verify issue exists and get project
     const issueCheck = await pool.query(
       'SELECT project_id FROM issues WHERE id = $1',
       [id]
     );
     
     if (issueCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Issue not found' });
+      return res.status(404).json({ 
+        error: 'Issue not found',
+        details: `No issue found with ID ${id}. Cannot calculate rollup effort.`
+      });
     }
     
-    const hasAccess = await checkProjectAccess(req.user.id, issueCheck.rows[0].project_id, req.user.role);
+    // Verify user has access to the project
+    const projectId = issueCheck.rows[0].project_id;
+    const hasAccess = await checkProjectAccess(req.user.id, projectId, req.user.role);
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied to this project' });
+      return res.status(403).json({ 
+        error: 'Access denied',
+        details: 'You do not have permission to access this project'
+      });
     }
     
     const rollup = await calculateRollupEffort(id, { updateParent });
@@ -12967,7 +13017,10 @@ app.post('/api/issues/:issueId/calculate-rollup', authenticateToken, async (req,
     
   } catch (error) {
     console.error('Error calculating rollup effort:', error);
-    res.status(500).json({ error: 'Failed to calculate rollup effort' });
+    res.status(500).json({ 
+      error: 'Failed to calculate rollup effort',
+      details: error.message
+    });
   }
 });
 
@@ -12980,14 +13033,34 @@ app.post('/api/projects/:projectId/update-parent-efforts', authenticateToken, as
     const { projectId } = req.params;
     const id = parseInt(projectId);
     
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid project ID' });
+    // Validate project ID is a valid integer
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid project ID',
+        details: 'Project ID must be a positive integer'
+      });
     }
     
-    // Check project access
+    // Verify project exists
+    const projectCheck = await pool.query(
+      'SELECT id FROM projects WHERE id = $1',
+      [id]
+    );
+    
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Project not found',
+        details: `No project found with ID ${id}`
+      });
+    }
+    
+    // Verify user has access to the project
     const hasAccess = await checkProjectAccess(req.user.id, id, req.user.role);
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied to this project' });
+      return res.status(403).json({ 
+        error: 'Access denied',
+        details: 'You do not have permission to access this project'
+      });
     }
     
     const summary = await updateAllParentEfforts(id);
@@ -12995,7 +13068,10 @@ app.post('/api/projects/:projectId/update-parent-efforts', authenticateToken, as
     
   } catch (error) {
     console.error('Error updating parent efforts:', error);
-    res.status(500).json({ error: 'Failed to update parent efforts' });
+    res.status(500).json({ 
+      error: 'Failed to update parent efforts',
+      details: error.message
+    });
   }
 });
 
@@ -13008,23 +13084,35 @@ app.get('/api/issues/:issueId/estimate-with-dependencies', authenticateToken, as
     const { issueId } = req.params;
     const id = parseInt(issueId);
     
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid issue ID' });
+    // Validate issue ID is a valid integer
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid issue ID',
+        details: 'Issue ID must be a positive integer'
+      });
     }
     
-    // Get issue's project and check access
+    // Verify issue exists and get project
     const issueCheck = await pool.query(
       'SELECT project_id FROM issues WHERE id = $1',
       [id]
     );
     
     if (issueCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Issue not found' });
+      return res.status(404).json({ 
+        error: 'Issue not found',
+        details: `No issue found with ID ${id}`
+      });
     }
     
-    const hasAccess = await checkProjectAccess(req.user.id, issueCheck.rows[0].project_id, req.user.role);
+    // Verify user has access to the project
+    const projectId = issueCheck.rows[0].project_id;
+    const hasAccess = await checkProjectAccess(req.user.id, projectId, req.user.role);
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied to this project' });
+      return res.status(403).json({ 
+        error: 'Access denied',
+        details: 'You do not have permission to access this project'
+      });
     }
     
     const estimate = await estimateWithDependencies(id);
@@ -13032,7 +13120,10 @@ app.get('/api/issues/:issueId/estimate-with-dependencies', authenticateToken, as
     
   } catch (error) {
     console.error('Error estimating with dependencies:', error);
-    res.status(500).json({ error: 'Failed to estimate with dependencies' });
+    res.status(500).json({ 
+      error: 'Failed to estimate with dependencies',
+      details: error.message
+    });
   }
 });
 
@@ -13045,14 +13136,34 @@ app.get('/api/projects/:projectId/hierarchy', authenticateToken, async (req, res
     const { projectId } = req.params;
     const id = parseInt(projectId);
     
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid project ID' });
+    // Validate project ID is a valid integer
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid project ID',
+        details: 'Project ID must be a positive integer'
+      });
     }
     
-    // Check project access
+    // Verify project exists
+    const projectCheck = await pool.query(
+      'SELECT id FROM projects WHERE id = $1',
+      [id]
+    );
+    
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Project not found',
+        details: `No project found with ID ${id}`
+      });
+    }
+    
+    // Verify user has access to the project
     const hasAccess = await checkProjectAccess(req.user.id, id, req.user.role);
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied to this project' });
+      return res.status(403).json({ 
+        error: 'Access denied',
+        details: 'You do not have permission to access this project'
+      });
     }
     
     const result = await pool.query(
@@ -13064,7 +13175,10 @@ app.get('/api/projects/:projectId/hierarchy', authenticateToken, async (req, res
     
   } catch (error) {
     console.error('Error getting project hierarchy:', error);
-    res.status(500).json({ error: 'Failed to get project hierarchy' });
+    res.status(500).json({ 
+      error: 'Failed to get project hierarchy',
+      details: error.message
+    });
   }
 });
 
