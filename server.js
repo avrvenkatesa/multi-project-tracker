@@ -3544,6 +3544,9 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
     assignee, 
     dueDate, 
     projectId,
+    parentIssueId,
+    isEpic,
+    estimatedEffortHours,
     progress = 0,
     // AI-related fields
     createdByAI = false,
@@ -3565,10 +3568,27 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
       });
     }
     
+    // Validate parent issue if provided
+    if (parentIssueId) {
+      const [parentIssue] = await sql`SELECT project_id FROM issues WHERE id = ${parseInt(parentIssueId)}`;
+      if (!parentIssue) {
+        return res.status(404).json({ 
+          error: 'Parent issue not found' 
+        });
+      }
+      // Normalize both to integers for comparison
+      if (parseInt(parentIssue.project_id) !== parseInt(projectId)) {
+        return res.status(400).json({ 
+          error: 'Parent issue must belong to the same project' 
+        });
+      }
+    }
+    
     const [newIssue] = await sql`
       INSERT INTO issues (
         title, description, type, priority, category, assignee, 
-        due_date, project_id, status, progress, created_by,
+        due_date, project_id, parent_issue_id, is_epic, estimated_effort_hours,
+        status, progress, created_by,
         created_by_ai, ai_confidence, ai_analysis_id
       ) VALUES (
         ${title.trim()}, 
@@ -3578,7 +3598,10 @@ app.post('/api/issues', authenticateToken, requireRole('Team Member'), async (re
         ${category || 'General'}, 
         ${assignee || ''}, 
         ${dueDate || null}, 
-        ${parseInt(projectId)}, 
+        ${parseInt(projectId)},
+        ${parentIssueId ? parseInt(parentIssueId) : null},
+        ${isEpic || false},
+        ${estimatedEffortHours ? parseFloat(estimatedEffortHours) : null},
         'To Do',
         ${progress || 0},
         ${req.user.id.toString()},

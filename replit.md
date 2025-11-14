@@ -1,5 +1,37 @@
 # Multi-Project Tracker
 
+## Recent Changes
+
+### November 14, 2025 - Comprehensive Hierarchical API Test Suite + Parent Linkage Feature
+**Feature**: Complete end-to-end testing framework for all 6 hierarchical issue management endpoints, plus enhanced issue creation API to support parent-child relationships programmatically.
+
+**Implementation**:
+- **Comprehensive Test Suite** (`test/test-hierarchy-api.js`):
+  - Cookie-based authentication using real user credentials
+  - Automated test project and hierarchical issue creation (1 parent epic + 3 children)
+  - Tests all 6 hierarchical endpoints: GET children, POST calculate-rollup, GET hierarchy, GET estimate-with-dependencies, POST update-parent-efforts, GET project hierarchy
+  - Validates response structure, status codes, and data integrity
+  - Robust cleanup with 404-tolerance for idempotent teardown
+  - Clear ✅/❌ logging with detailed request/response output
+  - 100% success rate (6/6 tests passed)
+  - Run with: `node test/test-hierarchy-api.js`
+
+- **Parent Linkage Support**: Enhanced `POST /api/issues` endpoint to accept:
+  - `parentIssueId`: Links new issue to parent issue (validated to same project)
+  - `isEpic`: Marks issue as an epic for hierarchy organization
+  - `estimatedEffortHours`: Sets initial effort estimate during creation
+  - Type-safe validation ensures parent project ID matches child project ID
+  - Enables programmatic creation of hierarchical issue structures via API
+
+**Key Benefits**:
+1. **Automated Testing**: All hierarchical endpoints validated with repeatable test suite
+2. **API Completeness**: Can now create parent-child issue relationships through API (previously required manual database updates)
+3. **Type Safety**: Parent linkage validation prevents project mismatch errors
+4. **Developer Experience**: Clear test output shows exactly what succeeded/failed
+5. **CI/CD Ready**: Test suite can be integrated into continuous integration pipelines
+
+**Architect Review**: Passed as production-ready. Type-safe parent validation prevents false 400 errors. Cleanup routine properly handles 404s for idempotent teardown. All 6 endpoints validated end-to-end with 100% pass rate.
+
 ## Overview
 The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include: AI Meeting Analysis, AI Checklist Generation, Checklist Validation, comprehensive PDF and CSV reporting, and an enhanced comment system with markdown support and @mention autocomplete. The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
 
