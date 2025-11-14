@@ -687,20 +687,22 @@ async function estimateWithDependencies(issueId, options = {}) {
     
     console.log(`[Dependency Estimate] Base effort for ${itemType} ${issueId}: ${baseEffort} hours`);
     
-    // Query dependencies
+    // Query dependencies from issue_dependencies table
+    // Must handle both issue and action_item prerequisites
     const depsResult = await pool.query(
       `SELECT 
         d.id,
-        d.source_item_id,
-        d.dependent_item_id,
-        d.dependency_type,
-        i.title as prerequisite_title,
-        i.status as prerequisite_status,
-        i.estimated_effort_hours as prerequisite_effort
+        d.prerequisite_item_id,
+        d.issue_id,
+        d.prerequisite_item_type,
+        COALESCE(i.title, ai.title) as prerequisite_title,
+        COALESCE(i.status, ai.status) as prerequisite_status,
+        COALESCE(i.estimated_effort_hours, ai.estimated_effort_hours) as prerequisite_effort
        FROM issue_dependencies d
-       LEFT JOIN ${tableName} i ON d.source_item_id = i.id
-       WHERE d.dependent_item_id = $1 AND d.item_type = $2`,
-      [issueId, itemType]
+       LEFT JOIN issues i ON d.prerequisite_item_id = i.id AND d.prerequisite_item_type = 'issue'
+       LEFT JOIN action_items ai ON d.prerequisite_item_id = ai.id AND d.prerequisite_item_type = 'action-item'
+       WHERE d.issue_id = $1`,
+      [issueId]
     );
     
     const dependencies = depsResult.rows;
@@ -743,11 +745,11 @@ async function estimateWithDependencies(issueId, options = {}) {
       bufferPercentage,
       dependencies: dependencies.map(d => ({
         id: d.id,
-        prerequisiteId: d.source_item_id,
+        prerequisiteId: d.prerequisite_item_id,
         prerequisiteTitle: d.prerequisite_title,
         prerequisiteStatus: d.prerequisite_status,
         prerequisiteEffort: parseFloat(d.prerequisite_effort) || 0,
-        type: d.dependency_type,
+        type: d.prerequisite_item_type,
         isComplete: ['Done', 'Closed', 'Completed'].includes(d.prerequisite_status)
       })),
       breakdown: {
