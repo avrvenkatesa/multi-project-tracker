@@ -65,6 +65,8 @@ const documentService = require('./services/document-service');
 const { calculateProjectSchedule } = require('./services/schedule-calculation-service');
 const aiCostTracker = require('./services/ai-cost-tracker');
 const timelineExtractor = require('./services/timeline-extractor');
+const hierarchyExtractor = require('./services/hierarchy-extractor');
+const multiDocAnalyzer = require('./services/multi-document-analyzer');
 const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 
 // Configure WebSocket for Node.js < v22
@@ -13335,6 +13337,261 @@ app.post('/api/admin/update-assignees', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * Extract hierarchy from document text using AI
+ * POST /api/analyze/extract-hierarchy
+ * Body: { documentText: string, projectId?: number, options?: object }
+ */
+app.post('/api/analyze/extract-hierarchy', authenticateToken, async (req, res) => {
+  try {
+    const { documentText, projectId, options = {} } = req.body;
+    
+    // Validate required fields
+    if (!documentText || typeof documentText !== 'string' || documentText.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Missing required field',
+        details: 'documentText is required and must be a non-empty string'
+      });
+    }
+    
+    console.log(`[HIERARCHY EXTRACT] Starting extraction for ${documentText.length} characters`);
+    
+    // Extract hierarchy using AI
+    const extractionResult = await hierarchyExtractor.extractHierarchy(
+      documentText.trim(),
+      {
+        ...options,
+        userId: req.user.id
+      }
+    );
+    
+    // Check if extraction was successful
+    if (!extractionResult.success) {
+      console.error('[HIERARCHY EXTRACT] Extraction failed:', extractionResult.error);
+      return res.status(500).json({
+        error: 'Hierarchy extraction failed',
+        details: extractionResult.error,
+        metadata: extractionResult.metadata
+      });
+    }
+    
+    console.log(`[HIERARCHY EXTRACT] Successfully extracted ${extractionResult.items?.length || 0} items`);
+    
+    // If projectId is provided, optionally create issues from the hierarchy
+    let createdIssues = null;
+    if (projectId) {
+      const id = parseInt(projectId);
+      
+      // Validate project ID
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ 
+          error: 'Invalid project ID',
+          details: 'Project ID must be a positive integer'
+        });
+      }
+      
+      // Verify project exists and user has access
+      const projectCheck = await pool.query(
+        'SELECT id FROM projects WHERE id = $1',
+        [id]
+      );
+      
+      if (projectCheck.rows.length === 0) {
+        return res.status(404).json({ 
+          error: 'Project not found',
+          details: `No project found with ID ${id}`
+        });
+      }
+      
+      const hasAccess = await checkProjectAccess(req.user.id, id, req.user.role);
+      if (!hasAccess) {
+        return res.status(403).json({ 
+          error: 'Access denied',
+          details: 'You do not have permission to access this project'
+        });
+      }
+      
+      // Create issues from hierarchy if requested
+      if (options.createIssues && extractionResult.items && extractionResult.items.length > 0) {
+        console.log(`[HIERARCHY EXTRACT] Creating issues in project ${id}`);
+        
+        try {
+          // Convert hierarchy items to workstream format for dependency mapper
+          const workstreams = extractionResult.items.map(item => ({
+            name: item.title,
+            description: item.description || '',
+            type: item.type === 'epic' ? 'Epic' : 'Task',
+            priority: item.priority || 'Medium',
+            estimatedHours: item.estimatedHours || 0,
+            confidence: item.confidence || 'medium',
+            parent: item.parent || null,
+            children: item.children || [],
+            dependencies: item.dependencies || []
+          }));
+          
+          const issuesResult = await dependencyMapper.createHierarchicalIssues(
+            workstreams,
+            id,
+            req.user.id
+          );
+          
+          createdIssues = issuesResult;
+          console.log(`[HIERARCHY EXTRACT] Created ${issuesResult.created?.length || 0} issues`);
+        } catch (createError) {
+          console.error('[HIERARCHY EXTRACT] Failed to create issues:', createError);
+          return res.status(500).json({
+            error: 'Failed to create issues from hierarchy',
+            details: createError.message,
+            extraction: extractionResult
+          });
+        }
+      }
+    }
+    
+    // Return extraction results
+    res.json({
+      success: true,
+      extraction: {
+        items: extractionResult.items,
+        summary: extractionResult.summary,
+        metadata: extractionResult.metadata
+      },
+      createdIssues,
+      message: createdIssues 
+        ? `Successfully extracted ${extractionResult.items.length} items and created ${createdIssues.created?.length || 0} issues`
+        : `Successfully extracted ${extractionResult.items.length} items`
+    });
+    
+  } catch (error) {
+    console.error('[HIERARCHY EXTRACT] Error:', error);
+    res.status(500).json({ 
+      error: 'Failed to extract hierarchy',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * Analyze documents and create hierarchical issues
+ * POST /api/projects/:projectId/analyze-documents
+ * Body: { documents: Array<{ text: string, name: string, classification?: string }>, options?: object }
+ */
+app.post('/api/projects/:projectId/analyze-documents', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { documents, options = {} } = req.body;
+    const id = parseInt(projectId);
+    
+    // Validate project ID
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid project ID',
+        details: 'Project ID must be a positive integer'
+      });
+    }
+    
+    // Validate documents array
+    if (!documents || !Array.isArray(documents) || documents.length === 0) {
+      return res.status(400).json({ 
+        error: 'Missing required field',
+        details: 'documents must be a non-empty array'
+      });
+    }
+    
+    // Validate each document has required fields
+    for (let i = 0; i < documents.length; i++) {
+      const doc = documents[i];
+      if (!doc.text || typeof doc.text !== 'string') {
+        return res.status(400).json({ 
+          error: 'Invalid document format',
+          details: `Document at index ${i} is missing required field 'text' or text is not a string`
+        });
+      }
+      if (!doc.name || typeof doc.name !== 'string') {
+        return res.status(400).json({ 
+          error: 'Invalid document format',
+          details: `Document at index ${i} is missing required field 'name' or name is not a string`
+        });
+      }
+    }
+    
+    // Verify project exists
+    const projectCheck = await pool.query(
+      'SELECT id, name FROM projects WHERE id = $1',
+      [id]
+    );
+    
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Project not found',
+        details: `No project found with ID ${id}`
+      });
+    }
+    
+    // Verify user has access to the project
+    const hasAccess = await checkProjectAccess(req.user.id, id, req.user.role);
+    if (!hasAccess) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        details: 'You do not have permission to access this project'
+      });
+    }
+    
+    const projectName = projectCheck.rows[0].name;
+    console.log(`[ANALYZE DOCS] Starting analysis for project "${projectName}" (ID: ${id})`);
+    console.log(`[ANALYZE DOCS] Processing ${documents.length} document(s)`);
+    
+    // Format documents for analyzer
+    const formattedDocs = documents.map(doc => ({
+      filename: doc.name,
+      text: doc.text,
+      classification: doc.classification || 'Document'
+    }));
+    
+    // Call multi-document analyzer
+    const analysisResult = await multiDocAnalyzer.analyzeAndCreateHierarchy(
+      formattedDocs,
+      id,
+      {
+        userId: req.user.id,
+        includeEffort: options.includeEffort !== false,
+        projectContext: options.projectContext || `Project: ${projectName}`
+      }
+    );
+    
+    // Return analysis results
+    if (analysisResult.success) {
+      console.log(`[ANALYZE DOCS] Success! Created ${analysisResult.created?.total || 0} issues`);
+      res.json({
+        success: true,
+        hierarchy: analysisResult.hierarchy,
+        created: analysisResult.created,
+        validation: analysisResult.validation,
+        extraction: analysisResult.extraction,
+        creationErrors: analysisResult.creationErrors || [],
+        message: `Successfully analyzed ${documents.length} document(s) and created ${analysisResult.created?.total || 0} issues`
+      });
+    } else {
+      console.error('[ANALYZE DOCS] Analysis failed:', analysisResult.errors);
+      res.status(500).json({
+        success: false,
+        error: 'Document analysis failed',
+        errors: analysisResult.errors || [],
+        warnings: analysisResult.warnings || [],
+        hierarchy: analysisResult.hierarchy,
+        stats: analysisResult.stats
+      });
+    }
+    
+  } catch (error) {
+    console.error('[ANALYZE DOCS] Error:', error);
+    res.status(500).json({ 
+      error: 'Failed to analyze documents',
+      details: error.message
+    });
+  }
+});
+
 // ==================== BULK METADATA ENDPOINT (PERFORMANCE OPTIMIZATION) ====================
 
 /**
@@ -15689,6 +15946,8 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`   GET  /api/action-items`);
   console.log(`   POST /api/action-items`);
   console.log(`   GET  /api/users`);
+  console.log(`   🤖 POST /api/analyze/extract-hierarchy`);
+  console.log(`   🤖 POST /api/projects/:projectId/analyze-documents`);
   
   // Initialize daily notification jobs
   initializeDailyJobs();
