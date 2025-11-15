@@ -1,72 +1,5 @@
 # Multi-Project Tracker
 
-## Recent Changes
-
-### November 14, 2025 - Comprehensive Hierarchical API Test Suite + Parent Linkage + Enhanced Validation
-**Feature**: Complete end-to-end testing framework for all 6 hierarchical issue management endpoints, enhanced issue creation API with parent-child relationship support, and comprehensive input validation with descriptive error messages.
-
-**Implementation**:
-- **Comprehensive Test Suite** (`test/test-hierarchy-api.js`):
-  - Cookie-based authentication using real user credentials
-  - Automated test project and hierarchical issue creation (1 parent epic + 3 children)
-  - Tests all 6 hierarchical endpoints: GET children, POST calculate-rollup, GET hierarchy, GET estimate-with-dependencies, POST update-parent-efforts, GET project hierarchy
-  - Validates response structure, status codes, and data integrity
-  - Robust cleanup with 404-tolerance for idempotent teardown
-  - Clear ✅/❌ logging with detailed request/response output
-  - 100% success rate (6/6 tests passed)
-  - Run with: `node test/test-hierarchy-api.js`
-
-- **Parent Linkage Support**: Enhanced `POST /api/issues` endpoint to accept:
-  - `parentIssueId`: Links new issue to parent issue (validated to same project)
-  - `isEpic`: Marks issue as an epic for hierarchy organization
-  - `estimatedEffortHours`: Sets initial effort estimate during creation
-  - Type-safe validation ensures parent project ID matches child project ID
-  - Enables programmatic creation of hierarchical issue structures via API
-
-- **Enhanced Input Validation**: Added comprehensive validation to all 6 hierarchical endpoints:
-  - ID validation: All issueId and projectId parameters validated as positive integers with descriptive error messages
-  - Resource existence: Issues and projects verified to exist BEFORE processing (404 with details)
-  - Type validation: Request body fields validated (e.g., updateParent must be boolean)
-  - Access control: All endpoints verify user access via checkProjectAccess (403 with details)
-  - Error details: All error responses include descriptive details for better debugging
-  - Validation test suite (`test/test-hierarchy-validation.js`): 10/10 tests pass (100% coverage)
-
-**Key Benefits**:
-1. **Automated Testing**: All hierarchical endpoints validated with repeatable test suite (6/6 functional + 10/10 validation = 16 total tests)
-2. **API Completeness**: Can now create parent-child issue relationships through API (previously required manual database updates)
-3. **Type Safety**: Parent linkage validation prevents project mismatch errors
-4. **Developer Experience**: Clear, descriptive error messages with details field for debugging
-5. **CI/CD Ready**: Test suites can be integrated into continuous integration pipelines
-6. **Robust Validation**: Handles invalid inputs gracefully with proper HTTP status codes (400, 403, 404, 500)
-
-**Architect Review**: Passed as production-ready. Enhanced validation enforces positive-integer checks, confirms resource existence before service calls, and consistently returns descriptive error messages. Both functional suite (6/6) and validation suite (10/10) run clean with 100% pass rates.
-
-**API Documentation**: Comprehensive endpoint documentation created at `docs/api/hierarchy-endpoints.md` including:
-- Full endpoint specifications (HTTP method, path, parameters)
-- cURL request examples for all 7 endpoints (6 hierarchical + 1 enhanced creation)
-- JSON response examples with real data from test suite
-- Complete error handling documentation (400, 401, 403, 404, 500)
-- Example workflows for common use cases (creating hierarchies, viewing progress)
-- Best practices for performance optimization and error handling
-- Rate limiting information
-
-**Postman Collection**: Importable Postman collection for manual testing (`test/postman/hierarchy-endpoints.postman_collection.json`):
-- 11 requests across 3 folders (Authentication, Hierarchy Management, Error Scenarios)
-- Automatic test scripts validating response structure and business logic
-- Pre-request scripts for variable validation and authentication checks
-- 6 collection variables with auto-population from responses
-- Complete README with setup instructions and troubleshooting guide
-- Global test assertions for response time and content-type validation
-
-**Integration Verification**: Comprehensive API integration verification completed (`HIERARCHY_API_VERIFICATION_REPORT.md`):
-- ✅ 100% test pass rate (15/15 tests)
-- ✅ All 7 endpoints verified as production-ready
-- ✅ Code review checks: imports, middleware, validation, error handling
-- ✅ Functional tests: all endpoints working correctly
-- ✅ Error handling tests: proper status codes and messages
-- ✅ Security verified: authentication and authorization on all endpoints
-- ✅ Total coverage: 31 tests across 3 test suites (100% pass rate)
-
 ## Overview
 The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures. Key capabilities include: AI Meeting Analysis, AI Checklist Generation, Checklist Validation, comprehensive PDF and CSV reporting, and an enhanced comment system with markdown support and @mention autocomplete. The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
 
@@ -89,6 +22,7 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 - **AI Checklist Generation**: Generates comprehensive checklists from descriptions and documents using OpenAI GPT-4o.
 - **AI Document Classification**: Hybrid classification system using GPT-4o for uploaded documents.
 - **AI Timeline Extraction**: Extracts project timeline information from document text using GPT-4o.
+- **AI-Powered Hierarchy Extraction Service**: Uses Claude AI (Anthropic) to extract hierarchical task structures from documents with intelligent parsing of epics, tasks, and subtasks. It supports multi-format documents, tracks API call costs, provides robust validation, and offers tree operations.
 - **Workstream Detection**: AI-powered document analysis to identify workstreams, extract requirements, and generate focused checklists.
 - **Automatic Effort Estimation**: AI-created issues automatically receive effort estimates based on workstream complexity, including confidence scoring.
 - **Automatic Schedule Generation**: Multi-document processing automatically creates project schedules with Gantt charts using AI effort estimates and dependencies.
@@ -127,6 +61,7 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 
 ### AI Integration
 - OpenAI (GPT-3.5-Turbo, GPT-4o)
+- Anthropic (Claude Sonnet 4)
 
 ### Database & ORM
 - @neondatabase/serverless
