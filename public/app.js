@@ -5123,6 +5123,17 @@ document.addEventListener('DOMContentLoaded', function() {
   if (backToListBtn) {
     backToListBtn.addEventListener('click', showTranscriptsList);
   }
+  
+  // Hierarchy expand/collapse controls (Prompt 7)
+  const expandAllBtn = document.getElementById('expand-all-btn');
+  if (expandAllBtn) {
+    expandAllBtn.addEventListener('click', expandAllKanbanCards);
+  }
+  
+  const collapseAllBtn = document.getElementById('collapse-all-btn');
+  if (collapseAllBtn) {
+    collapseAllBtn.addEventListener('click', collapseAllKanbanCards);
+  }
 });
 
 // ============= TRANSCRIPTS VIEWER =============
