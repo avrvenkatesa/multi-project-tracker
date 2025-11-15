@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KanbanCard Component Demo</title>
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Kanban Hierarchy CSS -->
+  <link rel="stylesheet" href="../../css/kanban-hierarchy.css">
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f3f4f6;
+      padding: 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      color: #1f2937;
+      margin-bottom: 10px;
+    }
+    
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 30px;
+    }
+    
+    .demo-section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .demo-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 16px;
+    }
+    
+    .kanban-column {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 200px;
+    }
+    
+    .column-header {
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #d1d5db;
+    }
+    
+    .demo-controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .demo-btn {
+      padding: 8px 16px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .demo-btn:hover {
+      background: #2563eb;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎨 KanbanCard Component Demo</h1>
+  <p class="subtitle">Hierarchical Kanban card component with expandable children</p>
+
+  <!-- Demo 1: Simple Epic with Children -->
+  <div class="demo-section">
+    <div class="demo-title">Demo 1: Epic with Child Tasks</div>
+    <div class="demo-controls">
+      <button class="demo-btn" onclick="expandAll()">Expand All</button>
+      <button class="demo-btn" onclick="collapseAll()">Collapse All</button>
+    </div>
+    <div class="kanban-column">
+      <div class="column-header">In Progress</div>
+      <div id="demo1-container"></div>
+    </div>
+  </div>
+
+  <!-- Demo 2: Multiple Epics -->
+  <div class="demo-section">
+    <div class="demo-title">Demo 2: Multiple Epics with Various States</div>
+    <div class="kanban-column">
+      <div class="column-header">To Do</div>
+      <div id="demo2-container"></div>
+    </div>
+  </div>
+
+  <!-- Demo 3: Deeply Nested Hierarchy -->
+  <div class="demo-section">
+    <div class="demo-title">Demo 3: Nested Hierarchy (3 Levels)</div>
+    <div class="kanban-column">
+      <div class="column-header">Blocked</div>
+      <div id="demo3-container"></div>
+    </div>
+  </div>
+
+  <!-- KanbanCard Component -->
+  <script src="./KanbanCard.js"></script>
+
+  <script>
+    // Sample data for demos
+    const sampleEpic1 = {
+      id: 101,
+      title: 'Phase 1: Frontend Modernization',
+      description: 'Modernize the frontend architecture and UI/UX',
+      status: 'In Progress',
+      priority: 'High',
+      parent_issue_id: null,
+      hierarchy_level: 0,
+      is_epic: true,
+      effort_hours: 120,
+      assignee: 'Sarah Chen',
+      children: [
+        {
+          id: 102,
+          title: 'User Interface Redesign',
+          description: 'Redesign the main UI components',
+          status: 'In Progress',
+          priority: 'High',
+          parent_issue_id: 101,
+          hierarchy_level: 1,
+          is_epic: false,
+          effort_hours: 40,
+          assignee: 'Mike Johnson',
+          children: []
+        },
+        {
+          id: 103,
+          title: 'Shopping Cart Enhancement',
+          description: 'Improve shopping cart functionality',
+          status: 'Done',
+          priority: 'Medium',
+          parent_issue_id: 101,
+          hierarchy_level: 1,
+          is_epic: false,
+          effort_hours: 32,
+          assignee: 'Emma Davis',
+          children: []
+        },
+        {
+          id: 104,
+          title: 'Mobile Responsive Layout',
+          description: 'Make the app fully responsive',
+          status: 'To Do',
+          priority: 'High',
+          parent_issue_id: 101,
+          hierarchy_level: 1,
+          is_epic: false,
+          effort_hours: 48,
+          assignee: 'Alex Martinez',
+          children: []
+        }
+      ]
+    };
+
+    const sampleEpic2 = {
+      id: 201,
+      title: 'Phase 2: Backend API',
+      description: 'Build microservices architecture',
+      status: 'To Do',
+      priority: 'Critical',
+      parent_issue_id: null,
+      hierarchy_level: 0,
+      is_epic: true,
+      effort_hours: 200,
+      assignee: 'David Wilson',
+      children: [
+        {
+          id: 202,
+          title: 'API Gateway Setup',
+          description: 'Configure Kong API gateway',
+          status: 'To Do',
+          priority: 'Critical',
+          parent_issue_id: 201,
+          hierarchy_level: 1,
+          is_epic: false,
+          effort_hours: 24,
+          assignee: 'Lisa Brown',
+          children: []
+        },
+        {
+          id: 203,
+          title: 'Product Catalog Service',
+          description: 'Create product management microservice',
+          status: 'To Do',
+          priority: 'High',
+          parent_issue_id: 201,
+          hierarchy_level: 1,
+          is_epic: false,
+          effort_hours: 80,
+          assignee: 'James Lee',
+          children: []
+        }
+      ]
+    };
+
+    const sampleEpic3 = {
+      id: 301,
+      title: 'Phase 3: DevOps Infrastructure',
+      description: 'Set up CI/CD and monitoring',
+      status: 'Blocked',
+      priority: 'Medium',
+      parent_issue_id: null,
+      hierarchy_level: 0,
+      is_epic: true,
+      effort_hours: 80,
+      assignee: 'Tom Anderson',
+      children: [
+        {
+          id: 302,
+          title: 'CI/CD Pipeline',
+          description: 'Configure GitHub Actions',
+          status: 'Blocked',
+          priority: 'High',
+          parent_issue_id: 301,
+          hierarchy_level: 1,
+          is_epic: false,
+          effort_hours: 40,
+          assignee: 'Rachel Kim',
+          children: [
+            {
+              id: 303,
+              title: 'Setup Build Stage',
+              description: 'Configure build automation',
+              status: 'Blocked',
+              priority: 'Medium',
+              parent_issue_id: 302,
+              hierarchy_level: 2,
+              is_epic: false,
+              effort_hours: 16,
+              assignee: 'Chris Park',
+              children: []
+            }
+          ]
+        }
+      ]
+    };
+
+    // Card registry for toggle functionality
+    const cardRegistry = new Map();
+
+    // Render demos
+    function renderDemo1() {
+      const card = new KanbanCard(sampleEpic1, {
+        showChildren: true,
+        indentLevel: 0,
+        onExpand: (issue) => console.log('Expanded:', issue.title),
+        onCollapse: (issue) => console.log('Collapsed:', issue.title)
+      });
+      cardRegistry.set(sampleEpic1.id, card);
+      document.getElementById('demo1-container').innerHTML = card.render();
+    }
+
+    function renderDemo2() {
+      const card1 = new KanbanCard(sampleEpic1, { showChildren: true });
+      const card2 = new KanbanCard(sampleEpic2, { showChildren: true });
+      cardRegistry.set(sampleEpic1.id, card1);
+      cardRegistry.set(sampleEpic2.id, card2);
+      document.getElementById('demo2-container').innerHTML = card1.render() + card2.render();
+    }
+
+    function renderDemo3() {
+      const card = new KanbanCard(sampleEpic3, { showChildren: true });
+      cardRegistry.set(sampleEpic3.id, card);
+      document.getElementById('demo3-container').innerHTML = card.render();
+    }
+
+    // Initialize demos
+    renderDemo1();
+    renderDemo2();
+    renderDemo3();
+
+    // Listen for toggle events
+    document.addEventListener('kanban-card-toggle', (e) => {
+      const issueId = e.detail.issueId;
+      const card = cardRegistry.get(issueId);
+      if (card) {
+        card.toggle();
+      }
+    });
+
+    // Demo controls
+    function expandAll() {
+      cardRegistry.forEach(card => {
+        if (card.issue.children && card.issue.children.length > 0 && !card.expanded) {
+          card.toggle();
+        }
+      });
+    }
+
+    function collapseAll() {
+      cardRegistry.forEach(card => {
+        if (card.issue.children && card.issue.children.length > 0 && card.expanded) {
+          card.toggle();
+        }
+      });
+    }
+  </script>
+</body>
+</html>
