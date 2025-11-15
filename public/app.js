@@ -11074,20 +11074,47 @@ async function expandAllKanbanCards() {
     return;
   }
   
-  // Get all items currently displayed on Kanban board
-  let allItems = [];
-  if (currentFilters.type === 'issue') {
-    allItems = [...issues];
-  } else if (currentFilters.type === 'action') {
-    allItems = [...actionItems];
-  } else {
-    allItems = [...issues, ...actionItems];
+  if (!currentProject) {
+    console.warn('[KANBAN STATE] No current project');
+    return;
   }
   
-  // Expand all items with children
-  window.KanbanState.expandAllIssues(allItems);
+  // Fetch hierarchy data to determine which issues have children
+  try {
+    const hierarchyResponse = await axios.get(
+      `/api/projects/${currentProject.id}/hierarchy`,
+      { withCredentials: true }
+    );
+    const hierarchyData = hierarchyResponse.data || [];
+    
+    // Find all issues that have children (i.e., issues that are parents)
+    const expandedSet = new Set();
+    const childrenMap = new Map();
+    
+    // Build map of parent IDs to children
+    hierarchyData.forEach(item => {
+      if (item.parent_issue_id) {
+        if (!childrenMap.has(item.parent_issue_id)) {
+          childrenMap.set(item.parent_issue_id, []);
+        }
+        childrenMap.get(item.parent_issue_id).push(item.id);
+      }
+    });
+    
+    // Add all parent IDs to expanded set
+    childrenMap.forEach((children, parentId) => {
+      expandedSet.add(parentId);
+    });
+    
+    // Save expanded states
+    window.KanbanState.saveAllExpandedStates(expandedSet);
+    
+    console.log(`[KANBAN STATE] Expanded ${expandedSet.size} issues with children`);
+  } catch (error) {
+    console.error('[KANBAN STATE] Error fetching hierarchy:', error);
+  }
   
-  // Re-render Kanban board
+  // Re-render Kanban board to reflect expanded states
   await renderKanbanBoard();
 }
 
