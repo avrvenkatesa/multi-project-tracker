@@ -1267,6 +1267,133 @@ function createTimesheetRequiredBadge(item, project) {
   return '';
 }
 
+// Helper function: Render a single Kanban card with hierarchy support
+function renderKanbanCardWithHierarchy(item, metadata, indentLevel = 0) {
+    const { relationshipCounts, commentCounts, checklistStatuses, circularDependencies } = metadata;
+    
+    const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
+    const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
+    const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+    const planningBadge = createPlanningEstimateBadge(item);
+    const circularDeps = circularDependencies[`${item.type}-${item.id}`] || null;
+    
+    const hasChildren = item.children && item.children.length > 0;
+    const indentPx = indentLevel * 16;
+    const isExpanded = getExpandedState(item.id);
+    
+    // Check permissions for edit/delete
+    const currentUser = AuthManager.currentUser;
+    const isOwner = currentUser && parseInt(item.created_by, 10) === parseInt(currentUser.id, 10);
+    const isAssignee = currentUser && item.assignee === currentUser.username;
+    
+    const roleHierarchy = {
+        'System Administrator': 5,
+        'Project Manager': 4,
+        'Team Lead': 3,
+        'Team Member': 2,
+        'Stakeholder': 1,
+        'External Viewer': 0
+    };
+    const userRoleLevel = currentUser ? (roleHierarchy[currentUser.role] || 0) : 0;
+    const isTeamLeadOrAbove = userRoleLevel >= roleHierarchy['Team Lead'];
+    
+    const canEdit = isOwner || isAssignee || isTeamLeadOrAbove;
+    const canDelete = isTeamLeadOrAbove;
+    
+    // Epic badge and border
+    const epicClass = item.is_epic ? 'kanban-card-epic' : '';
+    const epicBorderClass = item.is_epic ? 'border-indigo-500' : '';
+    
+    let cardHtml = `
+        <div class="kanban-card ${epicClass} ${getAICardBackgroundClass(item)} rounded p-3 shadow-sm ${getAICardBorderClass(item)} border-l-4 ${!item.created_by_ai ? getBorderColor(item.priority || "medium") : ''} ${epicBorderClass} cursor-pointer hover:shadow-md transition-shadow relative"
+             draggable="true"
+             data-item-id="${item.id}"
+             data-item-type="${item.type || 'issue'}"
+             style="margin-left: ${indentPx}px">
+            
+            <div class="flex items-start gap-2 mb-2">
+                ${hasChildren ? `
+                    <button class="hierarchy-chevron mt-1 text-gray-500 hover:text-gray-700 w-4 h-4 flex-shrink-0" 
+                            data-item-id="${item.id}"
+                            aria-label="${isExpanded ? 'Collapse' : 'Expand'} children">
+                        <i class="fas fa-chevron-${isExpanded ? 'down' : 'right'}"></i>
+                    </button>
+                ` : `
+                    <span class="w-4 h-4 flex-shrink-0"></span>
+                `}
+                
+                <input type="checkbox" 
+                       class="item-checkbox mt-1 cursor-pointer w-4 h-4 flex-shrink-0" 
+                       data-item-id="${item.id}"
+                       data-item-type="${item.type || 'issue'}" />
+                <div class="flex-1">
+                    <div class="flex justify-between items-start mb-2 gap-2">
+                        <div class="flex items-center gap-1">
+                            ${item.is_epic ? '<span class="text-xs font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">EPIC</span>' : ''}
+                            <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
+                            <span class="text-xs text-gray-500">·</span>
+                            <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
+                        </div>
+                        ${getAISourceBadge(item)}
+                    </div>
+                    <h5 class="font-medium text-sm mb-1">${item.title}</h5>
+                    <p class="text-xs text-gray-600 mb-2">${(item.description || "").substring(0, 80)}...</p>
+                    ${
+                        item.completion_percentage !== undefined && item.completion_percentage !== null
+                            ? `<div class="mb-2">
+                                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div class="bg-blue-600 h-1.5 rounded-full transition-all" style="width: ${item.completion_percentage}%"></div>
+                                </div>
+                                <div class="text-xs text-gray-600 mt-0.5">${item.completion_percentage}%</div>
+                            </div>`
+                            : ""
+                    }
+                    <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
+                        <span>${item.assignee || "Unassigned"}</span>
+                    </div>
+                    ${createDueDateBadge(item.due_date, item.status, item.completed_at)}
+                    ${createEffortEstimateBadge(item)}
+                    ${planningBadge ? `<div class="mb-2">${planningBadge}</div>` : ''}
+                    ${circularDeps ? createCircularDependencyBadge(item, circularDeps) : ''}
+                    ${item.tags && item.tags.length > 0 ? `
+                        <div class="flex flex-wrap gap-1 mb-2">
+                            ${item.tags.map(tag => `
+                                <span class="px-2 py-0.5 text-xs rounded-full font-medium" style="background-color: ${tag.color}20; color: ${tag.color}; border: 1px solid ${tag.color}40;">
+                                    ${tag.name}
+                                </span>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="checklist-badge-container flex-1">${generateChecklistBadge(checklistStatus)}</div>
+                        ${userRoleLevel >= roleHierarchy['Team Member'] ? `
+                            <button 
+                                class="quick-log-btn text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1 flex-shrink-0"
+                                data-action="quick-log"
+                                data-item-id="${item.id}"
+                                data-item-type="${item.type}"
+                                title="Quick Log Time"
+                            >
+                                ⏱️ Log
+                            </button>
+                        ` : ''}
+                    </div>
+                    ${createTimesheetRequiredBadge(item, currentProject)}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Recursively render children if they exist and card is expanded
+    if (hasChildren && isExpanded) {
+        item.children.forEach(child => {
+            cardHtml += renderKanbanCardWithHierarchy(child, metadata, indentLevel + 1);
+        });
+    }
+    
+    return cardHtml;
+}
+
 // Render Kanban board
 async function renderKanbanBoard() {
     console.log('[KANBAN] renderKanbanBoard called, currentProject:', {
@@ -1461,156 +1588,50 @@ async function renderKanbanBoard() {
                     rootItems = columnItems;
                 }
                 
-                // Render cards using KanbanCard component or fallback to old template
-                const useHierarchicalCards = typeof KanbanCard !== 'undefined' && currentFilters.type !== 'action';
+                // Prepare metadata object for rendering
+                const metadata = {
+                    relationshipCounts,
+                    commentCounts,
+                    checklistStatuses,
+                    circularDependencies
+                };
                 
-                if (useHierarchicalCards) {
-                    // NEW: Render with KanbanCard component (supports hierarchy)
-                    container.innerHTML = rootItems
-                        .map((item) => {
-                            const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
-                            const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
-                            const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
-                            const planningBadge = createPlanningEstimateBadge(item);
-                            const circularDeps = circularDependencies[`${item.type}-${item.id}`] || null;
-                            
-                            // Create KanbanCard with callbacks
-                            const card = new KanbanCard(item, {
-                                onExpand: (issue) => {
-                                    console.log('[KANBAN] Expanded:', issue.title);
-                                    // Save expanded state to localStorage
-                                    saveExpandedState(issue.id, true);
-                                },
-                                onCollapse: (issue) => {
-                                    console.log('[KANBAN] Collapsed:', issue.title);
-                                    // Save collapsed state to localStorage
-                                    saveExpandedState(issue.id, false);
-                                },
-                                onClick: (issue) => {
-                                    // Handled by click event listener below
-                                }
-                            });
-                            
-                            return card.render();
-                        })
-                        .join("");
-                } else {
-                    // OLD: Fallback to inline HTML template for action items or when component unavailable
-                    container.innerHTML = rootItems
-                        .map((item) => {
-                            const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
-                            const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
-                            const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
-                            const planningBadge = createPlanningEstimateBadge(item);
-                            const circularDeps = circularDependencies[`${item.type}-${item.id}`] || null;
-                        
-                        // Check permissions for edit/delete
-                        const currentUser = AuthManager.currentUser;
-                        const isOwner = currentUser && parseInt(item.created_by, 10) === parseInt(currentUser.id, 10);
-                        const isAssignee = currentUser && item.assignee === currentUser.username;
-                        
-                        // Role hierarchy: System Administrator (5), Project Manager (4), Team Lead (3), Team Member (2), Stakeholder (1), External Viewer (0)
-                        const roleHierarchy = {
-                            'System Administrator': 5,
-                            'Project Manager': 4,
-                            'Team Lead': 3,
-                            'Team Member': 2,
-                            'Stakeholder': 1,
-                            'External Viewer': 0
-                        };
-                        const userRoleLevel = currentUser ? (roleHierarchy[currentUser.role] || 0) : 0;
-                        const isTeamLeadOrAbove = userRoleLevel >= roleHierarchy['Team Lead'];
-                        
-                        const canEdit = isOwner || isAssignee || isTeamLeadOrAbove;
-                        const canDelete = isTeamLeadOrAbove;
-                        
-                        return `
-                    <div class="kanban-card ${getAICardBackgroundClass(item)} rounded p-3 shadow-sm ${getAICardBorderClass(item)} border-l-4 ${!item.created_by_ai ? getBorderColor(item.priority || "medium") : ''} cursor-pointer hover:shadow-md transition-shadow relative"
-                         draggable="true"
-                         data-item-id="${item.id}"
-                         data-item-type="${item.type || 'issue'}">
-                        <div class="flex items-start gap-2 mb-2">
-                            <input type="checkbox" 
-                                   class="item-checkbox mt-1 cursor-pointer w-4 h-4 flex-shrink-0" 
-                                   data-item-id="${item.id}"
-                                   data-item-type="${item.type || 'issue'}" />
-                            <div class="flex-1">
-                        <div class="flex justify-between items-start mb-2 gap-2">
-                            <div class="flex items-center gap-1">
-                                <span class="text-xs font-medium ${getTextColor(item.type || "issue")}">${item.type || "Issue"}</span>
-                                <span class="text-xs text-gray-500">·</span>
-                                <span class="text-xs text-gray-500">${item.priority || "Medium"}</span>
-                            </div>
-                            ${getAISourceBadge(item)}
-                        </div>
-                        <h5 class="font-medium text-sm mb-1">${item.title}</h5>
-                        <p class="text-xs text-gray-600 mb-2">${(item.description || "").substring(0, 80)}...</p>
-                        ${
-                            item.completion_percentage !== undefined && item.completion_percentage !== null
-                                ? `<div class="mb-2">
-                                    <div class="w-full bg-gray-200 rounded-full h-1.5">
-                                        <div class="bg-blue-600 h-1.5 rounded-full transition-all" style="width: ${item.completion_percentage}%"></div>
-                                    </div>
-                                    <div class="text-xs text-gray-600 mt-0.5">${item.completion_percentage}%</div>
-                                </div>`
-                                : ""
-                        }
-                        <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
-                            <span>${item.assignee || "Unassigned"}</span>
-                        </div>
-                        ${createDueDateBadge(item.due_date, item.status, item.completed_at)}
-                        ${createEffortEstimateBadge(item)}
-                        ${planningBadge ? `<div class="mb-2">${planningBadge}</div>` : ''}
-                        ${circularDeps ? createCircularDependencyBadge(item, circularDeps) : ''}
-                        ${item.tags && item.tags.length > 0 ? `
-                            <div class="flex flex-wrap gap-1 mb-2">
-                                ${item.tags.map(tag => `
-                                    <span class="px-2 py-0.5 text-xs rounded-full font-medium" style="background-color: ${tag.color}20; color: ${tag.color}; border: 1px solid ${tag.color}40;">
-                                        ${tag.name}
-                                    </span>
-                                `).join('')}
-                            </div>
-                        ` : ''}
-                        <div class="flex items-center justify-between gap-2">
-                            <div class="checklist-badge-container flex-1">${generateChecklistBadge(checklistStatus)}</div>
-                            ${userRoleLevel >= roleHierarchy['Team Member'] ? `
-                                <button 
-                                    class="quick-log-btn text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1 flex-shrink-0"
-                                    data-action="quick-log"
-                                    data-item-id="${item.id}"
-                                    data-item-type="${item.type}"
-                                    title="Quick Log Time"
-                                >
-                                    ⏱️ Log
-                                </button>
-                            ` : ''}
-                        </div>
-                        ${createTimesheetRequiredBadge(item, currentProject)}
-                            </div>
-                        </div>
-                    </div>
-                `;
-                    })
+                // Render cards with hierarchy support
+                container.innerHTML = rootItems
+                    .map((item) => renderKanbanCardWithHierarchy(item, metadata, 0))
                     .join("");
-                }
+                    
                 container.style.minHeight = 'auto';
             }
             
-            // Add drag and drop event listeners to cards (works for both old and new cards)
+            // Add drag and drop event listeners to cards (works for hierarchy cards too)
             container.querySelectorAll('.kanban-card').forEach(card => {
                 card.addEventListener('dragstart', handleDragStart);
                 card.addEventListener('dragend', handleDragEnd);
+                
+                // HIERARCHY: Add chevron click handler for expand/collapse
+                const chevron = card.querySelector('.hierarchy-chevron');
+                if (chevron) {
+                    chevron.addEventListener('click', async function(e) {
+                        e.stopPropagation();
+                        const itemId = parseInt(this.getAttribute('data-item-id'));
+                        
+                        // Toggle expanded state
+                        const currentState = getExpandedState(itemId);
+                        saveExpandedState(itemId, !currentState);
+                        
+                        // Re-render the Kanban board to show/hide children
+                        await renderKanbanBoard();
+                    });
+                }
                 
                 // Add click handler to open item detail modal
                 card.addEventListener('click', async function(e) {
                     // Don't open modal if we just finished dragging
                     if (isDragging) return;
                     
-                    // HIERARCHY: Check if clicked on chevron (expand/collapse button)
+                    // HIERARCHY: Check if clicked on chevron (already handled above)
                     if (e.target.closest('.hierarchy-chevron')) {
-                        e.stopPropagation();
-                        // Chevron click is handled by KanbanCard component
-                        // The component will call onExpand/onCollapse callbacks
                         return;
                     }
                     
