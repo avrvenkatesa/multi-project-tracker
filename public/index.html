@@ -12,6 +12,9 @@
         <link rel="stylesheet" href="css/design-tokens.css">
         <link rel="stylesheet" href="css/buttons.css">
         
+        <!-- Hierarchical Kanban Styles -->
+        <link rel="stylesheet" href="css/kanban.css">
+        
         <!-- Shared Components -->
         <script src="components/shared-header.js"></script>
         <script src="components/shared-loading.js"></script>
@@ -2738,6 +2741,12 @@
         <script src="comments.js?v=3"></script>
         <script src="js/checklist-completion-warning.js"></script>
         <script src="js/timesheet.js"></script>
+        
+        <!-- Hierarchical Kanban Components (Story 4.5) -->
+        <!-- Load in order: utilities first, then components, then main app -->
+        <script src="js/utils/hierarchy-utils.js"></script>
+        <script src="js/components/KanbanCard.js"></script>
+        
         <script src="app.js?v=47"></script>
         <script src="js/project-management.js"></script>
     </body>
