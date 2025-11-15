@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kanban Card Component Test Page</title>
+  
+  <!-- Font Awesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Hierarchical Kanban CSS -->
+  <link rel="stylesheet" href="/css/kanban.css">
+  
+  <!-- Test Page Specific Styles -->
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      opacity: 0.9;
+      font-size: 16px;
+    }
+
+    .controls {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .controls h3 {
+      color: #333;
+      font-size: 18px;
+      margin-right: 15px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: white;
+    }
+
+    .btn-success {
+      background: #10b981;
+      color: white;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #64748b;
+      color: white;
+    }
+
+    .test-section {
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .test-section h2 {
+      color: #6366f1;
+      font-size: 24px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #6366f1;
+    }
+
+    .test-section .description {
+      color: #666;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    .kanban-column {
+      background: #f9fafb;
+      padding: 20px;
+      border-radius: 8px;
+      border: 2px dashed #e5e7eb;
+      min-height: 100px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .console-output {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      margin-top: 20px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .console-output .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid #334155;
+    }
+
+    .console-output .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .console-output .timestamp {
+      color: #94a3b8;
+      margin-right: 10px;
+    }
+
+    .console-output .log-info {
+      color: #60a5fa;
+    }
+
+    .console-output .log-success {
+      color: #34d399;
+    }
+
+    .console-output .log-warning {
+      color: #fbbf24;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .btn {
+        justify-content: center;
+      }
+    }
+
+    .badge-legend {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .success-message {
+      background: #dcfce7;
+      border: 2px solid #22c55e;
+      color: #166534;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1><i class="fas fa-vial"></i> Kanban Card Component Test Page</h1>
+      <p>Story 4.5 - Hierarchical Kanban Enhancement | Testing KanbanCard.js Component</p>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-value" id="total-cards">0</div>
+        <div class="stat-label">Total Cards Rendered</div>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+        <div class="stat-value" id="epic-count">0</div>
+        <div class="stat-label">Epics</div>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+        <div class="stat-value" id="task-count">0</div>
+        <div class="stat-label">Tasks</div>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+        <div class="stat-value" id="expanded-count">0</div>
+        <div class="stat-label">Expanded Cards</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <h3>Interactive Controls:</h3>
+      <button class="btn btn-primary" id="expand-all-btn">
+        <i class="fas fa-chevron-down"></i> Expand All
+      </button>
+      <button class="btn btn-secondary" id="collapse-all-btn">
+        <i class="fas fa-chevron-right"></i> Collapse All
+      </button>
+      <button class="btn btn-success" id="refresh-btn">
+        <i class="fas fa-sync"></i> Refresh Cards
+      </button>
+      <button class="btn btn-danger" id="clear-console-btn">
+        <i class="fas fa-trash"></i> Clear Console
+      </button>
+    </div>
+
+    <!-- Test Case 1: Epic with Progress Bar -->
+    <div class="test-section">
+      <h2>Test Case 1: Epic with Progress Bar & Children</h2>
+      <p class="description">
+        Epic with 3 child tasks in various states. Progress bar auto-calculates based on completed children.
+      </p>
+      <div class="badge-legend">
+        <div class="legend-item">
+          <span class="badge badge-epic">Epic</span>
+          <span>Epic-level issue</span>
+        </div>
+        <div class="legend-item">
+          <span class="badge badge-priority-high">High</span>
+          <span>High priority</span>
+        </div>
+        <div class="legend-item">
+          <i class="fas fa-user"></i>
+          <span>Assigned user</span>
+        </div>
+        <div class="legend-item">
+          <i class="fas fa-clock"></i>
+          <span>Effort hours</span>
+        </div>
+      </div>
+      <div class="kanban-column" id="test-epic-progress"></div>
+    </div>
+
+    <!-- Test Case 2: Nested 3-Level Hierarchy -->
+    <div class="test-section">
+      <h2>Test Case 2: Deep Nesting (3 Levels)</h2>
+      <p class="description">
+        Epic → Task → Subtask hierarchy showing 3 levels of nesting with proper indentation.
+      </p>
+      <div class="kanban-column" id="test-deep-nesting"></div>
+    </div>
+
+    <!-- Test Case 3: Multiple Epics Side by Side -->
+    <div class="test-section">
+      <h2>Test Case 3: Multiple Epics with Different States</h2>
+      <p class="description">
+        Two epics showing different priorities, assignees, and child counts.
+      </p>
+      <div class="grid-2">
+        <div class="kanban-column" id="test-multiple-epics-1"></div>
+        <div class="kanban-column" id="test-multiple-epics-2"></div>
+      </div>
+    </div>
+
+    <!-- Test Case 4: Edge Cases -->
+    <div class="test-section">
+      <h2>Test Case 4: Edge Cases & Missing Data</h2>
+      <p class="description">
+        Testing graceful handling of missing assignees, effort hours, and empty children arrays.
+      </p>
+      <div class="kanban-column" id="test-edge-cases"></div>
+    </div>
+
+    <!-- Test Case 5: Different Priority Levels -->
+    <div class="test-section">
+      <h2>Test Case 5: Priority Badges</h2>
+      <p class="description">
+        Showcasing all priority levels: Critical, High, Medium, Low.
+      </p>
+      <div class="kanban-column" id="test-priorities"></div>
+    </div>
+
+    <!-- Console Output -->
+    <div class="test-section">
+      <h2>Console Output</h2>
+      <p class="description">
+        Real-time logging of component events and interactions.
+      </p>
+      <div class="console-output" id="console-output">
+        <div class="log-entry">
+          <span class="timestamp">[00:00:00]</span>
+          <span class="log-info">Console initialized. Waiting for events...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hierarchy Utilities -->
+  <script src="/js/utils/hierarchy-utils.js"></script>
+  
+  <!-- Kanban Card Component -->
+  <script src="/js/components/KanbanCard.js"></script>
+
+  <!-- Test Page Script -->
+  <script src="/js/test-kanban-cards.js"></script>
+</body>
+</html>
