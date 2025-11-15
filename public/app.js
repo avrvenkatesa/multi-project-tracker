@@ -11014,52 +11014,85 @@ function updateMultiDocComplexityInfo() {
 
 /**
  * Save expanded/collapsed state for an issue
+ * Delegates to KanbanState utility (loaded from kanban-state.js)
  * @param {number} issueId - The issue ID
  * @param {boolean} isExpanded - Whether the issue is expanded
  */
 function saveExpandedState(issueId, isExpanded) {
-  try {
-    const key = `kanban_expanded_${currentProject?.id || 'default'}`;
-    let expandedState = JSON.parse(localStorage.getItem(key) || '{}');
-    
-    if (isExpanded) {
-      expandedState[issueId] = true;
-    } else {
-      delete expandedState[issueId];
-    }
-    
-    localStorage.setItem(key, JSON.stringify(expandedState));
-    console.log(`[KANBAN STATE] Saved expanded state for issue ${issueId}: ${isExpanded}`);
-  } catch (error) {
-    console.warn('[KANBAN STATE] Failed to save expanded state:', error);
+  if (window.KanbanState) {
+    window.KanbanState.saveExpandedState(issueId, isExpanded);
+  } else {
+    console.warn('[KANBAN STATE] KanbanState utility not loaded');
   }
 }
 
 /**
  * Get expanded state for an issue
+ * Delegates to KanbanState utility (loaded from kanban-state.js)
  * @param {number} issueId - The issue ID
  * @returns {boolean} Whether the issue is expanded
  */
 function getExpandedState(issueId) {
-  try {
-    const key = `kanban_expanded_${currentProject?.id || 'default'}`;
-    const expandedState = JSON.parse(localStorage.getItem(key) || '{}');
-    return expandedState[issueId] === true;
-  } catch (error) {
-    console.warn('[KANBAN STATE] Failed to get expanded state:', error);
+  if (window.KanbanState) {
+    return window.KanbanState.getExpandedState(issueId);
+  } else {
+    console.warn('[KANBAN STATE] KanbanState utility not loaded');
     return false;
   }
 }
 
 /**
  * Clear all expanded states for the current project
+ * Delegates to KanbanState utility (loaded from kanban-state.js)
  */
 function clearExpandedStates() {
-  try {
-    const key = `kanban_expanded_${currentProject?.id || 'default'}`;
-    localStorage.removeItem(key);
-    console.log('[KANBAN STATE] Cleared all expanded states');
-  } catch (error) {
-    console.warn('[KANBAN STATE] Failed to clear expanded states:', error);
+  if (window.KanbanState) {
+    window.KanbanState.clearExpandedStates();
+  } else {
+    console.warn('[KANBAN STATE] KanbanState utility not loaded');
   }
+}
+
+/**
+ * Expand all issues with children
+ * @returns {Promise<void>}
+ */
+async function expandAllKanbanCards() {
+  if (!window.KanbanState) {
+    console.warn('[KANBAN STATE] KanbanState utility not loaded');
+    return;
+  }
+  
+  // Get all items currently displayed on Kanban board
+  let allItems = [];
+  if (currentFilters.type === 'issue') {
+    allItems = [...issues];
+  } else if (currentFilters.type === 'action') {
+    allItems = [...actionItems];
+  } else {
+    allItems = [...issues, ...actionItems];
+  }
+  
+  // Expand all items with children
+  window.KanbanState.expandAllIssues(allItems);
+  
+  // Re-render Kanban board
+  await renderKanbanBoard();
+}
+
+/**
+ * Collapse all issues
+ * @returns {Promise<void>}
+ */
+async function collapseAllKanbanCards() {
+  if (!window.KanbanState) {
+    console.warn('[KANBAN STATE] KanbanState utility not loaded');
+    return;
+  }
+  
+  // Collapse all
+  window.KanbanState.collapseAllIssues();
+  
+  // Re-render Kanban board
+  await renderKanbanBoard();
 }
