@@ -1292,6 +1292,44 @@ async function renderKanbanBoard() {
     
     const allItems = itemsToDisplay;
     
+    // HIERARCHY: Fetch hierarchy data for issues to enable parent-child relationships
+    let hierarchyData = [];
+    let hierarchyMap = new Map(); // Map of issue ID to hierarchy info
+    
+    if (currentProject && currentProject.id && currentFilters.type !== 'action') {
+        try {
+            const hierarchyResponse = await axios.get(
+                `/api/projects/${currentProject.id}/hierarchy`,
+                { withCredentials: true }
+            );
+            hierarchyData = hierarchyResponse.data || [];
+            
+            // Build hierarchy map for quick lookup
+            hierarchyData.forEach(item => {
+                hierarchyMap.set(item.id, {
+                    parent_issue_id: item.parent_issue_id,
+                    is_epic: item.is_epic,
+                    hierarchy_level: item.hierarchy_level || 0
+                });
+            });
+            
+            console.log(`[KANBAN HIERARCHY] Loaded ${hierarchyData.length} hierarchy items`);
+        } catch (error) {
+            console.warn('[KANBAN HIERARCHY] Failed to load hierarchy data:', error);
+            // Continue without hierarchy data - will render flat
+        }
+    }
+    
+    // Enrich items with hierarchy info
+    allItems.forEach(item => {
+        if (item.type === 'issue' && hierarchyMap.has(item.id)) {
+            const hierarchyInfo = hierarchyMap.get(item.id);
+            item.parent_issue_id = hierarchyInfo.parent_issue_id;
+            item.is_epic = hierarchyInfo.is_epic;
+            item.hierarchy_level = hierarchyInfo.hierarchy_level;
+        }
+    });
+    
     // PERFORMANCE OPTIMIZATION: Use bulk metadata endpoint instead of individual API calls
     // This replaces 150+ individual API calls with a single bulk request
     let relationshipCounts = {};
@@ -1400,13 +1438,71 @@ async function renderKanbanBoard() {
                 container.innerHTML = '<div class="text-gray-400 text-sm text-center py-8">Drop items here</div>';
                 container.style.minHeight = '100px';
             } else {
-                container.innerHTML = columnItems
-                    .map((item) => {
-                        const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
-                        const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
-                        const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
-                        const planningBadge = createPlanningEstimateBadge(item);
-                        const circularDeps = circularDependencies[`${item.type}-${item.id}`] || null;
+                // HIERARCHY: Build tree structure for issues in this column
+                let rootItems = columnItems;
+                
+                // Only build hierarchy for issues (not action items)
+                if (currentFilters.type !== 'action' && typeof HierarchyUtils !== 'undefined') {
+                    try {
+                        // Build tree from items in this column
+                        const tree = HierarchyUtils.buildHierarchyTree(columnItems);
+                        
+                        // Only render root-level items (children are rendered recursively)
+                        rootItems = tree.filter(item => !item.parent_issue_id);
+                        
+                        console.log(`[KANBAN HIERARCHY] Column "${status}": ${columnItems.length} items, ${rootItems.length} roots`);
+                    } catch (error) {
+                        console.warn('[KANBAN HIERARCHY] Failed to build tree:', error);
+                        // Fallback: render all items flat
+                        rootItems = columnItems;
+                    }
+                } else {
+                    // No hierarchy for action items, render all
+                    rootItems = columnItems;
+                }
+                
+                // Render cards using KanbanCard component or fallback to old template
+                const useHierarchicalCards = typeof KanbanCard !== 'undefined' && currentFilters.type !== 'action';
+                
+                if (useHierarchicalCards) {
+                    // NEW: Render with KanbanCard component (supports hierarchy)
+                    container.innerHTML = rootItems
+                        .map((item) => {
+                            const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
+                            const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
+                            const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+                            const planningBadge = createPlanningEstimateBadge(item);
+                            const circularDeps = circularDependencies[`${item.type}-${item.id}`] || null;
+                            
+                            // Create KanbanCard with callbacks
+                            const card = new KanbanCard(item, {
+                                onExpand: (issue) => {
+                                    console.log('[KANBAN] Expanded:', issue.title);
+                                    // Save expanded state to localStorage
+                                    saveExpandedState(issue.id, true);
+                                },
+                                onCollapse: (issue) => {
+                                    console.log('[KANBAN] Collapsed:', issue.title);
+                                    // Save collapsed state to localStorage
+                                    saveExpandedState(issue.id, false);
+                                },
+                                onClick: (issue) => {
+                                    // Handled by click event listener below
+                                }
+                            });
+                            
+                            return card.render();
+                        })
+                        .join("");
+                } else {
+                    // OLD: Fallback to inline HTML template for action items or when component unavailable
+                    container.innerHTML = rootItems
+                        .map((item) => {
+                            const relCount = relationshipCounts[`${item.type}-${item.id}`] || 0;
+                            const commentCount = commentCounts[`${item.type}-${item.id}`] || 0;
+                            const checklistStatus = checklistStatuses[`${item.type}-${item.id}`] || { hasChecklist: false, total: 0, completed: 0, percentage: 0 };
+                            const planningBadge = createPlanningEstimateBadge(item);
+                            const circularDeps = circularDependencies[`${item.type}-${item.id}`] || null;
                         
                         // Check permissions for edit/delete
                         const currentUser = AuthManager.currentUser;
@@ -1496,10 +1592,11 @@ async function renderKanbanBoard() {
                 `;
                     })
                     .join("");
+                }
                 container.style.minHeight = 'auto';
             }
             
-            // Add drag and drop event listeners to cards
+            // Add drag and drop event listeners to cards (works for both old and new cards)
             container.querySelectorAll('.kanban-card').forEach(card => {
                 card.addEventListener('dragstart', handleDragStart);
                 card.addEventListener('dragend', handleDragEnd);
@@ -1508,6 +1605,14 @@ async function renderKanbanBoard() {
                 card.addEventListener('click', async function(e) {
                     // Don't open modal if we just finished dragging
                     if (isDragging) return;
+                    
+                    // HIERARCHY: Check if clicked on chevron (expand/collapse button)
+                    if (e.target.closest('.hierarchy-chevron')) {
+                        e.stopPropagation();
+                        // Chevron click is handled by KanbanCard component
+                        // The component will call onExpand/onCollapse callbacks
+                        return;
+                    }
                     
                     // Check if clicked on circular dependency link
                     if (e.target.classList.contains('cycle-dep-link')) {
@@ -10881,5 +10986,59 @@ function updateMultiDocComplexityInfo() {
     }`;
     
     maxFiles.textContent = maxFileCount;
+  }
+}
+
+// ==================== HIERARCHY: EXPAND/COLLAPSE STATE PERSISTENCE ====================
+
+/**
+ * Save expanded/collapsed state for an issue
+ * @param {number} issueId - The issue ID
+ * @param {boolean} isExpanded - Whether the issue is expanded
+ */
+function saveExpandedState(issueId, isExpanded) {
+  try {
+    const key = `kanban_expanded_${currentProject?.id || 'default'}`;
+    let expandedState = JSON.parse(localStorage.getItem(key) || '{}');
+    
+    if (isExpanded) {
+      expandedState[issueId] = true;
+    } else {
+      delete expandedState[issueId];
+    }
+    
+    localStorage.setItem(key, JSON.stringify(expandedState));
+    console.log(`[KANBAN STATE] Saved expanded state for issue ${issueId}: ${isExpanded}`);
+  } catch (error) {
+    console.warn('[KANBAN STATE] Failed to save expanded state:', error);
+  }
+}
+
+/**
+ * Get expanded state for an issue
+ * @param {number} issueId - The issue ID
+ * @returns {boolean} Whether the issue is expanded
+ */
+function getExpandedState(issueId) {
+  try {
+    const key = `kanban_expanded_${currentProject?.id || 'default'}`;
+    const expandedState = JSON.parse(localStorage.getItem(key) || '{}');
+    return expandedState[issueId] === true;
+  } catch (error) {
+    console.warn('[KANBAN STATE] Failed to get expanded state:', error);
+    return false;
+  }
+}
+
+/**
+ * Clear all expanded states for the current project
+ */
+function clearExpandedStates() {
+  try {
+    const key = `kanban_expanded_${currentProject?.id || 'default'}`;
+    localStorage.removeItem(key);
+    console.log('[KANBAN STATE] Cleared all expanded states');
+  } catch (error) {
+    console.warn('[KANBAN STATE] Failed to clear expanded states:', error);
   }
 }
