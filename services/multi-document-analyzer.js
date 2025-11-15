@@ -20,6 +20,8 @@
 const { pool } = require('../db');
 const aiCostTracker = require('./ai-cost-tracker');
 const schedulerService = require('./schedulerService');
+const hierarchyExtractor = require('./hierarchy-extractor');
+const dependencyMapper = require('./dependency-mapper');
 
 class MultiDocumentAnalyzer {
   constructor() {
@@ -594,6 +596,157 @@ class MultiDocumentAnalyzer {
     return documents.map((doc, index) => 
       `=== Document ${index + 1}: ${doc.filename} (${doc.classification || 'unclassified'}) ===\n${doc.text}`
     ).join('\n\n');
+  }
+
+  /**
+   * Analyze documents and create hierarchical issues using AI extraction
+   * 
+   * @param {Array} documents - Array of {filename, text, classification}
+   * @param {number} projectId - Project ID to create issues in
+   * @param {Object} options - Options for extraction and creation
+   * @param {number} options.userId - User ID creating the issues
+   * @param {boolean} [options.includeEffort=true] - Whether to extract effort estimates
+   * @param {string} [options.projectContext=''] - Additional context about the project
+   * @returns {Promise<Object>} Result with hierarchy, created issues, and validation
+   */
+  async analyzeAndCreateHierarchy(documents, projectId, options = {}) {
+    const {
+      userId,
+      includeEffort = true,
+      projectContext = ''
+    } = options;
+
+    console.log('📚 [Hierarchy Analyzer] Starting hierarchy extraction and creation...');
+    console.log(`   Documents: ${documents.length}`);
+    console.log(`   Project ID: ${projectId}`);
+    console.log(`   User ID: ${userId}`);
+
+    try {
+      // Step 1: Combine document text
+      console.log('📄 [Hierarchy Analyzer] Step 1: Combining documents...');
+      const combinedText = documents
+        .map((doc, index) => {
+          const header = `=== Document ${index + 1}: ${doc.filename} ===`;
+          return `${header}\n${doc.text}`;
+        })
+        .join('\n\n---\n\n');
+
+      console.log(`✅ [Hierarchy Analyzer] Combined ${combinedText.length} characters from ${documents.length} documents`);
+
+      // Step 2: Extract hierarchy using Claude AI
+      console.log('🤖 [Hierarchy Analyzer] Step 2: Extracting hierarchy with Claude AI...');
+      const extractionResult = await hierarchyExtractor.extractHierarchy(combinedText, {
+        includeEffort,
+        projectContext,
+        userId,
+        projectId
+      });
+
+      const hierarchy = extractionResult.hierarchy;
+      console.log(`✅ [Hierarchy Analyzer] Extracted ${hierarchy.length} items`);
+      console.log(`   Summary:`, extractionResult.summary);
+
+      // Step 3: Validate hierarchy
+      console.log('🔍 [Hierarchy Analyzer] Step 3: Validating hierarchy...');
+      const validation = hierarchyExtractor.validateHierarchy(hierarchy);
+
+      if (!validation.valid) {
+        console.log(`❌ [Hierarchy Analyzer] Validation failed with ${validation.errors.length} error(s)`);
+        validation.errors.forEach(err => console.log(`   • ${err}`));
+        
+        return {
+          success: false,
+          errors: validation.errors,
+          warnings: validation.warnings,
+          hierarchy,
+          stats: validation.stats
+        };
+      }
+
+      console.log(`✅ [Hierarchy Analyzer] Validation passed`);
+      if (validation.warnings.length > 0) {
+        console.log(`⚠️  [Hierarchy Analyzer] ${validation.warnings.length} warning(s):`);
+        validation.warnings.forEach(warn => console.log(`   • ${warn}`));
+      }
+
+      // Step 4: Convert hierarchy to workstream-like format for issue creation
+      console.log('🔄 [Hierarchy Analyzer] Step 4: Converting hierarchy to issue format...');
+      const workstreamsForCreation = hierarchy.map(item => ({
+        name: item.name,
+        title: item.name,
+        description: item.description || '',
+        isEpic: item.isEpic,
+        hierarchyLevel: item.hierarchyLevel,
+        parent: item.parent,
+        effort: item.effort,
+        priority: item.priority || 'medium',
+        dependencies: item.dependencies || [],
+        children: []  // Will be populated by createHierarchicalIssues
+      }));
+
+      console.log(`✅ [Hierarchy Analyzer] Converted ${workstreamsForCreation.length} items for issue creation`);
+
+      // Step 5: Create hierarchical issues in database
+      console.log('🏗️  [Hierarchy Analyzer] Step 5: Creating hierarchical issues...');
+      const creationResult = await dependencyMapper.createHierarchicalIssues(
+        workstreamsForCreation,
+        projectId,
+        userId
+      );
+
+      console.log(`✅ [Hierarchy Analyzer] Created ${creationResult.created.length} issues`);
+      console.log(`   Epics: ${creationResult.epics.length}`);
+      console.log(`   Tasks: ${creationResult.tasks.length}`);
+
+      if (creationResult.errors && creationResult.errors.length > 0) {
+        console.log(`⚠️  [Hierarchy Analyzer] ${creationResult.errors.length} error(s) during creation:`);
+        creationResult.errors.forEach(err => console.log(`   • ${err}`));
+      }
+
+      // Step 6: Return comprehensive result
+      return {
+        success: true,
+        hierarchy,
+        created: {
+          total: creationResult.created.length,
+          epics: creationResult.epics.length,
+          tasks: creationResult.tasks.length,
+          issues: creationResult.created,
+          epicsList: creationResult.epics,
+          tasksList: creationResult.tasks
+        },
+        validation: {
+          valid: validation.valid,
+          errors: validation.errors,
+          warnings: validation.warnings,
+          stats: validation.stats
+        },
+        extraction: {
+          summary: extractionResult.summary,
+          metadata: extractionResult.metadata
+        },
+        creationErrors: creationResult.errors || []
+      };
+
+    } catch (error) {
+      console.error('❌ [Hierarchy Analyzer] Fatal error:', error.message);
+      console.error(error.stack);
+
+      return {
+        success: false,
+        errors: [error.message],
+        warnings: [],
+        hierarchy: [],
+        created: {
+          total: 0,
+          epics: 0,
+          tasks: 0,
+          issues: [],
+          epicsList: [],
+          tasksList: []
+        }
+      };
+    }
   }
 }
 

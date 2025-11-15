@@ -22,7 +22,7 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 - **AI Checklist Generation**: Generates comprehensive checklists from descriptions and documents using OpenAI GPT-4o.
 - **AI Document Classification**: Hybrid classification system using GPT-4o for uploaded documents.
 - **AI Timeline Extraction**: Extracts project timeline information from document text using GPT-4o.
-- **AI-Powered Hierarchy Extraction Service**: Uses Claude AI (Anthropic) to extract hierarchical task structures from documents with intelligent parsing of epics, tasks, and subtasks. It supports multi-format documents, tracks API call costs, provides robust validation, and offers tree operations.
+- **AI-Powered Hierarchy Extraction Service**: Uses Claude AI (Anthropic) to extract hierarchical task structures from documents with intelligent parsing of epics, tasks, and subtasks. It supports multi-format documents, tracks API call costs, provides robust validation, and offers tree operations. Integrated with multi-document analyzer for end-to-end workflow: document upload → AI extraction → validation → automatic issue creation.
 - **Workstream Detection**: AI-powered document analysis to identify workstreams, extract requirements, and generate focused checklists.
 - **Automatic Effort Estimation**: AI-created issues automatically receive effort estimates based on workstream complexity, including confidence scoring.
 - **Automatic Schedule Generation**: Multi-document processing automatically creates project schedules with Gantt charts using AI effort estimates and dependencies.
