@@ -2232,16 +2232,55 @@ function renderScheduleDetail(data) {
       <!-- Gantt Chart Tab -->
       <div id="gantt-tab" class="detail-tab-content">
         <div class="bg-white rounded-lg border border-gray-200 p-4">
-          <!-- Compact View Toggle -->
-          <div class="flex justify-between items-center mb-4">
+          <!-- Controls Header -->
+          <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
             <h3 class="text-sm font-semibold text-gray-700">Gantt Chart</h3>
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-gray-600">Compact View</span>
-              <button id="compact-view-toggle" class="btn-ghost btn-sm" data-compact="true" title="Toggle compact view">
-                <i class="fas fa-compress-alt"></i>
-              </button>
+            <div class="flex items-center gap-4 flex-wrap">
+              <!-- Compact View Toggle -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-600">Compact View</span>
+                <button id="compact-view-toggle" class="btn-ghost btn-sm" data-compact="true" title="Toggle compact view">
+                  <i class="fas fa-compress-alt"></i>
+                </button>
+              </div>
+              
+              <!-- Hierarchy Controls -->
+              <div class="hierarchy-controls flex items-center gap-3 pl-3 border-l border-gray-300">
+                <label class="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
+                  <input type="checkbox" id="show-hierarchy-toggle" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                  <span>Show Hierarchy</span>
+                </label>
+
+                <button id="expand-all-btn" class="btn-ghost btn-sm" title="Expand All">
+                  <i class="fas fa-chevron-down mr-1"></i>
+                  <span class="text-xs">Expand All</span>
+                </button>
+
+                <button id="collapse-all-btn" class="btn-ghost btn-sm" title="Collapse All">
+                  <i class="fas fa-chevron-right mr-1"></i>
+                  <span class="text-xs">Collapse All</span>
+                </button>
+              </div>
             </div>
           </div>
+          
+          <!-- Hierarchy Legend -->
+          <div class="hierarchy-legend mb-3 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md flex items-center gap-6 text-xs">
+            <span class="font-semibold text-gray-700">Legend:</span>
+            <span class="flex items-center gap-2">
+              <span style="color: #6366f1; font-weight: 700;">📦 EPIC</span>
+              <span class="text-gray-600">Parent Task</span>
+            </span>
+            <span class="flex items-center gap-2">
+              <span class="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
+              <span class="text-gray-600">Task</span>
+            </span>
+            <span class="flex items-center gap-2">
+              <span class="inline-block w-2 h-2 rounded-full bg-gray-400"></span>
+              <span class="text-gray-600">Subtask</span>
+            </span>
+          </div>
+          
           <div id="gantt-container" class="gantt-container"></div>
         </div>
       </div>
@@ -2886,6 +2925,57 @@ function bindCompactToggle() {
       // Re-render Gantt with cached context
       if (lastGanttContext.tasks && lastGanttContext.schedule) {
         renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+      }
+    });
+  }
+  
+  // Hierarchy Controls Event Listeners
+  const hierarchyToggle = document.getElementById('show-hierarchy-toggle');
+  if (hierarchyToggle && !hierarchyToggle.dataset.bound) {
+    hierarchyToggle.dataset.bound = 'true';
+    hierarchyToggle.addEventListener('change', (e) => {
+      if (window.ganttEnhancer) {
+        const container = document.getElementById('gantt-container');
+        const svg = container.querySelector('svg');
+        
+        if (e.target.checked) {
+          // Re-enable hierarchy features
+          window.ganttEnhancer.enhance(lastGanttContext.tasks || []);
+        } else {
+          // Hide hierarchy elements
+          if (svg) {
+            const hierarchyElements = svg.querySelectorAll('.gantt-hierarchy-controls, .gantt-expand-btn, .gantt-tree-lines-group');
+            hierarchyElements.forEach(el => el.style.display = 'none');
+          }
+        }
+      }
+    });
+  }
+  
+  const expandAllBtn = document.getElementById('expand-all-btn');
+  if (expandAllBtn && !expandAllBtn.dataset.bound) {
+    expandAllBtn.dataset.bound = 'true';
+    expandAllBtn.addEventListener('click', () => {
+      if (window.ganttEnhancer) {
+        window.ganttEnhancer.expandAll();
+        // Re-render Gantt with updated expand state
+        if (lastGanttContext.tasks && lastGanttContext.schedule) {
+          renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+        }
+      }
+    });
+  }
+  
+  const collapseAllBtn = document.getElementById('collapse-all-btn');
+  if (collapseAllBtn && !collapseAllBtn.dataset.bound) {
+    collapseAllBtn.dataset.bound = 'true';
+    collapseAllBtn.addEventListener('click', () => {
+      if (window.ganttEnhancer) {
+        window.ganttEnhancer.collapseAll();
+        // Re-render Gantt with updated collapse state
+        if (lastGanttContext.tasks && lastGanttContext.schedule) {
+          renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+        }
       }
     });
   }
