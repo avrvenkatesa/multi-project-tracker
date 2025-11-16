@@ -252,14 +252,28 @@ async function createTestProject() {
           <div class="bg-white p-4 rounded border text-sm font-mono overflow-x-auto whitespace-pre-wrap">
 ${epics.map(epic => {
   const epicTasks = hierarchyData.filter(t => t.parent_issue_id === epic.item_id);
-  return `📁 ${epic.title}\n${epicTasks.map(task => {
+  let epicStr = `📁 EPIC: ${epic.title} (${epic.ai_effort_estimate_hours || 0}h)`;
+  
+  epicTasks.forEach((task, taskIdx) => {
     const taskSubtasks = hierarchyData.filter(st => st.parent_issue_id === task.item_id);
-    return `  ├─ 📋 ${task.title}${taskSubtasks.length > 0 ? '\n' + taskSubtasks.map((st, i) => 
-      `  │  ${i === taskSubtasks.length - 1 ? '└─' : '├─'} 📌 ${st.title}`
-    ).join('\n') : ''}`;
-  }).join('\n')}`;
+    const isLastTask = taskIdx === epicTasks.length - 1;
+    const taskPrefix = isLastTask ? '└─' : '├─';
+    const childPrefix = isLastTask ? '   ' : '│  ';
+    
+    epicStr += `\n  ${taskPrefix} 📋 ${task.title} (${task.ai_effort_estimate_hours || 0}h)`;
+    
+    if (taskSubtasks.length > 0) {
+      taskSubtasks.forEach((subtask, stIdx) => {
+        const isLastSubtask = stIdx === taskSubtasks.length - 1;
+        const subtaskPrefix = isLastSubtask ? '└─' : '├─';
+        epicStr += `\n  ${childPrefix}  ${subtaskPrefix} 📌 ${subtask.title} (${subtask.ai_effort_estimate_hours || 0}h)`;
+      });
+    }
+  });
+  
+  return epicStr;
 }).join('\n\n')}
-${standalone.length > 0 ? '\n\n⭐ Standalone Tasks:\n' + standalone.map(t => `  ├─ 📋 ${t.title}`).join('\n') : ''}
+${standalone.length > 0 ? '\n\n⭐ STANDALONE TASKS:' + standalone.map((t, i) => `\n  ${i === standalone.length - 1 ? '└─' : '├─'} 📋 ${t.title} (${t.ai_effort_estimate_hours || 0}h)`).join('') : ''}
           </div>
         </div>
 
