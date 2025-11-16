@@ -1,0 +1,277 @@
+/**
+ * Kanban Hierarchy Styles
+ * 
+ * CSS for hierarchical Kanban cards with expandable/collapsible children,
+ * epic badges, progress bars, and visual hierarchy indicators.
+ */
+
+/* ============================================
+   Kanban Card Base Styles
+   ============================================ */
+
+.kanban-card {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.kanban-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+/* Epic Card Styling */
+.kanban-card-epic {
+  border-left: 4px solid #8b5cf6;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+}
+
+.kanban-card-epic:hover {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+/* ============================================
+   Card Header
+   ============================================ */
+
+.kanban-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.kanban-card-expand-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #6b7280;
+  font-size: 12px;
+  transition: color 0.2s ease;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kanban-card-expand-btn:hover {
+  color: #1f2937;
+}
+
+.kanban-card-expand-placeholder {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+}
+
+.kanban-card-id {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+  font-family: monospace;
+}
+
+/* ============================================
+   Badges
+   ============================================ */
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-epic {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+}
+
+/* Priority Badges */
+.badge-priority-critical {
+  background: #dc2626;
+  color: white;
+}
+
+.badge-priority-high {
+  background: #f59e0b;
+  color: white;
+}
+
+.badge-priority-medium {
+  background: #3b82f6;
+  color: white;
+}
+
+.badge-priority-low {
+  background: #10b981;
+  color: white;
+}
+
+/* ============================================
+   Card Content
+   ============================================ */
+
+.kanban-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.kanban-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.kanban-card-assignee,
+.kanban-card-effort {
+  font-size: 12px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kanban-card-assignee i,
+.kanban-card-effort i {
+  font-size: 10px;
+}
+
+/* ============================================
+   Progress Bar (for Epics)
+   ============================================ */
+
+.kanban-card-progress {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
+
+.progress-bar-label {
+  font-size: 11px;
+  color: #6b7280;
+  text-align: right;
+}
+
+/* ============================================
+   Children Container
+   ============================================ */
+
+.kanban-card-children {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #d1d5db;
+  position: relative;
+}
+
+/* Visual connector line for nested children */
+.kanban-card-children::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    #d1d5db 0%,
+    #d1d5db 50%,
+    transparent 100%
+  );
+}
+
+/* Nested child cards */
+.kanban-card-children .kanban-card {
+  background: #fafafa;
+  border-left: 2px solid #d1d5db;
+}
+
+.kanban-card-children .kanban-card:hover {
+  background: #f5f5f5;
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
+
+@media (max-width: 768px) {
+  .kanban-card {
+    padding: 10px;
+  }
+
+  .kanban-card-title {
+    font-size: 13px;
+  }
+
+  .kanban-card-meta {
+    font-size: 11px;
+  }
+
+  .kanban-card-assignee,
+  .kanban-card-effort {
+    font-size: 11px;
+  }
+}
+
+/* ============================================
+   Accessibility
+   ============================================ */
+
+.kanban-card-expand-btn:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.kanban-card:focus-within {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .kanban-card {
+    border: 2px solid #000;
+  }
+
+  .badge {
+    border: 1px solid currentColor;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .kanban-card,
+  .kanban-card-expand-btn,
+  .progress-bar-fill {
+    transition: none;
+  }
+}

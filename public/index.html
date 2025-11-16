@@ -12,6 +12,9 @@
         <link rel="stylesheet" href="css/design-tokens.css">
         <link rel="stylesheet" href="css/buttons.css">
         
+        <!-- Hierarchical Kanban Styles -->
+        <link rel="stylesheet" href="css/kanban.css">
+        
         <!-- Shared Components -->
         <script src="components/shared-header.js"></script>
         <script src="components/shared-loading.js"></script>
@@ -534,6 +537,30 @@
                                     Clear
                                 </button>
                             </div>
+                        </div>
+
+                        <!-- Hierarchy Controls (Prompt 7) -->
+                        <div id="hierarchy-controls" class="mb-4 flex items-center gap-2">
+                            <span class="text-sm font-medium text-gray-700">Issue Hierarchy:</span>
+                            <button 
+                                id="expand-all-btn" 
+                                class="px-3 py-1 text-sm bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors flex items-center gap-1"
+                                title="Expand all parent issues to show their children (persists across page reloads)"
+                            >
+                                <i class="fas fa-chevron-down"></i>
+                                Expand All
+                            </button>
+                            <button 
+                                id="collapse-all-btn" 
+                                class="px-3 py-1 text-sm bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors flex items-center gap-1"
+                                title="Collapse all parent issues (persists across page reloads)"
+                            >
+                                <i class="fas fa-chevron-right"></i>
+                                Collapse All
+                            </button>
+                            <span class="text-xs text-gray-500 italic ml-2">
+                                (Applies to issues only. State persists across sessions.)
+                            </span>
                         </div>
 
                         <!-- Kanban Board -->
@@ -2738,6 +2765,13 @@
         <script src="comments.js?v=3"></script>
         <script src="js/checklist-completion-warning.js"></script>
         <script src="js/timesheet.js"></script>
+        
+        <!-- Hierarchical Kanban Components (Story 4.5) -->
+        <!-- Load in order: utilities first, then components, then main app -->
+        <script src="js/utils/hierarchy-utils.js"></script>
+        <script src="js/utils/kanban-state.js"></script>
+        <script src="js/components/KanbanCard.js"></script>
+        
         <script src="app.js?v=47"></script>
         <script src="js/project-management.js"></script>
     </body>

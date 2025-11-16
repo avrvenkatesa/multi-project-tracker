@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hierarchy Utils Test Suite</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #6366f1;
+    }
+
+    .test-section {
+      margin-bottom: 40px;
+    }
+
+    h2 {
+      color: #6366f1;
+      margin-bottom: 15px;
+      font-size: 20px;
+    }
+
+    .test-case {
+      background: #f9fafb;
+      padding: 15px;
+      border-left: 4px solid #10b981;
+      margin-bottom: 15px;
+      border-radius: 4px;
+    }
+
+    .test-case.error {
+      border-left-color: #ef4444;
+      background: #fef2f2;
+    }
+
+    .test-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 12px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+
+    .badge.success {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .badge.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .summary {
+      background: #f0f9ff;
+      border: 2px solid #3b82f6;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 30px;
+    }
+
+    .summary h3 {
+      color: #1e40af;
+      margin-bottom: 10px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+
+    .stat {
+      background: white;
+      padding: 15px;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #6366f1;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .tree-visualization {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+      margin-top: 10px;
+      overflow-x: auto;
+    }
+
+    .tree-node {
+      margin-left: 20px;
+      padding: 2px 0;
+    }
+
+    .tree-root {
+      margin-left: 0;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Hierarchy Utils Test Suite</h1>
+    <p class="subtitle">Testing all functions in hierarchy-utils.js for Story 4.5</p>
+
+    <div id="test-results"></div>
+    
+    <div class="summary" id="summary"></div>
+  </div>
+
+  <script src="hierarchy-utils.js"></script>
+  <script>
+    // Test data
+    const flatIssues = [
+      { id: 1, title: 'Epic: Frontend Modernization', status: 'In Progress', parent_issue_id: null, is_epic: true },
+      { id: 2, title: 'Task: UI Redesign', status: 'Done', parent_issue_id: 1 },
+      { id: 3, title: 'Task: Shopping Cart', status: 'In Progress', parent_issue_id: 1 },
+      { id: 4, title: 'Subtask: Product Page', status: 'Done', parent_issue_id: 2 },
+      { id: 5, title: 'Subtask: Checkout Flow', status: 'To Do', parent_issue_id: 2 },
+      { id: 6, title: 'Epic: Backend API', status: 'To Do', parent_issue_id: null, is_epic: true },
+      { id: 7, title: 'Task: REST Endpoints', status: 'To Do', parent_issue_id: 6 },
+      { id: 8, title: 'Orphan Task', status: 'To Do', parent_issue_id: 999 } // Orphan with non-existent parent
+    ];
+
+    // Test runner
+    const tests = [];
+    let passCount = 0;
+    let failCount = 0;
+
+    function addTest(name, fn) {
+      tests.push({ name, fn });
+    }
+
+    function runTests() {
+      const container = document.getElementById('test-results');
+      container.innerHTML = '';
+
+      tests.forEach(test => {
+        const section = document.createElement('div');
+        section.className = 'test-section';
+
+        const title = document.createElement('h2');
+        title.textContent = test.name;
+        section.appendChild(title);
+
+        try {
+          const result = test.fn();
+          
+          const testCase = document.createElement('div');
+          testCase.className = 'test-case';
+
+          const testTitle = document.createElement('div');
+          testTitle.className = 'test-title';
+          testTitle.innerHTML = `Test passed <span class="badge success">✓ PASS</span>`;
+          testCase.appendChild(testTitle);
+
+          if (result.output) {
+            const pre = document.createElement('pre');
+            pre.textContent = result.output;
+            testCase.appendChild(pre);
+          }
+
+          if (result.visualization) {
+            const viz = document.createElement('div');
+            viz.className = 'tree-visualization';
+            viz.innerHTML = result.visualization;
+            testCase.appendChild(viz);
+          }
+
+          section.appendChild(testCase);
+          passCount++;
+
+        } catch (error) {
+          const testCase = document.createElement('div');
+          testCase.className = 'test-case error';
+
+          const testTitle = document.createElement('div');
+          testTitle.className = 'test-title';
+          testTitle.innerHTML = `Test failed <span class="badge error">✗ FAIL</span>`;
+          testCase.appendChild(testTitle);
+
+          const pre = document.createElement('pre');
+          pre.textContent = error.message + '\n\n' + error.stack;
+          testCase.appendChild(pre);
+
+          section.appendChild(testCase);
+          failCount++;
+        }
+
+        container.appendChild(section);
+      });
+
+      // Update summary
+      const summary = document.getElementById('summary');
+      summary.innerHTML = `
+        <h3>Test Summary</h3>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-value">${tests.length}</div>
+            <div class="stat-label">Total Tests</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" style="color: #10b981">${passCount}</div>
+            <div class="stat-label">Passed</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" style="color: #ef4444">${failCount}</div>
+            <div class="stat-label">Failed</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">${Math.round((passCount / tests.length) * 100)}%</div>
+            <div class="stat-label">Success Rate</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Define tests
+    addTest('1. buildHierarchyTree()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      
+      if (!Array.isArray(tree)) {
+        throw new Error('Expected tree to be an array');
+      }
+
+      // Should have 3 roots: Epic 1, Epic 6, and Orphan 8
+      if (tree.length !== 3) {
+        throw new Error(`Expected 3 root issues, got ${tree.length}`);
+      }
+
+      const epic1 = tree.find(i => i.id === 1);
+      if (!epic1 || epic1.children.length !== 2) {
+        throw new Error('Epic 1 should have 2 children');
+      }
+
+      const task2 = epic1.children.find(i => i.id === 2);
+      if (!task2 || task2.children.length !== 2) {
+        throw new Error('Task 2 should have 2 children');
+      }
+
+      // Visualize tree
+      const visualization = `
+<div class="tree-root">└─ Epic 1: Frontend Modernization (2 children)</div>
+<div class="tree-node">├─ Task 2: UI Redesign (2 children)</div>
+<div class="tree-node" style="margin-left: 40px">├─ Subtask 4: Product Page</div>
+<div class="tree-node" style="margin-left: 40px">└─ Subtask 5: Checkout Flow</div>
+<div class="tree-node">└─ Task 3: Shopping Cart</div>
+<div class="tree-root">└─ Epic 6: Backend API (1 child)</div>
+<div class="tree-node">└─ Task 7: REST Endpoints</div>
+<div class="tree-root">└─ Orphan 8: Orphan Task (no parent found)</div>
+      `;
+
+      return {
+        output: JSON.stringify(tree, null, 2),
+        visualization
+      };
+    });
+
+    addTest('2. flattenHierarchyTree()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      const flat = HierarchyUtils.flattenHierarchyTree(tree);
+
+      if (!Array.isArray(flat)) {
+        throw new Error('Expected flat to be an array');
+      }
+
+      if (flat.length !== 8) {
+        throw new Error(`Expected 8 issues, got ${flat.length}`);
+      }
+
+      // Check hierarchy levels
+      const issue4 = flat.find(i => i.id === 4);
+      if (issue4.hierarchy_level !== 2) {
+        throw new Error(`Expected issue 4 to have hierarchy_level 2, got ${issue4.hierarchy_level}`);
+      }
+
+      const output = flat.map(i => 
+        `${'  '.repeat(i.hierarchy_level)}[Level ${i.hierarchy_level}] #${i.id} - ${i.title}`
+      ).join('\n');
+
+      return { output };
+    });
+
+    addTest('3. findIssueInTree()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      
+      const issue4 = HierarchyUtils.findIssueInTree(tree, 4);
+      if (!issue4 || issue4.id !== 4) {
+        throw new Error('Failed to find issue 4');
+      }
+
+      const issue999 = HierarchyUtils.findIssueInTree(tree, 999);
+      if (issue999 !== null) {
+        throw new Error('Should return null for non-existent issue');
+      }
+
+      return {
+        output: `Found issue: ${JSON.stringify(issue4, null, 2)}\n\nNon-existent issue: ${issue999}`
+      };
+    });
+
+    addTest('4. calculateChildProgress()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      const epic1 = tree.find(i => i.id === 1);
+      
+      const progress = HierarchyUtils.calculateChildProgress(epic1);
+
+      if (typeof progress.total !== 'number' || typeof progress.completed !== 'number') {
+        throw new Error('Progress should have total and completed numbers');
+      }
+
+      // Epic 1 has 4 descendants: Task 2 (Done), Task 3 (In Progress), Subtask 4 (Done), Subtask 5 (To Do)
+      // Completed: Task 2, Subtask 4 = 2
+      // Total: 4
+      if (progress.total !== 4) {
+        throw new Error(`Expected total 4, got ${progress.total}`);
+      }
+
+      if (progress.completed !== 2) {
+        throw new Error(`Expected completed 2, got ${progress.completed}`);
+      }
+
+      if (progress.percentage !== 50) {
+        throw new Error(`Expected percentage 50, got ${progress.percentage}`);
+      }
+
+      return {
+        output: JSON.stringify(progress, null, 2)
+      };
+    });
+
+    addTest('5. getIssueDepth()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      const flat = HierarchyUtils.flattenHierarchyTree(tree);
+
+      const issue1 = flat.find(i => i.id === 1);
+      const depth1 = HierarchyUtils.getIssueDepth(issue1);
+
+      const issue4 = flat.find(i => i.id === 4);
+      const depth4 = HierarchyUtils.getIssueDepth(issue4);
+
+      if (depth1 !== 0) {
+        throw new Error(`Expected depth 0 for root issue, got ${depth1}`);
+      }
+
+      if (depth4 !== 2) {
+        throw new Error(`Expected depth 2 for nested issue, got ${depth4}`);
+      }
+
+      return {
+        output: `Issue #1 depth: ${depth1}\nIssue #4 depth: ${depth4}`
+      };
+    });
+
+    addTest('6. getAllDescendants()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      const epic1 = tree.find(i => i.id === 1);
+      
+      const descendants = HierarchyUtils.getAllDescendants(epic1);
+
+      if (!Array.isArray(descendants)) {
+        throw new Error('Expected descendants to be an array');
+      }
+
+      // Epic 1 should have 4 descendants
+      if (descendants.length !== 4) {
+        throw new Error(`Expected 4 descendants, got ${descendants.length}`);
+      }
+
+      const ids = descendants.map(d => d.id).sort();
+      const expected = [2, 3, 4, 5].sort();
+      
+      if (JSON.stringify(ids) !== JSON.stringify(expected)) {
+        throw new Error(`Expected descendants [2,3,4,5], got [${ids}]`);
+      }
+
+      return {
+        output: descendants.map(d => `#${d.id} - ${d.title}`).join('\n')
+      };
+    });
+
+    addTest('7. findParentIssue()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      
+      const parent = HierarchyUtils.findParentIssue(tree, 4);
+      
+      if (!parent || parent.id !== 2) {
+        throw new Error('Parent of issue 4 should be issue 2');
+      }
+
+      const noParent = HierarchyUtils.findParentIssue(tree, 1);
+      if (noParent !== null) {
+        throw new Error('Root issue should have no parent');
+      }
+
+      return {
+        output: `Parent of issue 4: #${parent.id} - ${parent.title}\nParent of root issue 1: ${noParent}`
+      };
+    });
+
+    addTest('8. getRootIssue()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      
+      const root = HierarchyUtils.getRootIssue(tree, 4);
+      
+      if (!root || root.id !== 1) {
+        throw new Error('Root of issue 4 should be issue 1');
+      }
+
+      return {
+        output: `Root of issue 4: #${root.id} - ${root.title}`
+      };
+    });
+
+    addTest('9. filterTree()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      
+      const doneIssues = HierarchyUtils.filterTree(tree, issue => issue.status === 'Done');
+      
+      const flat = HierarchyUtils.flattenHierarchyTree(doneIssues);
+      const doneIds = flat.filter(i => i.status === 'Done').map(i => i.id).sort();
+
+      if (JSON.stringify(doneIds) !== JSON.stringify([2, 4])) {
+        throw new Error(`Expected Done issues [2,4], got [${doneIds}]`);
+      }
+
+      return {
+        output: flat.map(i => `#${i.id} - ${i.title} (${i.status})`).join('\n')
+      };
+    });
+
+    addTest('10. countIssuesInTree()', () => {
+      const tree = HierarchyUtils.buildHierarchyTree(flatIssues);
+      
+      const count = HierarchyUtils.countIssuesInTree(tree);
+      
+      if (count !== 8) {
+        throw new Error(`Expected count 8, got ${count}`);
+      }
+
+      return {
+        output: `Total issues in tree: ${count}`
+      };
+    });
+
+    // Run all tests
+    runTests();
+  </script>
+</body>
+</html>
