@@ -40,8 +40,9 @@
    ============================================ */
 
 .gantt-expand-btn {
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
+  cursor: pointer !important;
+  pointer-events: all !important;
+  transition: none; /* Prevent transition flickering */
 }
 
 .gantt-expand-btn circle {
@@ -49,12 +50,13 @@
   fill: #ffffff;
   stroke: var(--gantt-border, #e1e4e8);
   stroke-width: 2px;
-  transition: fill 0.15s ease-in-out, stroke 0.15s ease-in-out;
+  pointer-events: none !important;
+  transition: fill 0.15s ease, transform 0.15s ease;
 }
 
 .gantt-expand-btn:hover circle {
-  fill: #f0f4ff;
-  stroke: #4f46e5;
+  fill: #f6f8fa;
+  transform: scale(1.1);
 }
 
 .gantt-expand-btn:active circle {
@@ -67,7 +69,8 @@
   font-family: 'Font Awesome 6 Free';
   font-weight: 900;
   font-size: 8px;
-  pointer-events: none;
+  pointer-events: none !important; /* Never intercept clicks */
+  user-select: none;
   text-anchor: middle;
   transition: transform 0.2s ease-in-out;
 }
@@ -287,6 +290,16 @@
 
 .gantt-hierarchy-controls {
   z-index: 2; /* Above bars */
+  pointer-events: none;
+}
+
+.gantt-hierarchy-controls > * {
+  pointer-events: auto;
+}
+
+/* Prevent parent elements from interfering */
+.bar-wrapper {
+  pointer-events: auto;
 }
 
 /* Dependency highlighting: Preserve when hierarchy active */

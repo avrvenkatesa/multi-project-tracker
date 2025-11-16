@@ -4,6 +4,7 @@ class HierarchicalGanttEnhancer {
     this.container = ganttInstance.$svg;
     this.tasks = [];
     this.expanded = new Set();
+    this.expandCollapseHandler = null; // Store handler reference
     this.options = {
       showEpicBadges: options.showEpicBadges !== undefined ? options.showEpicBadges : true,
       showTreeLines: options.showTreeLines !== undefined ? options.showTreeLines : true,
@@ -33,6 +34,29 @@ class HierarchicalGanttEnhancer {
       if (this.options.showTreeLines) {
         this.addIndentationMarkers();
       }
+      
+      // Remove old event listener
+      if (this.expandCollapseHandler) {
+        this.container.removeEventListener('click', this.expandCollapseHandler);
+      }
+      
+      // Add single delegated click handler
+      this.expandCollapseHandler = (e) => {
+        // Find if click was on expand button
+        const expandBtn = e.target.closest('.gantt-expand-btn');
+        if (expandBtn) {
+          e.stopPropagation(); // Prevent Frappe Gantt from handling
+          e.preventDefault();
+          
+          const taskId = expandBtn.getAttribute('data-task-id');
+          if (taskId) {
+            console.log('Toggle expand for task:', taskId);
+            this.toggleExpand(taskId);
+          }
+        }
+      };
+      
+      this.container.addEventListener('click', this.expandCollapseHandler, true); // Use capture phase
     }, 100);
     
     return visibleTasks;
@@ -163,51 +187,65 @@ class HierarchicalGanttEnhancer {
     if (!this.container) return;
     
     const svg = this.container;
-    
-    this.tasks.forEach(task => {
+    const parentTasks = this.tasks.filter(task => {
       const taskId = `${task.item_type}-${task.item_id}`;
       const hasChildren = this.tasks.some(t => 
         t.parent_issue_id === task.item_id && t.item_type === 'issue'
       );
-      
-      if (!hasChildren) return;
-      
+      return hasChildren;
+    });
+    
+    parentTasks.forEach(task => {
+      const taskId = `${task.item_type}-${task.item_id}`;
       const barWrapper = svg.querySelector(`.bar-wrapper[data-id="${taskId}"]`);
       if (!barWrapper) return;
       
       const bar = barWrapper.querySelector('.bar');
       if (!bar) return;
       
-      const bbox = bar.getBBox();
+      const barBox = bar.getBBox();
       const isExpanded = this.expanded.has(taskId);
       
-      let buttonGroup = barWrapper.querySelector('.gantt-expand-btn');
-      if (!buttonGroup) {
-        buttonGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        buttonGroup.setAttribute('class', 'gantt-expand-btn');
-        barWrapper.appendChild(buttonGroup);
-      } else {
-        buttonGroup.innerHTML = '';
+      // Remove old button if exists
+      const oldButton = barWrapper.querySelector('.gantt-expand-btn');
+      if (oldButton) {
+        oldButton.remove();
       }
       
-      const buttonCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      buttonCircle.setAttribute('cx', bbox.x - 12);
-      buttonCircle.setAttribute('cy', bbox.y + bbox.height / 2);
-      buttonGroup.appendChild(buttonCircle);
+      // Create button group
+      const buttonGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      buttonGroup.classList.add('gantt-expand-btn');
+      buttonGroup.setAttribute('data-task-id', taskId); // Important for delegation
+      buttonGroup.style.cursor = 'pointer';
+      buttonGroup.style.pointerEvents = 'all'; // Allow clicking
       
+      // Create circle
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', barBox.x - 15);
+      circle.setAttribute('cy', barBox.y + barBox.height / 2);
+      circle.setAttribute('r', this.options.allowCollapse ? 8 : 8);
+      circle.setAttribute('fill', 'white');
+      circle.setAttribute('stroke', '#e1e4e8');
+      circle.setAttribute('stroke-width', '2');
+      circle.style.pointerEvents = 'none'; // Let parent handle events
+      
+      // Create chevron icon
       const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      chevron.setAttribute('class', `gantt-expand-icon ${isExpanded ? 'expanded' : 'collapsed'}`);
-      chevron.setAttribute('x', bbox.x - 12);
-      chevron.setAttribute('y', bbox.y + bbox.height / 2 + 3.5);
+      chevron.setAttribute('x', barBox.x - 15);
+      chevron.setAttribute('y', barBox.y + barBox.height / 2 + 3.5);
+      chevron.setAttribute('text-anchor', 'middle');
       chevron.setAttribute('font-family', 'Font Awesome 6 Free');
       chevron.setAttribute('font-weight', '900');
+      chevron.setAttribute('font-size', '8');
+      chevron.setAttribute('fill', '#6366f1');
+      chevron.classList.add('gantt-expand-icon');
+      chevron.classList.add(isExpanded ? 'expanded' : 'collapsed');
       chevron.textContent = isExpanded ? '\uf078' : '\uf054';
-      buttonGroup.appendChild(chevron);
+      chevron.style.pointerEvents = 'none'; // Let parent handle events
       
-      buttonGroup.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.toggleExpand(taskId);
-      });
+      buttonGroup.appendChild(circle);
+      buttonGroup.appendChild(chevron);
+      barWrapper.appendChild(buttonGroup);
     });
   }
 
@@ -333,18 +371,41 @@ class HierarchicalGanttEnhancer {
   }
 
   expandAll() {
-    const allParentIds = this.tasks
-      .filter(task => this.tasks.some(t => 
-        t.parent_issue_id === task.item_id && t.item_type === 'issue'
-      ))
-      .map(task => `${task.item_type}-${task.item_id}`);
+    console.log('📂 Expanding all parent tasks');
     
-    this.expanded = new Set(allParentIds);
+    // Find all parent tasks
+    const parentTasks = this.tasks.filter(task => {
+      const hasChildren = this.tasks.some(t => 
+        t.parent_issue_id === task.item_id && t.item_type === 'issue'
+      );
+      return hasChildren;
+    });
+    
+    console.log('Found', parentTasks.length, 'parent tasks');
+    
+    // Add all to expanded Set
+    parentTasks.forEach(task => {
+      const taskId = `${task.item_type}-${task.item_id}`;
+      this.expanded.add(taskId);
+    });
+    
+    console.log('Expanded Set size:', this.expanded.size);
+    
+    // Re-render
+    this.enhance(this.tasks);
     this.saveState();
   }
 
   collapseAll() {
+    console.log('📁 Collapsing all parent tasks');
+    
+    // Clear expanded Set
     this.expanded.clear();
+    
+    console.log('Expanded Set size:', this.expanded.size);
+    
+    // Re-render
+    this.enhance(this.tasks);
     this.saveState();
   }
 
@@ -363,6 +424,12 @@ class HierarchicalGanttEnhancer {
   }
 
   destroy() {
+    // Remove event listener
+    if (this.expandCollapseHandler) {
+      this.container.removeEventListener('click', this.expandCollapseHandler);
+      this.expandCollapseHandler = null;
+    }
+    
     if (this.container) {
       const elementsToRemove = this.container.querySelectorAll(
         '.gantt-hierarchy-controls, .gantt-expand-btn, .gantt-tree-lines-group'

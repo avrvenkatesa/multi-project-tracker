@@ -9,6 +9,7 @@ let allItems = [];
 let filteredItems = [];
 let selectedItemIds = new Set();
 let projectTeamMembers = [];
+let currentGanttEnhancer = null; // Global reference to current Gantt enhancer
 
 // ============================================
 // INITIALIZATION
@@ -2591,16 +2592,17 @@ async function renderGanttChart(tasks, schedule) {
           }
         });
         
-        // Store enhancer globally for hierarchy controls
-        window.ganttEnhancer = enhancer;
-        
         // Get visible tasks based on expand/collapse state
         const visibleTasks = enhancer.enhance(ganttTasks);
         
         // Refresh Gantt with visible tasks only
         gantt.refresh(visibleTasks);
         
-        console.log('✅ Hierarchy enhancement applied to Gantt chart');
+        // Store enhancer globally for hierarchy controls
+        currentGanttEnhancer = enhancer;
+        window.currentGanttEnhancer = enhancer; // For debugging
+        
+        console.log('✅ Hierarchy enhancer initialized and stored globally');
       } catch (error) {
         console.error('Failed to enhance Gantt with hierarchy:', error);
         // Continue without hierarchy - non-blocking
@@ -2999,55 +3001,58 @@ function bindCompactToggle() {
     });
   }
   
-  // Hierarchy Controls Event Listeners
-  const hierarchyToggle = document.getElementById('show-hierarchy-toggle');
-  if (hierarchyToggle && !hierarchyToggle.dataset.bound) {
-    hierarchyToggle.dataset.bound = 'true';
-    hierarchyToggle.addEventListener('change', (e) => {
-      if (window.ganttEnhancer) {
-        const container = document.getElementById('gantt-container');
-        const svg = container?.querySelector('svg');
-        
+  // ============================================
+  // Hierarchy control event listeners
+  // ============================================
+  
+  // Remove old listeners by cloning elements (removes all listeners)
+  const expandAllBtn = document.getElementById('expand-all-btn');
+  const collapseAllBtn = document.getElementById('collapse-all-btn');
+  const showHierarchyToggle = document.getElementById('show-hierarchy-toggle');
+  
+  if (expandAllBtn) {
+    const newExpandBtn = expandAllBtn.cloneNode(true);
+    expandAllBtn.parentNode.replaceChild(newExpandBtn, expandAllBtn);
+    
+    document.getElementById('expand-all-btn').addEventListener('click', () => {
+      console.log('🔽 Expand All button clicked');
+      if (currentGanttEnhancer && typeof currentGanttEnhancer.expandAll === 'function') {
+        currentGanttEnhancer.expandAll();
+      } else {
+        console.error('❌ expandAll method not available:', currentGanttEnhancer);
+      }
+    });
+  }
+  
+  if (collapseAllBtn) {
+    const newCollapseBtn = collapseAllBtn.cloneNode(true);
+    collapseAllBtn.parentNode.replaceChild(newCollapseBtn, collapseAllBtn);
+    
+    document.getElementById('collapse-all-btn').addEventListener('click', () => {
+      console.log('▶️ Collapse All button clicked');
+      if (currentGanttEnhancer && typeof currentGanttEnhancer.collapseAll === 'function') {
+        currentGanttEnhancer.collapseAll();
+      } else {
+        console.error('❌ collapseAll method not available:', currentGanttEnhancer);
+      }
+    });
+  }
+  
+  if (showHierarchyToggle) {
+    const newToggle = showHierarchyToggle.cloneNode(true);
+    showHierarchyToggle.parentNode.replaceChild(newToggle, showHierarchyToggle);
+    
+    document.getElementById('show-hierarchy-toggle').checked = true; // Default checked
+    document.getElementById('show-hierarchy-toggle').addEventListener('change', (e) => {
+      console.log('🔀 Hierarchy toggle:', e.target.checked);
+      if (currentGanttEnhancer) {
         if (e.target.checked) {
-          // Re-enable hierarchy features
           const ganttTasks = lastGanttContext.sortedTasks || [];
           if (ganttTasks.length > 0) {
-            window.ganttEnhancer.enhance(ganttTasks);
+            currentGanttEnhancer.enhance(ganttTasks);
           }
         } else {
-          // Hide hierarchy elements
-          if (svg) {
-            const hierarchyElements = svg.querySelectorAll('.gantt-hierarchy-controls, .gantt-expand-btn, .gantt-tree-lines-group');
-            hierarchyElements.forEach(el => el.style.display = 'none');
-          }
-        }
-      }
-    });
-  }
-  
-  const expandAllBtn = document.getElementById('expand-all-btn');
-  if (expandAllBtn && !expandAllBtn.dataset.bound) {
-    expandAllBtn.dataset.bound = 'true';
-    expandAllBtn.addEventListener('click', async () => {
-      if (window.ganttEnhancer) {
-        window.ganttEnhancer.expandAll();
-        // Re-render Gantt with updated expand state
-        if (lastGanttContext.tasks && lastGanttContext.schedule) {
-          await renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
-        }
-      }
-    });
-  }
-  
-  const collapseAllBtn = document.getElementById('collapse-all-btn');
-  if (collapseAllBtn && !collapseAllBtn.dataset.bound) {
-    collapseAllBtn.dataset.bound = 'true';
-    collapseAllBtn.addEventListener('click', async () => {
-      if (window.ganttEnhancer) {
-        window.ganttEnhancer.collapseAll();
-        // Re-render Gantt with updated collapse state
-        if (lastGanttContext.tasks && lastGanttContext.schedule) {
-          await renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+          currentGanttEnhancer.destroy();
         }
       }
     });
