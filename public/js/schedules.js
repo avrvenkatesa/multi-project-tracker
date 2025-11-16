@@ -2350,7 +2350,7 @@ function closeDetailModal() {
   document.getElementById('schedule-detail-modal').classList.add('hidden');
 }
 
-function switchDetailTab(tabName, tasks, schedule) {
+async function switchDetailTab(tabName, tasks, schedule) {
   // Update tab buttons
   document.querySelectorAll('.detail-tab-button').forEach(btn => {
     btn.classList.remove('active');
@@ -2365,7 +2365,7 @@ function switchDetailTab(tabName, tasks, schedule) {
 
   // If switching to Gantt tab, render the Gantt chart
   if (tabName === 'gantt') {
-    renderGanttChart(tasks, schedule);
+    await renderGanttChart(tasks, schedule);
   }
 }
 
@@ -2406,12 +2406,32 @@ function sortTasksByAssignee(tasks) {
   return { sortedTasks, metadata };
 }
 
-function renderGanttChart(tasks, schedule) {
+async function renderGanttChart(tasks, schedule) {
   // Sort tasks by assignee
   const { sortedTasks, metadata } = sortTasksByAssignee(tasks);
   
+  // ============================================
+  // HIERARCHY INTEGRATION: Fetch hierarchy data
+  // ============================================
+  let hierarchyData = [];
+  try {
+    const hierarchyResponse = await fetch(`/api/projects/${schedule.project_id}/hierarchy`);
+    if (hierarchyResponse.ok) {
+      hierarchyData = await hierarchyResponse.json();
+    }
+  } catch (error) {
+    console.warn('Could not fetch hierarchy data:', error);
+    // Continue without hierarchy - non-blocking
+  }
+  
+  // Build hierarchy map for quick lookup
+  const hierarchyMap = new Map();
+  hierarchyData.forEach(item => {
+    hierarchyMap.set(`${item.item_type}-${item.item_id}`, item);
+  });
+  
   // Cache context for compact toggle re-renders (include metadata for swim lanes)
-  lastGanttContext = { tasks, schedule, sortedTasks, metadata };
+  lastGanttContext = { tasks, schedule, sortedTasks, metadata, hierarchyData };
   
   const ganttContainer = document.getElementById('gantt-container');
   ganttContainer.innerHTML = ''; // Clear previous chart to avoid stacking
@@ -2427,10 +2447,15 @@ function renderGanttChart(tasks, schedule) {
     ganttContainer.classList.remove('gantt-expanded');
   }
 
-  // Prepare Gantt data from sorted tasks
+  // ============================================
+  // HIERARCHY INTEGRATION: Merge hierarchy data with tasks
+  // ============================================
   const ganttTasks = sortedTasks.map(task => {
+    const taskId = `${task.item_type}-${task.item_id}`;
+    const hierarchyInfo = hierarchyMap.get(taskId);
+    
     return {
-      id: `${task.item_type}-${task.item_id}`,
+      id: taskId,
       name: task.title,
       start: task.scheduled_start,
       end: task.scheduled_end,
@@ -2439,7 +2464,12 @@ function renderGanttChart(tasks, schedule) {
         ? task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(',') 
         : '',
       custom_class: task.is_critical_path ? 'bar-critical' : '',
-      _assignee: (task.assignee || 'Unassigned').toLowerCase() // Store for data attribute injection
+      _assignee: (task.assignee || 'Unassigned').toLowerCase(), // Store for data attribute injection
+      // Add hierarchy fields
+      item_type: task.item_type,
+      item_id: task.item_id,
+      parent_issue_id: hierarchyInfo?.parent_issue_id || null,
+      hierarchy_level: hierarchyInfo?.hierarchy_level || 0
     };
   });
 
@@ -2527,6 +2557,12 @@ function renderGanttChart(tasks, schedule) {
         <stop offset="0%" style="stop-color:#f0d583;stop-opacity:1" />
         <stop offset="100%" style="stop-color:#e8c555;stop-opacity:1" />
       `);
+      
+      // Epic gradient for hierarchy (indigo theme)
+      createGradient('gantt-epic-gradient', `
+        <stop offset="0%" style="stop-color:#818cf8;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#6366f1;stop-opacity:1" />
+      `);
     }
 
     // Inject data-assignee attributes onto bar-wrapper elements
@@ -2538,6 +2574,40 @@ function renderGanttChart(tasks, schedule) {
         }
       }
     });
+
+    // ============================================
+    // HIERARCHY INTEGRATION: Enhance Gantt with hierarchy features
+    // ============================================
+    if (window.HierarchicalGanttEnhancer && hierarchyData.length > 0) {
+      try {
+        const enhancer = new HierarchicalGanttEnhancer(gantt, {
+          showEpicBadges: true,
+          showTreeLines: true,
+          indentWidth: 20,
+          allowCollapse: true,
+          onToggle: (taskId, isExpanded) => {
+            // Re-render on expand/collapse
+            console.log(`Task ${taskId} ${isExpanded ? 'expanded' : 'collapsed'}`);
+          }
+        });
+        
+        // Store enhancer globally for hierarchy controls
+        window.ganttEnhancer = enhancer;
+        
+        // Get visible tasks based on expand/collapse state
+        const visibleTasks = enhancer.enhance(ganttTasks);
+        
+        // Refresh Gantt with visible tasks only
+        gantt.refresh(visibleTasks);
+        
+        console.log('✅ Hierarchy enhancement applied to Gantt chart');
+      } catch (error) {
+        console.error('Failed to enhance Gantt with hierarchy:', error);
+        // Continue without hierarchy - non-blocking
+      }
+    } else {
+      console.log('ℹ️ Hierarchy enhancement skipped (no data or enhancer not loaded)');
+    }
 
     // Build swim lanes (skip if only one assignee group)
     if (metadata.length > 1) {
@@ -2909,7 +2979,7 @@ function bindCompactToggle() {
   const compactToggle = document.getElementById('compact-view-toggle');
   if (compactToggle && !compactToggle.dataset.bound) {
     compactToggle.dataset.bound = 'true'; // Prevent duplicate bindings
-    compactToggle.addEventListener('click', () => {
+    compactToggle.addEventListener('click', async () => {
       const isCompact = compactToggle.dataset.compact === 'true';
       const nextState = !isCompact;
       
@@ -2924,7 +2994,7 @@ function bindCompactToggle() {
       
       // Re-render Gantt with cached context
       if (lastGanttContext.tasks && lastGanttContext.schedule) {
-        renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+        await renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
       }
     });
   }
@@ -2936,11 +3006,14 @@ function bindCompactToggle() {
     hierarchyToggle.addEventListener('change', (e) => {
       if (window.ganttEnhancer) {
         const container = document.getElementById('gantt-container');
-        const svg = container.querySelector('svg');
+        const svg = container?.querySelector('svg');
         
         if (e.target.checked) {
           // Re-enable hierarchy features
-          window.ganttEnhancer.enhance(lastGanttContext.tasks || []);
+          const ganttTasks = lastGanttContext.sortedTasks || [];
+          if (ganttTasks.length > 0) {
+            window.ganttEnhancer.enhance(ganttTasks);
+          }
         } else {
           // Hide hierarchy elements
           if (svg) {
@@ -2955,12 +3028,12 @@ function bindCompactToggle() {
   const expandAllBtn = document.getElementById('expand-all-btn');
   if (expandAllBtn && !expandAllBtn.dataset.bound) {
     expandAllBtn.dataset.bound = 'true';
-    expandAllBtn.addEventListener('click', () => {
+    expandAllBtn.addEventListener('click', async () => {
       if (window.ganttEnhancer) {
         window.ganttEnhancer.expandAll();
         // Re-render Gantt with updated expand state
         if (lastGanttContext.tasks && lastGanttContext.schedule) {
-          renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+          await renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
         }
       }
     });
@@ -2969,12 +3042,12 @@ function bindCompactToggle() {
   const collapseAllBtn = document.getElementById('collapse-all-btn');
   if (collapseAllBtn && !collapseAllBtn.dataset.bound) {
     collapseAllBtn.dataset.bound = 'true';
-    collapseAllBtn.addEventListener('click', () => {
+    collapseAllBtn.addEventListener('click', async () => {
       if (window.ganttEnhancer) {
         window.ganttEnhancer.collapseAll();
         // Re-render Gantt with updated collapse state
         if (lastGanttContext.tasks && lastGanttContext.schedule) {
-          renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+          await renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
         }
       }
     });
