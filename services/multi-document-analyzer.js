@@ -703,7 +703,81 @@ class MultiDocumentAnalyzer {
         creationResult.errors.forEach(err => console.log(`   • ${err}`));
       }
 
-      // Step 6: Return comprehensive result
+      // Step 6: Auto-generate schedule if issues were created
+      const scheduleResult = { created: false, scheduleId: null, message: 'Not created' };
+      if (creationResult.created.length > 0 && options.autoSchedule !== false) {
+        try {
+          console.log('📅 [Hierarchy Analyzer] Auto-generating project schedule...');
+          
+          // Fetch effort estimates and dependencies
+          const issueIds = creationResult.created.map(i => i.id);
+          const issuesData = await pool.query(
+            `SELECT id, title, assignee, ai_effort_estimate_hours, ai_estimate_confidence 
+             FROM issues WHERE id = ANY($1)`,
+            [issueIds]
+          );
+
+          // Fetch dependencies
+          const depsData = await pool.query(
+            `SELECT source_id, target_id, relationship_type
+             FROM issue_relationships
+             WHERE (source_id = ANY($1) OR target_id = ANY($1))
+             AND source_type = 'issue' AND target_type = 'issue'`,
+            [issueIds]
+          );
+
+          // Build dependency map
+          const dependencyMap = new Map();
+          for (const dep of depsData.rows) {
+            if (dep.relationship_type === 'blocks') {
+              const dependent = `issue:${dep.target_id}`;
+              const prerequisite = `issue:${dep.source_id}`;
+              if (!dependencyMap.has(dependent)) dependencyMap.set(dependent, []);
+              dependencyMap.get(dependent).push(prerequisite);
+            } else if (dep.relationship_type === 'depends_on') {
+              const dependent = `issue:${dep.source_id}`;
+              const prerequisite = `issue:${dep.target_id}`;
+              if (!dependencyMap.has(dependent)) dependencyMap.set(dependent, []);
+              dependencyMap.get(dependent).push(prerequisite);
+            }
+          }
+
+          // Prepare schedule items
+          const scheduleItems = issuesData.rows.map(issue => ({
+            type: 'issue',
+            id: issue.id,
+            title: issue.title,
+            assignee: issue.assignee || 'Unassigned',
+            estimate: parseFloat(issue.ai_effort_estimate_hours) || 0,
+            estimateSource: 'ai',
+            dependencies: dependencyMap.get(`issue:${issue.id}`) || []
+          }));
+
+          // Create schedule
+          const startDate = options.projectStartDate || new Date().toISOString().split('T')[0];
+          const result = await schedulerService.createScheduleFromIssues({
+            projectId,
+            name: 'AI-Generated Schedule (Hierarchy Import)',
+            items: scheduleItems,
+            startDate,
+            hoursPerDay: 8,
+            includeWeekends: false,
+            userId: options.userId,
+            notes: `Auto-generated from ${documents.length} hierarchical document(s)`
+          });
+
+          scheduleResult.created = true;
+          scheduleResult.scheduleId = result.scheduleId;
+          scheduleResult.message = `Schedule created with ${result.totalTasks} tasks`;
+          
+          console.log(`✅ [Hierarchy Analyzer] Schedule #${result.scheduleId} auto-created with ${result.totalTasks} tasks`);
+        } catch (scheduleError) {
+          console.error(`⚠️  [Hierarchy Analyzer] Schedule auto-creation failed: ${scheduleError.message}`);
+          scheduleResult.message = `Schedule creation failed: ${scheduleError.message}`;
+        }
+      }
+
+      // Step 7: Return comprehensive result
       return {
         success: true,
         hierarchy,
@@ -715,6 +789,7 @@ class MultiDocumentAnalyzer {
           epicsList: creationResult.epics,
           tasksList: creationResult.tasks
         },
+        schedule: scheduleResult,
         validation: {
           valid: validation.valid,
           errors: validation.errors,

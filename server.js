@@ -13548,35 +13548,33 @@ app.post('/api/projects/:projectId/analyze-documents', authenticateToken, async 
       classification: doc.classification || 'Document'
     }));
     
-    // Call multi-document analyzer (full workflow with schedules)
-    const analysisResult = await multiDocAnalyzer.analyzeMultipleDocuments(
+    // Call multi-document analyzer (hierarchy extraction with automatic schedule)
+    const analysisResult = await multiDocAnalyzer.analyzeAndCreateHierarchy(
       formattedDocs,
+      id,
       {
-        projectId: id,
         userId: req.user.id,
         projectStartDate: options.startDate || new Date().toISOString().split('T')[0],
-        progressCallback: null
+        includeEffort: options.includeEffort !== false,
+        projectContext: options.projectContext || `Project: ${projectName}`,
+        autoSchedule: true
       }
     );
     
     // Return analysis results
     if (analysisResult.success) {
-      console.log(`[ANALYZE DOCS] Success! Created ${analysisResult.issues?.created || 0} issues`);
+      console.log(`[ANALYZE DOCS] Success! Created ${analysisResult.created?.total || 0} hierarchical issues`);
       const response = {
         success: true,
-        workstreams: analysisResult.workstreams,
-        issues: analysisResult.issues,
-        timeline: analysisResult.timeline,
-        dependencies: analysisResult.dependencies,
+        hierarchy: analysisResult.hierarchy,
+        created: analysisResult.created,
         schedule: analysisResult.schedule,
-        aiCost: analysisResult.totalCost,
-        message: `Successfully analyzed ${documents.length} document(s) and created ${analysisResult.issues?.created || 0} issues with automatic schedule`
+        validation: analysisResult.validation,
+        extraction: analysisResult.extraction,
+        creationErrors: analysisResult.creationErrors || [],
+        aiCost: analysisResult.extraction?.metadata?.cost || 0,
+        message: `Successfully analyzed ${documents.length} document(s) and created ${analysisResult.created?.total || 0} hierarchical issues with automatic schedule`
       };
-      
-      // Add warnings if present
-      if (analysisResult.warnings && analysisResult.warnings.length > 0) {
-        response.warnings = analysisResult.warnings;
-      }
       
       res.json(response);
     } else {
