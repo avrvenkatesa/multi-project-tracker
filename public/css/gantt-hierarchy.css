@@ -1,0 +1,279 @@
+/**
+ * Gantt Hierarchy Styles
+ * Story 4.6 - Hierarchical Gantt Chart Enhancement
+ * 
+ * Styles for hierarchical features added to Frappe Gantt charts
+ * including epic badges, expand/collapse buttons, and tree lines.
+ */
+
+/* ============================================
+   EPIC BADGES
+   ============================================ */
+
+.gantt-epic-bar {
+  /* Container for epic-specific enhancements */
+}
+
+.epic-badge-group {
+  /* Badge positioned on epic task bars */
+  pointer-events: none;
+}
+
+.epic-badge-group rect {
+  /* Badge background */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.epic-badge-group text {
+  /* Badge text */
+  user-select: none;
+}
+
+/* ============================================
+   EXPAND/COLLAPSE BUTTONS
+   ============================================ */
+
+.expand-collapse-group {
+  cursor: pointer;
+  transition: transform 0.15s ease-in-out;
+}
+
+.expand-collapse-group:hover {
+  transform: scale(1.1);
+}
+
+.expand-collapse-group circle {
+  transition: all 0.2s ease-in-out;
+}
+
+.expand-collapse-group:hover circle {
+  fill: #f0f4ff;
+  stroke: #4f46e5;
+  stroke-width: 2.5;
+}
+
+.expand-collapse-group:active circle {
+  fill: #e0e7ff;
+}
+
+/* ============================================
+   TREE LINES
+   ============================================ */
+
+.tree-line-group {
+  /* Container for visual hierarchy lines */
+  pointer-events: none;
+}
+
+.tree-line-group line {
+  /* Individual tree connection lines */
+  stroke-dasharray: 3, 2;
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* Highlight tree lines on parent hover */
+.gantt-epic-bar:hover ~ .tree-line-group line {
+  opacity: 1 !important;
+  stroke-width: 2;
+}
+
+/* ============================================
+   GANTT BAR ENHANCEMENTS
+   ============================================ */
+
+/* Add border to epic bars for emphasis */
+.gantt .bar-wrapper.gantt-epic-bar .bar {
+  stroke: #6366f1;
+  stroke-width: 2;
+  filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.2));
+}
+
+/* Hover state for epic bars */
+.gantt .bar-wrapper.gantt-epic-bar:hover .bar {
+  filter: drop-shadow(0 3px 6px rgba(99, 102, 241, 0.3));
+}
+
+/* ============================================
+   CHILD TASK INDICATORS
+   ============================================ */
+
+/* Subtle visual indicator for child tasks */
+.gantt .bar-wrapper[data-has-parent="true"] .bar {
+  opacity: 0.95;
+}
+
+/* ============================================
+   HIERARCHY LEVEL INDICATORS
+   ============================================ */
+
+/* Visual depth indicators (optional, can be enabled via JS) */
+.gantt .bar-wrapper[data-hierarchy-level="1"] .bar {
+  height: 85%;
+}
+
+.gantt .bar-wrapper[data-hierarchy-level="2"] .bar {
+  height: 80%;
+}
+
+.gantt .bar-wrapper[data-hierarchy-level="3"] .bar {
+  height: 75%;
+}
+
+/* ============================================
+   COMPACT VIEW ADJUSTMENTS
+   ============================================ */
+
+/* Smaller badges in compact view */
+.gantt-container.gantt-expanded .epic-badge-group rect {
+  width: 32px;
+  height: 14px;
+}
+
+.gantt-container.gantt-expanded .epic-badge-group text {
+  font-size: 8px;
+}
+
+.gantt-container.gantt-expanded .expand-collapse-group circle {
+  r: 6;
+}
+
+.gantt-container.gantt-expanded .expand-collapse-group text {
+  font-size: 7px;
+}
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+/* Focus states for keyboard navigation */
+.expand-collapse-group:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .epic-badge-group rect {
+    stroke: #000;
+    stroke-width: 1;
+  }
+  
+  .tree-line-group line {
+    stroke: #000;
+    stroke-width: 2;
+    stroke-dasharray: none;
+  }
+  
+  .expand-collapse-group circle {
+    stroke-width: 3;
+  }
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+
+/* Smaller screens - reduce badge sizes */
+@media (max-width: 768px) {
+  .epic-badge-group rect {
+    width: 28px;
+  }
+  
+  .epic-badge-group text {
+    font-size: 7px;
+  }
+  
+  .expand-collapse-group circle {
+    r: 7;
+  }
+}
+
+/* ============================================
+   ANIMATION STATES
+   ============================================ */
+
+/* Fade in animation for newly added hierarchy elements */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.epic-badge-group,
+.expand-collapse-group,
+.tree-line-group {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+/* Expand/collapse animation */
+@keyframes expand {
+  from {
+    max-height: 0;
+    opacity: 0;
+  }
+  to {
+    max-height: 1000px;
+    opacity: 1;
+  }
+}
+
+/* Chevron rotation animation (handled via JS but CSS transition) */
+.expand-collapse-group text {
+  transition: transform 0.2s ease-in-out;
+  transform-origin: center;
+}
+
+/* ============================================
+   INTEGRATION WITH EXISTING STYLES
+   ============================================ */
+
+/* Ensure hierarchy elements don't interfere with existing features */
+.lane-overlays {
+  z-index: 1;
+}
+
+.tree-line-group {
+  z-index: 0;
+}
+
+.epic-badge-group,
+.expand-collapse-group {
+  z-index: 2;
+}
+
+/* Preserve dependency highlighting */
+.gantt-container:has(.dependency-source) .epic-badge-group,
+.gantt-container:has(.dependency-source) .tree-line-group {
+  opacity: 0.5;
+}
+
+.gantt-container:has(.dependency-source) .gantt-epic-bar.dependency-source .epic-badge-group,
+.gantt-container:has(.dependency-source) .gantt-epic-bar.dependency-highlighted .epic-badge-group {
+  opacity: 1;
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+
+@media print {
+  .expand-collapse-group {
+    display: none;
+  }
+  
+  .epic-badge-group,
+  .tree-line-group {
+    opacity: 1 !important;
+  }
+  
+  .tree-line-group line {
+    stroke: #000;
+    stroke-width: 1;
+  }
+}
