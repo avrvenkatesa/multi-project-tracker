@@ -13548,29 +13548,37 @@ app.post('/api/projects/:projectId/analyze-documents', authenticateToken, async 
       classification: doc.classification || 'Document'
     }));
     
-    // Call multi-document analyzer
-    const analysisResult = await multiDocAnalyzer.analyzeAndCreateHierarchy(
+    // Call multi-document analyzer (full workflow with schedules)
+    const analysisResult = await multiDocAnalyzer.analyzeMultipleDocuments(
       formattedDocs,
-      id,
       {
+        projectId: id,
         userId: req.user.id,
-        includeEffort: options.includeEffort !== false,
-        projectContext: options.projectContext || `Project: ${projectName}`
+        projectStartDate: options.startDate || new Date().toISOString().split('T')[0],
+        progressCallback: null
       }
     );
     
     // Return analysis results
     if (analysisResult.success) {
-      console.log(`[ANALYZE DOCS] Success! Created ${analysisResult.created?.total || 0} issues`);
-      res.json({
+      console.log(`[ANALYZE DOCS] Success! Created ${analysisResult.issues?.created || 0} issues`);
+      const response = {
         success: true,
-        hierarchy: analysisResult.hierarchy,
-        created: analysisResult.created,
-        validation: analysisResult.validation,
-        extraction: analysisResult.extraction,
-        creationErrors: analysisResult.creationErrors || [],
-        message: `Successfully analyzed ${documents.length} document(s) and created ${analysisResult.created?.total || 0} issues`
-      });
+        workstreams: analysisResult.workstreams,
+        issues: analysisResult.issues,
+        timeline: analysisResult.timeline,
+        dependencies: analysisResult.dependencies,
+        schedule: analysisResult.schedule,
+        aiCost: analysisResult.totalCost,
+        message: `Successfully analyzed ${documents.length} document(s) and created ${analysisResult.issues?.created || 0} issues with automatic schedule`
+      };
+      
+      // Add warnings if present
+      if (analysisResult.warnings && analysisResult.warnings.length > 0) {
+        response.warnings = analysisResult.warnings;
+      }
+      
+      res.json(response);
     } else {
       console.error('[ANALYZE DOCS] Analysis failed:', analysisResult.errors);
       res.status(500).json({
