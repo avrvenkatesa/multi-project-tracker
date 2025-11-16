@@ -531,11 +531,11 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
           const insertResult = await pool.query(
             `INSERT INTO issues 
              (project_id, title, description, status, priority, 
-              parent_issue_id, hierarchy_level, is_epic, effort_hours, 
-              created_via_ai_by, assignee, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, NULL, 0, TRUE, $6, $7, $8, NOW(), NOW())
+              parent_issue_id, hierarchy_level, is_epic, ai_effort_estimate_hours, 
+              ai_estimate_confidence, ai_estimate_version, created_via_ai_by, assignee, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NULL, 0, TRUE, $6, $7, $8, $9, $10, NOW(), NOW())
              RETURNING id, title`,
-            [projectId, title, description, 'To Do', priority, effortHours, userId, assignee]
+            [projectId, title, description, 'To Do', priority, effortHours, '0.85', 1, userId, assignee]
           );
 
           const createdEpic = insertResult.rows[0];
@@ -599,12 +599,12 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
           const insertResult = await pool.query(
             `INSERT INTO issues 
              (project_id, title, description, status, priority, 
-              parent_issue_id, hierarchy_level, is_epic, effort_hours, 
-              created_via_ai_by, assignee, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+              parent_issue_id, hierarchy_level, is_epic, ai_effort_estimate_hours, 
+              ai_estimate_confidence, ai_estimate_version, created_via_ai_by, assignee, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
              RETURNING id, title, parent_issue_id`,
             [projectId, title, description, 'To Do', priority, 
-             parentIssueId, hierarchyLevel, isEpic, effortHours, userId, assignee]
+             parentIssueId, hierarchyLevel, isEpic, effortHours, '0.85', 1, userId, assignee]
           );
 
           const createdTask = insertResult.rows[0];
