@@ -348,6 +348,20 @@ class HierarchicalGanttEnhancer {
     this.saveState();
   }
 
+  getExpandedCount() {
+    return this.expanded.size;
+  }
+
+  getCollapsedCount() {
+    const allParentIds = this.tasks
+      .filter(task => this.tasks.some(t => 
+        t.parent_issue_id === task.item_id && t.item_type === 'issue'
+      ))
+      .map(task => `${task.item_type}-${task.item_id}`);
+    
+    return allParentIds.filter(id => !this.expanded.has(id)).length;
+  }
+
   destroy() {
     if (this.container) {
       const elementsToRemove = this.container.querySelectorAll(

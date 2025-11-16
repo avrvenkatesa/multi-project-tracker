@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hierarchical Gantt Test - Story 4.6</title>
+
+  <!-- Frappe Gantt -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Our CSS -->
+  <link rel="stylesheet" href="/css/design-tokens.css">
+  <link rel="stylesheet" href="/css/gantt-hierarchy.css">
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      background: #f6f8fa;
+      margin: 0;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 { color: #2c3e50; margin-bottom: 8px; }
+    .subtitle { color: #666; margin-bottom: 24px; }
+    .section {
+      background: white;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      border: 1px solid #e1e4e8;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    button {
+      padding: 8px 16px;
+      background: white;
+      border: 1px solid #e1e4e8;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #f6f8fa;
+      border-color: #d1d5da;
+    }
+    button:active { transform: translateY(1px); }
+    .instructions {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      padding: 16px;
+      border-radius: 6px;
+    }
+    .instructions ol { margin: 8px 0 0 20px; }
+    .instructions li { margin: 4px 0; }
+    #gantt-container {
+      min-height: 400px;
+      overflow-x: auto;
+    }
+    .status-indicator {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    .status-ok { background: #d4edda; color: #155724; }
+    .status-warning { background: #fff3cd; color: #856404; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎯 Hierarchical Gantt Chart Test</h1>
+    <p class="subtitle">Story 4.6: Testing hierarchical Gantt enhancement with Frappe Gantt</p>
+
+    <!-- Controls Section -->
+    <div class="section">
+      <h3>🎮 Interactive Controls</h3>
+      <div class="controls">
+        <button id="expand-all"><i class="fas fa-chevron-down"></i> Expand All</button>
+        <button id="collapse-all"><i class="fas fa-chevron-right"></i> Collapse All</button>
+        <button id="toggle-tree-lines"><i class="fas fa-project-diagram"></i> Toggle Tree Lines</button>
+        <button id="toggle-badges"><i class="fas fa-tag"></i> Toggle Epic Badges</button>
+        <button id="reset"><i class="fas fa-redo"></i> Reset State</button>
+        <label style="display: flex; align-items: center; gap: 4px; margin-left: auto;">
+          <input type="checkbox" id="show-hierarchy" checked>
+          <span>Show Hierarchy</span>
+        </label>
+      </div>
+      <div style="font-size: 13px; color: #666;">
+        <span id="expanded-count">Expanded: 0</span> |
+        <span id="collapsed-count">Collapsed: 0</span> |
+        <span id="visible-count">Visible Tasks: 0</span>
+      </div>
+    </div>
+
+    <!-- Gantt Chart -->
+    <div class="section">
+      <h3>📊 Gantt Chart with Hierarchy</h3>
+      <div id="gantt-container"></div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="section instructions">
+      <h3>📝 Test Instructions</h3>
+      <ol>
+        <li>Click the <strong>chevron buttons</strong> (⊙▼ / ⊙▶) on epic bars to collapse/expand</li>
+        <li>Verify <strong>epic badges</strong> (purple "EPIC" labels) appear on parent tasks</li>
+        <li>Check <strong>tree lines</strong> connect parent bars to children (if enabled)</li>
+        <li>Test <strong>"Expand All"</strong> button - all epics should expand</li>
+        <li>Test <strong>"Collapse All"</strong> button - only epics should be visible</li>
+        <li>Verify <strong>dependencies</strong> (arrows) still work correctly</li>
+        <li>Toggle <strong>"Show Hierarchy"</strong> - features should enable/disable</li>
+        <li>Reload the page - state should persist (localStorage)</li>
+        <li>Open <strong>browser console</strong> to see event logs</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- Frappe Gantt -->
+  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+
+  <!-- Our components -->
+  <script src="/js/components/HierarchicalGanttEnhancer.js"></script>
+
+  <script>
+    // Sample hierarchical task data
+    const tasks = [
+      // Epic 1: User Authentication
+      {
+        id: 'epic-1',
+        name: 'User Authentication Module',
+        start: '2025-01-15',
+        end: '2025-02-15',
+        progress: 35,
+        is_epic: true,
+        parent_issue_id: null,
+        custom_class: 'bar-epic'
+      },
+      {
+        id: 'task-1-1',
+        name: 'Design Auth Flow',
+        start: '2025-01-15',
+        end: '2025-01-20',
+        progress: 100,
+        parent_issue_id: 'epic-1'
+      },
+      {
+        id: 'task-1-2',
+        name: 'Backend API Development',
+        start: '2025-01-21',
+        end: '2025-01-31',
+        progress: 60,
+        parent_issue_id: 'epic-1',
+        dependencies: 'task-1-1'
+      },
+      {
+        id: 'task-1-3',
+        name: 'Frontend UI Components',
+        start: '2025-02-01',
+        end: '2025-02-09',
+        progress: 20,
+        parent_issue_id: 'epic-1',
+        dependencies: 'task-1-2'
+      },
+      {
+        id: 'task-1-4',
+        name: 'Integration Testing',
+        start: '2025-02-10',
+        end: '2025-02-15',
+        progress: 0,
+        parent_issue_id: 'epic-1',
+        dependencies: 'task-1-3'
+      },
+
+      // Epic 2: Database Migration
+      {
+        id: 'epic-2',
+        name: 'Database Migration Project',
+        start: '2025-01-20',
+        end: '2025-02-10',
+        progress: 50,
+        is_epic: true,
+        parent_issue_id: null,
+        custom_class: 'bar-epic'
+      },
+      {
+        id: 'task-2-1',
+        name: 'Schema Design',
+        start: '2025-01-20',
+        end: '2025-01-24',
+        progress: 100,
+        parent_issue_id: 'epic-2'
+      },
+      {
+        id: 'task-2-2',
+        name: 'Write Migration Scripts',
+        start: '2025-01-25',
+        end: '2025-02-02',
+        progress: 70,
+        parent_issue_id: 'epic-2',
+        dependencies: 'task-2-1'
+      },
+      {
+        id: 'task-2-3',
+        name: 'Data Validation & Testing',
+        start: '2025-02-03',
+        end: '2025-02-10',
+        progress: 10,
+        parent_issue_id: 'epic-2',
+        dependencies: 'task-2-2'
+      },
+
+      // Standalone task (no parent)
+      {
+        id: 'task-standalone',
+        name: 'Code Review & Documentation',
+        start: '2025-02-11',
+        end: '2025-02-14',
+        progress: 0,
+        parent_issue_id: null,
+        dependencies: 'epic-1,epic-2'
+      }
+    ];
+
+    let gantt, enhancer;
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('🚀 Initializing Hierarchical Gantt Test');
+
+      // Create Frappe Gantt instance
+      gantt = new Gantt('#gantt-container', tasks, {
+        view_mode: 'Day',
+        bar_height: 30,
+        padding: 12,
+        date_format: 'YYYY-MM-DD',
+        language: 'en',
+        custom_popup_html: function(task) {
+          return `
+            <div class="details-container">
+              <h5>${task.name}</h5>
+              <p>Progress: ${task.progress}%</p>
+              <p>${task.start} → ${task.end}</p>
+              ${task.is_epic ? '<p><strong>📦 Epic</strong></p>' : ''}
+              ${task.parent_issue_id ? '<p>Parent: ' + task.parent_issue_id + '</p>' : ''}
+            </div>
+          `;
+        }
+      });
+
+      console.log('✅ Frappe Gantt created');
+
+      // Add hierarchy enhancement
+      if (window.HierarchicalGanttEnhancer) {
+        enhancer = new HierarchicalGanttEnhancer(gantt, {
+          showEpicBadges: true,
+          showTreeLines: true,
+          indentWidth: 20,
+          allowCollapse: true
+        });
+
+        enhancer.enhance(tasks);
+        console.log('✅ Hierarchy enhancer initialized');
+
+        updateCounts();
+      } else {
+        console.error('❌ HierarchicalGanttEnhancer not found!');
+      }
+
+      // Wire up controls
+      setupControls();
+    });
+
+    function setupControls() {
+      document.getElementById('expand-all').addEventListener('click', () => {
+        console.log('🔽 Expanding all tasks');
+        enhancer.expandAll();
+        updateCounts();
+      });
+
+      document.getElementById('collapse-all').addEventListener('click', () => {
+        console.log('▶️  Collapsing all tasks');
+        enhancer.collapseAll();
+        updateCounts();
+      });
+
+      document.getElementById('toggle-tree-lines').addEventListener('click', () => {
+        enhancer.options.showTreeLines = !enhancer.options.showTreeLines;
+        console.log('🌳 Tree lines:', enhancer.options.showTreeLines ? 'ON' : 'OFF');
+        enhancer.enhance(tasks);
+      });
+
+      document.getElementById('toggle-badges').addEventListener('click', () => {
+        enhancer.options.showEpicBadges = !enhancer.options.showEpicBadges;
+        console.log('🏷️  Epic badges:', enhancer.options.showEpicBadges ? 'ON' : 'OFF');
+        enhancer.enhance(tasks);
+      });
+
+      document.getElementById('show-hierarchy').addEventListener('change', (e) => {
+        if (e.target.checked) {
+          console.log('✅ Hierarchy enabled');
+          enhancer.enhance(tasks);
+        } else {
+          console.log('❌ Hierarchy disabled');
+          enhancer.destroy();
+        }
+        updateCounts();
+      });
+
+      document.getElementById('reset').addEventListener('click', () => {
+        console.log('🔄 Resetting state');
+        localStorage.removeItem('gantt-hierarchy-expanded-state');
+        location.reload();
+      });
+    }
+
+    function updateCounts() {
+      const expanded = enhancer.getExpandedCount ? enhancer.getExpandedCount() : 0;
+      const collapsed = enhancer.getCollapsedCount ? enhancer.getCollapsedCount() : 0;
+      const visible = tasks.filter(t => !t.parent_issue_id || enhancer.expanded.has(t.parent_issue_id)).length;
+
+      document.getElementById('expanded-count').textContent = `Expanded: ${expanded}`;
+      document.getElementById('collapsed-count').textContent = `Collapsed: ${collapsed}`;
+      document.getElementById('visible-count').textContent = `Visible Tasks: ${visible}`;
+    }
+  </script>
+</body>
+</html>
