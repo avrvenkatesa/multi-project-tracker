@@ -130,37 +130,32 @@ class HierarchicalGanttEnhancer {
       
       const bbox = bar.getBBox();
       
-      let badgeGroup = barWrapper.querySelector('.epic-badge-group');
+      let badgeGroup = barWrapper.querySelector('.gantt-hierarchy-controls');
       if (!badgeGroup) {
         badgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        badgeGroup.setAttribute('class', 'epic-badge-group');
+        badgeGroup.setAttribute('class', 'gantt-hierarchy-controls');
         barWrapper.appendChild(badgeGroup);
       } else {
         badgeGroup.innerHTML = '';
       }
       
       const badgeRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      badgeRect.setAttribute('class', 'epic-badge-rect');
       badgeRect.setAttribute('x', bbox.x + 4);
       badgeRect.setAttribute('y', bbox.y + 2);
       badgeRect.setAttribute('width', '36');
       badgeRect.setAttribute('height', bbox.height - 4);
-      badgeRect.setAttribute('rx', '3');
-      badgeRect.setAttribute('fill', '#6366f1');
-      badgeRect.setAttribute('opacity', '0.9');
       badgeGroup.appendChild(badgeRect);
       
       const badgeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      badgeText.setAttribute('class', 'epic-badge-text gantt-epic-badge');
       badgeText.setAttribute('x', bbox.x + 22);
       badgeText.setAttribute('y', bbox.y + bbox.height / 2 + 3.5);
-      badgeText.setAttribute('text-anchor', 'middle');
-      badgeText.setAttribute('font-size', '9px');
-      badgeText.setAttribute('font-weight', '700');
-      badgeText.setAttribute('fill', '#ffffff');
-      badgeText.setAttribute('pointer-events', 'none');
       badgeText.textContent = 'EPIC';
       badgeGroup.appendChild(badgeText);
       
-      barWrapper.classList.add('gantt-epic-bar');
+      barWrapper.classList.add('bar-epic');
+      bar.classList.add('bar-epic');
     });
   }
 
@@ -186,11 +181,10 @@ class HierarchicalGanttEnhancer {
       const bbox = bar.getBBox();
       const isExpanded = this.expanded.has(taskId);
       
-      let buttonGroup = barWrapper.querySelector('.expand-collapse-group');
+      let buttonGroup = barWrapper.querySelector('.gantt-expand-btn');
       if (!buttonGroup) {
         buttonGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        buttonGroup.setAttribute('class', 'expand-collapse-group');
-        buttonGroup.setAttribute('style', 'cursor: pointer;');
+        buttonGroup.setAttribute('class', 'gantt-expand-btn');
         barWrapper.appendChild(buttonGroup);
       } else {
         buttonGroup.innerHTML = '';
@@ -199,21 +193,14 @@ class HierarchicalGanttEnhancer {
       const buttonCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       buttonCircle.setAttribute('cx', bbox.x - 12);
       buttonCircle.setAttribute('cy', bbox.y + bbox.height / 2);
-      buttonCircle.setAttribute('r', '8');
-      buttonCircle.setAttribute('fill', '#ffffff');
-      buttonCircle.setAttribute('stroke', '#6366f1');
-      buttonCircle.setAttribute('stroke-width', '2');
       buttonGroup.appendChild(buttonCircle);
       
       const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      chevron.setAttribute('class', `gantt-expand-icon ${isExpanded ? 'expanded' : 'collapsed'}`);
       chevron.setAttribute('x', bbox.x - 12);
       chevron.setAttribute('y', bbox.y + bbox.height / 2 + 3.5);
-      chevron.setAttribute('text-anchor', 'middle');
       chevron.setAttribute('font-family', 'Font Awesome 6 Free');
       chevron.setAttribute('font-weight', '900');
-      chevron.setAttribute('font-size', '8px');
-      chevron.setAttribute('fill', '#6366f1');
-      chevron.setAttribute('pointer-events', 'none');
       chevron.textContent = isExpanded ? '\uf078' : '\uf054';
       buttonGroup.appendChild(chevron);
       
@@ -229,10 +216,10 @@ class HierarchicalGanttEnhancer {
     
     const svg = this.container;
     
-    let treeLineGroup = svg.querySelector('.tree-line-group');
+    let treeLineGroup = svg.querySelector('.gantt-tree-lines-group');
     if (!treeLineGroup) {
       treeLineGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      treeLineGroup.setAttribute('class', 'tree-line-group');
+      treeLineGroup.setAttribute('class', 'gantt-tree-lines-group');
       svg.insertBefore(treeLineGroup, svg.firstChild);
     } else {
       treeLineGroup.innerHTML = '';
@@ -242,9 +229,14 @@ class HierarchicalGanttEnhancer {
       const taskId = `${task.item_type}-${task.item_id}`;
       const level = this.getHierarchyLevel(task);
       
+      const barWrapper = svg.querySelector(`.bar-wrapper[data-id="${taskId}"]`);
+      if (barWrapper) {
+        barWrapper.classList.add(`gantt-level-${Math.min(level, 3)}`);
+        barWrapper.setAttribute('data-indent-level', level);
+      }
+      
       if (level === 0) return;
       
-      const barWrapper = svg.querySelector(`.bar-wrapper[data-id="${taskId}"]`);
       if (!barWrapper) return;
       
       const bar = barWrapper.querySelector('.bar');
@@ -254,13 +246,11 @@ class HierarchicalGanttEnhancer {
       const indentOffset = level * this.options.indentWidth;
       
       const horizontalLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      horizontalLine.setAttribute('class', 'gantt-tree-line gantt-tree-line-horizontal');
       horizontalLine.setAttribute('x1', bbox.x - indentOffset);
       horizontalLine.setAttribute('y1', bbox.y + bbox.height / 2);
       horizontalLine.setAttribute('x2', bbox.x - 4);
       horizontalLine.setAttribute('y2', bbox.y + bbox.height / 2);
-      horizontalLine.setAttribute('stroke', 'var(--gantt-border, #e1e4e8)');
-      horizontalLine.setAttribute('stroke-width', '1.5');
-      horizontalLine.setAttribute('opacity', '0.6');
       treeLineGroup.appendChild(horizontalLine);
       
       if (task.parent_issue_id) {
@@ -273,13 +263,11 @@ class HierarchicalGanttEnhancer {
             const parentBbox = parentBar.getBBox();
             
             const verticalLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            verticalLine.setAttribute('class', 'gantt-tree-line gantt-tree-line-vertical');
             verticalLine.setAttribute('x1', bbox.x - indentOffset);
             verticalLine.setAttribute('y1', parentBbox.y + parentBbox.height / 2);
             verticalLine.setAttribute('x2', bbox.x - indentOffset);
             verticalLine.setAttribute('y2', bbox.y + bbox.height / 2);
-            verticalLine.setAttribute('stroke', 'var(--gantt-border, #e1e4e8)');
-            verticalLine.setAttribute('stroke-width', '1.5');
-            verticalLine.setAttribute('opacity', '0.6');
             treeLineGroup.appendChild(verticalLine);
           }
         }
@@ -363,9 +351,15 @@ class HierarchicalGanttEnhancer {
   destroy() {
     if (this.container) {
       const elementsToRemove = this.container.querySelectorAll(
-        '.epic-badge-group, .expand-collapse-group, .tree-line-group'
+        '.gantt-hierarchy-controls, .gantt-expand-btn, .gantt-tree-lines-group'
       );
       elementsToRemove.forEach(el => el.remove());
+      
+      const barWrappers = this.container.querySelectorAll('.bar-wrapper');
+      barWrappers.forEach(wrapper => {
+        wrapper.classList.remove('bar-epic', 'gantt-level-0', 'gantt-level-1', 'gantt-level-2', 'gantt-level-3');
+        wrapper.removeAttribute('data-indent-level');
+      });
     }
   }
 }
