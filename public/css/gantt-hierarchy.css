@@ -49,19 +49,17 @@
   fill: #ffffff;
   stroke: var(--gantt-border, #e1e4e8);
   stroke-width: 2px;
-  transition: all 0.2s ease-in-out;
+  transition: fill 0.2s ease-in-out, stroke 0.2s ease-in-out, filter 0.2s ease-in-out;
 }
 
 .gantt-expand-btn:hover circle {
   fill: #f0f4ff;
   stroke: #4f46e5;
-  stroke-width: 2.5px;
   filter: drop-shadow(0 2px 4px rgba(79, 70, 229, 0.3));
 }
 
 .gantt-expand-btn:active circle {
   fill: #e0e7ff;
-  transform: scale(0.95);
 }
 
 .gantt-expand-icon {
