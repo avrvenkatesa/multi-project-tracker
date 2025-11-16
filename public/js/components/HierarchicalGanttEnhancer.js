@@ -18,6 +18,18 @@ class HierarchicalGanttEnhancer {
   enhance(tasks) {
     this.tasks = tasks;
     
+    // Debug logging to see task data structure
+    console.log('📋 All tasks received by enhancer:', tasks.length);
+    console.log('First 3 tasks:', tasks.slice(0, 3).map(t => ({
+      id: t.id,
+      name: t.name,
+      hierarchy_level: t.hierarchy_level,
+      is_epic: t.is_epic,
+      issue_type: t.issue_type,
+      item_type: t.item_type,
+      item_id: t.item_id
+    })));
+    
     const hierarchyTree = this.buildHierarchyTree(tasks);
     
     const visibleTasks = this.getVisibleTasks(hierarchyTree);
