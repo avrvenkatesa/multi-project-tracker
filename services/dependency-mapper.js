@@ -485,6 +485,7 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
     created: [],
     epics: [],
     tasks: [],
+    subtasks: [],
     errors: []
   };
 
@@ -494,150 +495,139 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
   }
 
   try {
-    // Separate workstreams into epics and tasks
-    const epics = [];
-    const tasks = [];
+    // Map to store ALL created issue IDs by name (not just epics)
+    const issueIdsByName = new Map();
+    
+    // Sort workstreams by hierarchyLevel to ensure parents are created before children
+    // Level 0 (epics) → Level 1 (tasks) → Level 2 (subtasks)
+    const sortedWorkstreams = [...workstreams].sort((a, b) => {
+      const levelA = a.hierarchyLevel ?? 0;
+      const levelB = b.hierarchyLevel ?? 0;
+      return levelA - levelB;
+    });
+    
+    console.log(`  → Processing ${sortedWorkstreams.length} items in hierarchical order`);
+    
+    // Count items by type for logging
+    const counts = { epics: 0, tasks: 0, subtasks: 0, standalone: 0 };
 
-    for (const workstream of workstreams) {
-      // Determine if this is an epic based on multiple criteria
-      const isEpic = workstream.isEpic || 
-                     workstream.hierarchyLevel === 0 || 
-                     (workstream.children && workstream.children.length > 0);
-      
-      if (isEpic) {
-        epics.push(workstream);
-      } else {
-        tasks.push(workstream);
-      }
-    }
-
-    console.log(`  → Identified ${epics.length} epic(s) and ${tasks.length} task(s)`);
-
-    // Map to store epic IDs keyed by epic name
-    const epicIdsByName = new Map();
-
-    // PHASE 1: Create epics first
-    if (epics.length > 0) {
-      console.log(`🏗️  Creating ${epics.length} epic(s)...`);
-      
-      for (const epic of epics) {
-        try {
-          const title = epic.title || epic.name;
-          const description = epic.description || '';
-          const priority = epic.priority || 'medium';
-          const effortHours = epic.effort || null;
-          const assignee = epic.assignee || epic.createdBy || 'Demo User';
-
-          const insertResult = await pool.query(
-            `INSERT INTO issues 
-             (project_id, title, description, status, priority, 
-              parent_issue_id, hierarchy_level, is_epic, ai_effort_estimate_hours, 
-              ai_estimate_confidence, ai_estimate_version, created_via_ai_by, assignee, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, NULL, 0, TRUE, $6, $7, $8, $9, $10, NOW(), NOW())
-             RETURNING id, title`,
-            [projectId, title, description, 'To Do', priority, effortHours, '0.85', 1, userId, assignee]
-          );
-
-          const createdEpic = insertResult.rows[0];
+    // Process all items in hierarchical order
+    for (const item of sortedWorkstreams) {
+      try {
+        const title = item.title || item.name;
+        const description = item.description || '';
+        const priority = item.priority || 'medium';
+        const effortHours = item.effort || null;
+        const assignee = item.assignee || item.createdBy || 'Demo User';
+        const itemLevel = item.hierarchyLevel ?? 0;
+        
+        // Determine parent issue ID
+        let parentIssueId = null;
+        const parentRef = item.parent || item.parentName;
+        
+        if (parentRef) {
+          parentIssueId = issueIdsByName.get(parentRef);
           
-          // Store in map for later reference
-          epicIdsByName.set(epic.name, createdEpic.id);
-          epicIdsByName.set(epic.title, createdEpic.id);
-          
-          result.created.push({
-            id: createdEpic.id,
-            title: createdEpic.title,
-            type: 'epic',
-            isEpic: true
-          });
-          
+          if (!parentIssueId) {
+            const warning = `Parent "${parentRef}" not found for item "${item.name}" (level ${itemLevel}) - adding to root level`;
+            result.errors.push(warning);
+            console.log(`  ⚠ ${warning}`);
+          }
+        }
+        
+        // Determine if this is an epic (only explicitly marked epics at level 0)
+        const isEpic = item.isEpic === true;
+        
+        // Determine actual hierarchy level for database
+        // If parent found, inherit level from item data, otherwise set to 0
+        const dbHierarchyLevel = parentIssueId ? itemLevel : 0;
+
+        const insertResult = await pool.query(
+          `INSERT INTO issues 
+           (project_id, title, description, status, priority, 
+            parent_issue_id, hierarchy_level, is_epic, ai_effort_estimate_hours, 
+            ai_estimate_confidence, ai_estimate_version, created_via_ai_by, assignee, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+           RETURNING id, title, parent_issue_id, hierarchy_level, is_epic`,
+          [projectId, title, description, 'To Do', priority, 
+           parentIssueId, dbHierarchyLevel, isEpic, effortHours, '0.85', 1, userId, assignee]
+        );
+
+        const createdItem = insertResult.rows[0];
+        
+        // Store in map for child lookups (both by name and title)
+        issueIdsByName.set(item.name, createdItem.id);
+        issueIdsByName.set(item.title, createdItem.id);
+        
+        // Track by type
+        let itemType;
+        if (isEpic) {
+          itemType = 'epic';
+          counts.epics++;
           result.epics.push({
-            id: createdEpic.id,
-            title: createdEpic.title,
-            name: epic.name
+            id: createdItem.id,
+            title: createdItem.title,
+            name: item.name
           });
-          
-          console.log(`  ✓ Created epic #${createdEpic.id}: "${createdEpic.title}"`);
-        } catch (error) {
-          const errorMsg = `Failed to create epic "${epic.name}": ${error.message}`;
-          result.errors.push(errorMsg);
-          console.error(`  ❌ ${errorMsg}`);
-        }
-      }
-    }
-
-    // PHASE 2: Create tasks with parent references
-    if (tasks.length > 0) {
-      console.log(`🏗️  Creating ${tasks.length} task(s)...`);
-      
-      for (const task of tasks) {
-        try {
-          const title = task.title || task.name;
-          const description = task.description || '';
-          const priority = task.priority || 'medium';
-          const effortHours = task.effort || null;
-          const assignee = task.assignee || task.createdBy || 'Demo User';
-          
-          // Determine parent issue ID
-          let parentIssueId = null;
-          const parentRef = task.parent || task.parentName;
-          
-          if (parentRef) {
-            parentIssueId = epicIdsByName.get(parentRef);
-            
-            if (!parentIssueId) {
-              const warning = `Parent "${parentRef}" not found for task "${task.name}" - adding to root level`;
-              result.errors.push(warning);
-              console.log(`  ⚠ ${warning}`);
-            }
-          }
-          
-          // Determine hierarchy level (1 if has parent, 0 if root)
-          const hierarchyLevel = parentIssueId ? 1 : 0;
-          const isEpic = hierarchyLevel === 0; // Root-level tasks might be considered epics
-
-          const insertResult = await pool.query(
-            `INSERT INTO issues 
-             (project_id, title, description, status, priority, 
-              parent_issue_id, hierarchy_level, is_epic, ai_effort_estimate_hours, 
-              ai_estimate_confidence, ai_estimate_version, created_via_ai_by, assignee, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
-             RETURNING id, title, parent_issue_id`,
-            [projectId, title, description, 'To Do', priority, 
-             parentIssueId, hierarchyLevel, isEpic, effortHours, '0.85', 1, userId, assignee]
-          );
-
-          const createdTask = insertResult.rows[0];
-          
-          result.created.push({
-            id: createdTask.id,
-            title: createdTask.title,
-            type: 'task',
-            parentId: createdTask.parent_issue_id,
-            isEpic: false
+        } else if (itemLevel === 2) {
+          itemType = 'subtask';
+          counts.subtasks++;
+          result.subtasks.push({
+            id: createdItem.id,
+            title: createdItem.title,
+            name: item.name,
+            parentId: createdItem.parent_issue_id
           });
-          
+        } else if (itemLevel === 1 || parentIssueId) {
+          itemType = 'task';
+          counts.tasks++;
           result.tasks.push({
-            id: createdTask.id,
-            title: createdTask.title,
-            name: task.name,
-            parentId: createdTask.parent_issue_id
+            id: createdItem.id,
+            title: createdItem.title,
+            name: item.name,
+            parentId: createdItem.parent_issue_id
           });
-          
-          if (createdTask.parent_issue_id) {
-            console.log(`  ✓ Created task #${createdTask.id}: "${createdTask.title}" (parent: #${createdTask.parent_issue_id})`);
-          } else {
-            console.log(`  ✓ Created task #${createdTask.id}: "${createdTask.title}" (root level)`);
-          }
-        } catch (error) {
-          const errorMsg = `Failed to create task "${task.name}": ${error.message}`;
-          result.errors.push(errorMsg);
-          console.error(`  ❌ ${errorMsg}`);
+        } else {
+          itemType = 'standalone';
+          counts.standalone++;
+          result.tasks.push({
+            id: createdItem.id,
+            title: createdItem.title,
+            name: item.name,
+            parentId: null
+          });
         }
+        
+        result.created.push({
+          id: createdItem.id,
+          title: createdItem.title,
+          type: itemType,
+          parentId: createdItem.parent_issue_id,
+          hierarchyLevel: createdItem.hierarchy_level,
+          isEpic: createdItem.is_epic
+        });
+        
+        // Log creation with type and parent info
+        if (createdItem.parent_issue_id) {
+          console.log(`  ✓ Created ${itemType} #${createdItem.id}: "${createdItem.title}" (parent: #${createdItem.parent_issue_id}, level: ${dbHierarchyLevel})`);
+        } else if (isEpic) {
+          console.log(`  ✓ Created epic #${createdItem.id}: "${createdItem.title}" (level: 0)`);
+        } else {
+          console.log(`  ✓ Created ${itemType} #${createdItem.id}: "${createdItem.title}" (standalone, level: 0)`);
+        }
+        
+      } catch (error) {
+        const errorMsg = `Failed to create item "${item.name}": ${error.message}`;
+        result.errors.push(errorMsg);
+        console.error(`  ❌ ${errorMsg}`);
       }
     }
 
-    console.log(`✅ Created ${result.created.length} hierarchical issue(s): ${result.epics.length} epic(s), ${result.tasks.length} task(s)`);
+    console.log(`✅ Created ${result.created.length} hierarchical issue(s):`);
+    console.log(`   - ${counts.epics} epic(s)`);
+    console.log(`   - ${counts.tasks} task(s)`);
+    console.log(`   - ${counts.subtasks} subtask(s)`);
+    console.log(`   - ${counts.standalone} standalone task(s)`);
     
     if (result.errors.length > 0) {
       console.log(`⚠ ${result.errors.length} error(s) occurred during creation`);
