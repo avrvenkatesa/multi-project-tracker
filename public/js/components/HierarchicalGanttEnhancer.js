@@ -134,52 +134,70 @@ class HierarchicalGanttEnhancer {
   }
 
   addEpicBadges() {
-    if (!this.container) return;
-    
-    const svg = this.container;
-    
-    this.tasks.forEach(task => {
-      const taskId = `${task.item_type}-${task.item_id}`;
-      const hasChildren = this.tasks.some(t => 
-        t.parent_issue_id === task.item_id && t.item_type === 'issue'
-      );
-      
-      if (!hasChildren) return;
-      
-      const barWrapper = svg.querySelector(`.bar-wrapper[data-id="${taskId}"]`);
-      if (!barWrapper) return;
-      
-      const bar = barWrapper.querySelector('.bar');
-      if (!bar) return;
-      
-      const bbox = bar.getBBox();
-      
-      let badgeGroup = barWrapper.querySelector('.gantt-hierarchy-controls');
-      if (!badgeGroup) {
-        badgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        badgeGroup.setAttribute('class', 'gantt-hierarchy-controls');
-        barWrapper.appendChild(badgeGroup);
-      } else {
-        badgeGroup.innerHTML = '';
+    console.log('🏷️ Adding epic badges...');
+    const epicTasks = this.tasks.filter(t => t.is_epic);
+    console.log(`Found ${epicTasks.length} epic tasks:`, epicTasks.map(t => t.name));
+
+    epicTasks.forEach(task => {
+      const barWrapper = this.container.querySelector(`.bar-wrapper[data-id="${task.id}"]`);
+      console.log(`Looking for bar-wrapper with data-id="${task.id}":`, barWrapper);
+
+      if (!barWrapper) {
+        console.warn(`⚠️ No bar wrapper found for epic task: ${task.name} (${task.id})`);
+        return;
       }
-      
-      const badgeRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      badgeRect.setAttribute('class', 'epic-badge-rect');
-      badgeRect.setAttribute('x', bbox.x + 4);
-      badgeRect.setAttribute('y', bbox.y + 2);
-      badgeRect.setAttribute('width', '36');
-      badgeRect.setAttribute('height', bbox.height - 4);
-      badgeGroup.appendChild(badgeRect);
-      
-      const badgeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      badgeText.setAttribute('class', 'epic-badge-text gantt-epic-badge');
-      badgeText.setAttribute('x', bbox.x + 22);
-      badgeText.setAttribute('y', bbox.y + bbox.height / 2 + 3.5);
-      badgeText.textContent = 'EPIC';
-      badgeGroup.appendChild(badgeText);
-      
-      barWrapper.classList.add('bar-epic');
-      bar.classList.add('bar-epic');
+
+      const bar = barWrapper.querySelector('.bar');
+      if (bar) {
+        bar.classList.add('bar-epic');
+        console.log(`✅ Added .bar-epic class to ${task.name}`);
+      }
+
+      // Remove existing badge if present
+      const existingBadge = barWrapper.querySelector('.gantt-epic-badge-group');
+      if (existingBadge) {
+        existingBadge.remove();
+      }
+
+      // Get bar dimensions
+      const barRect = bar.getBoundingClientRect();
+      const containerRect = this.container.getBoundingClientRect();
+
+      const x = parseFloat(bar.getAttribute('x')) || 0;
+      const y = parseFloat(bar.getAttribute('y')) || 0;
+      const height = parseFloat(bar.getAttribute('height')) || 30;
+
+      // Create badge group
+      const badgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      badgeGroup.classList.add('gantt-epic-badge-group');
+      badgeGroup.setAttribute('data-task-id', task.id);
+
+      // Background rectangle
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.classList.add('epic-badge-rect');
+      rect.setAttribute('x', x + 2);
+      rect.setAttribute('y', y + 2);
+      rect.setAttribute('width', '36');
+      rect.setAttribute('height', height - 4);
+      rect.setAttribute('rx', '3');
+      rect.setAttribute('fill', '#6366f1');
+
+      // Text label
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.classList.add('gantt-epic-badge');
+      text.setAttribute('x', x + 20);
+      text.setAttribute('y', y + height / 2 + 3);
+      text.setAttribute('fill', 'white');
+      text.setAttribute('font-size', '9');
+      text.setAttribute('font-weight', '600');
+      text.setAttribute('text-anchor', 'middle');
+      text.textContent = 'EPIC';
+
+      badgeGroup.appendChild(rect);
+      badgeGroup.appendChild(text);
+      barWrapper.appendChild(badgeGroup);
+
+      console.log(`✅ Epic badge added for ${task.name} at x=${x}, y=${y}`);
     });
   }
 
