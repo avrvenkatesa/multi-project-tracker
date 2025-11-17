@@ -17,6 +17,7 @@ class HierarchicalGanttEnhancer {
 
   // Helper to get task name (handles both 'name' and 'title' fields)
   getTaskName(task) {
+    if (!task) return 'Unknown Task';
     return task.name || task.title || 'Unnamed Task';
   }
 
@@ -177,7 +178,12 @@ class HierarchicalGanttEnhancer {
         buttons.forEach((btn, i) => {
           const taskId = btn.getAttribute('data-task-id');
           const task = this.tasks.find(t => this.getTaskId(t) === taskId);
-          console.log(`  Button ${i + 1}: ${this.getTaskName(task)} (${taskId})`);
+          if (task) {
+            console.log(`  Button ${i + 1}: ${this.getTaskName(task)} (${taskId})`);
+          } else {
+            console.log(`  Button ${i + 1}: Task not found for ID ${taskId}`);
+            console.log(`    Available task IDs:`, this.tasks.map(t => this.getTaskId(t)).slice(0, 5));
+          }
         });
       }, 200);
     }, 100);
