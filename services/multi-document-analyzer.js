@@ -427,10 +427,11 @@ class MultiDocumentAnalyzer {
             emit('log', { message: '⚠️  Schedule already exists - skipping auto-creation' });
             emit('log', { message: '' });
           } else {
-            // Fetch created issues with estimates and dependencies
+            // Fetch created issues with cascaded dates from post-processing
             const issuesData = await pool.query(
               `SELECT i.id, i.title, i.assignee, i.due_date,
                       i.ai_effort_estimate_hours as estimated_hours,
+                      i.start_date, i.due_date,
                       CASE
                         WHEN i.ai_estimate_version = 0 THEN 'heuristic'
                         WHEN i.ai_estimate_version > 0 THEN 'ai'
@@ -473,17 +474,18 @@ class MultiDocumentAnalyzer {
               }
             }
 
-            // Prepare items for schedule calculation
+            // Prepare items with CASCADED dates (not recalculated)
             const scheduleItems = issuesData.rows.map(issue => ({
               type: 'issue',
               id: issue.id,
               title: issue.title,
               assignee: issue.assignee || 'Unassigned',
-              // Convert to number - PostgreSQL numeric columns return strings
               estimate: parseFloat(issue.estimated_hours) || 0,
               estimateSource: issue.estimate_source || 'ai',
-              dueDate: issue.due_date,
-              dependencies: dependencyMap.get(`issue:${issue.id}`) || []
+              dependencies: dependencyMap.get(`issue:${issue.id}`) || [],
+              // ✅ Pass cascaded dates so schedule uses them instead of recalculating
+              scheduledStart: issue.start_date,
+              scheduledEnd: issue.due_date
             }));
 
             // Determine schedule start date
@@ -491,16 +493,14 @@ class MultiDocumentAnalyzer {
               result.timeline.phases?.[0]?.startDate || 
               new Date().toISOString().split('T')[0];
 
-            // Create schedule using reusable service
-            const scheduleResult = await schedulerService.createScheduleFromIssues({
+            // Create schedule using CASCADED dates (not recalculated)
+            const scheduleResult = await schedulerService.createScheduleFromCascadedIssues({
               projectId,
               name: 'AI-Generated Schedule (Multi-Document Import)',
               items: scheduleItems,
               startDate: scheduleStartDate,
-              hoursPerDay: 8,
-              includeWeekends: false,
               userId,
-              notes: `Auto-generated from multi-document import (${documents.length} documents)`
+              notes: `Auto-generated from multi-document import (${documents.length} documents) with cascaded dates`
             });
 
             result.schedule.created = true;
