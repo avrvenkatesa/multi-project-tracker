@@ -205,8 +205,10 @@ class HierarchicalGanttEnhancer {
     console.log(`Found ${epicTasks.length} epic tasks:`, epicTasks.map(t => t.name));
 
     epicTasks.forEach(task => {
-      const barWrapper = this.container.querySelector(`.bar-wrapper[data-id="${task.id}"]`);
-      console.log(`Looking for bar-wrapper with data-id="${task.id}":`, barWrapper);
+      // ✅ Use correct ID format: item_type-item_id
+      const taskId = `${task.item_type}-${task.item_id}`;
+      const barWrapper = this.container.querySelector(`.bar-wrapper[data-id="${taskId}"]`);
+      console.log(`Looking for bar-wrapper with data-id="${taskId}":`, barWrapper ? '✅ Found' : '❌ Not found');
 
       if (!barWrapper) {
         console.warn(`⚠️ No bar wrapper found for epic task: ${task.name} (${task.id})`);
@@ -236,7 +238,7 @@ class HierarchicalGanttEnhancer {
       // Create badge group
       const badgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       badgeGroup.classList.add('gantt-epic-badge-group');
-      badgeGroup.setAttribute('data-task-id', task.id);
+      badgeGroup.setAttribute('data-task-id', taskId);
 
       // Background rectangle
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -268,16 +270,23 @@ class HierarchicalGanttEnhancer {
   }
 
   addExpandCollapseButtons() {
+    console.log('🔘 Adding expand/collapse buttons...');
+    
     if (!this.container) return;
     
     const svg = this.container;
     const parentTasks = this.tasks.filter(task => {
       const taskId = `${task.item_type}-${task.item_id}`;
-      const hasChildren = this.tasks.some(t => 
+      const children = this.tasks.filter(t => 
         t.parent_issue_id === task.item_id && t.item_type === 'issue'
       );
-      return hasChildren;
+      if (children.length > 0) {
+        console.log(`  📁 ${task.name} has ${children.length} children`);
+      }
+      return children.length > 0;
     });
+    
+    console.log(`Found ${parentTasks.length} parent tasks with children`);
     
     parentTasks.forEach(task => {
       const taskId = `${task.item_type}-${task.item_id}`;
@@ -414,13 +423,27 @@ class HierarchicalGanttEnhancer {
   }
 
   toggleExpand(taskId) {
+    console.log(`🔄 Toggle expand for task: ${taskId}`);
+    
     if (this.expanded.has(taskId)) {
       this.expanded.delete(taskId);
+      console.log(`  ➡️ Collapsed ${taskId}`);
     } else {
       this.expanded.add(taskId);
+      console.log(`  ⬇️ Expanded ${taskId}`);
     }
     
     this.saveState();
+    
+    // ✅ CRITICAL: Re-render the Gantt chart to show/hide children
+    console.log('🔄 Re-rendering Gantt chart after toggle...');
+    const visibleTasks = this.enhance(this.tasks);
+    
+    // Refresh the Gantt chart with new visible tasks
+    if (this.gantt && this.gantt.refresh) {
+      this.gantt.refresh(visibleTasks);
+      console.log(`✅ Gantt chart refreshed with ${visibleTasks.length} visible tasks`);
+    }
     
     if (this.options.onToggle) {
       this.options.onToggle(taskId, this.expanded.has(taskId));
@@ -476,12 +499,25 @@ class HierarchicalGanttEnhancer {
     console.log('Expanded Set size:', this.expanded.size);
     
     // Re-render
-    this.enhance(this.tasks);
+    const visibleTasks = this.enhance(this.tasks);
+    if (this.gantt && this.gantt.refresh) {
+      this.gantt.refresh(visibleTasks);
+    }
     this.saveState();
   }
 
   collapseAll() {
     console.log('📁 Collapsing all parent tasks');
+    this.expanded.clear();
+    const visibleTasks = this.enhance(this.tasks);
+    if (this.gantt && this.gantt.refresh) {
+      this.gantt.refresh(visibleTasks);
+    }
+    this.saveState();
+  }
+  
+  destroy() {
+    console.log('🧹 Cleaning up hierarchy enhancer');
     
     // Clear expanded Set
     this.expanded.clear();
