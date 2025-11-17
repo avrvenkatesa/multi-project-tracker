@@ -118,57 +118,45 @@ class HierarchicalGanttEnhancer {
         console.log('🗑️ Removed old event handler');
       }
       
-      // Verify container
-      console.log('📍 Container element:', this.container);
-      console.log('📍 Container tag:', this.container?.tagName);
-      
-      // Event delegation for expand/collapse buttons (SVG-compatible)
+      // Coordinate-based click detection for SVG chevron buttons
       this.expandCollapseHandler = (e) => {
-        console.log('🖱️ Click detected!', e.target.tagName, e.target.classList ? Array.from(e.target.classList) : 'no classes');
+        // Get all chevron button groups
+        const allButtons = this.container.querySelectorAll('.gantt-expand-btn');
         
-        // For SVG, we need to check the target and its parents manually
-        let element = e.target;
-        let expandBtn = null;
-        let attempts = 0;
-        
-        // Walk up the DOM tree looking for .gantt-expand-btn
-        while (element && attempts < 5) {
-          console.log(`  Checking element ${attempts}:`, element.tagName, element.classList ? Array.from(element.classList) : 'no classes');
-          
-          if (element.classList && element.classList.contains('gantt-expand-btn')) {
-            expandBtn = element;
-            console.log('  ✅ Found it at this element!');
-            break;
-          }
-          
-          // Also check parent's classList
-          if (element.parentElement) {
-            if (element.parentElement.classList && 
-                element.parentElement.classList.contains('gantt-expand-btn')) {
-              expandBtn = element.parentElement;
-              console.log('  ✅ Found it at parent element!');
-              break;
+        // Check if click is inside any button's bounding box
+        for (const btn of allButtons) {
+          const circle = btn.querySelector('circle');
+          if (circle) {
+            const cx = parseFloat(circle.getAttribute('cx'));
+            const cy = parseFloat(circle.getAttribute('cy'));
+            const r = parseFloat(circle.getAttribute('r')) || 8;
+            
+            // Get click coordinates relative to SVG
+            const pt = this.container.createSVGPoint();
+            pt.x = e.clientX;
+            pt.y = e.clientY;
+            const svgPt = pt.matrixTransform(this.container.getScreenCTM().inverse());
+            
+            // Check if click is within circle radius
+            const dx = svgPt.x - cx;
+            const dy = svgPt.y - cy;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance <= r + 5) { // Add 5px tolerance
+              e.stopPropagation();
+              e.preventDefault();
+              const taskId = btn.getAttribute('data-task-id');
+              const task = this.tasks.find(t => this.getTaskId(t) === taskId);
+              console.log(`✅ Chevron clicked (coordinate match): ${this.getTaskName(task)} (${taskId})`);
+              this.toggleExpand(taskId);
+              return;
             }
           }
-          
-          element = element.parentElement;
-          attempts++;
-        }
-        
-        console.log('🔍 Found expand button:', expandBtn);
-        
-        if (expandBtn) {
-          e.stopPropagation();
-          e.preventDefault();
-          const taskId = expandBtn.getAttribute('data-task-id');
-          const task = this.tasks.find(t => this.getTaskId(t) === taskId);
-          console.log(`✅ Chevron clicked for task: ${this.getTaskName(task)} (${taskId})`);
-          this.toggleExpand(taskId);
         }
       };
       
       this.container.addEventListener('click', this.expandCollapseHandler, true);
-      console.log('✅ Event delegation attached for expand/collapse');
+      console.log('✅ Event delegation attached (coordinate-based)');
       
       // Test if event listener was added
       setTimeout(() => {
