@@ -15,22 +15,44 @@ class HierarchicalGanttEnhancer {
     this.loadState();
   }
 
+  normalizeTasks(tasks) {
+    // Ensure all tasks have is_epic and issue_type fields
+    return tasks.map(task => {
+      // If is_epic is undefined, infer from hierarchy_level
+      if (task.is_epic === undefined || task.is_epic === null) {
+        task.is_epic = task.hierarchy_level === 0;
+      }
+
+      // If issue_type is undefined, infer from hierarchy_level
+      if (!task.issue_type) {
+        if (task.hierarchy_level === 0) {
+          task.issue_type = 'epic';
+        } else if (task.hierarchy_level === 1) {
+          task.issue_type = 'task';
+        } else if (task.hierarchy_level === 2) {
+          task.issue_type = 'subtask';
+        } else {
+          task.issue_type = 'task';
+        }
+      }
+
+      return task;
+    });
+  }
+
   enhance(tasks) {
-    this.tasks = tasks;
+    // Normalize tasks first to ensure is_epic field exists
+    this.tasks = this.normalizeTasks(tasks);
     
-    // Debug logging to see task data structure
-    console.log('📋 All tasks received by enhancer:', tasks.length);
-    console.log('First 3 tasks:', tasks.slice(0, 3).map(t => ({
-      id: t.id,
-      name: t.name,
-      hierarchy_level: t.hierarchy_level,
-      is_epic: t.is_epic,
-      issue_type: t.issue_type,
-      item_type: t.item_type,
-      item_id: t.item_id
-    })));
+    // Debug logging
+    console.log('📋 Total tasks received:', this.tasks.length);
+    const epicCount = this.tasks.filter(t => t.is_epic).length;
+    console.log('👑 Epic tasks after normalization:', epicCount);
+    this.tasks.filter(t => t.is_epic).forEach(epic => {
+      console.log(`  - ${epic.name} (level ${epic.hierarchy_level})`);
+    });
     
-    const hierarchyTree = this.buildHierarchyTree(tasks);
+    const hierarchyTree = this.buildHierarchyTree(this.tasks);
     
     const visibleTasks = this.getVisibleTasks(hierarchyTree);
     

@@ -15353,7 +15353,19 @@ app.get('/api/schedules/:scheduleId/pdf', authenticateToken, async (req, res) =>
         CASE 
           WHEN ts.item_type = 'issue' THEN i.assignee
           ELSE ai.assignee
-        END as assignee
+        END as assignee,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.hierarchy_level
+          ELSE 0
+        END as hierarchy_level,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.is_epic
+          ELSE false
+        END as is_epic,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.parent_issue_id
+          ELSE NULL
+        END as parent_issue_id
        FROM task_schedules ts
        LEFT JOIN issues i ON ts.item_type = 'issue' AND ts.item_id = i.id
        LEFT JOIN action_items ai ON ts.item_type = 'action-item' AND ts.item_id = ai.id
