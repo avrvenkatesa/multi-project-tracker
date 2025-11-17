@@ -59,18 +59,20 @@ async function extractTextFromDocument(fileBuffer, mimeType, filename) {
       };
     }
     
-    if (mimeType === 'text/plain' || filename.endsWith('.txt')) {
+    if (mimeType === 'text/plain' || mimeType === 'text/markdown' || 
+        filename.endsWith('.txt') || filename.endsWith('.md')) {
       return {
         text: fileBuffer.toString('utf-8'),
         pageCount: null,
         metadata: {
-          filename: filename
+          filename: filename,
+          isMarkdown: filename.endsWith('.md')
         },
         success: true
       };
     }
     
-    throw new Error(`Unsupported file type: ${mimeType}. Please upload PDF, DOCX, or TXT files.`);
+    throw new Error(`Unsupported file type: ${mimeType}. Please upload PDF, DOCX, TXT, or Markdown files.`);
     
   } catch (error) {
     console.error('Error extracting text:', error);
@@ -86,14 +88,15 @@ function validateDocumentFile(file) {
   const allowedTypes = [
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain'
+    'text/plain',
+    'text/markdown'
   ];
   
   const maxSize = 10 * 1024 * 1024;
   
   if (!allowedTypes.includes(file.mimetype) && 
-      !file.originalname.match(/\.(pdf|docx|txt)$/i)) {
-    throw new Error('Invalid file type. Please upload PDF, DOCX, or TXT files only.');
+      !file.originalname.match(/\.(pdf|docx|txt|md)$/i)) {
+    throw new Error('Invalid file type. Please upload PDF, DOCX, TXT, or Markdown files only.');
   }
   
   if (file.size > maxSize) {
