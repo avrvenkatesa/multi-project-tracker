@@ -2408,31 +2408,19 @@ function sortTasksByAssignee(tasks) {
 }
 
 async function renderGanttChart(tasks, schedule) {
+  // Log raw tasks to verify hierarchy data from API
+  console.log('🔍 Raw API tasks (first 3):', tasks.slice(0, 3).map(t => ({
+    title: t.title,
+    hierarchy_level: t.hierarchy_level,
+    is_epic: t.is_epic,
+    parent_issue_id: t.parent_issue_id
+  })));
+  
   // Sort tasks by assignee
   const { sortedTasks, metadata } = sortTasksByAssignee(tasks);
   
-  // ============================================
-  // HIERARCHY INTEGRATION: Fetch hierarchy data
-  // ============================================
-  let hierarchyData = [];
-  try {
-    const hierarchyResponse = await fetch(`/api/projects/${schedule.project_id}/hierarchy`);
-    if (hierarchyResponse.ok) {
-      hierarchyData = await hierarchyResponse.json();
-    }
-  } catch (error) {
-    console.warn('Could not fetch hierarchy data:', error);
-    // Continue without hierarchy - non-blocking
-  }
-  
-  // Build hierarchy map for quick lookup
-  const hierarchyMap = new Map();
-  hierarchyData.forEach(item => {
-    hierarchyMap.set(`${item.item_type}-${item.item_id}`, item);
-  });
-  
   // Cache context for compact toggle re-renders (include metadata for swim lanes)
-  lastGanttContext = { tasks, schedule, sortedTasks, metadata, hierarchyData };
+  lastGanttContext = { tasks, schedule, sortedTasks, metadata };
   
   const ganttContainer = document.getElementById('gantt-container');
   ganttContainer.innerHTML = ''; // Clear previous chart to avoid stacking
@@ -2448,12 +2436,9 @@ async function renderGanttChart(tasks, schedule) {
     ganttContainer.classList.remove('gantt-expanded');
   }
 
-  // ============================================
-  // HIERARCHY INTEGRATION: Merge hierarchy data with tasks
-  // ============================================
+  // ✅ Use hierarchy fields DIRECTLY from tasks (already provided by API)
   const ganttTasks = sortedTasks.map(task => {
     const taskId = `${task.item_type}-${task.item_id}`;
-    const hierarchyInfo = hierarchyMap.get(taskId);
     
     return {
       id: taskId,
@@ -2465,13 +2450,29 @@ async function renderGanttChart(tasks, schedule) {
         ? task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(',') 
         : '',
       custom_class: task.is_critical_path ? 'bar-critical' : '',
-      _assignee: (task.assignee || 'Unassigned').toLowerCase(), // Store for data attribute injection
-      // Add hierarchy fields
+      _assignee: (task.assignee || 'Unassigned').toLowerCase(),
+      // ✅✅✅ CRITICAL: Preserve hierarchy fields from API response
       item_type: task.item_type,
       item_id: task.item_id,
-      parent_issue_id: hierarchyInfo?.parent_issue_id || null,
-      hierarchy_level: hierarchyInfo?.hierarchy_level || 0
+      parent_issue_id: task.parent_issue_id,
+      hierarchy_level: task.hierarchy_level,
+      is_epic: task.is_epic
     };
+  });
+  
+  // Log transformed tasks to verify fields are preserved
+  console.log('🔍 After transformation (first 3):', ganttTasks.slice(0, 3).map(t => ({
+    name: t.name,
+    hierarchy_level: t.hierarchy_level,
+    is_epic: t.is_epic,
+    parent_issue_id: t.parent_issue_id
+  })));
+  
+  console.log('📊 Transformed distribution:', {
+    level0: ganttTasks.filter(t => t.hierarchy_level === 0).length,
+    level1: ganttTasks.filter(t => t.hierarchy_level === 1).length,
+    level2: ganttTasks.filter(t => t.hierarchy_level === 2).length,
+    epics: ganttTasks.filter(t => t.is_epic === true).length
   });
 
   if (ganttTasks.length === 0) {
