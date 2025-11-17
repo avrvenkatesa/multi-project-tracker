@@ -189,18 +189,18 @@ svg.gantt .grid-line {
   stroke-width: 2px !important;
 }
 
-/* Level 2: SUBTASKS - Light Blue */
+/* Level 2: SUBTASKS - Grey */
 .bar-subtask {
-  fill: #93c5fd !important;
-  stroke: #60a5fa !important;
+  fill: #9ca3af !important;
+  stroke: #6b7280 !important;
   stroke-width: 1.5px !important;
-  filter: drop-shadow(0 1px 3px rgba(147, 197, 253, 0.2));
+  filter: drop-shadow(0 1px 3px rgba(107, 114, 128, 0.2));
   opacity: 1 !important;
 }
 
 .gantt .bar-subtask {
-  fill: #93c5fd !important;
-  stroke: #60a5fa !important;
+  fill: #9ca3af !important;
+  stroke: #6b7280 !important;
   stroke-width: 1.5px !important;
 }
 
@@ -230,8 +230,8 @@ svg.gantt .grid-line {
 }
 
 .bar-subtask .bar-progress {
-  fill: #bfdbfe !important;
-  opacity: 0.6 !important;
+  fill: #d1d5db !important;
+  opacity: 0.7 !important;
 }
 
 /* Ensure hierarchy styles override Frappe Gantt defaults */
