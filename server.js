@@ -202,12 +202,13 @@ const documentUpload = multer({
     const allowedTypes = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
+      'text/plain',
+      'text/markdown'
     ];
-    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt)$/i)) {
+    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt|md)$/i)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF, DOCX, and TXT files are allowed'));
+      cb(new Error('Only PDF, DOCX, TXT, and Markdown files are allowed'));
     }
   }
 });
@@ -244,12 +245,13 @@ const getDocumentUploadMiddleware = async (req, res, next) => {
         const allowedTypes = [
           'application/pdf',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'text/plain'
+          'text/plain',
+          'text/markdown'
         ];
-        if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt)$/i)) {
+        if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt|md)$/i)) {
           cb(null, true);
         } else {
-          cb(new Error('Only PDF, DOCX, and TXT files allowed'));
+          cb(new Error('Only PDF, DOCX, TXT, and Markdown files allowed'));
         }
       }
     });
