@@ -18,10 +18,16 @@ class HierarchicalGanttEnhancer {
   normalizeTasks(tasks) {
     // Ensure all tasks have is_epic and issue_type fields
     return tasks.map(task => {
-      // If is_epic is undefined, infer from hierarchy_level
-      if (task.is_epic === undefined || task.is_epic === null) {
+      // Coerce is_epic to a real boolean (handle PostgreSQL 't'/'f' strings)
+      if (typeof task.is_epic === 'string') {
+        task.is_epic = task.is_epic === 't' || task.is_epic === 'true' || task.is_epic === '1';
+      } else if (typeof task.is_epic === 'number') {
+        task.is_epic = task.is_epic === 1;
+      } else if (task.is_epic === null || task.is_epic === undefined) {
+        // Only infer from hierarchy_level if truly missing
         task.is_epic = task.hierarchy_level === 0;
       }
+      // Otherwise keep the boolean value as-is
 
       // If issue_type is undefined, infer from hierarchy_level
       if (!task.issue_type) {
