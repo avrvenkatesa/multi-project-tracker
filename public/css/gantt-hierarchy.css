@@ -127,24 +127,100 @@
 }
 
 /* ============================================
-   EPIC BARS
-   Enhanced styling for parent tasks
-   Integration: Applied to Frappe Gantt .bar elements
+   HIERARCHICAL COLOR CODING
+   Clear visual distinction between hierarchy levels
    ============================================ */
+
+/* Level 0: EPICS - Indigo/Purple gradient with thick border */
+.bar-epic {
+  fill: url(#gantt-epic-gradient) !important;
+  stroke: #6366f1 !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 3px 6px rgba(99, 102, 241, 0.3));
+  opacity: 1 !important;
+}
 
 .gantt .bar-epic {
   fill: url(#gantt-epic-gradient) !important;
-  stroke: #6366f1;
-  stroke-width: 2px;
-  filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.2));
+  stroke: #6366f1 !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 3px 6px rgba(99, 102, 241, 0.3));
   font-weight: 600;
 }
 
 .gantt .bar-epic:hover {
-  filter: drop-shadow(0 3px 6px rgba(99, 102, 241, 0.3));
+  filter: drop-shadow(0 4px 8px rgba(99, 102, 241, 0.4));
 }
 
-/* Epic bar gradient (defined in SVG defs) */
+/* Level 1: TASKS - Solid Blue */
+.bar-task {
+  fill: #3b82f6 !important;
+  stroke: #2563eb !important;
+  stroke-width: 2px !important;
+  filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.2));
+  opacity: 1 !important;
+}
+
+.gantt .bar-task {
+  fill: #3b82f6 !important;
+  stroke: #2563eb !important;
+  stroke-width: 2px !important;
+}
+
+/* Level 2: SUBTASKS - Light Blue */
+.bar-subtask {
+  fill: #93c5fd !important;
+  stroke: #60a5fa !important;
+  stroke-width: 1.5px !important;
+  filter: drop-shadow(0 1px 3px rgba(147, 197, 253, 0.2));
+  opacity: 1 !important;
+}
+
+.gantt .bar-subtask {
+  fill: #93c5fd !important;
+  stroke: #60a5fa !important;
+  stroke-width: 1.5px !important;
+}
+
+/* Level 3+: SUB-SUBTASKS - Very Light Blue/Cyan */
+.bar-sub-subtask {
+  fill: #dbeafe !important;
+  stroke: #93c5fd !important;
+  stroke-width: 1px !important;
+  opacity: 1 !important;
+}
+
+.gantt .bar-sub-subtask {
+  fill: #dbeafe !important;
+  stroke: #93c5fd !important;
+  stroke-width: 1px !important;
+}
+
+/* Progress bar styling for each level */
+.bar-epic .bar-progress {
+  fill: #818cf8 !important;
+  opacity: 0.8 !important;
+}
+
+.bar-task .bar-progress {
+  fill: #60a5fa !important;
+  opacity: 0.7 !important;
+}
+
+.bar-subtask .bar-progress {
+  fill: #bfdbfe !important;
+  opacity: 0.6 !important;
+}
+
+/* Ensure hierarchy styles override Frappe Gantt defaults */
+svg.gantt .bar-wrapper .bar-epic,
+svg.gantt .bar-wrapper .bar-task,
+svg.gantt .bar-wrapper .bar-subtask,
+svg.gantt .bar-wrapper .bar-sub-subtask {
+  opacity: 1 !important;
+}
+
+/* Epic bar gradient (defined in SVG defs via JS) */
 .gantt svg defs #gantt-epic-gradient {
   /* Applied via fill: url(#gantt-epic-gradient) */
 }

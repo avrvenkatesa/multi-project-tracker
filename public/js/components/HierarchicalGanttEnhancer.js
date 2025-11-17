@@ -26,6 +26,87 @@ class HierarchicalGanttEnhancer {
     return task.id || `${task.item_type}-${task.item_id}`;
   }
 
+  createGradientDefinitions() {
+    let defs = this.container.querySelector('defs');
+    if (!defs) {
+      defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      this.container.insertBefore(defs, this.container.firstChild);
+    }
+
+    // Remove existing gradient if present
+    const existingGradient = defs.querySelector('#gantt-epic-gradient');
+    if (existingGradient) {
+      existingGradient.remove();
+    }
+
+    // Epic gradient - Indigo to Purple
+    const epicGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    epicGradient.setAttribute('id', 'gantt-epic-gradient');
+    epicGradient.setAttribute('x1', '0%');
+    epicGradient.setAttribute('y1', '0%');
+    epicGradient.setAttribute('x2', '0%');
+    epicGradient.setAttribute('y2', '100%');
+
+    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop1.setAttribute('offset', '0%');
+    stop1.setAttribute('style', 'stop-color:#818cf8;stop-opacity:1');
+
+    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop2.setAttribute('offset', '100%');
+    stop2.setAttribute('style', 'stop-color:#6366f1;stop-opacity:1');
+
+    epicGradient.appendChild(stop1);
+    epicGradient.appendChild(stop2);
+    defs.appendChild(epicGradient);
+
+    console.log('✅ Gradient definitions created');
+  }
+
+  applyHierarchicalStyling() {
+    console.log('🎨 Applying hierarchical styling...');
+
+    let epicCount = 0, taskCount = 0, subtaskCount = 0, subSubtaskCount = 0;
+
+    this.tasks.forEach(task => {
+      const taskId = `${task.item_type}-${task.item_id}`;
+      const barWrapper = this.container.querySelector(`.bar-wrapper[data-id="${taskId}"]`);
+      if (!barWrapper) {
+        console.warn(`⚠️ No bar wrapper for ${this.getTaskName(task)} (${taskId})`);
+        return;
+      }
+
+      const bar = barWrapper.querySelector('.bar');
+      if (!bar) {
+        console.warn(`⚠️ No bar element for ${this.getTaskName(task)}`);
+        return;
+      }
+
+      // Remove ALL hierarchy classes first
+      bar.classList.remove('bar-epic', 'bar-task', 'bar-subtask', 'bar-sub-subtask');
+
+      // Apply class based on hierarchy level
+      if (task.is_epic || task.hierarchy_level === 0) {
+        bar.classList.add('bar-epic');
+        epicCount++;
+        console.log(`  🟣 EPIC: ${this.getTaskName(task)} (level ${task.hierarchy_level})`);
+      } else if (task.hierarchy_level === 1) {
+        bar.classList.add('bar-task');
+        taskCount++;
+        console.log(`  🔵 TASK: ${this.getTaskName(task)} (level ${task.hierarchy_level})`);
+      } else if (task.hierarchy_level === 2) {
+        bar.classList.add('bar-subtask');
+        subtaskCount++;
+        console.log(`  🔷 SUBTASK: ${this.getTaskName(task)} (level ${task.hierarchy_level})`);
+      } else if (task.hierarchy_level >= 3) {
+        bar.classList.add('bar-sub-subtask');
+        subSubtaskCount++;
+        console.log(`  ◽ SUB-SUBTASK: ${this.getTaskName(task)} (level ${task.hierarchy_level})`);
+      }
+    });
+
+    console.log(`📊 Styled: ${epicCount} epics, ${taskCount} tasks, ${subtaskCount} subtasks, ${subSubtaskCount} sub-subtasks`);
+  }
+
   normalizeTasks(tasks) {
     // Ensure all tasks have is_epic and issue_type fields
     // BUT: Only add missing fields, don't override existing correct data
@@ -100,6 +181,12 @@ class HierarchicalGanttEnhancer {
     const visibleTasks = this.getVisibleTasks(hierarchyTree);
     
     setTimeout(() => {
+      // ✅ Create gradient definitions FIRST
+      this.createGradientDefinitions();
+      
+      // ✅ Apply hierarchical styling BEFORE adding badges/buttons
+      this.applyHierarchicalStyling();
+      
       if (this.options.showEpicBadges) {
         this.addEpicBadges();
       }
@@ -502,6 +589,17 @@ class HierarchicalGanttEnhancer {
     if (this.gantt && this.gantt.refresh) {
       this.gantt.refresh(visibleTasks);
       console.log(`✅ Gantt chart refreshed with ${visibleTasks.length} visible tasks`);
+      
+      // Re-apply styles after Gantt refresh (Frappe may reset styles)
+      setTimeout(() => {
+        this.applyHierarchicalStyling();
+        if (this.options.showEpicBadges) {
+          this.addEpicBadges();
+        }
+        if (this.options.allowCollapse) {
+          this.addExpandCollapseButtons();
+        }
+      }, 50);
     }
     
     if (this.options.onToggle) {
