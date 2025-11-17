@@ -44,13 +44,27 @@ class HierarchicalGanttEnhancer {
     // Normalize tasks first to ensure is_epic field exists
     this.tasks = this.normalizeTasks(tasks);
     
-    // Debug logging
+    // Enhanced debug logging
     console.log('📋 Total tasks received:', this.tasks.length);
-    const epicCount = this.tasks.filter(t => t.is_epic).length;
-    console.log('👑 Epic tasks after normalization:', epicCount);
-    this.tasks.filter(t => t.is_epic).forEach(epic => {
-      console.log(`  - ${epic.name} (level ${epic.hierarchy_level})`);
+
+    // Check hierarchy levels distribution
+    const levelCounts = {};
+    this.tasks.forEach(t => {
+      levelCounts[t.hierarchy_level] = (levelCounts[t.hierarchy_level] || 0) + 1;
     });
+    console.log('📊 Hierarchy level distribution:', levelCounts);
+
+    // Check parent-child relationships
+    const withParents = this.tasks.filter(t => t.parent_issue_id).length;
+    console.log('👨‍👧‍👦 Tasks with parents:', withParents);
+
+    // Show first 5 tasks with full details
+    console.table(this.tasks.slice(0, 5).map(t => ({
+      name: t.name,
+      hierarchy_level: t.hierarchy_level,
+      parent_issue_id: t.parent_issue_id,
+      is_epic: t.is_epic
+    })));
     
     const hierarchyTree = this.buildHierarchyTree(this.tasks);
     
