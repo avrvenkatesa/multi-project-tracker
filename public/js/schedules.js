@@ -2450,11 +2450,19 @@ async function renderGanttChart(tasks, schedule) {
         // Check issue_dependencies first (text field from issues table)
         if (task.issue_dependencies && task.issue_dependencies.trim()) {
           const depIds = task.issue_dependencies.split(',').map(id => id.trim()).filter(id => id);
-          return depIds.map(id => `issue-${id}`).join(',');
+          const result = depIds.map(id => `issue-${id}`).join(', '); // Space after comma per Frappe docs
+          console.log(`🔗 Task "${task.title}" has dependencies:`, {
+            raw: task.issue_dependencies,
+            parsed: depIds,
+            formatted: result
+          });
+          return result;
         }
         // Fallback to task.dependencies (JSONB from task_schedules)
         if (task.dependencies && task.dependencies.length > 0) {
-          return task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(',');
+          const result = task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(', '); // Space after comma
+          console.log(`🔗 Task "${task.title}" has JSONB dependencies:`, result);
+          return result;
         }
         return '';
       })(),
