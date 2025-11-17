@@ -17,21 +17,26 @@ class HierarchicalGanttEnhancer {
 
   normalizeTasks(tasks) {
     // Ensure all tasks have is_epic and issue_type fields
+    // BUT: Only add missing fields, don't override existing correct data
     return tasks.map(task => {
-      // Coerce is_epic to a real boolean (handle PostgreSQL 't'/'f' strings)
-      if (typeof task.is_epic === 'string') {
+      // ✅ ONLY set is_epic if it's truly missing (undefined/null)
+      // Don't override false values!
+      if (task.is_epic === undefined || task.is_epic === null) {
+        task.is_epic = task.hierarchy_level === 0;
+        console.log(`⚠️ Inferred is_epic=${task.is_epic} for "${task.name}" (level ${task.hierarchy_level})`);
+      } else if (typeof task.is_epic === 'string') {
+        // Handle PostgreSQL 't'/'f' strings
+        const oldValue = task.is_epic;
         task.is_epic = task.is_epic === 't' || task.is_epic === 'true' || task.is_epic === '1';
+        console.log(`🔄 Converted is_epic from "${oldValue}" to ${task.is_epic} for "${task.name}"`);
       } else if (typeof task.is_epic === 'number') {
         task.is_epic = task.is_epic === 1;
-      } else if (task.is_epic === null || task.is_epic === undefined) {
-        // Only infer from hierarchy_level if truly missing
-        task.is_epic = task.hierarchy_level === 0;
       }
       // Otherwise keep the boolean value as-is
 
-      // If issue_type is undefined, infer from hierarchy_level
+      // ✅ ONLY set issue_type if missing
       if (!task.issue_type) {
-        if (task.hierarchy_level === 0) {
+        if (task.hierarchy_level === 0 || task.is_epic) {
           task.issue_type = 'epic';
         } else if (task.hierarchy_level === 1) {
           task.issue_type = 'task';
@@ -47,30 +52,37 @@ class HierarchicalGanttEnhancer {
   }
 
   enhance(tasks) {
-    // Normalize tasks first to ensure is_epic field exists
-    this.tasks = this.normalizeTasks(tasks);
-    
-    // Enhanced debug logging
-    console.log('📋 Total tasks received:', this.tasks.length);
-
-    // Check hierarchy levels distribution
-    const levelCounts = {};
-    this.tasks.forEach(t => {
-      levelCounts[t.hierarchy_level] = (levelCounts[t.hierarchy_level] || 0) + 1;
-    });
-    console.log('📊 Hierarchy level distribution:', levelCounts);
-
-    // Check parent-child relationships
-    const withParents = this.tasks.filter(t => t.parent_issue_id).length;
-    console.log('👨‍👧‍👦 Tasks with parents:', withParents);
-
-    // Show first 5 tasks with full details
-    console.table(this.tasks.slice(0, 5).map(t => ({
+    console.log('📥 Raw tasks received (BEFORE normalization):', tasks.length);
+    console.table(tasks.slice(0, 3).map(t => ({
       name: t.name,
       hierarchy_level: t.hierarchy_level,
-      parent_issue_id: t.parent_issue_id,
-      is_epic: t.is_epic
+      is_epic: t.is_epic,
+      parent_issue_id: t.parent_issue_id
     })));
+
+    // Normalize tasks
+    this.tasks = this.normalizeTasks(tasks);
+
+    console.log('📋 After normalization:', this.tasks.length);
+    const epicCount = this.tasks.filter(t => t.is_epic === true).length;
+    const level0Count = this.tasks.filter(t => t.hierarchy_level === 0).length;
+    const level1Count = this.tasks.filter(t => t.hierarchy_level === 1).length;
+    const level2Count = this.tasks.filter(t => t.hierarchy_level === 2).length;
+
+    console.log('👑 Epics (is_epic=true):', epicCount);
+    console.log('📊 Distribution: Level 0:', level0Count, '| Level 1:', level1Count, '| Level 2:', level2Count);
+
+    if (epicCount !== level0Count) {
+      console.error('❌ MISMATCH! Epic count should equal Level 0 count!');
+      console.log('Tasks marked as epic but not level 0:');
+      this.tasks.filter(t => t.is_epic && t.hierarchy_level !== 0).forEach(t => {
+        console.log(`  - ${t.name}: is_epic=${t.is_epic}, level=${t.hierarchy_level}`);
+      });
+    }
+
+    this.tasks.filter(t => t.is_epic).forEach(epic => {
+      console.log(`  👑 ${epic.name} (level ${epic.hierarchy_level})`);
+    });
     
     const hierarchyTree = this.buildHierarchyTree(this.tasks);
     
