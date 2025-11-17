@@ -11,11 +11,15 @@
    Positioned at the start of parent task bars
    ============================================ */
 
+.gantt-epic-badge-group {
+  pointer-events: none !important; /* Don't block clicks */
+}
+
 .gantt-epic-badge {
   font-size: 12px;
   font-weight: 600;
   fill: #6366f1;
-  pointer-events: none;
+  pointer-events: none !important;
   user-select: none;
 }
 
@@ -24,13 +28,14 @@
   opacity: 0.9;
   rx: 3px;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+  pointer-events: none !important; /* Don't block clicks */
 }
 
 .epic-badge-text {
   fill: #ffffff;
   font-size: 9px;
   font-weight: 700;
-  pointer-events: none;
+  pointer-events: none !important;
   text-anchor: middle;
 }
 
@@ -42,7 +47,13 @@
 .gantt-expand-btn {
   cursor: pointer !important;
   pointer-events: all !important;
+  z-index: 1000 !important; /* Above all other elements */
   transition: none; /* Prevent transition flickering */
+}
+
+.gantt-expand-circle {
+  cursor: pointer !important;
+  pointer-events: all !important; /* Allow clicks on circle */
 }
 
 .gantt-expand-btn circle {
@@ -50,7 +61,8 @@
   fill: #ffffff;
   stroke: var(--gantt-border, #e1e4e8);
   stroke-width: 2px;
-  pointer-events: none !important;
+  cursor: pointer !important;
+  pointer-events: all !important; /* Allow clicks to bubble to parent */
   transition: fill 0.15s ease, transform 0.15s ease;
 }
 

@@ -114,12 +114,21 @@ class HierarchicalGanttEnhancer {
       // Remove old event listener
       if (this.expandCollapseHandler) {
         this.container.removeEventListener('click', this.expandCollapseHandler);
+        console.log('🗑️ Removed old event handler');
       }
+      
+      // Verify container
+      console.log('📍 Container element:', this.container);
+      console.log('📍 Container tag:', this.container?.tagName);
       
       // Add single delegated click handler
       this.expandCollapseHandler = (e) => {
+        console.log('🖱️ Click detected on container!', e.target.tagName, e.target.className);
+        
         // Find if click was on expand button
         const expandBtn = e.target.closest('.gantt-expand-btn');
+        console.log('🔍 Closest expand button:', expandBtn);
+        
         if (expandBtn) {
           e.stopPropagation(); // Prevent Frappe Gantt from handling
           e.preventDefault();
@@ -127,7 +136,7 @@ class HierarchicalGanttEnhancer {
           const taskId = expandBtn.getAttribute('data-task-id');
           if (taskId) {
             const task = this.tasks.find(t => this.getTaskId(t) === taskId);
-            console.log(`🖱️ Chevron clicked for task: ${this.getTaskName(task)} (${taskId})`);
+            console.log(`✅ Chevron clicked for task: ${this.getTaskName(task)} (${taskId})`);
             this.toggleExpand(taskId);
           }
         }
@@ -135,6 +144,18 @@ class HierarchicalGanttEnhancer {
       
       this.container.addEventListener('click', this.expandCollapseHandler, true); // Use capture phase
       console.log('✅ Event delegation attached for expand/collapse');
+      
+      // Test if event listener was added
+      setTimeout(() => {
+        console.log('🧪 Testing event listener setup...');
+        const buttons = this.container.querySelectorAll('.gantt-expand-btn');
+        console.log(`Found ${buttons.length} chevron buttons in DOM`);
+        buttons.forEach((btn, i) => {
+          const taskId = btn.getAttribute('data-task-id');
+          const task = this.tasks.find(t => this.getTaskId(t) === taskId);
+          console.log(`  Button ${i + 1}: ${this.getTaskName(task)} (${taskId})`);
+        });
+      }, 200);
     }, 100);
     
     return visibleTasks;
