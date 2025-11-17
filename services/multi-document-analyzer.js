@@ -131,13 +131,17 @@ class MultiDocumentAnalyzer {
         
         // Check if hierarchy extraction found structured content
         if (hierarchyResult && hierarchyResult.hierarchy && hierarchyResult.hierarchy.length > 0) {
+          // Check if we have hierarchical levels (items with level > 0 or parent_id set)
           const hasHierarchy = hierarchyResult.hierarchy.some(item => 
-            item.children && item.children.length > 0
+            (item.level && item.level > 0) || item.parent_id
           );
           
-          if (hasHierarchy) {
+          if (hasHierarchy || hierarchyResult.hierarchy.length > 3) {
             useHierarchicalWorkflow = true;
-            emit('log', { message: `✓ Found hierarchical structure with ${hierarchyResult.hierarchy.length} top-level items` });
+            const epics = hierarchyResult.hierarchy.filter(i => i.level === 0 || i.type === 'epic').length;
+            const tasks = hierarchyResult.hierarchy.filter(i => i.level === 1 || i.type === 'task').length;
+            const subtasks = hierarchyResult.hierarchy.filter(i => i.level === 2 || i.type === 'subtask').length;
+            emit('log', { message: `✓ Found hierarchical structure: ${epics} epics, ${tasks} tasks, ${subtasks} subtasks` });
             if (hierarchyResult.cost) {
               result.aiCostBreakdown.hierarchy_extraction = hierarchyResult.cost;
               result.totalCost += hierarchyResult.cost;
