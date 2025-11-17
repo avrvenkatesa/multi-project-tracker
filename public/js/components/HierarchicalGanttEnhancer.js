@@ -15,6 +15,16 @@ class HierarchicalGanttEnhancer {
     this.loadState();
   }
 
+  // Helper to get task name (handles both 'name' and 'title' fields)
+  getTaskName(task) {
+    return task.name || task.title || 'Unnamed Task';
+  }
+
+  // Helper to get task ID
+  getTaskId(task) {
+    return task.id || `${task.item_type}-${task.item_id}`;
+  }
+
   normalizeTasks(tasks) {
     // Ensure all tasks have is_epic and issue_type fields
     // BUT: Only add missing fields, don't override existing correct data
@@ -81,7 +91,7 @@ class HierarchicalGanttEnhancer {
     }
 
     this.tasks.filter(t => t.is_epic).forEach(epic => {
-      console.log(`  👑 ${epic.name} (level ${epic.hierarchy_level})`);
+      console.log(`  👑 ${this.getTaskName(epic)} (level ${epic.hierarchy_level})`);
     });
     
     const hierarchyTree = this.buildHierarchyTree(this.tasks);
@@ -116,13 +126,15 @@ class HierarchicalGanttEnhancer {
           
           const taskId = expandBtn.getAttribute('data-task-id');
           if (taskId) {
-            console.log('Toggle expand for task:', taskId);
+            const task = this.tasks.find(t => this.getTaskId(t) === taskId);
+            console.log(`🖱️ Chevron clicked for task: ${this.getTaskName(task)} (${taskId})`);
             this.toggleExpand(taskId);
           }
         }
       };
       
       this.container.addEventListener('click', this.expandCollapseHandler, true); // Use capture phase
+      console.log('✅ Event delegation attached for expand/collapse');
     }, 100);
     
     return visibleTasks;
@@ -202,7 +214,7 @@ class HierarchicalGanttEnhancer {
   addEpicBadges() {
     console.log('🏷️ Adding epic badges...');
     const epicTasks = this.tasks.filter(t => t.is_epic);
-    console.log(`Found ${epicTasks.length} epic tasks:`, epicTasks.map(t => t.name));
+    console.log(`Found ${epicTasks.length} epic tasks:`, epicTasks.map(t => this.getTaskName(t)));
 
     epicTasks.forEach(task => {
       // ✅ Use correct ID format: item_type-item_id
@@ -211,14 +223,14 @@ class HierarchicalGanttEnhancer {
       console.log(`Looking for bar-wrapper with data-id="${taskId}":`, barWrapper ? '✅ Found' : '❌ Not found');
 
       if (!barWrapper) {
-        console.warn(`⚠️ No bar wrapper found for epic task: ${task.name} (${task.id})`);
+        console.warn(`⚠️ No bar wrapper found for epic task: ${this.getTaskName(task)} (${taskId})`);
         return;
       }
 
       const bar = barWrapper.querySelector('.bar');
       if (bar) {
         bar.classList.add('bar-epic');
-        console.log(`✅ Added .bar-epic class to ${task.name}`);
+        console.log(`✅ Added .bar-epic class to ${this.getTaskName(task)}`);
       }
 
       // Remove existing badge if present
@@ -265,7 +277,7 @@ class HierarchicalGanttEnhancer {
       badgeGroup.appendChild(text);
       barWrapper.appendChild(badgeGroup);
 
-      console.log(`✅ Epic badge added for ${task.name} at x=${x}, y=${y}`);
+      console.log(`✅ Epic badge added for ${this.getTaskName(task)} at x=${x}, y=${y}`);
     });
   }
 
@@ -281,7 +293,7 @@ class HierarchicalGanttEnhancer {
         t.parent_issue_id === task.item_id && t.item_type === 'issue'
       );
       if (children.length > 0) {
-        console.log(`  📁 ${task.name} has ${children.length} children`);
+        console.log(`  📁 ${this.getTaskName(task)} has ${children.length} children`);
       }
       return children.length > 0;
     });
@@ -291,7 +303,10 @@ class HierarchicalGanttEnhancer {
     parentTasks.forEach(task => {
       const taskId = `${task.item_type}-${task.item_id}`;
       const barWrapper = svg.querySelector(`.bar-wrapper[data-id="${taskId}"]`);
-      if (!barWrapper) return;
+      if (!barWrapper) {
+        console.warn(`⚠️ No bar wrapper found for parent task: ${this.getTaskName(task)}`);
+        return;
+      }
       
       const bar = barWrapper.querySelector('.bar');
       if (!bar) return;
@@ -339,6 +354,8 @@ class HierarchicalGanttEnhancer {
       buttonGroup.appendChild(circle);
       buttonGroup.appendChild(chevron);
       barWrapper.appendChild(buttonGroup);
+      
+      console.log(`  ✅ Added ${isExpanded ? 'expanded' : 'collapsed'} button for ${this.getTaskName(task)}`);
     });
   }
 
@@ -423,14 +440,17 @@ class HierarchicalGanttEnhancer {
   }
 
   toggleExpand(taskId) {
-    console.log(`🔄 Toggle expand for task: ${taskId}`);
+    const task = this.tasks.find(t => this.getTaskId(t) === taskId);
+    const taskName = task ? this.getTaskName(task) : taskId;
+    
+    console.log(`🔄 Toggle expand for task: ${taskName} (${taskId})`);
     
     if (this.expanded.has(taskId)) {
       this.expanded.delete(taskId);
-      console.log(`  ➡️ Collapsed ${taskId}`);
+      console.log(`  ➡️ Collapsed ${taskName}`);
     } else {
       this.expanded.add(taskId);
-      console.log(`  ⬇️ Expanded ${taskId}`);
+      console.log(`  ⬇️ Expanded ${taskName}`);
     }
     
     this.saveState();
