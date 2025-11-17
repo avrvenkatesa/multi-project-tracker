@@ -15302,6 +15302,10 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
           WHEN ts.item_type = 'issue' THEN i.parent_issue_id
           ELSE NULL
         END as parent_issue_id,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN COALESCE(i.dependencies, '')
+          ELSE ''
+        END as issue_dependencies,
         COALESCE(ts.dependencies, '[]'::jsonb) as dependencies
        FROM task_schedules ts
        LEFT JOIN issues i ON ts.item_type = 'issue' AND ts.item_id = i.id
@@ -15311,23 +15315,25 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
       [scheduleId]
     );
     
-    // Log hierarchy data for debugging
+    // Log hierarchy data and dependencies for debugging
     console.log('📊 Sending tasks to Gantt chart:', {
       total: tasks.rows.length,
       epics: tasks.rows.filter(t => t.is_epic === true).length,
       level0: tasks.rows.filter(t => t.hierarchy_level === 0).length,
       level1: tasks.rows.filter(t => t.hierarchy_level === 1).length,
       level2: tasks.rows.filter(t => t.hierarchy_level === 2).length,
-      withParents: tasks.rows.filter(t => t.parent_issue_id).length
+      withParents: tasks.rows.filter(t => t.parent_issue_id).length,
+      withDependencies: tasks.rows.filter(t => t.issue_dependencies && t.issue_dependencies.length > 0).length
     });
     
-    // Log first 3 tasks with hierarchy info
+    // Log first 3 tasks with hierarchy and dependency info
     if (tasks.rows.length > 0) {
       console.log('Sample tasks:', tasks.rows.slice(0, 3).map(t => ({
         name: t.title,
         hierarchy_level: t.hierarchy_level,
         is_epic: t.is_epic,
-        parent_issue_id: t.parent_issue_id
+        parent_issue_id: t.parent_issue_id,
+        issue_dependencies: t.issue_dependencies
       })));
     }
 
