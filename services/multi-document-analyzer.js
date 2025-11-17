@@ -776,12 +776,13 @@ class MultiDocumentAnalyzer {
       const scheduleResult = { created: false, scheduleId: null, message: 'Not created' };
       if (creationResult.created.length > 0 && options.autoSchedule !== false) {
         try {
-          console.log('📅 [Hierarchy Analyzer] Auto-generating project schedule...');
+          console.log('📅 [Hierarchy Analyzer] Auto-generating project schedule using cascaded dates...');
           
-          // Fetch effort estimates and dependencies
+          // Fetch issues WITH cascaded dates from post-processing
           const issueIds = creationResult.created.map(i => i.id);
           const issuesData = await pool.query(
-            `SELECT id, title, assignee, ai_effort_estimate_hours, ai_estimate_confidence 
+            `SELECT id, title, assignee, ai_effort_estimate_hours, ai_estimate_confidence,
+                    start_date, due_date
              FROM issues WHERE id = ANY($1)`,
             [issueIds]
           );
@@ -811,7 +812,7 @@ class MultiDocumentAnalyzer {
             }
           }
 
-          // Prepare schedule items
+          // Prepare schedule items with CASCADED dates (not recalculated)
           const scheduleItems = issuesData.rows.map(issue => ({
             type: 'issue',
             id: issue.id,
@@ -819,27 +820,28 @@ class MultiDocumentAnalyzer {
             assignee: issue.assignee || 'Unassigned',
             estimate: parseFloat(issue.ai_effort_estimate_hours) || 0,
             estimateSource: 'ai',
-            dependencies: dependencyMap.get(`issue:${issue.id}`) || []
+            dependencies: dependencyMap.get(`issue:${issue.id}`) || [],
+            // ✅ Pass cascaded dates so schedule uses them instead of recalculating
+            scheduledStart: issue.start_date,
+            scheduledEnd: issue.due_date
           }));
 
-          // Create schedule
+          // Create schedule using cascaded dates
           const startDate = options.projectStartDate || new Date().toISOString().split('T')[0];
-          const result = await schedulerService.createScheduleFromIssues({
+          const result = await schedulerService.createScheduleFromCascadedIssues({
             projectId,
             name: 'AI-Generated Schedule (Hierarchy Import)',
             items: scheduleItems,
             startDate,
-            hoursPerDay: 8,
-            includeWeekends: false,
             userId: options.userId,
-            notes: `Auto-generated from ${documents.length} hierarchical document(s)`
+            notes: `Auto-generated from ${documents.length} hierarchical document(s) with cascaded dates`
           });
 
           scheduleResult.created = true;
           scheduleResult.scheduleId = result.scheduleId;
           scheduleResult.message = `Schedule created with ${result.totalTasks} tasks`;
           
-          console.log(`✅ [Hierarchy Analyzer] Schedule #${result.scheduleId} auto-created with ${result.totalTasks} tasks`);
+          console.log(`✅ [Hierarchy Analyzer] Schedule #${result.scheduleId} auto-created with cascaded dates`);
         } catch (scheduleError) {
           console.error(`⚠️  [Hierarchy Analyzer] Schedule auto-creation failed: ${scheduleError.message}`);
           scheduleResult.message = `Schedule creation failed: ${scheduleError.message}`;
