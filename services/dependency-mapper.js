@@ -559,12 +559,17 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
           }
         }
         
-        // Determine if this is an epic (only explicitly marked epics at level 0)
-        const isEpic = item.isEpic === true;
-        
         // Use AI-extracted hierarchy level, regardless of parent lookup success
         // Parent lookup failure doesn't mean the item is top-level
         const dbHierarchyLevel = itemLevel;
+        
+        // ✅ SAFEGUARD: is_epic can ONLY be true for level-0 tasks
+        // This prevents AI extraction errors from creating invalid data
+        const isEpic = (item.isEpic === true) && (dbHierarchyLevel === 0);
+        
+        if (item.isEpic === true && dbHierarchyLevel !== 0) {
+          console.warn(`  ⚠️ AI incorrectly marked "${item.name}" as epic at level ${dbHierarchyLevel}. Correcting to is_epic=false.`);
+        }
         
         // Log hierarchy assignment for debugging
         console.log(`  📊 "${item.name}": hierarchyLevel=${dbHierarchyLevel}, parentId=${parentIssueId || 'none'}, hasParentRef=${!!parentRef}`);

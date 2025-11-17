@@ -2580,7 +2580,7 @@ async function renderGanttChart(tasks, schedule) {
     // ============================================
     // HIERARCHY INTEGRATION: Enhance Gantt with hierarchy features
     // ============================================
-    if (window.HierarchicalGanttEnhancer && hierarchyData.length > 0) {
+    if (window.HierarchicalGanttEnhancer && ganttTasks.length > 0) {
       try {
         const enhancer = new HierarchicalGanttEnhancer(gantt, {
           showEpicBadges: true,
