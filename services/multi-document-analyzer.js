@@ -116,69 +116,128 @@ class MultiDocumentAnalyzer {
       emit('log', { message: '' });
       result.documents.processed = documents.length;
 
-      // Step 2: Detect workstreams (CRITICAL - cannot proceed without this)
-      emit('step', { step: 2, title: 'Detect Workstreams' });
-      emit('log', { message: 'Step 2/7: Detecting workstreams...' });
-      if (!this.workstreamDetector) {
-        throw new Error('Workstream detector service not available - cannot proceed');
-      }
-
-      // Get project name for context
-      const projectResult = await pool.query('SELECT name, description FROM projects WHERE id = $1', [projectId]);
-      const projectName = projectResult.rows[0]?.name || 'Unknown Project';
-      const projectDescription = projectResult.rows[0]?.description;
-
-      const workstreamsResult = await this.workstreamDetector.detectWorkstreams(combinedText, {
-        projectId,
-        projectName,
-        projectDescription,
-        documentFilename: documents.length === 1 ? documents[0].filename : `${documents.length} documents`
-      });
-      result.workstreams = workstreamsResult.workstreams || [];
+      // Step 2: Try hierarchy extraction first for structured documents
+      emit('step', { step: 2, title: 'Extract Hierarchy' });
+      emit('log', { message: 'Step 2/7: Extracting hierarchical structure...' });
       
-      // Workstream detector doesn't return cost - it's tracked separately via ai-cost-tracker
-
-      emit('log', { message: `✓ Found ${result.workstreams.length} workstreams` });
-      result.workstreams.forEach((ws, i) => {
-        emit('log', { message: `  ${i + 1}. ${ws.name} (${ws.complexity || 'unknown'} complexity)` });
-      });
-      emit('log', { message: '' });
-
-      if (result.workstreams.length === 0) {
-        throw new Error('No workstreams detected - cannot create project structure');
-      }
-
-      // Step 3: Create issues from workstreams with AI effort estimates
-      emit('step', { step: 3, title: 'Create Issues' });
-      emit('log', { message: 'Step 3/7: Creating issues from workstreams...' });
-      for (const workstream of result.workstreams) {
-        const effortEstimate = this._calculateEffortEstimate(workstream);
+      let hierarchyResult = null;
+      let useHierarchicalWorkflow = false;
+      
+      try {
+        hierarchyResult = await hierarchyExtractor.extractHierarchy(combinedText, {
+          projectId,
+          maxDepth: 3
+        });
         
-        const issueResult = await pool.query(
-          `INSERT INTO issues (
-            project_id, title, description, status, created_by,
-            ai_effort_estimate_hours, ai_estimate_confidence, ai_estimate_version
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-          [
-            projectId, 
-            workstream.name, 
-            workstream.description || '', 
-            'To Do', 
-            userId,
-            effortEstimate.hours,
-            effortEstimate.confidence,
-            0  // Version 0 = heuristic estimate (can be upgraded to detailed AI later)
-          ]
-        );
-        const issueId = issueResult.rows[0].id;
-        workstream.issueId = issueId;
-        result.issues.ids.push(issueId);
-        result.issues.created++;
-        emit('log', { message: `  ✓ Created issue #${issueId}: ${workstream.name} (${effortEstimate.hours}h, ${effortEstimate.confidence} confidence)` });
+        // Check if hierarchy extraction found structured content
+        if (hierarchyResult && hierarchyResult.hierarchy && hierarchyResult.hierarchy.length > 0) {
+          const hasHierarchy = hierarchyResult.hierarchy.some(item => 
+            item.children && item.children.length > 0
+          );
+          
+          if (hasHierarchy) {
+            useHierarchicalWorkflow = true;
+            emit('log', { message: `✓ Found hierarchical structure with ${hierarchyResult.hierarchy.length} top-level items` });
+            if (hierarchyResult.cost) {
+              result.aiCostBreakdown.hierarchy_extraction = hierarchyResult.cost;
+              result.totalCost += hierarchyResult.cost;
+            }
+          }
+        }
+      } catch (error) {
+        emit('log', { message: `⚠️  Hierarchy extraction failed: ${error.message}` });
       }
-      emit('log', { message: `✓ Created ${result.issues.created} issues with AI effort estimates` });
-      emit('log', { message: '' });
+      
+      if (useHierarchicalWorkflow) {
+        // Step 3: Create hierarchical issues with parent-child relationships
+        emit('step', { step: 3, title: 'Create Issues' });
+        emit('log', { message: 'Step 3/7: Creating hierarchical issues...' });
+        
+        const hierarchyCreationResult = await dependencyMapper.createHierarchicalIssues(
+          hierarchyResult.hierarchy,
+          projectId,
+          userId,
+          projectStartDate
+        );
+        
+        result.issues.created = hierarchyCreationResult.created.length;
+        result.issues.ids = hierarchyCreationResult.created.map(item => item.id);
+        
+        // Map created issues back to workstream format for compatibility with later steps
+        result.workstreams = hierarchyCreationResult.created.map(item => ({
+          name: item.title,
+          issueId: item.id,
+          dependencies: [] // Dependencies already created in database
+        }));
+        
+        emit('log', { message: `✓ Created ${result.issues.created} hierarchical issues` });
+        emit('log', { message: '' });
+      } else {
+        // Fallback to workstream detection for non-hierarchical documents
+        emit('log', { message: '⚠️  No hierarchical structure found - falling back to workstream detection' });
+        emit('log', { message: '' });
+        emit('step', { step: 2, title: 'Detect Workstreams' });
+        emit('log', { message: 'Step 2/7: Detecting workstreams...' });
+        
+        if (!this.workstreamDetector) {
+          throw new Error('Workstream detector service not available - cannot proceed');
+        }
+
+        // Get project name for context
+        const projectResult = await pool.query('SELECT name, description FROM projects WHERE id = $1', [projectId]);
+        const projectName = projectResult.rows[0]?.name || 'Unknown Project';
+        const projectDescription = projectResult.rows[0]?.description;
+
+        const workstreamsResult = await this.workstreamDetector.detectWorkstreams(combinedText, {
+          projectId,
+          projectName,
+          projectDescription,
+          documentFilename: documents.length === 1 ? documents[0].filename : `${documents.length} documents`
+        });
+        result.workstreams = workstreamsResult.workstreams || [];
+
+        emit('log', { message: `✓ Found ${result.workstreams.length} workstreams` });
+        result.workstreams.forEach((ws, i) => {
+          emit('log', { message: `  ${i + 1}. ${ws.name} (${ws.complexity || 'unknown'} complexity)` });
+        });
+        emit('log', { message: '' });
+
+        if (result.workstreams.length === 0) {
+          throw new Error('No workstreams detected - cannot create project structure');
+        }
+
+        // Step 3: Create issues from workstreams with AI effort estimates
+        emit('step', { step: 3, title: 'Create Issues' });
+        emit('log', { message: 'Step 3/7: Creating issues from workstreams...' });
+        for (const workstream of result.workstreams) {
+          const effortEstimate = this._calculateEffortEstimate(workstream);
+          
+          const issueResult = await pool.query(
+            `INSERT INTO issues (
+              project_id, title, description, status, created_by,
+              ai_effort_estimate_hours, ai_estimate_confidence, ai_estimate_version
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+            [
+              projectId, 
+              workstream.name, 
+              workstream.description || '', 
+              'To Do', 
+              userId,
+              effortEstimate.hours,
+              effortEstimate.confidence,
+              0  // Version 0 = heuristic estimate (can be upgraded to detailed AI later)
+            ]
+          );
+          const issueId = issueResult.rows[0].id;
+          workstream.issueId = issueId;
+          result.issues.ids.push(issueId);
+          result.issues.created++;
+          emit('log', { message: `  ✓ Created issue #${issueId}: ${workstream.name} (${effortEstimate.hours}h, ${effortEstimate.confidence} confidence)` });
+        }
+        emit('log', { message: `✓ Created ${result.issues.created} issues with AI effort estimates` });
+        emit('log', { message: '' });
+      }
 
       // Step 4: Extract timeline (OPTIONAL)
       emit('step', { step: 4, title: 'Extract Timeline' });
