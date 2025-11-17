@@ -2446,9 +2446,18 @@ async function renderGanttChart(tasks, schedule) {
       start: task.scheduled_start,
       end: task.scheduled_end,
       progress: task.status === 'Done' ? 100 : task.status === 'In Progress' ? 50 : 0,
-      dependencies: task.dependencies && task.dependencies.length > 0 
-        ? task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(',') 
-        : '',
+      dependencies: (() => {
+        // Check issue_dependencies first (text field from issues table)
+        if (task.issue_dependencies && task.issue_dependencies.trim()) {
+          const depIds = task.issue_dependencies.split(',').map(id => id.trim()).filter(id => id);
+          return depIds.map(id => `issue-${id}`).join(',');
+        }
+        // Fallback to task.dependencies (JSONB from task_schedules)
+        if (task.dependencies && task.dependencies.length > 0) {
+          return task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(',');
+        }
+        return '';
+      })(),
       custom_class: task.is_critical_path ? 'bar-critical' : '',
       _assignee: (task.assignee || 'Unassigned').toLowerCase(),
       // ✅✅✅ CRITICAL: Preserve hierarchy fields from API response

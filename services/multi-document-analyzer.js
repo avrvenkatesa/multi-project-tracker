@@ -138,9 +138,15 @@ class MultiDocumentAnalyzer {
           
           if (hasHierarchy || hierarchyResult.hierarchy.length > 3) {
             useHierarchicalWorkflow = true;
-            const epics = hierarchyResult.hierarchy.filter(i => i.level === 0 || i.type === 'epic').length;
-            const tasks = hierarchyResult.hierarchy.filter(i => i.level === 1 || i.type === 'task').length;
-            const subtasks = hierarchyResult.hierarchy.filter(i => i.level === 2 || i.type === 'subtask').length;
+            const epics = hierarchyResult.hierarchy.filter(i => 
+              i.hierarchy_level === 0 || i.level === 0 || i.type === 'epic'
+            ).length;
+            const tasks = hierarchyResult.hierarchy.filter(i => 
+              i.hierarchy_level === 1 || i.level === 1 || i.type === 'task'
+            ).length;
+            const subtasks = hierarchyResult.hierarchy.filter(i => 
+              i.hierarchy_level === 2 || i.level === 2 || i.type === 'subtask'
+            ).length;
             emit('log', { message: `✓ Found hierarchical structure: ${epics} epics, ${tasks} tasks, ${subtasks} subtasks` });
             if (hierarchyResult.cost) {
               result.aiCostBreakdown.hierarchy_extraction = hierarchyResult.cost;
