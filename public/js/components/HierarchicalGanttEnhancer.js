@@ -121,28 +121,52 @@ class HierarchicalGanttEnhancer {
       console.log('📍 Container element:', this.container);
       console.log('📍 Container tag:', this.container?.tagName);
       
-      // Add single delegated click handler
+      // Event delegation for expand/collapse buttons (SVG-compatible)
       this.expandCollapseHandler = (e) => {
-        console.log('🖱️ Click detected on container!', e.target.tagName, e.target.className);
+        console.log('🖱️ Click detected!', e.target.tagName, e.target.classList ? Array.from(e.target.classList) : 'no classes');
         
-        // Find if click was on expand button
-        const expandBtn = e.target.closest('.gantt-expand-btn');
-        console.log('🔍 Closest expand button:', expandBtn);
+        // For SVG, we need to check the target and its parents manually
+        let element = e.target;
+        let expandBtn = null;
+        let attempts = 0;
+        
+        // Walk up the DOM tree looking for .gantt-expand-btn
+        while (element && attempts < 5) {
+          console.log(`  Checking element ${attempts}:`, element.tagName, element.classList ? Array.from(element.classList) : 'no classes');
+          
+          if (element.classList && element.classList.contains('gantt-expand-btn')) {
+            expandBtn = element;
+            console.log('  ✅ Found it at this element!');
+            break;
+          }
+          
+          // Also check parent's classList
+          if (element.parentElement) {
+            if (element.parentElement.classList && 
+                element.parentElement.classList.contains('gantt-expand-btn')) {
+              expandBtn = element.parentElement;
+              console.log('  ✅ Found it at parent element!');
+              break;
+            }
+          }
+          
+          element = element.parentElement;
+          attempts++;
+        }
+        
+        console.log('🔍 Found expand button:', expandBtn);
         
         if (expandBtn) {
-          e.stopPropagation(); // Prevent Frappe Gantt from handling
+          e.stopPropagation();
           e.preventDefault();
-          
           const taskId = expandBtn.getAttribute('data-task-id');
-          if (taskId) {
-            const task = this.tasks.find(t => this.getTaskId(t) === taskId);
-            console.log(`✅ Chevron clicked for task: ${this.getTaskName(task)} (${taskId})`);
-            this.toggleExpand(taskId);
-          }
+          const task = this.tasks.find(t => this.getTaskId(t) === taskId);
+          console.log(`✅ Chevron clicked for task: ${this.getTaskName(task)} (${taskId})`);
+          this.toggleExpand(taskId);
         }
       };
       
-      this.container.addEventListener('click', this.expandCollapseHandler, true); // Use capture phase
+      this.container.addEventListener('click', this.expandCollapseHandler, true);
       console.log('✅ Event delegation attached for expand/collapse');
       
       // Test if event listener was added
