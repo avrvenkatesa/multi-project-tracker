@@ -13,6 +13,235 @@
 const { pool } = require('../db');
 
 /**
+ * GENERAL SOLUTION: Adjust task dates to create proper waterfall cascade
+ * Works for ANY project with hierarchical issues (epics → tasks → subtasks)
+ *
+ * @param {string} projectId - The project ID to adjust
+ * @param {Array<number>} issueIds - Array of newly created issue IDs to adjust (prevents overwriting existing issues)
+ * @param {object} pool - PostgreSQL connection pool
+ * @returns {Promise<void>}
+ */
+async function adjustDatesForCascade(projectId, issueIds, pool) {
+  console.log('');
+  console.log('='.repeat(60));
+  console.log('📅 POST-PROCESSING: Adjusting dates for cascade effect');
+  console.log('='.repeat(60));
+
+  if (!issueIds || issueIds.length === 0) {
+    console.log('⚠️  No issue IDs provided - skipping cascade adjustment');
+    return;
+  }
+
+  console.log(`🎯 Targeting ${issueIds.length} newly created issues only`);
+
+  // Fetch ONLY the newly created issues to prevent overwriting existing project data
+  const result = await pool.query(`
+    SELECT id, title, hierarchy_level, parent_issue_id, start_date, due_date, created_at
+    FROM issues
+    WHERE project_id = $1 AND id = ANY($2::int[])
+    ORDER BY hierarchy_level ASC, created_at ASC
+  `, [projectId, issueIds]);
+
+  const issues = result.rows;
+
+  if (issues.length === 0) {
+    console.log('⚠️  No issues found to adjust');
+    return;
+  }
+
+  console.log(`📊 Total issues to process: ${issues.length}`);
+
+  // Use the earliest created_at timestamp as the project baseline to prevent schedule drift
+  const earliestCreatedAt = issues.reduce((earliest, issue) => {
+    const issueDate = new Date(issue.created_at);
+    return issueDate < earliest ? issueDate : earliest;
+  }, new Date(issues[0].created_at));
+
+  console.log(`📅 Using baseline date: ${earliestCreatedAt.toISOString().split('T')[0]}`);
+
+  // Configuration - easily adjustable for different project types
+  const config = {
+    projectStartDate: earliestCreatedAt,
+    epic: {
+      offsetDays: 7,      // Days between epic starts
+      durationDays: 30    // Default epic duration
+    },
+    task: {
+      offsetDays: 3,      // Days between sibling task starts
+      durationDays: 10    // Default task duration
+    },
+    subtask: {
+      offsetDays: 5,      // Days between sibling subtask starts
+      durationDays: 5     // Default subtask duration
+    },
+    subSubtask: {
+      offsetDays: 2,      // Days between sub-subtasks
+      durationDays: 3     // Default sub-subtask duration
+    }
+  };
+
+  // Helper function to format date as YYYY-MM-DD
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Helper function to update issue dates
+  const updateIssueDates = async (issueId, startDate, dueDate) => {
+    await pool.query(`
+      UPDATE issues
+      SET start_date = $1, due_date = $2
+      WHERE id = $3
+    `, [formatDate(startDate), formatDate(dueDate), issueId]);
+  };
+
+  // Group issues by hierarchy level
+  const epicIssues = issues.filter(i => i.hierarchy_level === 0);
+  const taskIssues = issues.filter(i => i.hierarchy_level === 1);
+  const subtaskIssues = issues.filter(i => i.hierarchy_level === 2);
+  const subSubtaskIssues = issues.filter(i => i.hierarchy_level >= 3);
+
+  console.log(`📊 Breakdown: ${epicIssues.length} epics, ${taskIssues.length} tasks, ${subtaskIssues.length} subtasks, ${subSubtaskIssues.length} sub-subtasks`);
+  console.log('');
+
+  // LEVEL 0: Adjust EPICS (space them out sequentially)
+  console.log('🟣 PROCESSING EPICS (Level 0)...');
+  for (let i = 0; i < epicIssues.length; i++) {
+    const epic = epicIssues[i];
+
+    // Calculate start date
+    const startDate = new Date(config.projectStartDate);
+    startDate.setDate(startDate.getDate() + (i * config.epic.offsetDays));
+
+    // Calculate due date
+    const dueDate = new Date(startDate);
+    dueDate.setDate(dueDate.getDate() + config.epic.durationDays);
+
+    // Update in database
+    await updateIssueDates(epic.id, startDate, dueDate);
+
+    // Store updated dates for child calculations
+    epic.start_date = formatDate(startDate);
+    epic.due_date = formatDate(dueDate);
+
+    console.log(`  📌 Epic ${i + 1}/${epicIssues.length}: "${epic.title}"`);
+    console.log(`     Start: ${epic.start_date}, Due: ${epic.due_date}, Duration: ${config.epic.durationDays}d`);
+  }
+  console.log('');
+
+  // LEVEL 1: Adjust TASKS (based on parent epic start date)
+  console.log('🔵 PROCESSING TASKS (Level 1)...');
+  for (const task of taskIssues) {
+    // Find parent epic
+    const parentEpic = epicIssues.find(e => e.id === task.parent_issue_id);
+
+    if (!parentEpic) {
+      console.log(`  ⚠️  Task "${task.title}" has no parent epic - skipping`);
+      continue;
+    }
+
+    // Find sibling tasks (same parent)
+    const siblings = taskIssues.filter(t => t.parent_issue_id === task.parent_issue_id);
+    const siblingIndex = siblings.findIndex(s => s.id === task.id);
+
+    // Calculate start date (parent's start + sibling offset)
+    const startDate = new Date(parentEpic.start_date);
+    startDate.setDate(startDate.getDate() + (siblingIndex * config.task.offsetDays));
+
+    // Calculate due date
+    const dueDate = new Date(startDate);
+    dueDate.setDate(dueDate.getDate() + config.task.durationDays);
+
+    // Update in database
+    await updateIssueDates(task.id, startDate, dueDate);
+
+    // Store updated dates
+    task.start_date = formatDate(startDate);
+    task.due_date = formatDate(dueDate);
+
+    console.log(`  📍 Task: "${task.title}"`);
+    console.log(`     Parent: "${parentEpic.title}", Sibling: ${siblingIndex + 1}/${siblings.length}`);
+    console.log(`     Start: ${task.start_date}, Due: ${task.due_date}, Duration: ${config.task.durationDays}d`);
+  }
+  console.log('');
+
+  // LEVEL 2: Adjust SUBTASKS (based on parent task start date)
+  console.log('🔷 PROCESSING SUBTASKS (Level 2)...');
+  for (const subtask of subtaskIssues) {
+    // Find parent task
+    const parentTask = taskIssues.find(t => t.id === subtask.parent_issue_id);
+
+    if (!parentTask) {
+      console.log(`  ⚠️  Subtask "${subtask.title}" has no parent task - skipping`);
+      continue;
+    }
+
+    // Find sibling subtasks (same parent)
+    const siblings = subtaskIssues.filter(st => st.parent_issue_id === subtask.parent_issue_id);
+    const siblingIndex = siblings.findIndex(s => s.id === subtask.id);
+
+    // Calculate start date (parent's start + sibling offset)
+    const startDate = new Date(parentTask.start_date);
+    startDate.setDate(startDate.getDate() + (siblingIndex * config.subtask.offsetDays));
+
+    // Calculate due date
+    const dueDate = new Date(startDate);
+    dueDate.setDate(dueDate.getDate() + config.subtask.durationDays);
+
+    // Update in database
+    await updateIssueDates(subtask.id, startDate, dueDate);
+
+    // Store updated dates
+    subtask.start_date = formatDate(startDate);
+    subtask.due_date = formatDate(dueDate);
+
+    console.log(`  📎 Subtask: "${subtask.title}"`);
+    console.log(`     Parent: "${parentTask.title}", Sibling: ${siblingIndex + 1}/${siblings.length}`);
+    console.log(`     Start: ${subtask.start_date}, Due: ${subtask.due_date}, Duration: ${config.subtask.durationDays}d`);
+  }
+  console.log('');
+
+  // LEVEL 3+: Adjust SUB-SUBTASKS (based on parent subtask start date)
+  if (subSubtaskIssues.length > 0) {
+    console.log('◽ PROCESSING SUB-SUBTASKS (Level 3+)...');
+    for (const subSubtask of subSubtaskIssues) {
+      // Find parent (could be subtask or another sub-subtask)
+      const parentSubtask = subtaskIssues.find(st => st.id === subSubtask.parent_issue_id) ||
+                            subSubtaskIssues.find(sst => sst.id === subSubtask.parent_issue_id);
+
+      if (!parentSubtask) {
+        console.log(`  ⚠️  Sub-subtask "${subSubtask.title}" has no parent - skipping`);
+        continue;
+      }
+
+      // Find siblings
+      const siblings = subSubtaskIssues.filter(sst => sst.parent_issue_id === subSubtask.parent_issue_id);
+      const siblingIndex = siblings.findIndex(s => s.id === subSubtask.id);
+
+      // Calculate dates
+      const startDate = new Date(parentSubtask.start_date);
+      startDate.setDate(startDate.getDate() + (siblingIndex * config.subSubtask.offsetDays));
+
+      const dueDate = new Date(startDate);
+      dueDate.setDate(dueDate.getDate() + config.subSubtask.durationDays);
+
+      // Update in database
+      await updateIssueDates(subSubtask.id, startDate, dueDate);
+
+      console.log(`  ▫️  Sub-subtask: "${subSubtask.title}"`);
+      console.log(`     Start: ${formatDate(startDate)}, Due: ${formatDate(dueDate)}`);
+    }
+    console.log('');
+  }
+
+  console.log('✅ Date cascade adjustment complete!');
+  console.log('='.repeat(60));
+  console.log('');
+}
+
+/**
  * Calculate realistic start and due dates based on hierarchy and position
  * @param {Object} issue - The issue/task object with hierarchy_level
  * @param {number} index - Index in the array of all issues
@@ -786,6 +1015,11 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
     if (result.errors.length > 0) {
       console.log(`⚠ ${result.errors.length} error(s) occurred during creation`);
     }
+
+    // Apply cascade date adjustment for clean waterfall timeline
+    // CRITICAL: Only pass newly created issue IDs to prevent overwriting existing project data
+    const createdIssueIds = result.created.map(item => item.id);
+    await adjustDatesForCascade(projectId, createdIssueIds, pool);
 
     return result;
 
