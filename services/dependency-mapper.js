@@ -13,6 +13,73 @@
 const { pool } = require('../db');
 
 /**
+ * Calculate realistic start and due dates based on hierarchy and position
+ * @param {Object} issue - The issue/task object with hierarchy_level
+ * @param {number} index - Index in the array of all issues
+ * @param {Array} allIssues - All previously created issues (to check for parent dates)
+ * @param {Date} baseStartDate - Project start date
+ * @returns {Object} - Object with start_date, due_date, and duration
+ */
+function calculateTaskDates(issue, index, allIssues, baseStartDate) {
+  const now = baseStartDate || new Date();
+  const level = issue.hierarchy_level || 0;
+
+  // Default durations by hierarchy level (in days)
+  const durations = {
+    0: 30, // Epics: 30 days
+    1: 10, // Tasks: 10 days
+    2: 5,  // Subtasks: 5 days
+    3: 3   // Sub-subtasks: 3 days
+  };
+
+  const duration = durations[level] || 7;
+
+  // Calculate start date based on parent or sequential ordering
+  let startDate = new Date(now);
+
+  // If has parent, start on or after parent's start date
+  if (issue.parent_issue_id) {
+    const parent = allIssues.find(i => i.id === issue.parent_issue_id);
+    if (parent && parent.start_date) {
+      // Parse parent's start date
+      startDate = new Date(parent.start_date);
+
+      // Add offset for siblings to cascade tasks
+      const siblings = allIssues.filter(i => i.parent_issue_id === issue.parent_issue_id);
+      const siblingIndex = siblings.length; // Current position among siblings
+
+      // Tasks under same parent start with 2-day offset
+      startDate.setDate(startDate.getDate() + (siblingIndex * 2));
+    }
+  } else {
+    // Top-level tasks (epics): space them out significantly
+    const epicIndex = allIssues.filter(i => i.hierarchy_level === 0).length;
+    startDate.setDate(startDate.getDate() + (epicIndex * 5)); // 5 days between epic starts
+  }
+
+  // Calculate due date
+  const dueDate = new Date(startDate);
+  dueDate.setDate(dueDate.getDate() + duration);
+
+  // Format as YYYY-MM-DD
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  return {
+    start_date: formatDate(startDate),
+    due_date: formatDate(dueDate),
+    duration: duration
+  };
+}
+
+// Add this test log after the function definition
+console.log('✅ calculateTaskDates function defined');
+
+/**
  * Create dependencies from workstream detector output
  * 
  * @param {Array} workstreams - Array of workstream objects with dependencies
