@@ -565,6 +565,12 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
     // Map to store ALL created issue IDs by name (not just epics)
     const issueIdsByName = new Map();
     
+    // Track created issues with their dates for dependency calculation
+    const createdIssues = [];
+    const projectStartDate = new Date(); // Use current date as project start
+    
+    console.log(`📅 Project start date: ${projectStartDate.toISOString().split('T')[0]}`);
+    
     // Sort workstreams by hierarchyLevel to ensure parents are created before children
     // Level 0 (epics) → Level 1 (tasks) → Level 2 (subtasks)
     const sortedWorkstreams = [...workstreams].sort((a, b) => {
@@ -641,18 +647,66 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
         // Log hierarchy assignment for debugging
         console.log(`  📊 "${item.name}": hierarchyLevel=${dbHierarchyLevel}, parentId=${parentIssueId || 'none'}, hasParentRef=${!!parentRef}`);
 
+        // Calculate realistic dates based on hierarchy and parent
+        const calculatedDates = calculateTaskDates(
+          {
+            ...item,
+            parent_issue_id: parentIssueId,
+            hierarchy_level: dbHierarchyLevel
+          },
+          createdIssues.length,
+          createdIssues,
+          projectStartDate
+        );
+
+        // Build dependencies array
+        const dependencies = [];
+
+        // Dependency 1: Parent task (if exists)
+        if (parentIssueId) {
+          dependencies.push(parentIssueId);
+        }
+
+        // Dependency 2: Previous sibling (tasks with same parent, for sequential flow)
+        if (parentIssueId) {
+          const siblings = createdIssues.filter(ci => ci.parent_issue_id === parentIssueId);
+          if (siblings.length > 0) {
+            const previousSibling = siblings[siblings.length - 1];
+            dependencies.push(previousSibling.id);
+          }
+        }
+
+        const dependenciesString = dependencies.join(',');
+
+        console.log(`📋 Scheduling: ${title}`);
+        console.log(`   Level: ${dbHierarchyLevel}, Parent: ${parentIssueId || 'none'}`);
+        console.log(`   Dates: ${calculatedDates.start_date} → ${calculatedDates.due_date} (${calculatedDates.duration}d)`);
+        console.log(`   Dependencies: ${dependenciesString || 'none'}`);
+
         const insertResult = await pool.query(
           `INSERT INTO issues 
            (project_id, title, description, status, priority, 
             parent_issue_id, hierarchy_level, is_epic, ai_effort_estimate_hours, 
-            ai_estimate_confidence, ai_estimate_version, created_via_ai_by, assignee, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+            ai_estimate_confidence, ai_estimate_version, created_via_ai_by, assignee, 
+            start_date, due_date, dependencies, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
            RETURNING id, title, parent_issue_id, hierarchy_level, is_epic`,
           [projectId, title, description, 'To Do', priority, 
-           parentIssueId, dbHierarchyLevel, isEpic, effortHours, '0.85', 1, userId, assignee]
+           parentIssueId, dbHierarchyLevel, isEpic, effortHours, '0.85', 1, userId, assignee,
+           calculatedDates.start_date, calculatedDates.due_date, dependenciesString]
         );
 
         const createdItem = insertResult.rows[0];
+        
+        // Track created issue with dates for future calculations
+        createdIssues.push({
+          id: createdItem.id,
+          title: createdItem.title,
+          parent_issue_id: parentIssueId,
+          hierarchy_level: dbHierarchyLevel,
+          start_date: calculatedDates.start_date,
+          due_date: calculatedDates.due_date
+        });
         
         // Store in map for child lookups using BOTH name and title
         if (item.name) {
@@ -711,12 +765,9 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
         });
         
         // Log creation with type and parent info
+        console.log(`✅ Created ${itemType}: "${createdItem.title}" (ID: ${createdItem.id})`);
         if (createdItem.parent_issue_id) {
-          console.log(`  ✓ Created ${itemType} #${createdItem.id}: "${createdItem.title}" (parent: #${createdItem.parent_issue_id}, level: ${dbHierarchyLevel})`);
-        } else if (isEpic) {
-          console.log(`  ✓ Created epic #${createdItem.id}: "${createdItem.title}" (level: 0)`);
-        } else {
-          console.log(`  ✓ Created ${itemType} #${createdItem.id}: "${createdItem.title}" (standalone, level: 0)`);
+          console.log(`   → Parent: #${createdItem.parent_issue_id}, Level: ${dbHierarchyLevel}`);
         }
         
       } catch (error) {
