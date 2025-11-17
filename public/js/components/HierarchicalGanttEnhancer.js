@@ -107,6 +107,78 @@ class HierarchicalGanttEnhancer {
     console.log(`📊 Styled: ${epicCount} epics, ${taskCount} tasks, ${subtaskCount} subtasks, ${subSubtaskCount} sub-subtasks`);
   }
 
+  drawHorizontalConnectors() {
+    console.log('🔗 Drawing horizontal connectors with dots...');
+
+    // Remove existing connectors
+    const existingConnectors = this.container.querySelectorAll('.gantt-hierarchy-connector, .gantt-hierarchy-dot');
+    existingConnectors.forEach(conn => conn.remove());
+
+    // Create connector group
+    let connectorGroup = this.container.querySelector('.gantt-connectors-group');
+    if (!connectorGroup) {
+      connectorGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      connectorGroup.classList.add('gantt-connectors-group');
+      const gridGroup = this.container.querySelector('.grid');
+      if (gridGroup && gridGroup.nextSibling) {
+        this.container.insertBefore(connectorGroup, gridGroup.nextSibling);
+      } else {
+        this.container.appendChild(connectorGroup);
+      }
+    }
+
+    let connectorCount = 0;
+
+    this.tasks.forEach(task => {
+      if (!task.parent_issue_id) return; // Skip top-level tasks
+
+      const taskId = `${task.item_type}-${task.item_id}`;
+      const taskBar = this.container.querySelector(`.bar-wrapper[data-id="${taskId}"]`);
+      if (!taskBar) return;
+
+      const taskBarEl = taskBar.querySelector('.bar');
+      if (!taskBarEl) return;
+
+      const taskX = parseFloat(taskBarEl.getAttribute('x')) || 0;
+      const taskY = parseFloat(taskBarEl.getAttribute('y')) || 0;
+      const taskHeight = parseFloat(taskBarEl.getAttribute('height')) || 30;
+      const taskCenterY = taskY + taskHeight / 2;
+
+      // Horizontal connector line
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.classList.add('gantt-hierarchy-connector');
+      line.classList.add(`level-${task.hierarchy_level}`);
+      line.setAttribute('x1', taskX - 25);
+      line.setAttribute('y1', taskCenterY);
+      line.setAttribute('x2', taskX - 8);
+      line.setAttribute('y2', taskCenterY);
+
+      // Dot at the end of connector
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.classList.add('gantt-hierarchy-dot');
+      dot.setAttribute('cx', taskX - 8);
+      dot.setAttribute('cy', taskCenterY);
+      dot.setAttribute('r', '3');
+
+      // Color based on hierarchy level
+      if (task.hierarchy_level === 1) {
+        dot.setAttribute('fill', '#3b82f6');
+      } else if (task.hierarchy_level === 2) {
+        dot.setAttribute('fill', '#93c5fd');
+      } else {
+        dot.setAttribute('fill', '#cbd5e1');
+      }
+
+      connectorGroup.appendChild(line);
+      connectorGroup.appendChild(dot);
+      connectorCount++;
+
+      console.log(`  ➡️ Connected ${this.getTaskName(task)} (level ${task.hierarchy_level})`);
+    });
+
+    console.log(`✅ Drew ${connectorCount} connectors with dots`);
+  }
+
   normalizeTasks(tasks) {
     // Ensure all tasks have is_epic and issue_type fields
     // BUT: Only add missing fields, don't override existing correct data
@@ -195,8 +267,9 @@ class HierarchicalGanttEnhancer {
         this.addExpandCollapseButtons();
       }
       
+      // ✅ Draw horizontal connectors instead of tree lines
       if (this.options.showTreeLines) {
-        this.addIndentationMarkers();
+        this.drawHorizontalConnectors();
       }
       
       // Remove old event listener
@@ -598,6 +671,10 @@ class HierarchicalGanttEnhancer {
         }
         if (this.options.allowCollapse) {
           this.addExpandCollapseButtons();
+        }
+        // ✅ Redraw connectors after refresh
+        if (this.options.showTreeLines) {
+          this.drawHorizontalConnectors();
         }
       }, 50);
     }

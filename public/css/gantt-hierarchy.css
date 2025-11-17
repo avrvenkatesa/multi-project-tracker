@@ -98,32 +98,54 @@
 }
 
 /* ============================================
-   TREE LINES
-   Visual hierarchy connections between parent/child
-   Integration: Rendered behind Frappe Gantt bars
+   HORIZONTAL HIERARCHY CONNECTORS
+   Clean horizontal lines linking children to parents
    ============================================ */
 
-.gantt-tree-line {
-  stroke: var(--gantt-border, #e0e0e0);
-  stroke-width: 1px;
-  stroke-dasharray: 2, 2;
-  opacity: 0.6;
-  pointer-events: none;
-  transition: opacity 0.2s ease-in-out;
+/* Hide old vertical tree lines */
+.gantt-tree-line,
+.gantt-tree-lines-group {
+  display: none !important;
 }
 
-.gantt-tree-line-horizontal {
-  /* Horizontal connector from parent to child */
+/* Horizontal connector lines */
+.gantt-hierarchy-connector {
+  stroke: #cbd5e1 !important;
+  stroke-width: 2px !important;
+  fill: none !important;
+  opacity: 0.6 !important;
+  pointer-events: none !important;
 }
 
-.gantt-tree-line-vertical {
-  /* Vertical line connecting siblings */
+/* Different connector styles per level */
+.gantt-hierarchy-connector.level-1 {
+  stroke: #93c5fd !important;
+  stroke-width: 2px !important;
 }
 
-/* Highlight tree lines on hover */
-.gantt .bar-wrapper.bar-epic:hover ~ svg .gantt-tree-line {
-  opacity: 1;
-  stroke-width: 1.5px;
+.gantt-hierarchy-connector.level-2 {
+  stroke: #bfdbfe !important;
+  stroke-width: 1.5px !important;
+}
+
+.gantt-hierarchy-connector.level-3 {
+  stroke: #dbeafe !important;
+  stroke-width: 1px !important;
+}
+
+/* Dots at the end of connectors */
+.gantt-hierarchy-dot {
+  stroke: white !important;
+  stroke-width: 1px !important;
+  opacity: 0.8 !important;
+  pointer-events: none !important;
+}
+
+/* Make grid lines very subtle */
+svg.gantt .grid-line {
+  stroke: #f3f4f6 !important;
+  stroke-width: 0.5px !important;
+  opacity: 0.4 !important;
 }
 
 /* ============================================
