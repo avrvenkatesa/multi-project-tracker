@@ -521,26 +521,53 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
         const assignee = item.assignee || item.createdBy || 'Demo User';
         const itemLevel = item.hierarchyLevel ?? 0;
         
-        // Determine parent issue ID
+        // Parent resolution - try multiple lookup strategies
         let parentIssueId = null;
         const parentRef = item.parent || item.parentName;
         
         if (parentRef) {
+          // Strategy 1: Direct lookup by parent reference
           parentIssueId = issueIdsByName.get(parentRef);
           
+          // Strategy 2: Try exact title match if direct lookup fails
           if (!parentIssueId) {
-            const warning = `Parent "${parentRef}" not found for item "${item.name}" (level ${itemLevel}) - adding to root level`;
-            result.errors.push(warning);
-            console.log(`  ⚠ ${warning}`);
+            for (const [key, id] of issueIdsByName.entries()) {
+              if (key === item.parent || key === item.parentName) {
+                parentIssueId = id;
+                break;
+              }
+            }
+          }
+          
+          // Strategy 3: Try case-insensitive match
+          if (!parentIssueId) {
+            const parentLower = parentRef.toLowerCase();
+            for (const [key, id] of issueIdsByName.entries()) {
+              if (key.toLowerCase() === parentLower) {
+                parentIssueId = id;
+                console.log(`  ✅ Found parent "${key}" for "${item.name}" via case-insensitive match`);
+                break;
+              }
+            }
+          }
+          
+          if (!parentIssueId) {
+            console.log(`  ⚠ Parent "${parentRef}" not found for "${item.name}" (level ${itemLevel})`);
+            console.log(`     Available parents:`, Array.from(issueIdsByName.keys()).slice(0, 5));
+          } else {
+            console.log(`  ✅ Linked "${item.name}" to parent "${parentRef}"`);
           }
         }
         
         // Determine if this is an epic (only explicitly marked epics at level 0)
         const isEpic = item.isEpic === true;
         
-        // Determine actual hierarchy level for database
-        // If parent found, inherit level from item data, otherwise set to 0
-        const dbHierarchyLevel = parentIssueId ? itemLevel : 0;
+        // Use AI-extracted hierarchy level, regardless of parent lookup success
+        // Parent lookup failure doesn't mean the item is top-level
+        const dbHierarchyLevel = itemLevel;
+        
+        // Log hierarchy assignment for debugging
+        console.log(`  📊 "${item.name}": hierarchyLevel=${dbHierarchyLevel}, parentId=${parentIssueId || 'none'}, hasParentRef=${!!parentRef}`);
 
         const insertResult = await pool.query(
           `INSERT INTO issues 
@@ -555,9 +582,13 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
 
         const createdItem = insertResult.rows[0];
         
-        // Store in map for child lookups (both by name and title)
-        issueIdsByName.set(item.name, createdItem.id);
-        issueIdsByName.set(item.title, createdItem.id);
+        // Store in map for child lookups using BOTH name and title
+        if (item.name) {
+          issueIdsByName.set(item.name, createdItem.id);
+        }
+        if (item.title && item.title !== item.name) {
+          issueIdsByName.set(item.title, createdItem.id);
+        }
         
         // Track by type
         let itemType;
