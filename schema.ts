@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb, date, decimal } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb, date, decimal, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const users = pgTable('users', {
@@ -61,6 +61,8 @@ export const issues = pgTable('issues', {
   startDate: date('start_date'),
   endDate: date('end_date'),
   effortHours: decimal('effort_hours', { precision: 10, scale: 2 }),
+  // AIPM Foreign Keys (Story 5.1.1)
+  sourceMeetingId: integer('source_meeting_id'),
 });
 
 // Action Item Categories
@@ -88,6 +90,9 @@ export const actionItems = pgTable('action_items', {
   createdViaAiBy: integer('created_via_ai_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+  // AIPM Foreign Keys (Story 5.1.1)
+  sourceMeetingId: integer('source_meeting_id'),
+  sourceDecisionId: integer('source_decision_id'),
 });
 
 export const issueDependencies = pgTable('issue_dependencies', {
@@ -252,9 +257,46 @@ export const actionItemTags = pgTable('action_item_tags', {
   tagId: integer('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
 });
 
+// Risks Table
+export const risks = pgTable('risks', {
+  id: serial('id').primaryKey(),
+  riskId: varchar('risk_id', { length: 50 }).notNull(),
+  projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 500 }).notNull(),
+  description: text('description'),
+  category: varchar('category', { length: 100 }).notNull(),
+  riskSource: text('risk_source'),
+  tags: text('tags').array(),
+  probability: integer('probability').notNull(),
+  impact: integer('impact').notNull(),
+  riskScore: integer('risk_score'),
+  riskLevel: varchar('risk_level', { length: 50 }),
+  responseStrategy: varchar('response_strategy', { length: 100 }),
+  mitigationPlan: text('mitigation_plan'),
+  contingencyPlan: text('contingency_plan'),
+  mitigationCost: decimal('mitigation_cost', { precision: 12, scale: 2 }),
+  mitigationEffortHours: integer('mitigation_effort_hours'),
+  riskOwnerId: integer('risk_owner_id').references(() => users.id),
+  targetResolutionDate: date('target_resolution_date'),
+  reviewDate: date('review_date'),
+  status: varchar('status', { length: 50 }).default('identified'),
+  residualProbability: integer('residual_probability'),
+  residualImpact: integer('residual_impact'),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  closedAt: timestamp('closed_at'),
+  realizedAt: timestamp('realized_at'),
+  attachmentCount: integer('attachment_count').default(0),
+  costCurrency: varchar('cost_currency', { length: 10 }).default('USD'),
+  // AIPM Foreign Keys (Story 5.1.1)
+  sourceMeetingId: integer('source_meeting_id'),
+  relatedDecisionIds: jsonb('related_decision_ids'), // JSONB array of decision IDs
+});
+
 export const riskTags = pgTable('risk_tags', {
   id: serial('id').primaryKey(),
-  riskId: integer('risk_id').notNull(),
+  riskId: integer('risk_id').notNull().references(() => risks.id, { onDelete: 'cascade' }),
   tagId: integer('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
 });
 
@@ -429,4 +471,77 @@ export const checklistItemDependencies = pgTable('checklist_item_dependencies', 
   dependsOnItemId: integer('depends_on_item_id').notNull().references(() => checklistResponses.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at').defaultNow(),
   createdBy: integer('created_by').references(() => users.id),
+});
+
+// ============================================
+// AIPM FOUNDATION TABLES (Story 5.1.1)
+// ============================================
+
+// Decisions Table - Architectural Decision Records (ADR)
+export const decisions = pgTable('decisions', {
+  id: serial('id').primaryKey(),
+  decisionId: varchar('decision_id', { length: 50 }).notNull().unique(),
+  projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  decisionType: varchar('decision_type', { length: 50 }), // architectural, business, technical, operational
+  impactLevel: varchar('impact_level', { length: 20 }), // low, medium, high, critical
+  status: varchar('status', { length: 20 }).default('proposed'), // proposed, approved, rejected, superseded, implemented
+  supersededBy: integer('superseded_by').references(() => decisions.id),
+  alternativesConsidered: jsonb('alternatives_considered'), // array of alternative options
+  rationale: text('rationale'), // why this decision was made
+  consequences: text('consequences'), // expected outcomes
+  decidedBy: integer('decided_by').references(() => users.id),
+  decidedDate: timestamp('decided_date'),
+  reviewDate: timestamp('review_date'),
+  createdByAi: boolean('created_by_ai').default(false),
+  aiConfidence: varchar('ai_confidence', { length: 20 }), // low, medium, high
+  aiAnalysisId: uuid('ai_analysis_id'),
+  pkgNodeId: uuid('pkg_node_id'), // For Story 5.1.2 PKG integration
+  createdBy: integer('created_by').notNull().references(() => users.id),
+  createdDate: timestamp('created_date').defaultNow(),
+  updatedDate: timestamp('updated_date').defaultNow(),
+});
+
+// Meetings Table - Meeting persistence with transcripts
+export const meetings = pgTable('meetings', {
+  id: serial('id').primaryKey(),
+  meetingId: varchar('meeting_id', { length: 50 }).notNull().unique(),
+  projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  meetingDate: timestamp('meeting_date').notNull(),
+  durationMinutes: integer('duration_minutes'),
+  participants: jsonb('participants'), // array of usernames: ["alice", "bob"]
+  transcriptFiles: jsonb('transcript_files'), // array of file metadata
+  transcriptText: text('transcript_text'), // full transcript content
+  analysisId: uuid('analysis_id'), // links to AI analysis session
+  summary: text('summary'), // AI-generated summary
+  keyDecisions: jsonb('key_decisions'), // array of decision IDs extracted from meeting
+  actionItemsCreated: jsonb('action_items_created'), // array of action_item IDs
+  risksIdentified: jsonb('risks_identified'), // array of risk IDs
+  issuesCreated: jsonb('issues_created'), // array of issue IDs
+  visibility: varchar('visibility', { length: 20 }).default('public'), // public, private, team
+  pkgNodeId: uuid('pkg_node_id'), // For Story 5.1.2 PKG integration
+  createdBy: integer('created_by').notNull().references(() => users.id),
+  createdDate: timestamp('created_date').defaultNow(),
+  updatedDate: timestamp('updated_date').defaultNow(),
+});
+
+// Evidence Table - Citation linking for traceability
+export const evidence = pgTable('evidence', {
+  id: serial('id').primaryKey(),
+  entityType: varchar('entity_type', { length: 50 }).notNull(), // issue, action-item, risk, decision
+  entityId: integer('entity_id').notNull(), // ID in the respective table
+  evidenceType: varchar('evidence_type', { length: 50 }), // transcript_quote, document_excerpt, meeting_note, user_statement, email_excerpt
+  sourceType: varchar('source_type', { length: 50 }), // meeting, document, manual, email
+  sourceId: integer('source_id'), // references meeting.id or document.id
+  quoteText: text('quote_text').notNull(),
+  pageNumber: integer('page_number'), // for document evidence
+  timestampSeconds: integer('timestamp_seconds'), // for video/audio transcripts
+  context: text('context'), // additional context
+  confidence: varchar('confidence', { length: 20 }), // low, medium, high
+  extractionMethod: varchar('extraction_method', { length: 50 }), // manual, llm_extraction, keyword_match
+  pkgEdgeId: uuid('pkg_edge_id'), // For Story 5.1.2 PKG integration
+  createdBy: integer('created_by').notNull().references(() => users.id),
+  createdDate: timestamp('created_date').defaultNow(),
 });
