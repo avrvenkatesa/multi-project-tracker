@@ -76,6 +76,7 @@ const evidenceRouter = require('./routes/evidence');
 const ragRouter = require('./routes/aipm-rag');
 const pkgRouter = require('./routes/aipm-pkg');
 const aiAgentRouter = require('./routes/aiAgent');
+const aiDecisionMakerRouter = require('./routes/aiDecisionMaker');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -841,6 +842,7 @@ app.use('/api', authenticateToken, evidenceRouter);
 app.use('/api', authenticateToken, ragRouter);
 app.use('/api', authenticateToken, pkgRouter);
 app.use('/api/aipm', authenticateToken, aiAgentRouter); // AI Agent routes
+app.use('/api/aipm', authenticateToken, aiDecisionMakerRouter); // AI Decision Maker routes
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 

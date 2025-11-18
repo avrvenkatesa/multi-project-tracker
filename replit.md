@@ -47,6 +47,19 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 
 **Context Assembly**: Intelligent context builder assembles relevant project knowledge by querying RAG for semantic document search (top 10 results), PKG for entity retrieval (filtered by agent type, 20 nodes), and PKG edges for relationship mapping (up to 50 edges). Context assembly is optimized for <500ms performance with full audit trail logging.
 
+### Autonomous Decision Making (Story 5.2.2)
+**AI Decision Maker Service**: Extends the AI agent with autonomous decision-making capabilities (`services/aiDecisionMaker.js`). The service analyzes proposed decisions using PKG and RAG context, identifies impacted entities and risks, generates alternative approaches using LLM, and creates proposals for human approval through a Human-in-the-Loop (HITL) workflow.
+
+**Decision Analysis**: The `analyzeDecision()` method performs comprehensive impact analysis by searching RAG for related decisions, querying PKG for impacted nodes (tasks, risks), identifying related risks from the risk register, and detecting potential conflicts with existing approved decisions. Analysis results include execution time metrics and entity counts for transparency.
+
+**Alternative Generation**: The `generateAlternatives()` method uses LLM (Claude/GPT) to generate 3 alternative approaches for each decision, providing pros/cons, complexity estimates, and risk levels. Alternatives are formatted as JSON for structured processing and storage in the proposal.
+
+**HITL Proposal Workflow**: Proposals are created with confidence scores (0.7-0.99) and stored in `ai_agent_proposals` table awaiting human review. The workflow supports three outcomes: (1) Approval - creates the actual decision entity with AI provenance tracking, (2) Rejection - marks proposal as rejected with review notes, (3) Modification - allows human edits before approval. Auto-approval is supported for high-confidence proposals (>0.95) with system user attribution.
+
+**Decision Maker API Endpoints**: REST API (`routes/aiDecisionMaker.js`) provides 6 endpoints: `POST /api/aipm/projects/:projectId/agent/propose-decision` for AI decision proposals with impact analysis, `GET /api/aipm/projects/:projectId/agent/proposals` for listing proposals with filters, `GET /api/aipm/agent/proposals/:proposalId` for detailed proposal inspection, `POST /api/aipm/agent/proposals/:proposalId/approve` for HITL approval, `POST /api/aipm/agent/proposals/:proposalId/reject` for HITL rejection, and `GET /api/aipm/projects/:projectId/agent/pending-reviews` for pending proposal queue.
+
+**AI Provenance Tracking**: Created entities (decisions, risks, action items) include AI provenance fields: `created_by_ai` boolean flag, `ai_confidence` score (0.00-1.00), and linkage to original proposal via `ai_agent_proposals.created_entity_type` and `created_entity_id`. This ensures full traceability of AI-generated content and supports audit requirements.
+
 ### AI Features
 - **AI Meeting Analysis**: Two-phase processing for item extraction and status updates.
 - **AI Checklist Generation**: Generates comprehensive checklists from descriptions and documents using OpenAI GPT-4o.
