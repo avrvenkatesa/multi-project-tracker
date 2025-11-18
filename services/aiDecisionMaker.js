@@ -19,8 +19,8 @@ class AIDecisionMaker {
         r.id,
         r.source_type,
         r.source_id,
-        r.content_text,
-        r.metadata,
+        r.content,
+        r.meta,
         ts_rank(r.content_tsv, to_tsquery('english', $1)) as relevance
       FROM rag_documents r
       WHERE r.project_id = $2
@@ -273,8 +273,16 @@ Generate 3 alternative approaches to this decision.`;
 
     // Create the actual entity based on proposal type
     if (proposal.proposal_type === 'decision') {
+      // Generate decision_id
+      const decisionIdResult = await pool.query(
+        'SELECT generate_decision_id($1) as decision_id',
+        [proposal.project_id]
+      );
+      const decisionId = decisionIdResult.rows[0].decision_id;
+
       const decision = await pool.query(`
         INSERT INTO decisions (
+          decision_id,
           project_id,
           title,
           description,
@@ -287,9 +295,10 @@ Generate 3 alternative approaches to this decision.`;
           created_by_ai,
           ai_confidence
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11)
         RETURNING id
       `, [
+        decisionId,
         proposal.project_id,
         finalData.title,
         finalData.description,
