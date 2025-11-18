@@ -1,0 +1,633 @@
+/**
+ * Gantt Hierarchy Styles
+ * Story 4.6 - Hierarchical Gantt Chart Enhancement
+ * 
+ * Styles for hierarchical features added to Frappe Gantt charts.
+ * Compatible with existing swim lanes, compact view, and dependency highlighting.
+ */
+
+/* ============================================
+   EPIC BADGES
+   Positioned at the start of parent task bars
+   ============================================ */
+
+.gantt-epic-badge-group {
+  pointer-events: none !important; /* Don't block clicks */
+}
+
+.gantt-epic-badge {
+  font-size: 12px;
+  font-weight: 600;
+  fill: #6366f1;
+  pointer-events: none !important;
+  user-select: none;
+}
+
+.epic-badge-rect {
+  fill: #6366f1;
+  opacity: 0.9;
+  rx: 3px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+  pointer-events: none !important; /* Don't block clicks */
+}
+
+.epic-badge-text {
+  fill: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  pointer-events: none !important;
+  text-anchor: middle;
+}
+
+/* ============================================
+   EXPAND/COLLAPSE BUTTONS
+   Interactive controls for parent tasks
+   ============================================ */
+
+.gantt-expand-btn {
+  cursor: pointer !important;
+  pointer-events: all !important;
+  z-index: 1000 !important; /* Above all other elements */
+  transition: none; /* Prevent transition flickering */
+}
+
+.gantt-expand-circle {
+  cursor: pointer !important;
+  pointer-events: all !important; /* Allow clicks on circle */
+}
+
+.gantt-expand-btn circle {
+  r: 8px;
+  fill: #ffffff;
+  stroke: var(--gantt-border, #e1e4e8);
+  stroke-width: 2px;
+  cursor: pointer !important;
+  pointer-events: all !important; /* Allow clicks to bubble to parent */
+  transition: fill 0.15s ease, transform 0.15s ease;
+}
+
+.gantt-expand-btn:hover circle {
+  fill: #f6f8fa;
+  transform: scale(1.1);
+}
+
+.gantt-expand-btn:active circle {
+  fill: #e0e7ff;
+  stroke: #3730a3;
+}
+
+.gantt-expand-icon {
+  fill: #6366f1;
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 8px;
+  pointer-events: none !important; /* Never intercept clicks */
+  user-select: none;
+  text-anchor: middle;
+  transition: transform 0.2s ease-in-out;
+}
+
+/* Chevron rotation states */
+.gantt-expand-icon.expanded {
+  /* Chevron down */
+}
+
+.gantt-expand-icon.collapsed {
+  /* Chevron right */
+  transform: rotate(-90deg);
+}
+
+/* ============================================
+   HORIZONTAL HIERARCHY CONNECTORS
+   Clean horizontal lines linking children to parents
+   ============================================ */
+
+/* Hide old vertical tree lines */
+.gantt-tree-line,
+.gantt-tree-lines-group {
+  display: none !important;
+}
+
+/* Horizontal connector lines */
+.gantt-hierarchy-connector {
+  stroke: #cbd5e1 !important;
+  stroke-width: 2px !important;
+  fill: none !important;
+  opacity: 0.6 !important;
+  pointer-events: none !important;
+}
+
+/* Different connector styles per level */
+.gantt-hierarchy-connector.level-1 {
+  stroke: #93c5fd !important;
+  stroke-width: 2px !important;
+}
+
+.gantt-hierarchy-connector.level-2 {
+  stroke: #bfdbfe !important;
+  stroke-width: 1.5px !important;
+}
+
+.gantt-hierarchy-connector.level-3 {
+  stroke: #dbeafe !important;
+  stroke-width: 1px !important;
+}
+
+/* Dots at the end of connectors */
+.gantt-hierarchy-dot {
+  stroke: white !important;
+  stroke-width: 1px !important;
+  opacity: 0.8 !important;
+  pointer-events: none !important;
+}
+
+/* Make grid lines very subtle */
+svg.gantt .grid-line {
+  stroke: #f3f4f6 !important;
+  stroke-width: 0.5px !important;
+  opacity: 0.4 !important;
+}
+
+/* ============================================
+   HIERARCHICAL COLOR CODING
+   Clear visual distinction between hierarchy levels
+   ============================================ */
+
+/* Level 0: EPICS - Indigo/Purple gradient with thick border */
+.bar-epic {
+  fill: url(#gantt-epic-gradient) !important;
+  stroke: #6366f1 !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 3px 6px rgba(99, 102, 241, 0.3));
+  opacity: 1 !important;
+}
+
+.gantt .bar-epic {
+  fill: url(#gantt-epic-gradient) !important;
+  stroke: #6366f1 !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 3px 6px rgba(99, 102, 241, 0.3));
+  font-weight: 600;
+}
+
+.gantt .bar-epic:hover {
+  filter: drop-shadow(0 4px 8px rgba(99, 102, 241, 0.4));
+}
+
+/* Level 1: TASKS - Solid Blue */
+.bar-task {
+  fill: #3b82f6 !important;
+  stroke: #2563eb !important;
+  stroke-width: 2px !important;
+  filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.2));
+  opacity: 1 !important;
+}
+
+.gantt .bar-task {
+  fill: #3b82f6 !important;
+  stroke: #2563eb !important;
+  stroke-width: 2px !important;
+}
+
+/* Level 2: SUBTASKS - Grey */
+.bar-subtask {
+  fill: #9ca3af !important;
+  stroke: #6b7280 !important;
+  stroke-width: 1.5px !important;
+  filter: drop-shadow(0 1px 3px rgba(107, 114, 128, 0.2));
+  opacity: 1 !important;
+}
+
+.gantt .bar-subtask {
+  fill: #9ca3af !important;
+  stroke: #6b7280 !important;
+  stroke-width: 1.5px !important;
+}
+
+/* Level 3+: SUB-SUBTASKS - Very Light Blue/Cyan */
+.bar-sub-subtask {
+  fill: #dbeafe !important;
+  stroke: #93c5fd !important;
+  stroke-width: 1px !important;
+  opacity: 1 !important;
+}
+
+.gantt .bar-sub-subtask {
+  fill: #dbeafe !important;
+  stroke: #93c5fd !important;
+  stroke-width: 1px !important;
+}
+
+/* Progress bar styling for each level */
+.bar-epic .bar-progress {
+  fill: #818cf8 !important;
+  opacity: 0.8 !important;
+}
+
+.bar-task .bar-progress {
+  fill: #60a5fa !important;
+  opacity: 0.7 !important;
+}
+
+.bar-subtask .bar-progress {
+  fill: #d1d5db !important;
+  opacity: 0.7 !important;
+}
+
+/* Ensure hierarchy styles override Frappe Gantt defaults */
+svg.gantt .bar-wrapper .bar-epic,
+svg.gantt .bar-wrapper .bar-task,
+svg.gantt .bar-wrapper .bar-subtask,
+svg.gantt .bar-wrapper .bar-sub-subtask {
+  opacity: 1 !important;
+}
+
+/* Epic bar gradient (defined in SVG defs via JS) */
+.gantt svg defs #gantt-epic-gradient {
+  /* Applied via fill: url(#gantt-epic-gradient) */
+}
+
+/* ============================================
+   INDENTED BARS
+   Visual offset for child tasks based on hierarchy level
+   Integration: Applied via transform or x attribute
+   ============================================ */
+
+.gantt-bar-indented {
+  /* Base class for indented bars */
+}
+
+/* Alternative: Use data attributes for dynamic indentation */
+.gantt .bar-wrapper[data-indent-level="1"] .bar {
+  /* Level 1 indentation handled by JS */
+}
+
+.gantt .bar-wrapper[data-indent-level="2"] .bar {
+  /* Level 2 indentation handled by JS */
+}
+
+.gantt .bar-wrapper[data-indent-level="3"] .bar {
+  /* Level 3 indentation handled by JS */
+}
+
+/* ============================================
+   HIERARCHY LEVEL INDICATORS
+   Visual distinctions for different hierarchy depths
+   ============================================ */
+
+.gantt-level-0 {
+  /* Root/Epic level tasks */
+  font-weight: 600;
+}
+
+.gantt .bar-wrapper.gantt-level-0 .bar {
+  height: 100%;
+  stroke-width: 2px;
+}
+
+.gantt-level-1 {
+  /* First-level child tasks */
+  opacity: 0.98;
+}
+
+.gantt .bar-wrapper.gantt-level-1 .bar {
+  height: 90%;
+}
+
+.gantt-level-2 {
+  /* Second-level child tasks */
+  opacity: 0.96;
+}
+
+.gantt .bar-wrapper.gantt-level-2 .bar {
+  height: 85%;
+}
+
+.gantt-level-3 {
+  /* Third-level child tasks (if needed) */
+  opacity: 0.94;
+}
+
+.gantt .bar-wrapper.gantt-level-3 .bar {
+  height: 80%;
+}
+
+/* ============================================
+   COLLAPSED STATE
+   Visual indicators for collapsed parent tasks
+   ============================================ */
+
+.gantt-task-collapsed {
+  opacity: 0.7;
+}
+
+.gantt-task-collapsed .bar {
+  /* Dimmed appearance for collapsed state */
+}
+
+/* Child count indicator badge */
+.gantt-child-count-badge {
+  font-size: 10px;
+  font-weight: 600;
+  fill: #6b7280;
+  pointer-events: none;
+}
+
+.gantt-child-count-badge-bg {
+  fill: #f3f4f6;
+  stroke: #d1d5db;
+  stroke-width: 1px;
+  rx: 8px;
+}
+
+/* ============================================
+   HOVER EFFECTS
+   Enhanced interactivity
+   ============================================ */
+
+.gantt-expand-btn:hover {
+  transform: scale(1.1);
+}
+
+.gantt-expand-btn:hover circle {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+}
+
+/* Epic bar hover - highlight children */
+.gantt .bar-wrapper.bar-epic:hover {
+  z-index: 10;
+}
+
+/* ============================================
+   COMPACT VIEW ADJUSTMENTS
+   Integration: Adapts to .gantt-expanded class on container
+   ============================================ */
+
+.gantt-container.gantt-expanded .gantt-expand-btn circle {
+  r: 6px;
+}
+
+.gantt-container.gantt-expanded .gantt-expand-icon {
+  font-size: 7px;
+}
+
+.gantt-container.gantt-expanded .epic-badge-rect {
+  width: 32px !important;
+  height: 14px !important;
+}
+
+.gantt-container.gantt-expanded .epic-badge-text {
+  font-size: 8px;
+}
+
+.gantt-container.gantt-expanded .gantt-tree-line {
+  stroke-width: 0.75px;
+}
+
+/* ============================================
+   INTEGRATION WITH EXISTING FEATURES
+   Compatibility with swim lanes, dependencies, critical path
+   ============================================ */
+
+/* Swim lanes: Ensure hierarchy elements don't conflict */
+.lane-overlays {
+  z-index: 1;
+}
+
+.gantt-tree-lines-group {
+  z-index: 0; /* Behind bars */
+}
+
+.gantt-hierarchy-controls {
+  z-index: 2; /* Above bars */
+  pointer-events: none;
+}
+
+.gantt-hierarchy-controls > * {
+  pointer-events: auto;
+}
+
+/* Prevent parent elements from interfering */
+.bar-wrapper {
+  pointer-events: auto;
+}
+
+/* Dependency highlighting: Preserve when hierarchy active */
+.gantt-container:has(.dependency-source) .gantt-tree-line {
+  opacity: 0.3;
+}
+
+.gantt-container:has(.dependency-source) .bar-epic.dependency-source ~ .gantt-tree-line,
+.gantt-container:has(.dependency-source) .bar-epic.dependency-highlighted ~ .gantt-tree-line {
+  opacity: 0.6;
+}
+
+/* Critical path: Hierarchy elements adapt */
+.gantt .bar-wrapper.bar-critical.bar-epic .bar {
+  stroke: #dc2626;
+  stroke-width: 2.5px;
+}
+
+/* ============================================
+   ANIMATIONS
+   Smooth transitions for hierarchy interactions
+   ============================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.gantt-epic-badge,
+.gantt-expand-btn,
+.gantt-tree-line {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+/* Expand/collapse animation */
+@keyframes expandCollapse {
+  0% {
+    opacity: 0;
+    max-height: 0;
+  }
+  100% {
+    opacity: 1;
+    max-height: 1000px;
+  }
+}
+
+/* Chevron rotation */
+.gantt-expand-icon {
+  transform-origin: center;
+}
+
+/* ============================================
+   ACCESSIBILITY
+   Keyboard navigation and screen reader support
+   ============================================ */
+
+.gantt-expand-btn:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .epic-badge-rect {
+    stroke: #000;
+    stroke-width: 1px;
+  }
+  
+  .gantt-tree-line {
+    stroke: #000;
+    stroke-width: 2px;
+    stroke-dasharray: none;
+  }
+  
+  .gantt-expand-btn circle {
+    stroke-width: 3px;
+  }
+}
+
+/* Screen reader only text */
+.gantt-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   Adaptations for different screen sizes
+   ============================================ */
+
+@media (max-width: 768px) {
+  .epic-badge-rect {
+    width: 28px !important;
+  }
+  
+  .epic-badge-text {
+    font-size: 7px;
+  }
+  
+  .gantt-expand-btn circle {
+    r: 7px;
+  }
+  
+  .gantt-tree-line {
+    stroke-width: 0.75px;
+  }
+}
+
+/* ============================================
+   PRINT STYLES
+   Optimized for printing
+   ============================================ */
+
+@media print {
+  .gantt-expand-btn {
+    display: none;
+  }
+  
+  .gantt-epic-badge,
+  .gantt-tree-line {
+    opacity: 1 !important;
+  }
+  
+  .gantt-tree-line {
+    stroke: #000;
+    stroke-width: 1px;
+  }
+  
+  .gantt .bar-epic {
+    fill: #e0e7ff !important;
+    stroke: #000;
+  }
+}
+
+/* ============================================
+   DESIGN TOKEN INTEGRATION
+   Using existing Gantt color variables
+   ============================================ */
+
+/* 
+  Available tokens from design-tokens.css:
+  - var(--gantt-bar-default)
+  - var(--gantt-bar-progress)
+  - var(--gantt-bar-critical)
+  - var(--gantt-border)
+  - var(--gantt-grid)
+  - var(--gantt-text)
+  - var(--gantt-accent)
+*/
+
+/* Apply design tokens */
+.gantt-tree-line {
+  stroke: var(--gantt-border);
+}
+
+.gantt-expand-btn circle {
+  stroke: var(--gantt-border);
+}
+
+.gantt-child-count-badge {
+  fill: var(--gantt-text);
+}
+
+/* ============================================
+   FRAPPE GANTT COMPATIBILITY NOTES
+   
+   This CSS integrates with Frappe Gantt's SVG structure:
+   
+   1. Frappe Gantt creates:
+      - .gantt-container (main container)
+      - svg (SVG canvas)
+      - .bar-wrapper (task container)
+      - .bar (task rectangle)
+      - .bar-label (task text)
+   
+   2. Our enhancements add:
+      - .gantt-tree-lines-group (SVG group for tree lines)
+      - .gantt-hierarchy-controls (SVG group for buttons/badges)
+      - Class modifiers: .bar-epic, .gantt-level-N
+   
+   3. Compatibility layers:
+      - Z-index management for proper stacking
+      - :has() selector for contextual styling
+      - Transform-based positioning (non-destructive)
+   
+   4. Preserved features:
+      - Swim lanes (.lane-overlays)
+      - Dependency highlighting (.dependency-source)
+      - Compact view (.gantt-expanded)
+      - Critical path (.bar-critical)
+      - View modes (Quarter Day, Day, Week, Month)
+   
+   5. DOM structure:
+      svg
+        ├── defs (gradients)
+        ├── g.gantt-tree-lines-group (our tree lines)
+        ├── g.grid (Frappe's grid)
+        ├── g.date (Frappe's dates)
+        ├── g.arrow (Frappe's dependency arrows)
+        ├── g.bar-wrapper (Frappe's task bars)
+        │   ├── rect.bar
+        │   ├── rect.bar-progress
+        │   └── text.bar-label
+        ├── g.lane-overlays (existing swim lanes)
+        └── g.gantt-hierarchy-controls (our badges/buttons)
+   
+   ============================================ */

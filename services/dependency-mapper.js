@@ -13,6 +13,287 @@
 const { pool } = require('../db');
 
 /**
+ * GENERAL SOLUTION: Adjust task dates to create proper waterfall cascade
+ * Works for ANY project with hierarchical issues (epics → tasks → subtasks)
+ *
+ * @param {string} projectId - The project ID to adjust
+ * @param {Array<number>} issueIds - Array of newly created issue IDs to adjust (prevents overwriting existing issues)
+ * @param {object} pool - PostgreSQL connection pool
+ * @returns {Promise<void>}
+ */
+async function adjustDatesForCascade(projectId, issueIds, pool) {
+  console.log('');
+  console.log('='.repeat(60));
+  console.log('📅 POST-PROCESSING: Adjusting dates for cascade effect');
+  console.log('='.repeat(60));
+
+  if (!issueIds || issueIds.length === 0) {
+    console.log('⚠️  No issue IDs provided - skipping cascade adjustment');
+    return;
+  }
+
+  console.log(`🎯 Targeting ${issueIds.length} newly created issues only`);
+
+  // Fetch ONLY the newly created issues to prevent overwriting existing project data
+  const result = await pool.query(`
+    SELECT id, title, hierarchy_level, parent_issue_id, start_date, due_date, created_at
+    FROM issues
+    WHERE project_id = $1 AND id = ANY($2::int[])
+    ORDER BY hierarchy_level ASC, created_at ASC
+  `, [projectId, issueIds]);
+
+  const issues = result.rows;
+
+  if (issues.length === 0) {
+    console.log('⚠️  No issues found to adjust');
+    return;
+  }
+
+  console.log(`📊 Total issues to process: ${issues.length}`);
+
+  // Use the earliest created_at timestamp as the project baseline to prevent schedule drift
+  const earliestCreatedAt = issues.reduce((earliest, issue) => {
+    const issueDate = new Date(issue.created_at);
+    return issueDate < earliest ? issueDate : earliest;
+  }, new Date(issues[0].created_at));
+
+  console.log(`📅 Using baseline date: ${earliestCreatedAt.toISOString().split('T')[0]}`);
+
+  // Configuration - easily adjustable for different project types
+  const config = {
+    projectStartDate: earliestCreatedAt,
+    epic: {
+      offsetDays: 7,      // Days between epic starts
+      durationDays: 30    // Default epic duration
+    },
+    task: {
+      offsetDays: 3,      // Days between sibling task starts
+      durationDays: 10    // Default task duration
+    },
+    subtask: {
+      offsetDays: 5,      // Days between sibling subtask starts
+      durationDays: 5     // Default subtask duration
+    },
+    subSubtask: {
+      offsetDays: 2,      // Days between sub-subtasks
+      durationDays: 3     // Default sub-subtask duration
+    }
+  };
+
+  // Helper function to format date as YYYY-MM-DD
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Helper function to update issue dates
+  const updateIssueDates = async (issueId, startDate, dueDate) => {
+    await pool.query(`
+      UPDATE issues
+      SET start_date = $1, due_date = $2
+      WHERE id = $3
+    `, [formatDate(startDate), formatDate(dueDate), issueId]);
+  };
+
+  // Group issues by hierarchy level
+  const epicIssues = issues.filter(i => i.hierarchy_level === 0);
+  const taskIssues = issues.filter(i => i.hierarchy_level === 1);
+  const subtaskIssues = issues.filter(i => i.hierarchy_level === 2);
+  const subSubtaskIssues = issues.filter(i => i.hierarchy_level >= 3);
+
+  console.log(`📊 Breakdown: ${epicIssues.length} epics, ${taskIssues.length} tasks, ${subtaskIssues.length} subtasks, ${subSubtaskIssues.length} sub-subtasks`);
+  console.log('');
+
+  // LEVEL 0: Adjust EPICS (space them out sequentially)
+  console.log('🟣 PROCESSING EPICS (Level 0)...');
+  for (let i = 0; i < epicIssues.length; i++) {
+    const epic = epicIssues[i];
+
+    // Calculate start date
+    const startDate = new Date(config.projectStartDate);
+    startDate.setDate(startDate.getDate() + (i * config.epic.offsetDays));
+
+    // Calculate due date
+    const dueDate = new Date(startDate);
+    dueDate.setDate(dueDate.getDate() + config.epic.durationDays);
+
+    // Update in database
+    await updateIssueDates(epic.id, startDate, dueDate);
+
+    // Store updated dates for child calculations
+    epic.start_date = formatDate(startDate);
+    epic.due_date = formatDate(dueDate);
+
+    console.log(`  📌 Epic ${i + 1}/${epicIssues.length}: "${epic.title}"`);
+    console.log(`     Start: ${epic.start_date}, Due: ${epic.due_date}, Duration: ${config.epic.durationDays}d`);
+  }
+  console.log('');
+
+  // LEVEL 1: Adjust TASKS (based on parent epic start date, or baseline for orphans)
+  console.log('🔵 PROCESSING TASKS (Level 1)...');
+  let orphanedTaskIndex = 0;
+  for (const task of taskIssues) {
+    // Find parent epic
+    const parentEpic = epicIssues.find(e => e.id === task.parent_issue_id);
+
+    let startDate, dueDate;
+
+    if (!parentEpic) {
+      // Orphaned task - schedule based on baseline with sequential offset
+      console.log(`  ⚠️  Task "${task.title}" has no parent epic - scheduling as standalone`);
+      
+      startDate = new Date(config.projectStartDate);
+      // Space orphaned tasks after all epics
+      const offsetDays = (epicIssues.length * config.epic.offsetDays) + (orphanedTaskIndex * config.task.offsetDays);
+      startDate.setDate(startDate.getDate() + offsetDays);
+      
+      dueDate = new Date(startDate);
+      dueDate.setDate(dueDate.getDate() + config.task.durationDays);
+      
+      orphanedTaskIndex++;
+    } else {
+      // Has parent - schedule based on parent's start date
+      const siblings = taskIssues.filter(t => t.parent_issue_id === task.parent_issue_id);
+      const siblingIndex = siblings.findIndex(s => s.id === task.id);
+
+      // Calculate start date (parent's start + sibling offset)
+      startDate = new Date(parentEpic.start_date);
+      startDate.setDate(startDate.getDate() + (siblingIndex * config.task.offsetDays));
+
+      // Calculate due date
+      dueDate = new Date(startDate);
+      dueDate.setDate(dueDate.getDate() + config.task.durationDays);
+
+      console.log(`  📍 Task: "${task.title}"`);
+      console.log(`     Parent: "${parentEpic.title}", Sibling: ${siblingIndex + 1}/${siblings.length}`);
+    }
+
+    // Update in database
+    await updateIssueDates(task.id, startDate, dueDate);
+
+    // Store updated dates
+    task.start_date = formatDate(startDate);
+    task.due_date = formatDate(dueDate);
+
+    console.log(`     Start: ${task.start_date}, Due: ${task.due_date}, Duration: ${config.task.durationDays}d`);
+  }
+  console.log('');
+
+  // LEVEL 2: Adjust SUBTASKS (based on parent task start date, or baseline for orphans)
+  console.log('🔷 PROCESSING SUBTASKS (Level 2)...');
+  let orphanedSubtaskIndex = 0;
+  for (const subtask of subtaskIssues) {
+    // Find parent task
+    const parentTask = taskIssues.find(t => t.id === subtask.parent_issue_id);
+
+    let startDate, dueDate;
+
+    if (!parentTask) {
+      // Orphaned subtask - schedule based on baseline with sequential offset
+      console.log(`  ⚠️  Subtask "${subtask.title}" has no parent task - scheduling as standalone`);
+      
+      startDate = new Date(config.projectStartDate);
+      // Space orphaned subtasks after epics and tasks
+      const offsetDays = (epicIssues.length * config.epic.offsetDays) + 
+                        (taskIssues.length * config.task.offsetDays) + 
+                        (orphanedSubtaskIndex * config.subtask.offsetDays);
+      startDate.setDate(startDate.getDate() + offsetDays);
+      
+      dueDate = new Date(startDate);
+      dueDate.setDate(dueDate.getDate() + config.subtask.durationDays);
+      
+      orphanedSubtaskIndex++;
+    } else {
+      // Has parent - schedule based on parent's start date
+      const siblings = subtaskIssues.filter(st => st.parent_issue_id === subtask.parent_issue_id);
+      const siblingIndex = siblings.findIndex(s => s.id === subtask.id);
+
+      // Calculate start date (parent's start + sibling offset)
+      startDate = new Date(parentTask.start_date);
+      startDate.setDate(startDate.getDate() + (siblingIndex * config.subtask.offsetDays));
+
+      // Calculate due date
+      dueDate = new Date(startDate);
+      dueDate.setDate(dueDate.getDate() + config.subtask.durationDays);
+
+      console.log(`  📎 Subtask: "${subtask.title}"`);
+      console.log(`     Parent: "${parentTask.title}", Sibling: ${siblingIndex + 1}/${siblings.length}`);
+    }
+
+    // Update in database
+    await updateIssueDates(subtask.id, startDate, dueDate);
+
+    // Store updated dates
+    subtask.start_date = formatDate(startDate);
+    subtask.due_date = formatDate(dueDate);
+
+    console.log(`     Start: ${subtask.start_date}, Due: ${subtask.due_date}, Duration: ${config.subtask.durationDays}d`);
+  }
+  console.log('');
+
+  // LEVEL 3+: Adjust SUB-SUBTASKS (based on parent subtask start date, or baseline for orphans)
+  if (subSubtaskIssues.length > 0) {
+    console.log('◽ PROCESSING SUB-SUBTASKS (Level 3+)...');
+    let orphanedSubSubtaskIndex = 0;
+    for (const subSubtask of subSubtaskIssues) {
+      // Find parent (could be subtask or another sub-subtask)
+      const parentSubtask = subtaskIssues.find(st => st.id === subSubtask.parent_issue_id) ||
+                            subSubtaskIssues.find(sst => sst.id === subSubtask.parent_issue_id);
+
+      let startDate, dueDate;
+
+      if (!parentSubtask) {
+        // Orphaned sub-subtask - schedule based on baseline with sequential offset
+        console.log(`  ⚠️  Sub-subtask "${subSubtask.title}" has no parent - scheduling as standalone`);
+        
+        startDate = new Date(config.projectStartDate);
+        // Space orphaned sub-subtasks after all other items
+        const offsetDays = (epicIssues.length * config.epic.offsetDays) + 
+                          (taskIssues.length * config.task.offsetDays) + 
+                          (subtaskIssues.length * config.subtask.offsetDays) + 
+                          (orphanedSubSubtaskIndex * config.subSubtask.offsetDays);
+        startDate.setDate(startDate.getDate() + offsetDays);
+        
+        dueDate = new Date(startDate);
+        dueDate.setDate(dueDate.getDate() + config.subSubtask.durationDays);
+        
+        orphanedSubSubtaskIndex++;
+      } else {
+        // Has parent - schedule based on parent's start date
+        const siblings = subSubtaskIssues.filter(sst => sst.parent_issue_id === subSubtask.parent_issue_id);
+        const siblingIndex = siblings.findIndex(s => s.id === subSubtask.id);
+
+        // Calculate dates
+        startDate = new Date(parentSubtask.start_date);
+        startDate.setDate(startDate.getDate() + (siblingIndex * config.subSubtask.offsetDays));
+
+        dueDate = new Date(startDate);
+        dueDate.setDate(dueDate.getDate() + config.subSubtask.durationDays);
+      }
+
+      // Update in database
+      await updateIssueDates(subSubtask.id, startDate, dueDate);
+
+      // Store updated dates
+      subSubtask.start_date = formatDate(startDate);
+      subSubtask.due_date = formatDate(dueDate);
+
+      console.log(`  ▫️  Sub-subtask: "${subSubtask.title}"`);
+      console.log(`     Start: ${subSubtask.start_date}, Due: ${subSubtask.due_date}`);
+    }
+    console.log('');
+  }
+
+  console.log('✅ Date cascade adjustment complete!');
+  console.log('='.repeat(60));
+  console.log('');
+}
+
+// calculateTaskDates() function removed - dates now calculated in post-processing via adjustDatesForCascade()
+
+/**
  * Create dependencies from workstream detector output
  * 
  * @param {Array} workstreams - Array of workstream objects with dependencies
@@ -485,6 +766,7 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
     created: [],
     epics: [],
     tasks: [],
+    subtasks: [],
     errors: []
   };
 
@@ -494,154 +776,228 @@ async function createHierarchicalIssues(workstreams, projectId, userId) {
   }
 
   try {
-    // Separate workstreams into epics and tasks
-    const epics = [];
-    const tasks = [];
+    // Map to store ALL created issue IDs by name (not just epics)
+    const issueIdsByName = new Map();
+    
+    // Track created issues with their dates for dependency calculation
+    const createdIssues = [];
+    const projectStartDate = new Date(); // Use current date as project start
+    
+    console.log(`📅 Project start date: ${projectStartDate.toISOString().split('T')[0]}`);
+    
+    // Sort workstreams by hierarchyLevel to ensure parents are created before children
+    // Level 0 (epics) → Level 1 (tasks) → Level 2 (subtasks)
+    const sortedWorkstreams = [...workstreams].sort((a, b) => {
+      const levelA = a.hierarchyLevel ?? 0;
+      const levelB = b.hierarchyLevel ?? 0;
+      return levelA - levelB;
+    });
+    
+    console.log(`  → Processing ${sortedWorkstreams.length} items in hierarchical order`);
+    
+    // Count items by type for logging
+    const counts = { epics: 0, tasks: 0, subtasks: 0, standalone: 0 };
 
-    for (const workstream of workstreams) {
-      // Determine if this is an epic based on multiple criteria
-      const isEpic = workstream.isEpic || 
-                     workstream.hierarchyLevel === 0 || 
-                     (workstream.children && workstream.children.length > 0);
-      
-      if (isEpic) {
-        epics.push(workstream);
-      } else {
-        tasks.push(workstream);
-      }
-    }
-
-    console.log(`  → Identified ${epics.length} epic(s) and ${tasks.length} task(s)`);
-
-    // Map to store epic IDs keyed by epic name
-    const epicIdsByName = new Map();
-
-    // PHASE 1: Create epics first
-    if (epics.length > 0) {
-      console.log(`🏗️  Creating ${epics.length} epic(s)...`);
-      
-      for (const epic of epics) {
-        try {
-          const title = epic.title || epic.name;
-          const description = epic.description || '';
-          const priority = epic.priority || 'medium';
-          const effortHours = epic.effort || null;
-          const assignee = epic.assignee || epic.createdBy || 'Demo User';
-
-          const insertResult = await pool.query(
-            `INSERT INTO issues 
-             (project_id, title, description, status, priority, 
-              parent_issue_id, hierarchy_level, is_epic, effort_hours, 
-              created_via_ai_by, assignee, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, NULL, 0, TRUE, $6, $7, $8, NOW(), NOW())
-             RETURNING id, title`,
-            [projectId, title, description, 'To Do', priority, effortHours, userId, assignee]
-          );
-
-          const createdEpic = insertResult.rows[0];
+    // Process all items in hierarchical order
+    for (const item of sortedWorkstreams) {
+      try {
+        const title = item.title || item.name;
+        const description = item.description || '';
+        const priority = item.priority || 'medium';
+        const effortHours = item.effort || null;
+        const assignee = item.assignee || item.createdBy || 'Demo User';
+        const itemLevel = item.hierarchyLevel ?? 0;
+        
+        // Parent resolution - try multiple lookup strategies
+        let parentIssueId = null;
+        const parentRef = item.parent || item.parentName;
+        
+        if (parentRef) {
+          // Strategy 1: Direct lookup by parent reference
+          parentIssueId = issueIdsByName.get(parentRef);
           
-          // Store in map for later reference
-          epicIdsByName.set(epic.name, createdEpic.id);
-          epicIdsByName.set(epic.title, createdEpic.id);
-          
-          result.created.push({
-            id: createdEpic.id,
-            title: createdEpic.title,
-            type: 'epic',
-            isEpic: true
-          });
-          
-          result.epics.push({
-            id: createdEpic.id,
-            title: createdEpic.title,
-            name: epic.name
-          });
-          
-          console.log(`  ✓ Created epic #${createdEpic.id}: "${createdEpic.title}"`);
-        } catch (error) {
-          const errorMsg = `Failed to create epic "${epic.name}": ${error.message}`;
-          result.errors.push(errorMsg);
-          console.error(`  ❌ ${errorMsg}`);
-        }
-      }
-    }
-
-    // PHASE 2: Create tasks with parent references
-    if (tasks.length > 0) {
-      console.log(`🏗️  Creating ${tasks.length} task(s)...`);
-      
-      for (const task of tasks) {
-        try {
-          const title = task.title || task.name;
-          const description = task.description || '';
-          const priority = task.priority || 'medium';
-          const effortHours = task.effort || null;
-          const assignee = task.assignee || task.createdBy || 'Demo User';
-          
-          // Determine parent issue ID
-          let parentIssueId = null;
-          const parentRef = task.parent || task.parentName;
-          
-          if (parentRef) {
-            parentIssueId = epicIdsByName.get(parentRef);
-            
-            if (!parentIssueId) {
-              const warning = `Parent "${parentRef}" not found for task "${task.name}" - adding to root level`;
-              result.errors.push(warning);
-              console.log(`  ⚠ ${warning}`);
+          // Strategy 2: Try exact title match if direct lookup fails
+          if (!parentIssueId) {
+            for (const [key, id] of issueIdsByName.entries()) {
+              if (key === item.parent || key === item.parentName) {
+                parentIssueId = id;
+                break;
+              }
             }
           }
           
-          // Determine hierarchy level (1 if has parent, 0 if root)
-          const hierarchyLevel = parentIssueId ? 1 : 0;
-          const isEpic = hierarchyLevel === 0; // Root-level tasks might be considered epics
-
-          const insertResult = await pool.query(
-            `INSERT INTO issues 
-             (project_id, title, description, status, priority, 
-              parent_issue_id, hierarchy_level, is_epic, effort_hours, 
-              created_via_ai_by, assignee, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
-             RETURNING id, title, parent_issue_id`,
-            [projectId, title, description, 'To Do', priority, 
-             parentIssueId, hierarchyLevel, isEpic, effortHours, userId, assignee]
-          );
-
-          const createdTask = insertResult.rows[0];
-          
-          result.created.push({
-            id: createdTask.id,
-            title: createdTask.title,
-            type: 'task',
-            parentId: createdTask.parent_issue_id,
-            isEpic: false
-          });
-          
-          result.tasks.push({
-            id: createdTask.id,
-            title: createdTask.title,
-            name: task.name,
-            parentId: createdTask.parent_issue_id
-          });
-          
-          if (createdTask.parent_issue_id) {
-            console.log(`  ✓ Created task #${createdTask.id}: "${createdTask.title}" (parent: #${createdTask.parent_issue_id})`);
-          } else {
-            console.log(`  ✓ Created task #${createdTask.id}: "${createdTask.title}" (root level)`);
+          // Strategy 3: Try case-insensitive match
+          if (!parentIssueId) {
+            const parentLower = parentRef.toLowerCase();
+            for (const [key, id] of issueIdsByName.entries()) {
+              if (key.toLowerCase() === parentLower) {
+                parentIssueId = id;
+                console.log(`  ✅ Found parent "${key}" for "${item.name}" via case-insensitive match`);
+                break;
+              }
+            }
           }
-        } catch (error) {
-          const errorMsg = `Failed to create task "${task.name}": ${error.message}`;
-          result.errors.push(errorMsg);
-          console.error(`  ❌ ${errorMsg}`);
+          
+          if (!parentIssueId) {
+            console.log(`  ⚠ Parent "${parentRef}" not found for "${item.name}" (level ${itemLevel})`);
+            console.log(`     Available parents:`, Array.from(issueIdsByName.keys()).slice(0, 5));
+          } else {
+            console.log(`  ✅ Linked "${item.name}" to parent "${parentRef}"`);
+          }
         }
+        
+        // Use AI-extracted hierarchy level, regardless of parent lookup success
+        // Parent lookup failure doesn't mean the item is top-level
+        const dbHierarchyLevel = itemLevel;
+        
+        // ✅ SAFEGUARD: is_epic can ONLY be true for level-0 tasks
+        // This prevents AI extraction errors from creating invalid data
+        const isEpic = (item.isEpic === true) && (dbHierarchyLevel === 0);
+        
+        if (item.isEpic === true && dbHierarchyLevel !== 0) {
+          console.warn(`  ⚠️ AI incorrectly marked "${item.name}" as epic at level ${dbHierarchyLevel}. Correcting to is_epic=false.`);
+        }
+        
+        // Log hierarchy assignment for debugging
+        console.log(`  📊 "${item.name}": hierarchyLevel=${dbHierarchyLevel}, parentId=${parentIssueId || 'none'}, hasParentRef=${!!parentRef}`);
+
+        // Dates will be calculated in post-processing step by adjustDatesForCascade()
+        // Insert with NULL dates for now
+
+        // Build dependencies array
+        const dependencies = [];
+
+        // Dependency 1: Parent task (if exists)
+        if (parentIssueId) {
+          dependencies.push(parentIssueId);
+        }
+
+        // Dependency 2: Previous sibling (tasks with same parent, for sequential flow)
+        if (parentIssueId) {
+          const siblings = createdIssues.filter(ci => ci.parent_issue_id === parentIssueId);
+          if (siblings.length > 0) {
+            const previousSibling = siblings[siblings.length - 1];
+            dependencies.push(previousSibling.id);
+          }
+        }
+
+        const dependenciesString = dependencies.join(',');
+
+        console.log(`📋 Creating: ${title}`);
+        console.log(`   Level: ${dbHierarchyLevel}, Parent: ${parentIssueId || 'none'}`);
+        console.log(`   Dependencies: ${dependenciesString || 'none'}`);
+
+        const insertResult = await pool.query(
+          `INSERT INTO issues 
+           (project_id, title, description, status, priority, 
+            parent_issue_id, hierarchy_level, is_epic, ai_effort_estimate_hours, 
+            ai_estimate_confidence, ai_estimate_version, created_via_ai_by, assignee, 
+            start_date, due_date, dependencies, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
+           RETURNING id, title, parent_issue_id, hierarchy_level, is_epic`,
+          [projectId, title, description, 'To Do', priority, 
+           parentIssueId, dbHierarchyLevel, isEpic, effortHours, '0.85', 1, userId, assignee,
+           null, null, dependenciesString]  // ✅ Dates set in post-processing
+        );
+
+        const createdItem = insertResult.rows[0];
+        
+        // Track created issue for hierarchy lookups
+        createdIssues.push({
+          id: createdItem.id,
+          title: createdItem.title,
+          parent_issue_id: parentIssueId,
+          hierarchy_level: dbHierarchyLevel
+        });
+        
+        // Store in map for child lookups using BOTH name and title
+        if (item.name) {
+          issueIdsByName.set(item.name, createdItem.id);
+        }
+        if (item.title && item.title !== item.name) {
+          issueIdsByName.set(item.title, createdItem.id);
+        }
+        
+        // Track by type
+        let itemType;
+        if (isEpic) {
+          itemType = 'epic';
+          counts.epics++;
+          result.epics.push({
+            id: createdItem.id,
+            title: createdItem.title,
+            name: item.name
+          });
+        } else if (itemLevel === 2) {
+          itemType = 'subtask';
+          counts.subtasks++;
+          result.subtasks.push({
+            id: createdItem.id,
+            title: createdItem.title,
+            name: item.name,
+            parentId: createdItem.parent_issue_id
+          });
+        } else if (itemLevel === 1 || parentIssueId) {
+          itemType = 'task';
+          counts.tasks++;
+          result.tasks.push({
+            id: createdItem.id,
+            title: createdItem.title,
+            name: item.name,
+            parentId: createdItem.parent_issue_id
+          });
+        } else {
+          itemType = 'standalone';
+          counts.standalone++;
+          result.tasks.push({
+            id: createdItem.id,
+            title: createdItem.title,
+            name: item.name,
+            parentId: null
+          });
+        }
+        
+        result.created.push({
+          id: createdItem.id,
+          title: createdItem.title,
+          type: itemType,
+          parentId: createdItem.parent_issue_id,
+          hierarchyLevel: createdItem.hierarchy_level,
+          isEpic: createdItem.is_epic
+        });
+        
+        // Log creation with type and parent info
+        console.log(`✅ Created ${itemType}: "${createdItem.title}" (ID: ${createdItem.id})`);
+        if (createdItem.parent_issue_id) {
+          console.log(`   → Parent: #${createdItem.parent_issue_id}, Level: ${dbHierarchyLevel}`);
+        }
+        
+      } catch (error) {
+        const errorMsg = `Failed to create item "${item.name}": ${error.message}`;
+        result.errors.push(errorMsg);
+        console.error(`  ❌ ${errorMsg}`);
       }
     }
 
-    console.log(`✅ Created ${result.created.length} hierarchical issue(s): ${result.epics.length} epic(s), ${result.tasks.length} task(s)`);
+    console.log(`✅ Created ${result.created.length} hierarchical issue(s):`);
+    console.log(`   - ${counts.epics} epic(s)`);
+    console.log(`   - ${counts.tasks} task(s)`);
+    console.log(`   - ${counts.subtasks} subtask(s)`);
+    console.log(`   - ${counts.standalone} standalone task(s)`);
     
     if (result.errors.length > 0) {
       console.log(`⚠ ${result.errors.length} error(s) occurred during creation`);
     }
+
+    console.log('');
+    console.log('━'.repeat(70));
+    console.log('✅ Issue creation complete. Starting date cascade calculation...');
+    console.log('━'.repeat(70));
+
+    // Apply cascade date adjustment for clean waterfall timeline
+    // CRITICAL: Only pass newly created issue IDs to prevent overwriting existing project data
+    const createdIssueIds = result.created.map(item => item.id);
+    await adjustDatesForCascade(projectId, createdIssueIds, pool);
 
     return result;
 

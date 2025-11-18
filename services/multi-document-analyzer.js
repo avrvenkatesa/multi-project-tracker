@@ -116,69 +116,138 @@ class MultiDocumentAnalyzer {
       emit('log', { message: '' });
       result.documents.processed = documents.length;
 
-      // Step 2: Detect workstreams (CRITICAL - cannot proceed without this)
-      emit('step', { step: 2, title: 'Detect Workstreams' });
-      emit('log', { message: 'Step 2/7: Detecting workstreams...' });
-      if (!this.workstreamDetector) {
-        throw new Error('Workstream detector service not available - cannot proceed');
-      }
-
-      // Get project name for context
-      const projectResult = await pool.query('SELECT name, description FROM projects WHERE id = $1', [projectId]);
-      const projectName = projectResult.rows[0]?.name || 'Unknown Project';
-      const projectDescription = projectResult.rows[0]?.description;
-
-      const workstreamsResult = await this.workstreamDetector.detectWorkstreams(combinedText, {
-        projectId,
-        projectName,
-        projectDescription,
-        documentFilename: documents.length === 1 ? documents[0].filename : `${documents.length} documents`
-      });
-      result.workstreams = workstreamsResult.workstreams || [];
+      // Step 2: Try hierarchy extraction first for structured documents
+      emit('step', { step: 2, title: 'Extract Hierarchy' });
+      emit('log', { message: 'Step 2/7: Extracting hierarchical structure...' });
       
-      // Workstream detector doesn't return cost - it's tracked separately via ai-cost-tracker
-
-      emit('log', { message: `✓ Found ${result.workstreams.length} workstreams` });
-      result.workstreams.forEach((ws, i) => {
-        emit('log', { message: `  ${i + 1}. ${ws.name} (${ws.complexity || 'unknown'} complexity)` });
-      });
-      emit('log', { message: '' });
-
-      if (result.workstreams.length === 0) {
-        throw new Error('No workstreams detected - cannot create project structure');
-      }
-
-      // Step 3: Create issues from workstreams with AI effort estimates
-      emit('step', { step: 3, title: 'Create Issues' });
-      emit('log', { message: 'Step 3/7: Creating issues from workstreams...' });
-      for (const workstream of result.workstreams) {
-        const effortEstimate = this._calculateEffortEstimate(workstream);
+      let hierarchyResult = null;
+      let useHierarchicalWorkflow = false;
+      
+      try {
+        hierarchyResult = await hierarchyExtractor.extractHierarchy(combinedText, {
+          projectId,
+          maxDepth: 3
+        });
         
-        const issueResult = await pool.query(
-          `INSERT INTO issues (
-            project_id, title, description, status, created_by,
-            ai_effort_estimate_hours, ai_estimate_confidence, ai_estimate_version
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-          [
-            projectId, 
-            workstream.name, 
-            workstream.description || '', 
-            'To Do', 
-            userId,
-            effortEstimate.hours,
-            effortEstimate.confidence,
-            0  // Version 0 = heuristic estimate (can be upgraded to detailed AI later)
-          ]
-        );
-        const issueId = issueResult.rows[0].id;
-        workstream.issueId = issueId;
-        result.issues.ids.push(issueId);
-        result.issues.created++;
-        emit('log', { message: `  ✓ Created issue #${issueId}: ${workstream.name} (${effortEstimate.hours}h, ${effortEstimate.confidence} confidence)` });
+        // Check if hierarchy extraction found structured content
+        if (hierarchyResult && hierarchyResult.hierarchy && hierarchyResult.hierarchy.length > 0) {
+          // Check if we have hierarchical levels (items with hierarchyLevel > 0 or parent set)
+          const hasHierarchy = hierarchyResult.hierarchy.some(item => 
+            (item.hierarchyLevel && item.hierarchyLevel > 0) || item.parent
+          );
+          
+          if (hasHierarchy || hierarchyResult.hierarchy.length > 3) {
+            useHierarchicalWorkflow = true;
+            const epics = hierarchyResult.hierarchy.filter(i => 
+              i.hierarchyLevel === 0 || i.isEpic === true
+            ).length;
+            const tasks = hierarchyResult.hierarchy.filter(i => 
+              i.hierarchyLevel === 1
+            ).length;
+            const subtasks = hierarchyResult.hierarchy.filter(i => 
+              i.hierarchyLevel === 2
+            ).length;
+            emit('log', { message: `✓ Found hierarchical structure: ${epics} epics, ${tasks} tasks, ${subtasks} subtasks` });
+            if (hierarchyResult.cost) {
+              result.aiCostBreakdown.hierarchy_extraction = hierarchyResult.cost;
+              result.totalCost += hierarchyResult.cost;
+            }
+          }
+        }
+      } catch (error) {
+        emit('log', { message: `⚠️  Hierarchy extraction failed: ${error.message}` });
       }
-      emit('log', { message: `✓ Created ${result.issues.created} issues with AI effort estimates` });
-      emit('log', { message: '' });
+      
+      if (useHierarchicalWorkflow) {
+        // Step 3: Create hierarchical issues with parent-child relationships
+        emit('step', { step: 3, title: 'Create Issues' });
+        emit('log', { message: 'Step 3/7: Creating hierarchical issues...' });
+        
+        const hierarchyCreationResult = await dependencyMapper.createHierarchicalIssues(
+          hierarchyResult.hierarchy,
+          projectId,
+          userId,
+          projectStartDate
+        );
+        
+        result.issues.created = hierarchyCreationResult.created.length;
+        result.issues.ids = hierarchyCreationResult.created.map(item => item.id);
+        
+        // Map created issues back to workstream format for compatibility with later steps
+        result.workstreams = hierarchyCreationResult.created.map(item => ({
+          name: item.title,
+          issueId: item.id,
+          dependencies: [] // Dependencies already created in database
+        }));
+        
+        emit('log', { message: `✓ Created ${result.issues.created} hierarchical issues` });
+        emit('log', { message: '' });
+      } else {
+        // Fallback to workstream detection for non-hierarchical documents
+        emit('log', { message: '⚠️  No hierarchical structure found - falling back to workstream detection' });
+        emit('log', { message: '' });
+        emit('step', { step: 2, title: 'Detect Workstreams' });
+        emit('log', { message: 'Step 2/7: Detecting workstreams...' });
+        
+        if (!this.workstreamDetector) {
+          throw new Error('Workstream detector service not available - cannot proceed');
+        }
+
+        // Get project name for context
+        const projectResult = await pool.query('SELECT name, description FROM projects WHERE id = $1', [projectId]);
+        const projectName = projectResult.rows[0]?.name || 'Unknown Project';
+        const projectDescription = projectResult.rows[0]?.description;
+
+        const workstreamsResult = await this.workstreamDetector.detectWorkstreams(combinedText, {
+          projectId,
+          projectName,
+          projectDescription,
+          documentFilename: documents.length === 1 ? documents[0].filename : `${documents.length} documents`
+        });
+        result.workstreams = workstreamsResult.workstreams || [];
+
+        emit('log', { message: `✓ Found ${result.workstreams.length} workstreams` });
+        result.workstreams.forEach((ws, i) => {
+          emit('log', { message: `  ${i + 1}. ${ws.name} (${ws.complexity || 'unknown'} complexity)` });
+        });
+        emit('log', { message: '' });
+
+        if (result.workstreams.length === 0) {
+          throw new Error('No workstreams detected - cannot create project structure');
+        }
+
+        // Step 3: Create issues from workstreams with AI effort estimates
+        emit('step', { step: 3, title: 'Create Issues' });
+        emit('log', { message: 'Step 3/7: Creating issues from workstreams...' });
+        for (const workstream of result.workstreams) {
+          const effortEstimate = this._calculateEffortEstimate(workstream);
+          
+          const issueResult = await pool.query(
+            `INSERT INTO issues (
+              project_id, title, description, status, created_by,
+              ai_effort_estimate_hours, ai_estimate_confidence, ai_estimate_version
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+            [
+              projectId, 
+              workstream.name, 
+              workstream.description || '', 
+              'To Do', 
+              userId,
+              effortEstimate.hours,
+              effortEstimate.confidence,
+              0  // Version 0 = heuristic estimate (can be upgraded to detailed AI later)
+            ]
+          );
+          const issueId = issueResult.rows[0].id;
+          workstream.issueId = issueId;
+          result.issues.ids.push(issueId);
+          result.issues.created++;
+          emit('log', { message: `  ✓ Created issue #${issueId}: ${workstream.name} (${effortEstimate.hours}h, ${effortEstimate.confidence} confidence)` });
+        }
+        emit('log', { message: `✓ Created ${result.issues.created} issues with AI effort estimates` });
+        emit('log', { message: '' });
+      }
 
       // Step 4: Extract timeline (OPTIONAL)
       emit('step', { step: 4, title: 'Extract Timeline' });
@@ -358,10 +427,11 @@ class MultiDocumentAnalyzer {
             emit('log', { message: '⚠️  Schedule already exists - skipping auto-creation' });
             emit('log', { message: '' });
           } else {
-            // Fetch created issues with estimates and dependencies
+            // Fetch created issues with cascaded dates from post-processing
             const issuesData = await pool.query(
               `SELECT i.id, i.title, i.assignee, i.due_date,
                       i.ai_effort_estimate_hours as estimated_hours,
+                      i.start_date, i.due_date,
                       CASE
                         WHEN i.ai_estimate_version = 0 THEN 'heuristic'
                         WHEN i.ai_estimate_version > 0 THEN 'ai'
@@ -404,17 +474,18 @@ class MultiDocumentAnalyzer {
               }
             }
 
-            // Prepare items for schedule calculation
+            // Prepare items with CASCADED dates (not recalculated)
             const scheduleItems = issuesData.rows.map(issue => ({
               type: 'issue',
               id: issue.id,
               title: issue.title,
               assignee: issue.assignee || 'Unassigned',
-              // Convert to number - PostgreSQL numeric columns return strings
               estimate: parseFloat(issue.estimated_hours) || 0,
               estimateSource: issue.estimate_source || 'ai',
-              dueDate: issue.due_date,
-              dependencies: dependencyMap.get(`issue:${issue.id}`) || []
+              dependencies: dependencyMap.get(`issue:${issue.id}`) || [],
+              // ✅ Pass cascaded dates so schedule uses them instead of recalculating
+              scheduledStart: issue.start_date,
+              scheduledEnd: issue.due_date
             }));
 
             // Determine schedule start date
@@ -422,16 +493,14 @@ class MultiDocumentAnalyzer {
               result.timeline.phases?.[0]?.startDate || 
               new Date().toISOString().split('T')[0];
 
-            // Create schedule using reusable service
-            const scheduleResult = await schedulerService.createScheduleFromIssues({
+            // Create schedule using CASCADED dates (not recalculated)
+            const scheduleResult = await schedulerService.createScheduleFromCascadedIssues({
               projectId,
               name: 'AI-Generated Schedule (Multi-Document Import)',
               items: scheduleItems,
               startDate: scheduleStartDate,
-              hoursPerDay: 8,
-              includeWeekends: false,
               userId,
-              notes: `Auto-generated from multi-document import (${documents.length} documents)`
+              notes: `Auto-generated from multi-document import (${documents.length} documents) with cascaded dates`
             });
 
             result.schedule.created = true;
@@ -703,7 +772,83 @@ class MultiDocumentAnalyzer {
         creationResult.errors.forEach(err => console.log(`   • ${err}`));
       }
 
-      // Step 6: Return comprehensive result
+      // Step 6: Auto-generate schedule if issues were created
+      const scheduleResult = { created: false, scheduleId: null, message: 'Not created' };
+      if (creationResult.created.length > 0 && options.autoSchedule !== false) {
+        try {
+          console.log('📅 [Hierarchy Analyzer] Auto-generating project schedule using cascaded dates...');
+          
+          // Fetch issues WITH cascaded dates from post-processing
+          const issueIds = creationResult.created.map(i => i.id);
+          const issuesData = await pool.query(
+            `SELECT id, title, assignee, ai_effort_estimate_hours, ai_estimate_confidence,
+                    start_date, due_date
+             FROM issues WHERE id = ANY($1)`,
+            [issueIds]
+          );
+
+          // Fetch dependencies
+          const depsData = await pool.query(
+            `SELECT source_id, target_id, relationship_type
+             FROM issue_relationships
+             WHERE (source_id = ANY($1) OR target_id = ANY($1))
+             AND source_type = 'issue' AND target_type = 'issue'`,
+            [issueIds]
+          );
+
+          // Build dependency map
+          const dependencyMap = new Map();
+          for (const dep of depsData.rows) {
+            if (dep.relationship_type === 'blocks') {
+              const dependent = `issue:${dep.target_id}`;
+              const prerequisite = `issue:${dep.source_id}`;
+              if (!dependencyMap.has(dependent)) dependencyMap.set(dependent, []);
+              dependencyMap.get(dependent).push(prerequisite);
+            } else if (dep.relationship_type === 'depends_on') {
+              const dependent = `issue:${dep.source_id}`;
+              const prerequisite = `issue:${dep.target_id}`;
+              if (!dependencyMap.has(dependent)) dependencyMap.set(dependent, []);
+              dependencyMap.get(dependent).push(prerequisite);
+            }
+          }
+
+          // Prepare schedule items with CASCADED dates (not recalculated)
+          const scheduleItems = issuesData.rows.map(issue => ({
+            type: 'issue',
+            id: issue.id,
+            title: issue.title,
+            assignee: issue.assignee || 'Unassigned',
+            estimate: parseFloat(issue.ai_effort_estimate_hours) || 0,
+            estimateSource: 'ai',
+            dependencies: dependencyMap.get(`issue:${issue.id}`) || [],
+            // ✅ Pass cascaded dates so schedule uses them instead of recalculating
+            scheduledStart: issue.start_date,
+            scheduledEnd: issue.due_date
+          }));
+
+          // Create schedule using cascaded dates
+          const startDate = options.projectStartDate || new Date().toISOString().split('T')[0];
+          const result = await schedulerService.createScheduleFromCascadedIssues({
+            projectId,
+            name: 'AI-Generated Schedule (Hierarchy Import)',
+            items: scheduleItems,
+            startDate,
+            userId: options.userId,
+            notes: `Auto-generated from ${documents.length} hierarchical document(s) with cascaded dates`
+          });
+
+          scheduleResult.created = true;
+          scheduleResult.scheduleId = result.scheduleId;
+          scheduleResult.message = `Schedule created with ${result.totalTasks} tasks`;
+          
+          console.log(`✅ [Hierarchy Analyzer] Schedule #${result.scheduleId} auto-created with cascaded dates`);
+        } catch (scheduleError) {
+          console.error(`⚠️  [Hierarchy Analyzer] Schedule auto-creation failed: ${scheduleError.message}`);
+          scheduleResult.message = `Schedule creation failed: ${scheduleError.message}`;
+        }
+      }
+
+      // Step 7: Return comprehensive result
       return {
         success: true,
         hierarchy,
@@ -715,6 +860,7 @@ class MultiDocumentAnalyzer {
           epicsList: creationResult.epics,
           tasksList: creationResult.tasks
         },
+        schedule: scheduleResult,
         validation: {
           valid: validation.valid,
           errors: validation.errors,

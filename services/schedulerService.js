@@ -396,6 +396,135 @@ ${issues.length} issue(s) and ${actionItems.length} action item(s)`;
       client.release();
     }
   }
+
+  /**
+   * Create a project schedule from issues with PRE-CALCULATED cascaded dates
+   * (Used by hierarchy import - dates already set by cascade post-processing)
+   * @param {Object} params - Parameters
+   * @param {number} params.projectId - Project ID
+   * @param {string} params.name - Schedule name
+   * @param {Array} params.items - Array of items with {type, id, title, assignee, estimate, estimateSource, scheduledStart, scheduledEnd, dependencies}
+   * @param {string} params.startDate - Baseline start date (for schedule summary only)
+   * @param {number} params.userId - User creating the schedule
+   * @param {string} params.notes - Optional notes
+   * @returns {Promise<Object>} Schedule object with id and summary
+   */
+  async createScheduleFromCascadedIssues({
+    projectId,
+    name,
+    items,
+    startDate,
+    userId,
+    notes = null
+  }) {
+    console.log(`📅 Creating schedule "${name}" from ${items.length} cascaded issues...`);
+
+    // Validation
+    if (!projectId || !name || !items || !Array.isArray(items) || items.length === 0) {
+      throw new Error('Invalid schedule parameters: projectId, name, and items array required');
+    }
+
+    // Calculate schedule summary from cascaded dates
+    const scheduledStarts = items.map(i => new Date(i.scheduledStart)).filter(d => !isNaN(d));
+    const scheduledEnds = items.map(i => new Date(i.scheduledEnd)).filter(d => !isNaN(d));
+    
+    const scheduleStart = scheduledStarts.length > 0 ? 
+      new Date(Math.min(...scheduledStarts)).toISOString().split('T')[0] : startDate;
+    const scheduleEnd = scheduledEnds.length > 0 ? 
+      new Date(Math.max(...scheduledEnds)).toISOString().split('T')[0] : startDate;
+    
+    const totalHours = items.reduce((sum, item) => sum + (parseFloat(item.estimate) || 0), 0);
+    const totalTasks = items.length;
+
+    console.log(`📊 Schedule summary: ${scheduleStart} to ${scheduleEnd}, ${totalTasks} tasks, ${totalHours}h total`);
+
+    // Start transaction to persist schedule
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Insert schedule
+      const scheduleInsert = await client.query(
+        `INSERT INTO project_schedules 
+         (project_id, name, version, start_date, end_date, hours_per_day, include_weekends,
+          total_tasks, total_hours, critical_path_tasks, critical_path_hours, risks_count,
+          is_active, is_published, created_by, notes)
+         VALUES ($1, $2, 1, $3, $4, 8, FALSE, $5, $6, 0, 0, 0, TRUE, FALSE, $7, $8)
+         RETURNING id`,
+        [projectId, name, scheduleStart, scheduleEnd, totalTasks, totalHours, userId, notes]
+      );
+
+      const scheduleId = scheduleInsert.rows[0].id;
+      console.log(`[SCHEDULE] Created schedule #${scheduleId} with cascaded dates`);
+
+      // Insert schedule items
+      for (const item of items) {
+        await client.query(
+          `INSERT INTO schedule_items (schedule_id, item_type, item_id)
+           VALUES ($1, $2, $3)`,
+          [scheduleId, item.type, item.id]
+        );
+      }
+
+      // Insert task schedules using CASCADED dates (not recalculated)
+      for (const item of items) {
+        const estimatedHoursValue = parseFloat(item.estimate) || 0;
+        const start = item.scheduledStart;
+        const end = item.scheduledEnd;
+        
+        // Calculate duration in days
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        const durationDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+        
+        console.log(`[SCHEDULE] Adding task ${item.id}: ${start} → ${end} (${durationDays}d)`);
+        
+        await client.query(
+          `INSERT INTO task_schedules 
+           (schedule_id, item_type, item_id, assignee, estimated_hours, estimate_source,
+            scheduled_start, scheduled_end, duration_days, due_date,
+            is_critical_path, has_risk, risk_reason, days_late, dependencies)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+          [
+            scheduleId,
+            item.type,
+            item.id,
+            item.assignee || null,
+            estimatedHoursValue,
+            item.estimateSource || 'ai',
+            start,  // Use cascaded start date
+            end,    // Use cascaded end date
+            durationDays,
+            end,    // Use end as due_date
+            false,  // is_critical_path (not calculated for cascaded schedules)
+            false,  // has_risk
+            null,   // risk_reason
+            0,      // days_late
+            JSON.stringify(item.dependencies || [])
+          ]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      console.log(`✅ Schedule #${scheduleId} created with cascaded dates`);
+
+      return {
+        scheduleId,
+        version: 1,
+        totalTasks,
+        totalHours,
+        startDate: scheduleStart,
+        endDate: scheduleEnd
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 module.exports = new SchedulerService();

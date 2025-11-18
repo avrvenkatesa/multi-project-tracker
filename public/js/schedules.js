@@ -9,6 +9,7 @@ let allItems = [];
 let filteredItems = [];
 let selectedItemIds = new Set();
 let projectTeamMembers = [];
+let currentGanttEnhancer = null; // Global reference to current Gantt enhancer
 
 // ============================================
 // INITIALIZATION
@@ -2232,16 +2233,55 @@ function renderScheduleDetail(data) {
       <!-- Gantt Chart Tab -->
       <div id="gantt-tab" class="detail-tab-content">
         <div class="bg-white rounded-lg border border-gray-200 p-4">
-          <!-- Compact View Toggle -->
-          <div class="flex justify-between items-center mb-4">
+          <!-- Controls Header -->
+          <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
             <h3 class="text-sm font-semibold text-gray-700">Gantt Chart</h3>
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-gray-600">Compact View</span>
-              <button id="compact-view-toggle" class="btn-ghost btn-sm" data-compact="true" title="Toggle compact view">
-                <i class="fas fa-compress-alt"></i>
-              </button>
+            <div class="flex items-center gap-4 flex-wrap">
+              <!-- Compact View Toggle -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-600">Compact View</span>
+                <button id="compact-view-toggle" class="btn-ghost btn-sm" data-compact="true" title="Toggle compact view">
+                  <i class="fas fa-compress-alt"></i>
+                </button>
+              </div>
+              
+              <!-- Hierarchy Controls -->
+              <div class="hierarchy-controls flex items-center gap-3 pl-3 border-l border-gray-300">
+                <label class="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
+                  <input type="checkbox" id="show-hierarchy-toggle" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                  <span>Show Hierarchy</span>
+                </label>
+
+                <button id="expand-all-btn" class="btn-ghost btn-sm" title="Expand All">
+                  <i class="fas fa-chevron-down mr-1"></i>
+                  <span class="text-xs">Expand All</span>
+                </button>
+
+                <button id="collapse-all-btn" class="btn-ghost btn-sm" title="Collapse All">
+                  <i class="fas fa-chevron-right mr-1"></i>
+                  <span class="text-xs">Collapse All</span>
+                </button>
+              </div>
             </div>
           </div>
+          
+          <!-- Hierarchy Legend -->
+          <div class="hierarchy-legend mb-3 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md flex items-center gap-6 text-xs">
+            <span class="font-semibold text-gray-700">Legend:</span>
+            <span class="flex items-center gap-2">
+              <span style="color: #6366f1; font-weight: 700;">📦 EPIC</span>
+              <span class="text-gray-600">Parent Task</span>
+            </span>
+            <span class="flex items-center gap-2">
+              <span class="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
+              <span class="text-gray-600">Task</span>
+            </span>
+            <span class="flex items-center gap-2">
+              <span class="inline-block w-2 h-2 rounded-full bg-gray-400"></span>
+              <span class="text-gray-600">Subtask</span>
+            </span>
+          </div>
+          
           <div id="gantt-container" class="gantt-container"></div>
         </div>
       </div>
@@ -2311,7 +2351,7 @@ function closeDetailModal() {
   document.getElementById('schedule-detail-modal').classList.add('hidden');
 }
 
-function switchDetailTab(tabName, tasks, schedule) {
+async function switchDetailTab(tabName, tasks, schedule) {
   // Update tab buttons
   document.querySelectorAll('.detail-tab-button').forEach(btn => {
     btn.classList.remove('active');
@@ -2326,7 +2366,7 @@ function switchDetailTab(tabName, tasks, schedule) {
 
   // If switching to Gantt tab, render the Gantt chart
   if (tabName === 'gantt') {
-    renderGanttChart(tasks, schedule);
+    await renderGanttChart(tasks, schedule);
   }
 }
 
@@ -2367,7 +2407,15 @@ function sortTasksByAssignee(tasks) {
   return { sortedTasks, metadata };
 }
 
-function renderGanttChart(tasks, schedule) {
+async function renderGanttChart(tasks, schedule) {
+  // Log raw tasks to verify hierarchy data from API
+  console.log('🔍 Raw API tasks (first 3):', tasks.slice(0, 3).map(t => ({
+    title: t.title,
+    hierarchy_level: t.hierarchy_level,
+    is_epic: t.is_epic,
+    parent_issue_id: t.parent_issue_id
+  })));
+  
   // Sort tasks by assignee
   const { sortedTasks, metadata } = sortTasksByAssignee(tasks);
   
@@ -2388,20 +2436,60 @@ function renderGanttChart(tasks, schedule) {
     ganttContainer.classList.remove('gantt-expanded');
   }
 
-  // Prepare Gantt data from sorted tasks
+  // ✅ Use hierarchy fields DIRECTLY from tasks (already provided by API)
   const ganttTasks = sortedTasks.map(task => {
+    const taskId = `${task.item_type}-${task.item_id}`;
+    
     return {
-      id: `${task.item_type}-${task.item_id}`,
+      id: taskId,
       name: task.title,
       start: task.scheduled_start,
       end: task.scheduled_end,
       progress: task.status === 'Done' ? 100 : task.status === 'In Progress' ? 50 : 0,
-      dependencies: task.dependencies && task.dependencies.length > 0 
-        ? task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(',') 
-        : '',
+      dependencies: (() => {
+        // Check issue_dependencies first (text field from issues table)
+        if (task.issue_dependencies && task.issue_dependencies.trim()) {
+          const depIds = task.issue_dependencies.split(',').map(id => id.trim()).filter(id => id);
+          const result = depIds.map(id => `issue-${id}`).join(', '); // Space after comma per Frappe docs
+          console.log(`🔗 Task "${task.title}" has dependencies:`, {
+            raw: task.issue_dependencies,
+            parsed: depIds,
+            formatted: result
+          });
+          return result;
+        }
+        // Fallback to task.dependencies (JSONB from task_schedules)
+        if (task.dependencies && task.dependencies.length > 0) {
+          const result = task.dependencies.map(dep => `${dep.item_type}-${dep.item_id}`).join(', '); // Space after comma
+          console.log(`🔗 Task "${task.title}" has JSONB dependencies:`, result);
+          return result;
+        }
+        return '';
+      })(),
       custom_class: task.is_critical_path ? 'bar-critical' : '',
-      _assignee: (task.assignee || 'Unassigned').toLowerCase() // Store for data attribute injection
+      _assignee: (task.assignee || 'Unassigned').toLowerCase(),
+      // ✅✅✅ CRITICAL: Preserve hierarchy fields from API response
+      item_type: task.item_type,
+      item_id: task.item_id,
+      parent_issue_id: task.parent_issue_id,
+      hierarchy_level: task.hierarchy_level,
+      is_epic: task.is_epic
     };
+  });
+  
+  // Log transformed tasks to verify fields are preserved
+  console.log('🔍 After transformation (first 3):', ganttTasks.slice(0, 3).map(t => ({
+    name: t.name,
+    hierarchy_level: t.hierarchy_level,
+    is_epic: t.is_epic,
+    parent_issue_id: t.parent_issue_id
+  })));
+  
+  console.log('📊 Transformed distribution:', {
+    level0: ganttTasks.filter(t => t.hierarchy_level === 0).length,
+    level1: ganttTasks.filter(t => t.hierarchy_level === 1).length,
+    level2: ganttTasks.filter(t => t.hierarchy_level === 2).length,
+    epics: ganttTasks.filter(t => t.is_epic === true).length
   });
 
   if (ganttTasks.length === 0) {
@@ -2488,6 +2576,12 @@ function renderGanttChart(tasks, schedule) {
         <stop offset="0%" style="stop-color:#f0d583;stop-opacity:1" />
         <stop offset="100%" style="stop-color:#e8c555;stop-opacity:1" />
       `);
+      
+      // Epic gradient for hierarchy (indigo theme)
+      createGradient('gantt-epic-gradient', `
+        <stop offset="0%" style="stop-color:#818cf8;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#6366f1;stop-opacity:1" />
+      `);
     }
 
     // Inject data-assignee attributes onto bar-wrapper elements
@@ -2499,6 +2593,41 @@ function renderGanttChart(tasks, schedule) {
         }
       }
     });
+
+    // ============================================
+    // HIERARCHY INTEGRATION: Enhance Gantt with hierarchy features
+    // ============================================
+    if (window.HierarchicalGanttEnhancer && ganttTasks.length > 0) {
+      try {
+        const enhancer = new HierarchicalGanttEnhancer(gantt, {
+          showEpicBadges: true,
+          showTreeLines: true,
+          indentWidth: 20,
+          allowCollapse: true,
+          onToggle: (taskId, isExpanded) => {
+            // Re-render on expand/collapse
+            console.log(`Task ${taskId} ${isExpanded ? 'expanded' : 'collapsed'}`);
+          }
+        });
+        
+        // Get visible tasks based on expand/collapse state
+        const visibleTasks = enhancer.enhance(ganttTasks);
+        
+        // Refresh Gantt with visible tasks only
+        gantt.refresh(visibleTasks);
+        
+        // Store enhancer globally for hierarchy controls
+        currentGanttEnhancer = enhancer;
+        window.currentGanttEnhancer = enhancer; // For debugging
+        
+        console.log('✅ Hierarchy enhancer initialized and stored globally');
+      } catch (error) {
+        console.error('Failed to enhance Gantt with hierarchy:', error);
+        // Continue without hierarchy - non-blocking
+      }
+    } else {
+      console.log('ℹ️ Hierarchy enhancement skipped (no data or enhancer not loaded)');
+    }
 
     // Build swim lanes (skip if only one assignee group)
     if (metadata.length > 1) {
@@ -2870,7 +2999,7 @@ function bindCompactToggle() {
   const compactToggle = document.getElementById('compact-view-toggle');
   if (compactToggle && !compactToggle.dataset.bound) {
     compactToggle.dataset.bound = 'true'; // Prevent duplicate bindings
-    compactToggle.addEventListener('click', () => {
+    compactToggle.addEventListener('click', async () => {
       const isCompact = compactToggle.dataset.compact === 'true';
       const nextState = !isCompact;
       
@@ -2885,7 +3014,64 @@ function bindCompactToggle() {
       
       // Re-render Gantt with cached context
       if (lastGanttContext.tasks && lastGanttContext.schedule) {
-        renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+        await renderGanttChart(lastGanttContext.tasks, lastGanttContext.schedule);
+      }
+    });
+  }
+  
+  // ============================================
+  // Hierarchy control event listeners
+  // ============================================
+  
+  // Remove old listeners by cloning elements (removes all listeners)
+  const expandAllBtn = document.getElementById('expand-all-btn');
+  const collapseAllBtn = document.getElementById('collapse-all-btn');
+  const showHierarchyToggle = document.getElementById('show-hierarchy-toggle');
+  
+  if (expandAllBtn) {
+    const newExpandBtn = expandAllBtn.cloneNode(true);
+    expandAllBtn.parentNode.replaceChild(newExpandBtn, expandAllBtn);
+    
+    document.getElementById('expand-all-btn').addEventListener('click', () => {
+      console.log('🔽 Expand All button clicked');
+      if (currentGanttEnhancer && typeof currentGanttEnhancer.expandAll === 'function') {
+        currentGanttEnhancer.expandAll();
+      } else {
+        console.error('❌ expandAll method not available:', currentGanttEnhancer);
+      }
+    });
+  }
+  
+  if (collapseAllBtn) {
+    const newCollapseBtn = collapseAllBtn.cloneNode(true);
+    collapseAllBtn.parentNode.replaceChild(newCollapseBtn, collapseAllBtn);
+    
+    document.getElementById('collapse-all-btn').addEventListener('click', () => {
+      console.log('▶️ Collapse All button clicked');
+      if (currentGanttEnhancer && typeof currentGanttEnhancer.collapseAll === 'function') {
+        currentGanttEnhancer.collapseAll();
+      } else {
+        console.error('❌ collapseAll method not available:', currentGanttEnhancer);
+      }
+    });
+  }
+  
+  if (showHierarchyToggle) {
+    const newToggle = showHierarchyToggle.cloneNode(true);
+    showHierarchyToggle.parentNode.replaceChild(newToggle, showHierarchyToggle);
+    
+    document.getElementById('show-hierarchy-toggle').checked = true; // Default checked
+    document.getElementById('show-hierarchy-toggle').addEventListener('change', (e) => {
+      console.log('🔀 Hierarchy toggle:', e.target.checked);
+      if (currentGanttEnhancer) {
+        if (e.target.checked) {
+          const ganttTasks = lastGanttContext.sortedTasks || [];
+          if (ganttTasks.length > 0) {
+            currentGanttEnhancer.enhance(ganttTasks);
+          }
+        } else {
+          currentGanttEnhancer.destroy();
+        }
       }
     });
   }

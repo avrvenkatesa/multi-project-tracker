@@ -202,12 +202,13 @@ const documentUpload = multer({
     const allowedTypes = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
+      'text/plain',
+      'text/markdown'
     ];
-    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt)$/i)) {
+    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt|md)$/i)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF, DOCX, and TXT files are allowed'));
+      cb(new Error('Only PDF, DOCX, TXT, and Markdown files are allowed'));
     }
   }
 });
@@ -244,12 +245,13 @@ const getDocumentUploadMiddleware = async (req, res, next) => {
         const allowedTypes = [
           'application/pdf',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'text/plain'
+          'text/plain',
+          'text/markdown'
         ];
-        if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt)$/i)) {
+        if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(pdf|docx|txt|md)$/i)) {
           cb(null, true);
         } else {
-          cb(new Error('Only PDF, DOCX, and TXT files allowed'));
+          cb(new Error('Only PDF, DOCX, TXT, and Markdown files allowed'));
         }
       }
     });
@@ -13548,29 +13550,35 @@ app.post('/api/projects/:projectId/analyze-documents', authenticateToken, async 
       classification: doc.classification || 'Document'
     }));
     
-    // Call multi-document analyzer
+    // Call multi-document analyzer (hierarchy extraction with automatic schedule)
     const analysisResult = await multiDocAnalyzer.analyzeAndCreateHierarchy(
       formattedDocs,
       id,
       {
         userId: req.user.id,
+        projectStartDate: options.startDate || new Date().toISOString().split('T')[0],
         includeEffort: options.includeEffort !== false,
-        projectContext: options.projectContext || `Project: ${projectName}`
+        projectContext: options.projectContext || `Project: ${projectName}`,
+        autoSchedule: true
       }
     );
     
     // Return analysis results
     if (analysisResult.success) {
-      console.log(`[ANALYZE DOCS] Success! Created ${analysisResult.created?.total || 0} issues`);
-      res.json({
+      console.log(`[ANALYZE DOCS] Success! Created ${analysisResult.created?.total || 0} hierarchical issues`);
+      const response = {
         success: true,
         hierarchy: analysisResult.hierarchy,
         created: analysisResult.created,
+        schedule: analysisResult.schedule,
         validation: analysisResult.validation,
         extraction: analysisResult.extraction,
         creationErrors: analysisResult.creationErrors || [],
-        message: `Successfully analyzed ${documents.length} document(s) and created ${analysisResult.created?.total || 0} issues`
-      });
+        aiCost: analysisResult.extraction?.metadata?.cost || 0,
+        message: `Successfully analyzed ${documents.length} document(s) and created ${analysisResult.created?.total || 0} hierarchical issues with automatic schedule`
+      };
+      
+      res.json(response);
     } else {
       console.error('[ANALYZE DOCS] Analysis failed:', analysisResult.errors);
       res.status(500).json({
@@ -15269,7 +15277,7 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
       }
     }
 
-    // Get task schedules with dependencies
+    // Get task schedules with dependencies and hierarchy data
     const tasks = await pool.query(
       `SELECT ts.*,
         CASE 
@@ -15284,6 +15292,22 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
           WHEN ts.item_type = 'issue' THEN i.assignee
           ELSE ai.assignee
         END as assignee,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.hierarchy_level
+          ELSE 0
+        END as hierarchy_level,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.is_epic
+          ELSE false
+        END as is_epic,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.parent_issue_id
+          ELSE NULL
+        END as parent_issue_id,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN COALESCE(i.dependencies, '')
+          ELSE ''
+        END as issue_dependencies,
         COALESCE(ts.dependencies, '[]'::jsonb) as dependencies
        FROM task_schedules ts
        LEFT JOIN issues i ON ts.item_type = 'issue' AND ts.item_id = i.id
@@ -15292,6 +15316,28 @@ app.get('/api/schedules/:scheduleId', authenticateToken, async (req, res) => {
        ORDER BY ts.scheduled_start`,
       [scheduleId]
     );
+    
+    // Log hierarchy data and dependencies for debugging
+    console.log('📊 Sending tasks to Gantt chart:', {
+      total: tasks.rows.length,
+      epics: tasks.rows.filter(t => t.is_epic === true).length,
+      level0: tasks.rows.filter(t => t.hierarchy_level === 0).length,
+      level1: tasks.rows.filter(t => t.hierarchy_level === 1).length,
+      level2: tasks.rows.filter(t => t.hierarchy_level === 2).length,
+      withParents: tasks.rows.filter(t => t.parent_issue_id).length,
+      withDependencies: tasks.rows.filter(t => t.issue_dependencies && t.issue_dependencies.length > 0).length
+    });
+    
+    // Log first 3 tasks with hierarchy and dependency info
+    if (tasks.rows.length > 0) {
+      console.log('Sample tasks:', tasks.rows.slice(0, 3).map(t => ({
+        name: t.title,
+        hierarchy_level: t.hierarchy_level,
+        is_epic: t.is_epic,
+        parent_issue_id: t.parent_issue_id,
+        issue_dependencies: t.issue_dependencies
+      })));
+    }
 
     res.json({
       schedule: {
@@ -15347,7 +15393,19 @@ app.get('/api/schedules/:scheduleId/pdf', authenticateToken, async (req, res) =>
         CASE 
           WHEN ts.item_type = 'issue' THEN i.assignee
           ELSE ai.assignee
-        END as assignee
+        END as assignee,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.hierarchy_level
+          ELSE 0
+        END as hierarchy_level,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.is_epic
+          ELSE false
+        END as is_epic,
+        CASE 
+          WHEN ts.item_type = 'issue' THEN i.parent_issue_id
+          ELSE NULL
+        END as parent_issue_id
        FROM task_schedules ts
        LEFT JOIN issues i ON ts.item_type = 'issue' AND ts.item_id = i.id
        LEFT JOIN action_items ai ON ts.item_type = 'action-item' AND ts.item_id = ai.id
