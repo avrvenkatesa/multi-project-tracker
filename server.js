@@ -816,6 +816,22 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
   });
 });
 
+// ============= PUBLIC AIPM ROUTES =============
+// AI Agent health check (public, no auth required)
+const aiAgentService = require('./services/aiAgent');
+app.get('/api/aipm/agent/health', async (req, res) => {
+  try {
+    const hasApiKey = !!aiAgentService.apiKey;
+    res.json({
+      status: hasApiKey ? 'operational' : 'no_api_key',
+      model: aiAgentService.defaultModel,
+      apiKeyConfigured: hasApiKey
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Health check failed' });
+  }
+});
+
 // ============= AIPM ROUTES =============
 // Mount AIPM route modules with authentication middleware
 // These routes are mounted AFTER auth routes to avoid route conflicts
