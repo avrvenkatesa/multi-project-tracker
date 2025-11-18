@@ -73,6 +73,7 @@ const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 const decisionsRouter = require('./routes/decisions');
 const meetingsRouter = require('./routes/meetings');
 const evidenceRouter = require('./routes/evidence');
+const ragRouter = require('./routes/aipm-rag');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -819,6 +820,7 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
 app.use('/api', authenticateToken, decisionsRouter);
 app.use('/api', authenticateToken, meetingsRouter);
 app.use('/api', authenticateToken, evidenceRouter);
+app.use('/api', authenticateToken, ragRouter);
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 
