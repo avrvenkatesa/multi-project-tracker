@@ -74,6 +74,7 @@ const decisionsRouter = require('./routes/decisions');
 const meetingsRouter = require('./routes/meetings');
 const evidenceRouter = require('./routes/evidence');
 const ragRouter = require('./routes/aipm-rag');
+const pkgRouter = require('./routes/aipm-pkg');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -821,6 +822,7 @@ app.use('/api', authenticateToken, decisionsRouter);
 app.use('/api', authenticateToken, meetingsRouter);
 app.use('/api', authenticateToken, evidenceRouter);
 app.use('/api', authenticateToken, ragRouter);
+app.use('/api', authenticateToken, pkgRouter);
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 

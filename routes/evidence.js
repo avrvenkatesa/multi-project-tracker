@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { Pool } = require('@neondatabase/serverless');
+const { pool } = require('../db');
 const joi = require('joi');
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Validation schema
 const evidenceSchema = joi.object({
