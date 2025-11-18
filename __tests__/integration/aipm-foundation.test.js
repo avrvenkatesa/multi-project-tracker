@@ -22,13 +22,19 @@ describe('AIPM Foundation - Integration Tests', () => {
   let authCookie;
 
   beforeAll(async () => {
-    // Create test user
-    const userResult = await pool.query(`
-      INSERT INTO users (username, email, password_hash, role)
-      VALUES ('aipm-test-user', 'aipm-test@example.com', 'hashed_password', 'Developer')
-      ON CONFLICT (email) DO UPDATE SET username = EXCLUDED.username
-      RETURNING id
+    // Create or get test user
+    let userResult = await pool.query(`
+      SELECT id FROM users WHERE email = 'aipm-test@example.com'
     `);
+    
+    if (userResult.rows.length === 0) {
+      userResult = await pool.query(`
+        INSERT INTO users (username, email, password, role)
+        VALUES ('aipm-test-user', 'aipm-test@example.com', 'hashed_password', 'Developer')
+        RETURNING id
+      `);
+    }
+    
     testUserId = userResult.rows[0].id;
 
     // Generate auth token
@@ -50,7 +56,7 @@ describe('AIPM Foundation - Integration Tests', () => {
     // Add user as project member
     await pool.query(`
       INSERT INTO project_members (project_id, user_id, role, status)
-      VALUES ($1, $2, 'Project Manager', 'active')
+      VALUES ($1, $2, 'Manager', 'active')
       ON CONFLICT (project_id, user_id) DO NOTHING
     `, [testProjectId, testUserId]);
 
