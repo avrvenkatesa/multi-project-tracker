@@ -20,13 +20,13 @@ const app = require('../server');
 
 describe('Story 5.1.1: AIPM Foundation Tables', () => {
   let testProjectId = 1;
-  let authToken;
+  let authCookie;  // Store the Set-Cookie header
   let createdDecisionId;
   let createdMeetingId;
   let createdEvidenceId;
 
   beforeAll(async () => {
-    // Setup: Create test user and get auth token
+    // Setup: Create test user and get auth cookie
     const testUser = {
       username: `testuser${Date.now()}`,
       email: `test-${Date.now()}@example.com`,
@@ -39,10 +39,10 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
         .post('/api/auth/register')
         .send(testUser);
 
-      console.log('Register response:', registerResponse.status, registerResponse.body);
+      console.log('✓ Register response:', registerResponse.status);
 
       if (registerResponse.status === 201) {
-        // Login to get token
+        // Login to get session cookie
         const loginResponse = await request(app)
           .post('/api/auth/login')
           .send({
@@ -50,18 +50,12 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
             password: testUser.password
           });
 
-        console.log('Login response:', loginResponse.status, loginResponse.body);
-        console.log('Login headers:', loginResponse.headers['set-cookie']);
+        console.log('✓ Login response:', loginResponse.status);
 
-        // Extract token from cookie
+        // Extract the Set-Cookie header
         if (loginResponse.status === 200) {
-          const cookies = loginResponse.headers['set-cookie'];
-          if (cookies) {
-            const tokenCookie = cookies.find(c => c.startsWith('token='));
-            if (tokenCookie) {
-              authToken = tokenCookie.split(';')[0].split('=')[1];
-            }
-          }
+          authCookie = loginResponse.headers['set-cookie'];
+          console.log('✓ Test user authenticated with cookie');
         }
       } else {
         console.error('Registration failed:', registerResponse.status, registerResponse.body);
@@ -71,9 +65,9 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
       throw error;
     }
 
-    // Verify we have an auth token
-    if (!authToken) {
-      throw new Error('Failed to obtain auth token for testing');
+    // Verify we have an auth cookie
+    if (!authCookie) {
+      throw new Error('Failed to obtain auth cookie for testing');
     }
   });
 
@@ -186,10 +180,9 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
   describe('Decisions API', () => {
     test('POST /api/decisions creates decision with auto-ID', async () => {
       const response = await request(app)
-        .post('/api/decisions')
-        .set('Authorization', `Bearer ${authToken}`)
+        .post(`/api/projects/${testProjectId}/decisions`)
+        .set('Cookie', authCookie)
         .send({
-          project_id: testProjectId,
           title: 'Test Decision - Jest',
           description: 'Automated test decision',
           decision_type: 'technical',
@@ -214,7 +207,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('GET /api/decisions/:id retrieves decision', async () => {
       const response = await request(app)
         .get(`/api/decisions/${createdDecisionId}`)
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .expect(200);
 
       expect(response.body.id).toBe(createdDecisionId);
@@ -225,7 +218,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('PATCH /api/decisions/:id updates decision', async () => {
       const response = await request(app)
         .patch(`/api/decisions/${createdDecisionId}`)
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .send({
           status: 'approved',
           decided_date: '2025-11-18T10:00:00Z'
@@ -250,7 +243,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
       // Update decision
       await request(app)
         .patch(`/api/decisions/${createdDecisionId}`)
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .send({ rationale: 'Updated rationale' })
         .expect(200);
 
@@ -267,7 +260,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('GET /api/projects/:id/decisions lists decisions', async () => {
       const response = await request(app)
         .get(`/api/projects/${testProjectId}/decisions`)
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .expect(200);
 
       expect(response.body).toHaveProperty('decisions');
@@ -278,7 +271,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('GET /api/projects/:id/decisions?status=approved filters by status', async () => {
       const response = await request(app)
         .get(`/api/projects/${testProjectId}/decisions?status=approved`)
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .expect(200);
 
       expect(response.body.decisions.every(d => d.status === 'approved')).toBe(true);
@@ -292,10 +285,9 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
   describe('Meetings API', () => {
     test('POST /api/meetings creates meeting with auto-ID', async () => {
       const response = await request(app)
-        .post('/api/meetings')
-        .set('Authorization', `Bearer ${authToken}`)
+        .post(`/api/projects/${testProjectId}/meetings`)
+        .set('Cookie', authCookie)
         .send({
-          project_id: testProjectId,
           title: 'Test Meeting - Jest',
           meeting_date: '2025-11-18T14:00:00Z',
           duration_minutes: 60,
@@ -315,7 +307,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('GET /api/meetings/:id retrieves meeting', async () => {
       const response = await request(app)
         .get(`/api/meetings/${createdMeetingId}`)
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .expect(200);
 
       expect(response.body.id).toBe(createdMeetingId);
@@ -326,7 +318,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('PATCH /api/meetings/:id updates meeting', async () => {
       const response = await request(app)
         .patch(`/api/meetings/${createdMeetingId}`)
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .send({
           summary: 'AI-generated summary of the test meeting'
         })
@@ -344,7 +336,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('POST /api/evidence creates evidence link', async () => {
       const response = await request(app)
         .post('/api/evidence')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .send({
           entity_type: 'decision',
           entity_id: createdDecisionId,
@@ -367,7 +359,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('GET /api/decisions/:id/evidence retrieves evidence', async () => {
       const response = await request(app)
         .get(`/api/decisions/${createdDecisionId}/evidence`)
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .expect(200);
 
       expect(response.body).toHaveProperty('evidence');
@@ -381,7 +373,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('POST /api/evidence rejects invalid entity_id', async () => {
       const response = await request(app)
         .post('/api/evidence')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .send({
           entity_type: 'decision',
           entity_id: 999999,
@@ -403,10 +395,9 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
   describe('Integration with Existing Features', () => {
     test('Can create action_item with source_meeting_id', async () => {
       const response = await request(app)
-        .post('/api/action-items')
-        .set('Authorization', `Bearer ${authToken}`)
+        .post(`/api/projects/${testProjectId}/action-items`)
+        .set('Cookie', authCookie)
         .send({
-          project_id: testProjectId,
           title: 'Test Action from Meeting',
           description: 'Action item linked to meeting',
           priority: 'medium',
@@ -426,7 +417,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
     test('Can link risk to meeting', async () => {
       const riskResponse = await request(app)
         .post('/api/projects/1/risks')
-        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', authCookie)
         .send({
           title: 'Test Risk from Meeting',
           category: 'technical',
@@ -450,24 +441,24 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
   describe('Data Integrity', () => {
     test('Auto-ID generation is sequential per project', async () => {
       const decision1 = await request(app)
-        .post('/api/decisions')
-        .set('Authorization', `Bearer ${authToken}`)
+        .post(`/api/projects/${testProjectId}/decisions`)
+        .set('Cookie', authCookie)
         .send({
-          project_id: testProjectId,
           title: 'Seq Test 1',
           decision_type: 'technical',
-          impact_level: 'low'
+          impact_level: 'low',
+          status: 'proposed'
         })
         .expect(201);
 
       const decision2 = await request(app)
-        .post('/api/decisions')
-        .set('Authorization', `Bearer ${authToken}`)
+        .post(`/api/projects/${testProjectId}/decisions`)
+        .set('Cookie', authCookie)
         .send({
-          project_id: testProjectId,
           title: 'Seq Test 2',
           decision_type: 'technical',
-          impact_level: 'low'
+          impact_level: 'low',
+          status: 'proposed'
         })
         .expect(201);
 
@@ -495,13 +486,13 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
 
     test('Enum constraints enforced', async () => {
       const response = await request(app)
-        .post('/api/decisions')
-        .set('Authorization', `Bearer ${authToken}`)
+        .post(`/api/projects/${testProjectId}/decisions`)
+        .set('Cookie', authCookie)
         .send({
-          project_id: testProjectId,
           title: 'Invalid Decision Type',
           decision_type: 'invalid_type',
-          impact_level: 'low'
+          impact_level: 'low',
+          status: 'proposed'
         });
 
       // Should fail validation (400) or constraint (500)
