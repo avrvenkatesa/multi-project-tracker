@@ -1,7 +1,7 @@
 # Multi-Project Tracker
 
 ## Overview
-The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights and robust security measures, including AI Meeting Analysis, AI Checklist Generation, Checklist Validation, comprehensive PDF and CSV reporting, and an enhanced comment system. The project aims to be a leading solution for centralized project oversight and efficient team collaboration.
+The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights like Meeting Analysis, Checklist Generation, Checklist Validation, PDF/CSV reporting, and an enhanced comment system. The project aims to be a leading solution for centralized project oversight and efficient team collaboration, providing AI-powered insights, robust security, and advanced project scheduling with critical path analysis.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -9,97 +9,36 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### UI/UX Decisions
-The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles. It includes a Project Dashboard with analytics and Chart.js visualizations, Kanban boards with hierarchical issue display, and a comprehensive unified checklist system. A professional enterprise-grade design token system ensures UI consistency. Key UI features include project complexity configuration, comprehensive checklist management, effort estimates, quick time logging, advanced project scheduling with strict resource assignment, task-level estimate selection for what-if analysis, and professional schedule outputs (Timeline, Gantt Chart, Resources views). The Gantt chart features interactive timeline visualization, dependency arrows, critical path highlighting, and adjustable view modes.
-
-**Hierarchical Kanban Board**: Supports parent-child issue relationships with expandable/collapsible cards, epic badges, and persistent state in localStorage.
-
-**HierarchicalGanttEnhancer Component**: A wrapper for Frappe Gantt that adds hierarchical visualization, including epic badges, expand/collapse controls, tree lines, and indentation markers, while preserving all original Frappe Gantt features.
+The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles and a professional enterprise-grade design token system for consistency. Key UI features include a Project Dashboard with Chart.js analytics, hierarchical Kanban boards with parent-child issue display, and a comprehensive unified checklist system. Advanced project scheduling includes interactive Gantt charts with dependency visualization, critical path highlighting, and task-level estimate selection for what-if analysis.
 
 ### Technical Implementations
-The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication, and a 6-tier RBAC system. Joi is used for request validation and bcryptjs for password hashing. The backend handles CRUD operations, atomic transactions, project-level authorization, and logging. Performance optimizations include a bulk metadata endpoint and debounced search. Service layers manage various functionalities including AI processing, standalone checklists, workstream detection, document classification, topological sort, schedule calculation, AI cost tracking, and hierarchy extraction. API endpoints support features such as auto-creating checklists, status updates, bulk template application, document upload for AI processing, project scheduling with critical path analysis, AI hierarchy extraction, and multi-document analysis with automatic issue creation.
-
-**Frontend Hierarchy Integration**: The Kanban board fetches hierarchy data from the backend and builds tree structures, enhancing existing card templates with hierarchical display features.
+The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware (Helmet, CORS, rate limiting), JWT authentication, and a 6-tier RBAC system. Joi is used for request validation and bcryptjs for password hashing. The backend handles CRUD operations, atomic transactions, project-level authorization, and logging. Service layers manage AI processing, standalone checklists, workstream detection, document classification, topological sort, schedule calculation, AI cost tracking, and hierarchy extraction. API endpoints support features such as auto-creating checklists, status updates, bulk template application, document upload for AI processing, project scheduling with critical path analysis, AI hierarchy extraction, and multi-document analysis with automatic issue creation.
 
 ### System Design Choices
-The database schema includes Users, Projects, Issues, Action Items, and a comprehensive checklist system. It supports AI-specific data, collaboration data, user preferences, risk management, and tag typing. Project scheduling involves `project_schedules`, `schedule_items`, `task_schedules`, and `schedule_changes`, supporting multiple scenarios and critical path identification. Timesheet entry configuration is supported at project and item levels.
+The database schema includes Users, Projects, Issues, Action Items, and a comprehensive checklist system, supporting AI-specific data, collaboration, user preferences, risk management, and tag typing. Project scheduling involves tables for `project_schedules`, `schedule_items`, `task_schedules`, and `schedule_changes`, supporting multiple scenarios and critical path identification. Timesheet entry configuration is supported at project and item levels.
 
-**PKG (Project Knowledge Graph) Overlay**: A unified graph abstraction layer built on PostgreSQL, providing a non-invasive overlay over all project entities (Tasks, Risks, Decisions, Meetings) via `pkg_nodes` and `pkg_edges` tables. It enables AI agents to query and manipulate entities through a single unified interface, tracking AI provenance and supporting versioning.
+A **PKG (Project Knowledge Graph) Overlay** provides a unified graph abstraction layer built on PostgreSQL, enabling AI agents to query and manipulate project entities via a single interface, tracking AI provenance and supporting versioning.
 
-**RAG (Retrieval-Augmented Generation) Foundation**: A unified document indexing and semantic search system built on PostgreSQL full-text search. The `rag_documents` table with `content_tsv` columns enables fast full-text search. Documents are automatically indexed from meetings, decisions, and risks via database triggers. API endpoints provide semantic search, manual document upload, and LLM context assembly.
+A **RAG (Retrieval-Augmented Generation) Foundation** offers a unified document indexing and semantic search system built on PostgreSQL full-text search, with documents automatically indexed from various sources.
 
-**PKG Query API**: Provides programmatic access to the knowledge graph via `GET /api/aipm/projects/:projectId/pkg` and `GET /api/aipm/pkg/query` endpoints for advanced filtering.
+The **AI Agent Core Engine** provides intelligent project management assistance through context assembly from PKG and RAG, LLM integration (Claude/GPT), session tracking, and audit logging. It supports specialized modes for decision assistance, risk detection, meeting analysis, and knowledge exploration.
 
-### Testing & Documentation (Story 5.1.4)
-**Integration Testing**: Comprehensive end-to-end test suite (`__tests__/integration/aipm-foundation.test.js`) validates the complete AIPM foundation workflow including Decision → PKG → RAG flow, Meeting → Evidence → PKG edges, Issue Hierarchy → PKG edges, PKG API endpoints, and RAG search functionality. Tests verify auto-sync triggers, data consistency, and API correctness.
+**Autonomous Decision Making** extends the AI agent with capabilities to analyze proposed decisions, identify impacts, generate alternatives, and create proposals for human approval via a Human-in-the-Loop (HITL) workflow, ensuring AI provenance tracking.
 
-**Smoke Testing**: Fast-running smoke test script (`scripts/smoke-test-aipm.js`) provides quick validation of system health including table existence checks, PKG seeding verification (591 nodes), sync trigger testing, RAG indexing verification (8 documents), and full-text search validation. Script uses color-coded output for easy visual scanning with 10/11 tests passing on deployment.
+**Proactive Risk Detection** identifies project risks using multi-dimensional analysis across meeting mentions, dependency bottlenecks, decision risks, pattern anomalies, and overdue items. Detected risks are ranked by severity, deduplicated, and can be auto-created or proposed for human review.
 
-**Performance Testing**: Dedicated performance test suite (`__tests__/performance/pkg-query-perf.test.js`) validates query performance at scale with benchmarks for PKG node queries (<500ms), complex graph JOINs (<1s), RAG full-text search (<300ms), type filtering (<100ms), and JSONB attribute queries (<200ms).
-
-**API Documentation**: Comprehensive API reference (`docs/AIPM-API.md`) documents all AIPM endpoints including Decisions API, Meetings API, Evidence API, PKG API, and RAG API with request/response examples, auto-sync behavior, PKG node/edge types, error responses, and performance characteristics.
-
-### AI Agent Core Engine (Story 5.2.1)
-**AI Agent Orchestration**: Core AI agent service (`services/aiAgent.js`) provides intelligent project management assistance through context assembly from PKG and RAG, LLM integration (Claude/GPT), session tracking, and comprehensive audit logging. The agent supports four specialized modes: `decision_assistant` for architectural decisions, `risk_detector` for proactive risk identification, `meeting_analyzer` for meeting intelligence, and `knowledge_explorer` for general Q&A.
-
-**Agent Database Schema**: Three core tables support AI agent operations: `ai_agent_sessions` tracks AI invocations with context metadata (PKG nodes used, RAG docs used, tokens, latency), `ai_agent_proposals` stores AI-generated suggestions awaiting human approval (HITL workflow), and `ai_agent_audit_log` provides detailed action traceability for transparency.
-
-**Agent API Endpoints**: REST API (`routes/aiAgent.js`) provides `POST /api/aipm/projects/:projectId/agent/chat` for conversational interaction, `GET /api/aipm/projects/:projectId/agent/sessions` for session history, `GET /api/aipm/agent/sessions/:sessionId` for detailed session inspection with audit logs, and `GET /api/aipm/agent/health` for service health monitoring.
-
-**Context Assembly**: Intelligent context builder assembles relevant project knowledge by querying RAG for semantic document search (top 10 results), PKG for entity retrieval (filtered by agent type, 20 nodes), and PKG edges for relationship mapping (up to 50 edges). Context assembly is optimized for <500ms performance with full audit trail logging.
-
-### Autonomous Decision Making (Story 5.2.2)
-**AI Decision Maker Service**: Extends the AI agent with autonomous decision-making capabilities (`services/aiDecisionMaker.js`). The service analyzes proposed decisions using PKG and RAG context, identifies impacted entities and risks, generates alternative approaches using LLM, and creates proposals for human approval through a Human-in-the-Loop (HITL) workflow.
-
-**Decision Analysis**: The `analyzeDecision()` method performs comprehensive impact analysis by searching RAG for related decisions, querying PKG for impacted nodes (tasks, risks), identifying related risks from the risk register, and detecting potential conflicts with existing approved decisions. Analysis results include execution time metrics and entity counts for transparency.
-
-**Alternative Generation**: The `generateAlternatives()` method uses LLM (Claude/GPT) to generate 3 alternative approaches for each decision, providing pros/cons, complexity estimates, and risk levels. Alternatives are formatted as JSON for structured processing and storage in the proposal.
-
-**HITL Proposal Workflow**: Proposals are created with confidence scores (0.7-0.99) and stored in `ai_agent_proposals` table awaiting human review. The workflow supports three outcomes: (1) Approval - creates the actual decision entity with AI provenance tracking, (2) Rejection - marks proposal as rejected with review notes, (3) Modification - allows human edits before approval. Auto-approval is supported for high-confidence proposals (>0.95) with system user attribution.
-
-**Decision Maker API Endpoints**: REST API (`routes/aiDecisionMaker.js`) provides 6 endpoints: `POST /api/aipm/projects/:projectId/agent/propose-decision` for AI decision proposals with impact analysis, `GET /api/aipm/projects/:projectId/agent/proposals` for listing proposals with filters, `GET /api/aipm/agent/proposals/:proposalId` for detailed proposal inspection, `POST /api/aipm/agent/proposals/:proposalId/approve` for HITL approval, `POST /api/aipm/agent/proposals/:proposalId/reject` for HITL rejection, and `GET /api/aipm/projects/:projectId/agent/pending-reviews` for pending proposal queue.
-
-**AI Provenance Tracking**: Created entities (decisions, risks, action items) include AI provenance fields: `created_by_ai` boolean flag, `ai_confidence` score (0.00-1.00), and linkage to original proposal via `ai_agent_proposals.created_entity_type` and `created_entity_id`. This ensures full traceability of AI-generated content and supports audit requirements.
-
-### Proactive Risk Detection (Story 5.2.3)
-**AI Risk Detector Service**: Proactively identifies project risks using multi-dimensional analysis (`services/aiRiskDetector.js`). The service scans projects across 5 detection methods: (1) Meeting mentions - full-text search on RAG documents for risk keywords (blocker, delay, critical, etc.), (2) Dependency bottlenecks - identifies tasks with ≥5 dependencies in PKG, (3) Decision risks - finds high-impact decisions with <2 alternatives considered, (4) Pattern anomalies - detects stuck tasks (14+ days in progress) and orphaned tasks (no parent/assignee), (5) Overdue items - identifies tasks past due date with escalating impact. Detected risks are ranked by severity score (probability × impact) and deduplicated by source.
-
-**Risk Detection Database**: Extended `risks` table with AI detection fields: `ai_detected` boolean flag, `ai_confidence` score (0.00-1.00), and `detection_source` varchar (meeting_mention, dependency_bottleneck, insufficient_analysis, stuck_task, orphaned_task, overdue_task). Partial index on `ai_detected=TRUE` optimizes queries for AI-detected risks.
-
-**Auto-Creation & Proposals**: The service supports dual-mode risk creation: (1) Auto-creation - risks with confidence ≥0.9 are automatically created with system user attribution and proper risk_id generation (RISK-001, RISK-002, etc.), (2) Proposal workflow - lower-confidence risks (<0.9) create proposals in `ai_agent_proposals` table for human review via HITL workflow, leveraging the existing approval/rejection infrastructure from Story 5.2.2.
-
-**Risk Detector API Endpoints**: REST API (`routes/aiRiskDetector.js`) provides 3 endpoints: `POST /api/aipm/projects/:projectId/agent/scan-risks` executes full risk scan across all 5 detection methods with optional auto-creation, `GET /api/aipm/projects/:projectId/risks/ai-detected` lists all AI-detected risks ordered by severity, and `GET /api/aipm/projects/:projectId/agent/risk-summary` provides detection statistics with properly aggregated detection_breakdown counts per source type. All endpoints integrate with AI agent session tracking for audit trails.
-
-**Risk Scanning Performance**: Full project scan executes 5 parallel detection methods with optimized database queries. Typical execution time ~1.4s for projects with mixed data (meetings, decisions, PKG nodes). RAG full-text search uses PostgreSQL's `to_tsquery` with single-word keywords to avoid syntax errors. PKG queries leverage existing indexes on `type`, `project_id`, and JSONB `attrs` fields for efficient anomaly detection.
-
-### AI Features
-- **AI Meeting Analysis**: Two-phase processing for item extraction and status updates.
-- **AI Checklist Generation**: Generates comprehensive checklists from descriptions and documents using OpenAI GPT-4o.
-- **AI Document Classification**: Hybrid classification system using GPT-4o for uploaded documents.
-- **AI Timeline Extraction**: Extracts project timeline information from document text using GPT-4o.
-- **AI-Powered Hierarchy Extraction Service**: Uses Anthropic Claude AI to extract hierarchical task structures from documents.
-- **Workstream Detection**: AI-powered document analysis to identify workstreams and extract requirements.
-- **Automatic Effort Estimation**: AI-created issues automatically receive effort estimates.
-- **Automatic Schedule Generation**: Multi-document processing automatically creates project schedules.
-- **Intelligent Issue Matching**: AI-powered semantic matching of generated checklists to existing issues.
-- **AI Dependency Suggestion**: Analyzes tasks and suggests logical dependencies.
-- **Checklist Validation**: Provides quality scoring and consistency checks.
-- **Centralized AI Cost Tracking**: All AI features integrate with a centralized cost tracking service.
+AI features include AI Meeting Analysis, AI Checklist Generation, AI Document Classification, AI Timeline Extraction, AI-Powered Hierarchy Extraction, Workstream Detection, Automatic Effort Estimation, Automatic Schedule Generation, Intelligent Issue Matching, AI Dependency Suggestion, Checklist Validation, and Centralized AI Cost Tracking.
 
 ## External Dependencies
 
-### Core Frameworks
 - Express.js
 - Axios
 - Tailwind CSS
-
-### Security Libraries
 - Helmet
 - CORS
 - bcryptjs
 - jsonwebtoken
 - express-rate-limit
-
-### Validation & Utilities
 - Joi
 - Multer
 - uuid
@@ -107,25 +46,15 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 - pdf-parse
 - mammoth
 - file-type
-
-### AI Integration
 - OpenAI (GPT-3.5-Turbo, GPT-4o)
 - Anthropic (Claude Sonnet 4)
-
-### Database & ORM
 - @neondatabase/serverless
 - drizzle-orm
 - drizzle-kit
-
-### Email & Notifications
 - nodemailer
 - node-cron
-
-### Reporting & Export
 - pdfkit
 - stream-buffers
 - csv-writer
-
-### CDN Services
 - Chart.js
 - Frappe Gantt (v0.6.1)
