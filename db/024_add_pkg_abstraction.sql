@@ -57,6 +57,9 @@ CREATE INDEX idx_pkg_nodes_created ON pkg_nodes(created_at DESC);
 -- GIN index for JSONB attrs queries
 CREATE INDEX idx_pkg_nodes_attrs ON pkg_nodes USING GIN(attrs);
 
+-- UNIQUE constraint to ensure one-to-one mapping between source entities and PKG nodes (idempotent upserts)
+ALTER TABLE pkg_nodes ADD CONSTRAINT uq_pkg_nodes_source UNIQUE (source_table, source_id);
+
 -- Comments
 COMMENT ON TABLE pkg_nodes IS 'Unified Project Knowledge Graph nodes representing all entities';
 COMMENT ON COLUMN pkg_nodes.type IS 'Entity type from AIPM ontology (Task, Risk, Decision, Meeting, etc.)';
@@ -109,6 +112,9 @@ CREATE INDEX idx_pkg_edges_confidence ON pkg_edges(confidence DESC);
 
 -- GIN index for JSONB attrs
 CREATE INDEX idx_pkg_edges_attrs ON pkg_edges USING GIN(attrs);
+
+-- UNIQUE constraint to prevent duplicate relationships (idempotent upserts)
+ALTER TABLE pkg_edges ADD CONSTRAINT uq_pkg_edges_relationship UNIQUE (project_id, type, from_node_id, to_node_id);
 
 -- Comments
 COMMENT ON TABLE pkg_edges IS 'Relationships between PKG nodes (dependencies, evidence links, ownership, etc.)';
