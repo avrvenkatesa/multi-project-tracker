@@ -435,13 +435,6 @@ function requireRole(minimumRole) {
   };
 }
 
-// ============= AIPM ROUTES =============
-// Mount AIPM route modules with authentication middleware
-// Authentication middleware is applied at mount point for all routes
-app.use('/api', authenticateToken, decisionsRouter);
-app.use('/api', authenticateToken, meetingsRouter);
-app.use('/api', authenticateToken, evidenceRouter);
-
 // ============= AI ANALYSIS PERMISSION FUNCTIONS =============
 
 /**
@@ -819,6 +812,13 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
     role: req.user.role
   });
 });
+
+// ============= AIPM ROUTES =============
+// Mount AIPM route modules with authentication middleware
+// These routes are mounted AFTER auth routes to avoid route conflicts
+app.use('/api', authenticateToken, decisionsRouter);
+app.use('/api', authenticateToken, meetingsRouter);
+app.use('/api', authenticateToken, evidenceRouter);
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 
@@ -16000,25 +16000,31 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Multi-Project Tracker running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
-  console.log(`📋 API Endpoints:`);
-  console.log(`   POST /api/auth/register`);
-  console.log(`   POST /api/auth/login`);
-  console.log(`   POST /api/auth/logout`);
-  console.log(`   GET  /api/auth/me`);
-  console.log(`   GET  /api/projects`);
-  console.log(`   POST /api/projects`);
-  console.log(`   GET  /api/issues`);
-  console.log(`   POST /api/issues`);
-  console.log(`   GET  /api/action-items`);
-  console.log(`   POST /api/action-items`);
-  console.log(`   GET  /api/users`);
-  console.log(`   🤖 POST /api/analyze/extract-hierarchy`);
-  console.log(`   🤖 POST /api/projects/:projectId/analyze-documents`);
-  
-  // Initialize daily notification jobs
-  initializeDailyJobs();
-});
+// Only start server if not in test mode
+if (require.main === module) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Multi-Project Tracker running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
+    console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
+    console.log(`📋 API Endpoints:`);
+    console.log(`   POST /api/auth/register`);
+    console.log(`   POST /api/auth/login`);
+    console.log(`   POST /api/auth/logout`);
+    console.log(`   GET  /api/auth/me`);
+    console.log(`   GET  /api/projects`);
+    console.log(`   POST /api/projects`);
+    console.log(`   GET  /api/issues`);
+    console.log(`   POST /api/issues`);
+    console.log(`   GET  /api/action-items`);
+    console.log(`   POST /api/action-items`);
+    console.log(`   GET  /api/users`);
+    console.log(`   🤖 POST /api/analyze/extract-hierarchy`);
+    console.log(`   🤖 POST /api/projects/:projectId/analyze-documents`);
+    
+    // Initialize daily notification jobs
+    initializeDailyJobs();
+  });
+}
+
+// Export app for testing
+module.exports = app;
