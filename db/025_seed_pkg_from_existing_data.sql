@@ -26,7 +26,7 @@ SELECT
   i.ai_confidence,
   i.ai_analysis_id,
   i.created_by,
-  i.created_date
+  i.created_at
 FROM issues i
 ON CONFLICT DO NOTHING;
 
