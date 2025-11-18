@@ -29,6 +29,15 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 
 **PKG Query API**: Provides programmatic access to the knowledge graph via `GET /api/aipm/projects/:projectId/pkg` and `GET /api/aipm/pkg/query` endpoints for advanced filtering.
 
+### Testing & Documentation (Story 5.1.4)
+**Integration Testing**: Comprehensive end-to-end test suite (`__tests__/integration/aipm-foundation.test.js`) validates the complete AIPM foundation workflow including Decision → PKG → RAG flow, Meeting → Evidence → PKG edges, Issue Hierarchy → PKG edges, PKG API endpoints, and RAG search functionality. Tests verify auto-sync triggers, data consistency, and API correctness.
+
+**Smoke Testing**: Fast-running smoke test script (`scripts/smoke-test-aipm.js`) provides quick validation of system health including table existence checks, PKG seeding verification (591 nodes), sync trigger testing, RAG indexing verification (8 documents), and full-text search validation. Script uses color-coded output for easy visual scanning with 10/11 tests passing on deployment.
+
+**Performance Testing**: Dedicated performance test suite (`__tests__/performance/pkg-query-perf.test.js`) validates query performance at scale with benchmarks for PKG node queries (<500ms), complex graph JOINs (<1s), RAG full-text search (<300ms), type filtering (<100ms), and JSONB attribute queries (<200ms).
+
+**API Documentation**: Comprehensive API reference (`docs/AIPM-API.md`) documents all AIPM endpoints including Decisions API, Meetings API, Evidence API, PKG API, and RAG API with request/response examples, auto-sync behavior, PKG node/edge types, error responses, and performance characteristics.
+
 ### AI Features
 - **AI Meeting Analysis**: Two-phase processing for item extraction and status updates.
 - **AI Checklist Generation**: Generates comprehensive checklists from descriptions and documents using OpenAI GPT-4o.
