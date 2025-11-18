@@ -111,25 +111,38 @@ router.get('/projects/:projectId/agent/risk-summary', async (req, res) => {
   try {
     const { projectId } = req.params;
 
+    // Get main statistics
     const summary = await pool.query(`
       SELECT
         COUNT(*) as total_ai_risks,
         COUNT(*) FILTER (WHERE status = 'Open') as open_risks,
         COUNT(*) FILTER (WHERE probability * impact >= 12) as high_severity,
         COUNT(*) FILTER (WHERE probability * impact >= 6 AND probability * impact < 12) as medium_severity,
-        COUNT(*) FILTER (WHERE probability * impact < 6) as low_severity,
-        json_agg(
-          json_build_object(
-            'type', detection_source,
-            'count', 1
-          )
-        ) FILTER (WHERE detection_source IS NOT NULL) as detection_breakdown
+        COUNT(*) FILTER (WHERE probability * impact < 6) as low_severity
       FROM risks
       WHERE project_id = $1
         AND ai_detected = TRUE
     `, [parseInt(projectId)]);
 
-    res.json({ summary: summary.rows[0] });
+    // Get detection breakdown with proper aggregation
+    const breakdown = await pool.query(`
+      SELECT
+        detection_source as type,
+        COUNT(*) as count
+      FROM risks
+      WHERE project_id = $1
+        AND ai_detected = TRUE
+        AND detection_source IS NOT NULL
+      GROUP BY detection_source
+      ORDER BY count DESC
+    `, [parseInt(projectId)]);
+
+    res.json({
+      summary: {
+        ...summary.rows[0],
+        detection_breakdown: breakdown.rows
+      }
+    });
   } catch (error) {
     console.error('Error fetching risk summary:', error);
     res.status(500).json({ error: 'Failed to fetch risk summary' });

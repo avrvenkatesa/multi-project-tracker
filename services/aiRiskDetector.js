@@ -397,9 +397,18 @@ class AIRiskDetector {
 
     for (const risk of detectedRisks) {
       if (risk.confidence >= confidenceThreshold) {
+        // Generate risk ID
+        const riskIdResult = await pool.query(
+          'SELECT COUNT(*) as count FROM risks WHERE project_id = $1',
+          [projectId]
+        );
+        const count = parseInt(riskIdResult.rows[0].count) + 1;
+        const riskId = `RISK-${count.toString().padStart(3, '0')}`;
+
         // Create risk directly (no approval needed)
         const result = await pool.query(`
           INSERT INTO risks (
+            risk_id,
             project_id,
             title,
             description,
@@ -412,9 +421,10 @@ class AIRiskDetector {
             detection_source,
             created_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8, $9, $10)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11)
           RETURNING *
         `, [
+          riskId,
           projectId,
           risk.title,
           risk.description,
