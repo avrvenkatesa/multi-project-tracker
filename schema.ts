@@ -62,7 +62,7 @@ export const issues = pgTable('issues', {
   endDate: date('end_date'),
   effortHours: decimal('effort_hours', { precision: 10, scale: 2 }),
   // AIPM Foreign Keys (Story 5.1.1)
-  sourceMeetingId: integer('source_meeting_id'),
+  sourceMeetingId: integer('source_meeting_id').references(() => meetings.id),
 });
 
 // Action Item Categories
@@ -91,8 +91,8 @@ export const actionItems = pgTable('action_items', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   // AIPM Foreign Keys (Story 5.1.1)
-  sourceMeetingId: integer('source_meeting_id'),
-  sourceDecisionId: integer('source_decision_id'),
+  sourceMeetingId: integer('source_meeting_id').references(() => meetings.id),
+  sourceDecisionId: integer('source_decision_id').references(() => decisions.id),
 });
 
 export const issueDependencies = pgTable('issue_dependencies', {
@@ -290,7 +290,7 @@ export const risks = pgTable('risks', {
   attachmentCount: integer('attachment_count').default(0),
   costCurrency: varchar('cost_currency', { length: 10 }).default('USD'),
   // AIPM Foreign Keys (Story 5.1.1)
-  sourceMeetingId: integer('source_meeting_id'),
+  sourceMeetingId: integer('source_meeting_id').references(() => meetings.id),
   relatedDecisionIds: jsonb('related_decision_ids'), // JSONB array of decision IDs
 });
 

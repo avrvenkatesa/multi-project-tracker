@@ -69,6 +69,11 @@ const hierarchyExtractor = require('./services/hierarchy-extractor');
 const multiDocAnalyzer = require('./services/multi-document-analyzer');
 const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 
+// AIPM Route modules
+const decisionsRouter = require('./routes/decisions');
+const meetingsRouter = require('./routes/meetings');
+const evidenceRouter = require('./routes/evidence');
+
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
 
@@ -429,6 +434,13 @@ function requireRole(minimumRole) {
     next();
   };
 }
+
+// ============= AIPM ROUTES =============
+// Mount AIPM route modules with authentication middleware
+// Authentication middleware is applied at mount point for all routes
+app.use('/api', authenticateToken, decisionsRouter);
+app.use('/api', authenticateToken, meetingsRouter);
+app.use('/api', authenticateToken, evidenceRouter);
 
 // ============= AI ANALYSIS PERMISSION FUNCTIONS =============
 
