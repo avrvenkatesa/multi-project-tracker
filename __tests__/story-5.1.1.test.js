@@ -358,7 +358,7 @@ describe('Story 5.1.1: AIPM Foundation Tables', () => {
 
     test('GET /api/decisions/:id/evidence retrieves evidence', async () => {
       const response = await request(app)
-        .get(`/api/decision/${createdDecisionId}/evidence`)
+        .get(`/api/decisions/${createdDecisionId}/evidence`)
         .set('Cookie', authCookie)
         .expect(200);
 
