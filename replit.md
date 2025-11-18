@@ -60,6 +60,17 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 
 **AI Provenance Tracking**: Created entities (decisions, risks, action items) include AI provenance fields: `created_by_ai` boolean flag, `ai_confidence` score (0.00-1.00), and linkage to original proposal via `ai_agent_proposals.created_entity_type` and `created_entity_id`. This ensures full traceability of AI-generated content and supports audit requirements.
 
+### Proactive Risk Detection (Story 5.2.3)
+**AI Risk Detector Service**: Proactively identifies project risks using multi-dimensional analysis (`services/aiRiskDetector.js`). The service scans projects across 5 detection methods: (1) Meeting mentions - full-text search on RAG documents for risk keywords (blocker, delay, critical, etc.), (2) Dependency bottlenecks - identifies tasks with ≥5 dependencies in PKG, (3) Decision risks - finds high-impact decisions with <2 alternatives considered, (4) Pattern anomalies - detects stuck tasks (14+ days in progress) and orphaned tasks (no parent/assignee), (5) Overdue items - identifies tasks past due date with escalating impact. Detected risks are ranked by severity score (probability × impact) and deduplicated by source.
+
+**Risk Detection Database**: Extended `risks` table with AI detection fields: `ai_detected` boolean flag, `ai_confidence` score (0.00-1.00), and `detection_source` varchar (meeting_mention, dependency_bottleneck, insufficient_analysis, stuck_task, orphaned_task, overdue_task). Partial index on `ai_detected=TRUE` optimizes queries for AI-detected risks.
+
+**Auto-Creation & Proposals**: The service supports dual-mode risk creation: (1) Auto-creation - risks with confidence ≥0.9 are automatically created with system user attribution and proper risk_id generation (RISK-001, RISK-002, etc.), (2) Proposal workflow - lower-confidence risks (<0.9) create proposals in `ai_agent_proposals` table for human review via HITL workflow, leveraging the existing approval/rejection infrastructure from Story 5.2.2.
+
+**Risk Detector API Endpoints**: REST API (`routes/aiRiskDetector.js`) provides 3 endpoints: `POST /api/aipm/projects/:projectId/agent/scan-risks` executes full risk scan across all 5 detection methods with optional auto-creation, `GET /api/aipm/projects/:projectId/risks/ai-detected` lists all AI-detected risks ordered by severity, and `GET /api/aipm/projects/:projectId/agent/risk-summary` provides detection statistics with properly aggregated detection_breakdown counts per source type. All endpoints integrate with AI agent session tracking for audit trails.
+
+**Risk Scanning Performance**: Full project scan executes 5 parallel detection methods with optimized database queries. Typical execution time ~1.4s for projects with mixed data (meetings, decisions, PKG nodes). RAG full-text search uses PostgreSQL's `to_tsquery` with single-word keywords to avoid syntax errors. PKG queries leverage existing indexes on `type`, `project_id`, and JSONB `attrs` fields for efficient anomaly detection.
+
 ### AI Features
 - **AI Meeting Analysis**: Two-phase processing for item extraction and status updates.
 - **AI Checklist Generation**: Generates comprehensive checklists from descriptions and documents using OpenAI GPT-4o.
