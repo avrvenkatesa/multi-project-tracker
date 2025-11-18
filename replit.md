@@ -38,6 +38,15 @@ The database schema includes Users, Projects, Issues, Action Items, and a compre
 
 **API Documentation**: Comprehensive API reference (`docs/AIPM-API.md`) documents all AIPM endpoints including Decisions API, Meetings API, Evidence API, PKG API, and RAG API with request/response examples, auto-sync behavior, PKG node/edge types, error responses, and performance characteristics.
 
+### AI Agent Core Engine (Story 5.2.1)
+**AI Agent Orchestration**: Core AI agent service (`services/aiAgent.js`) provides intelligent project management assistance through context assembly from PKG and RAG, LLM integration (Claude/GPT), session tracking, and comprehensive audit logging. The agent supports four specialized modes: `decision_assistant` for architectural decisions, `risk_detector` for proactive risk identification, `meeting_analyzer` for meeting intelligence, and `knowledge_explorer` for general Q&A.
+
+**Agent Database Schema**: Three core tables support AI agent operations: `ai_agent_sessions` tracks AI invocations with context metadata (PKG nodes used, RAG docs used, tokens, latency), `ai_agent_proposals` stores AI-generated suggestions awaiting human approval (HITL workflow), and `ai_agent_audit_log` provides detailed action traceability for transparency.
+
+**Agent API Endpoints**: REST API (`routes/aiAgent.js`) provides `POST /api/aipm/projects/:projectId/agent/chat` for conversational interaction, `GET /api/aipm/projects/:projectId/agent/sessions` for session history, `GET /api/aipm/agent/sessions/:sessionId` for detailed session inspection with audit logs, and `GET /api/aipm/agent/health` for service health monitoring.
+
+**Context Assembly**: Intelligent context builder assembles relevant project knowledge by querying RAG for semantic document search (top 10 results), PKG for entity retrieval (filtered by agent type, 20 nodes), and PKG edges for relationship mapping (up to 50 edges). Context assembly is optimized for <500ms performance with full audit trail logging.
+
 ### AI Features
 - **AI Meeting Analysis**: Two-phase processing for item extraction and status updates.
 - **AI Checklist Generation**: Generates comprehensive checklists from descriptions and documents using OpenAI GPT-4o.
