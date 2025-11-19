@@ -86,6 +86,7 @@ class AIAgentDashboard {
 
     this.eventSource = new EventSource(url);
     let fullResponse = '';
+    let sessionId = null;
 
     this.eventSource.onmessage = (event) => {
       try {
@@ -93,6 +94,7 @@ class AIAgentDashboard {
 
         if (data.type === 'session') {
           console.log('Session ID:', data.sessionId);
+          sessionId = data.sessionId;
         } else if (data.type === 'status') {
           this.updateMessage(loadingMessageId, data.message + '...');
         } else if (data.type === 'context') {
@@ -101,6 +103,8 @@ class AIAgentDashboard {
           fullResponse += data.text;
           this.updateMessage(loadingMessageId, fullResponse);
         } else if (data.type === 'complete') {
+          // Add action buttons now that response is complete
+          this.updateMessage(loadingMessageId, fullResponse, sessionId);
           this.eventSource.close();
           this.loadRecentSessions(); // Refresh
         } else if (data.type === 'error') {
@@ -129,30 +133,88 @@ class AIAgentDashboard {
     };
   }
 
-  addMessage(role, content, isLoading = false) {
+  addMessage(role, content, isLoading = false, sessionId = null) {
     const messagesContainer = document.getElementById('chat-messages');
     const messageId = 'msg-' + Date.now();
 
     const messageDiv = document.createElement('div');
     messageDiv.id = messageId;
     messageDiv.className = `chat-message ${role}`;
+    
+    const actionButtons = role === 'assistant' && !isLoading ? `
+      <div class="message-actions">
+        <button class="copy-btn" data-message-id="${messageId}" title="Copy response">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+          </svg>
+        </button>
+        <button class="feedback-btn thumbs-up" data-message-id="${messageId}" data-session-id="${sessionId || ''}" data-feedback="positive" title="Helpful response">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+          </svg>
+        </button>
+        <button class="feedback-btn thumbs-down" data-message-id="${messageId}" data-session-id="${sessionId || ''}" data-feedback="negative" title="Unhelpful response">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"/>
+          </svg>
+        </button>
+      </div>
+    ` : '';
+    
     messageDiv.innerHTML = `
       <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
-      <div class="message-content ${isLoading ? 'loading' : ''}">${this.formatMessage(content)}</div>
+      <div class="message-wrapper">
+        <div class="message-content ${isLoading ? 'loading' : ''}">${this.formatMessage(content)}</div>
+        ${actionButtons}
+      </div>
     `;
 
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
+    // Add event listeners for action buttons
+    if (role === 'assistant' && !isLoading) {
+      this.attachMessageActionListeners(messageId, sessionId);
+    }
+
     return messageId;
   }
 
-  updateMessage(messageId, content) {
+  updateMessage(messageId, content, sessionId = null) {
     const messageEl = document.getElementById(messageId);
     if (messageEl) {
       const contentEl = messageEl.querySelector('.message-content');
       contentEl.innerHTML = this.formatMessage(content);
+      const wasLoading = contentEl.classList.contains('loading');
       contentEl.classList.remove('loading');
+
+      // Add action buttons if this was a loading message that's now complete
+      if (wasLoading && sessionId) {
+        const wrapper = messageEl.querySelector('.message-wrapper');
+        if (wrapper && !wrapper.querySelector('.message-actions')) {
+          const actionButtons = `
+            <div class="message-actions">
+              <button class="copy-btn" data-message-id="${messageId}" title="Copy response">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </button>
+              <button class="feedback-btn thumbs-up" data-message-id="${messageId}" data-session-id="${sessionId}" data-feedback="positive" title="Helpful response">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+                </svg>
+              </button>
+              <button class="feedback-btn thumbs-down" data-message-id="${messageId}" data-session-id="${sessionId}" data-feedback="negative" title="Unhelpful response">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"/>
+                </svg>
+              </button>
+            </div>
+          `;
+          wrapper.insertAdjacentHTML('beforeend', actionButtons);
+          this.attachMessageActionListeners(messageId, sessionId);
+        }
+      }
 
       // Auto-scroll
       const container = document.getElementById('chat-messages');
@@ -166,6 +228,105 @@ class AIAgentDashboard {
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
       .replace(/\n/g, '<br>');
+  }
+
+  attachMessageActionListeners(messageId, sessionId) {
+    // Copy button
+    const copyBtn = document.querySelector(`[data-message-id="${messageId}"].copy-btn`);
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => this.copyMessage(messageId));
+    }
+
+    // Feedback buttons
+    const thumbsUp = document.querySelector(`[data-message-id="${messageId}"].thumbs-up`);
+    const thumbsDown = document.querySelector(`[data-message-id="${messageId}"].thumbs-down`);
+    
+    if (thumbsUp) {
+      thumbsUp.addEventListener('click', () => this.submitFeedback(sessionId, 'positive', messageId));
+    }
+    if (thumbsDown) {
+      thumbsDown.addEventListener('click', () => this.submitFeedback(sessionId, 'negative', messageId));
+    }
+  }
+
+  copyMessage(messageId) {
+    const messageEl = document.getElementById(messageId);
+    if (!messageEl) return;
+
+    const contentEl = messageEl.querySelector('.message-content');
+    if (!contentEl) return;
+
+    // Get plain text (strip HTML)
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = contentEl.innerHTML;
+    const text = tempDiv.textContent || tempDiv.innerText || '';
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(text).then(() => {
+      // Visual feedback
+      const copyBtn = messageEl.querySelector('.copy-btn');
+      if (copyBtn) {
+        copyBtn.innerHTML = `
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+        `;
+        setTimeout(() => {
+          copyBtn.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+          `;
+        }, 2000);
+      }
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+    });
+  }
+
+  async submitFeedback(sessionId, feedbackType, messageId) {
+    if (!sessionId) {
+      console.warn('No session ID available for feedback');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/aipm/agent/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          sessionId,
+          feedbackType,
+          projectId: this.currentProjectId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit feedback');
+      }
+
+      // Visual feedback
+      const messageEl = document.getElementById(messageId);
+      if (messageEl) {
+        const thumbsUp = messageEl.querySelector('.thumbs-up');
+        const thumbsDown = messageEl.querySelector('.thumbs-down');
+        
+        if (feedbackType === 'positive') {
+          thumbsUp?.classList.add('active');
+          thumbsDown?.classList.remove('active');
+        } else {
+          thumbsDown?.classList.add('active');
+          thumbsUp?.classList.remove('active');
+        }
+      }
+
+      console.log(`Feedback submitted: ${feedbackType}`);
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+    }
   }
 
   async loadRecentSessions() {
