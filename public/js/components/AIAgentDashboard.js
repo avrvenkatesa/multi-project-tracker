@@ -252,6 +252,11 @@ class AIAgentDashboard {
   }
 
   formatMessage(content) {
+    // Handle null/undefined content
+    if (!content) {
+      return '<em class="text-gray-500">No content available</em>';
+    }
+    
     // Basic markdown-like formatting
     return content
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -422,6 +427,11 @@ class AIAgentDashboard {
       const data = await response.json();
       const session = data.session;
 
+      // Validate session data
+      if (!session) {
+        throw new Error('Session data not found');
+      }
+
       // Clear chat and display the session
       chatMessages.innerHTML = '';
 
@@ -432,10 +442,10 @@ class AIAgentDashboard {
       }
 
       // Display user message
-      this.addMessage('user', session.user_prompt);
+      this.addMessage('user', session.user_prompt || 'No prompt available');
 
-      // Display AI response
-      this.addMessage('assistant', session.ai_response, sessionId);
+      // Display AI response (handle missing response gracefully)
+      this.addMessage('assistant', session.ai_response || 'Response not available', sessionId);
 
       // Scroll to bottom
       chatMessages.scrollTop = chatMessages.scrollHeight;
