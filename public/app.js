@@ -611,6 +611,16 @@ function setupEventListeners() {
             window.location.href = 'templates.html';
         }
     });
+    document.getElementById('view-ai-agent-btn')?.addEventListener('click', () => {
+        if (currentProject) {
+            window.location.href = `ai-agent.html?projectId=${currentProject.id}`;
+        }
+    });
+    document.getElementById('view-proposals-btn')?.addEventListener('click', () => {
+        if (currentProject) {
+            window.location.href = `proposals.html?projectId=${currentProject.id}`;
+        }
+    });
     
     // Dropdown menu functionality
     const viewDropdownBtn = document.getElementById('view-dropdown-btn');
