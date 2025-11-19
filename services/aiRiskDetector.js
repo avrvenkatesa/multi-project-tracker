@@ -395,69 +395,73 @@ class AIRiskDetector {
   async autoCreateHighConfidenceRisks({ projectId, detectedRisks, confidenceThreshold = 0.9 }) {
     const autoCreated = [];
 
-    for (const risk of detectedRisks) {
-      if (risk.confidence >= confidenceThreshold) {
-        // Find next available risk ID by checking for gaps
-        const existingIds = await pool.query(`
-          SELECT risk_id FROM risks 
-          WHERE project_id = $1 
-            AND risk_id ~ '^RISK-[0-9]+$'
-          ORDER BY risk_id
-        `, [projectId]);
-        
-        let nextNumber = 1;
-        const usedNumbers = new Set(
-          existingIds.rows.map(r => parseInt(r.risk_id.substring(5)))
+    // Filter high-confidence risks first
+    const highConfidenceRisks = detectedRisks.filter(r => r.confidence >= confidenceThreshold);
+    
+    if (highConfidenceRisks.length === 0) {
+      return autoCreated;
+    }
+
+    // Create risks with atomic deduplication via unique index
+    for (const risk of highConfidenceRisks) {
+      try {
+        // Generate stable source identifier for deduplication
+        const sourceId = risk.source?.id || risk.source?.title || risk.title;
+        const sourceIdentifier = `${risk.type}:${sourceId}`;
+
+        // Generate unique risk ID atomically (safe for concurrent requests)
+        const riskIdResult = await pool.query(
+          'SELECT generate_risk_id($1) as risk_id',
+          [projectId]
         );
-        
-        // Find first gap in sequence
-        while (usedNumbers.has(nextNumber)) {
-          nextNumber++;
-        }
-        
-        const riskId = `RISK-${nextNumber.toString().padStart(3, '0')}`;
+        const riskId = riskIdResult.rows[0].risk_id;
 
-        try {
-          // Create risk directly (no approval needed)
-          const result = await pool.query(`
-            INSERT INTO risks (
-              risk_id,
-              project_id,
-              title,
-              description,
-              category,
-              probability,
-              impact,
-              status,
-              ai_detected,
-              ai_confidence,
-              detection_source,
-              created_by
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11)
-            RETURNING *
-          `, [
-            riskId,
-            projectId,
-            risk.title,
-            risk.description,
-            risk.type,
-            risk.probability,
-            risk.impact,
-            'identified',
-            risk.confidence,
-            risk.type,
-            1 // System user
-          ]);
+        // Create risk with ON CONFLICT DO NOTHING for atomic deduplication
+        const result = await pool.query(`
+          INSERT INTO risks (
+            risk_id,
+            project_id,
+            title,
+            description,
+            category,
+            probability,
+            impact,
+            status,
+            ai_detected,
+            ai_confidence,
+            detection_source,
+            source_identifier,
+            created_by
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11, $12)
+          ON CONFLICT (project_id, detection_source, source_identifier) 
+          WHERE ai_detected = TRUE AND source_identifier IS NOT NULL
+          DO NOTHING
+          RETURNING *
+        `, [
+          riskId,
+          projectId,
+          risk.title,
+          risk.description,
+          risk.type,
+          risk.probability,
+          risk.impact,
+          'identified',
+          risk.confidence,
+          risk.type,
+          sourceIdentifier,
+          1 // System user
+        ]);
 
+        // Only add to autoCreated if actually inserted (not skipped by ON CONFLICT)
+        if (result.rows.length > 0) {
           autoCreated.push(result.rows[0]);
-        } catch (err) {
-          // Skip if duplicate risk_id (edge case with concurrent requests or manual risks)
-          if (err.code !== '23505') {
-            throw err;
-          }
-          console.log(`Skipped creating ${riskId} - already exists`);
+        } else {
+          console.log(`Skipped duplicate risk: ${risk.title} (${sourceIdentifier})`);
         }
+      } catch (err) {
+        // Log error but continue with next risk
+        console.error(`Failed to create risk "${risk.title}":`, err.message);
       }
     }
 
