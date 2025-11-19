@@ -445,14 +445,63 @@ class AIAgentService {
    * Helper: Build system prompt based on agent type
    */
   /**
+   * Extract available source titles from context for concrete citation examples
+   * This helps the LLM see the ACTUAL sources it can cite
+   */
+  extractAvailableSourceTitles(context) {
+    const titles = [];
+
+    // Extract titles from PKG nodes
+    if (context.pkgNodes && Array.isArray(context.pkgNodes)) {
+      context.pkgNodes.forEach(node => {
+        const attrs = node.attrs || {};
+        const title = attrs.title ||
+                     attrs.risk_id ||
+                     attrs.decision_id ||
+                     attrs.meeting_id ||
+                     attrs.issue_id ||
+                     attrs.task_id;
+        if (title) {
+          titles.push(String(title));
+        }
+      });
+    }
+
+    // Extract titles from RAG documents
+    if (context.ragDocuments && Array.isArray(context.ragDocuments)) {
+      context.ragDocuments.forEach(doc => {
+        if (doc.title) {
+          titles.push(String(doc.title));
+        }
+      });
+    }
+
+    // Remove duplicates and return
+    return [...new Set(titles)];
+  }
+
+  /**
    * Build grounded prompt with citation instructions
-   * ENHANCED: Explicit grounding and citation requirements
+   * ENHANCED: Shows actual available sources from context for concrete examples
    */
   buildGroundedPrompt(userPrompt, context, agentType) {
+    // Extract actual available source titles for concrete examples
+    const availableSources = this.extractAvailableSourceTitles(context);
+
+    // Build the sources list for the prompt (show up to 10)
+    const sourcesListText = availableSources.length > 0
+      ? `\nAVAILABLE SOURCES IN THIS PROJECT:\n${availableSources.slice(0, 10).map(s => `- "${s}"`).join('\n')}\n${availableSources.length > 10 ? `... and ${availableSources.length - 10} more sources\n` : ''}`
+      : '';
+
     const systemPrompt = `You are an AI project management assistant with access to the project's knowledge graph and documentation.
 
 CRITICAL CITATION REQUIREMENTS:
-You MUST cite every fact using the EXACT format: [Source: Title]
+You MUST cite EVERY fact using the EXACT format: [Source: Title]
+${sourcesListText}
+CITATION FORMAT (MANDATORY):
+- Use [Source: Title] immediately after EACH claim or fact
+- Use the exact titles from the available sources listed above
+- Place the citation at the END of the sentence, before the period
 
 CORRECT citation examples:
 ✓ "The project uses a 7-step migration approach [Source: Migration Strategy]."
@@ -460,26 +509,28 @@ CORRECT citation examples:
 ✓ "The team identified 3 critical risks [Source: Risk Assessment Meeting]."
 
 INCORRECT citation examples (DO NOT use these):
-✗ "Context: This approach was chosen..."
-✗ "Source: Task mentions..."
-✗ "Key Action: Sultan is executing..."
-✗ Writing source info as markdown headers or bullets
+✗ "Context: This approach was chosen..." (no citation!)
+✗ "Source: Task mentions..." (wrong format!)
+✗ "Key Action: Sultan is executing..." (no citation!)
+✗ Writing source info as markdown headers or bullets without citations
+✗ ## Decisions Made (no citations!)
 
 MANDATORY RULES:
-1. Every claim MUST have [Source: ...] citation immediately after it
-2. Use ONLY the bracket format - no other source descriptions
-3. Base responses ONLY on provided context
-4. If information is missing, say "I don't have information about that"
+1. EVERY sentence with a factual claim MUST have [Source: ...] citation
+2. Use ONLY the bracket format [Source: Title] - no other source descriptions
+3. Use exact titles from the AVAILABLE SOURCES list above
+4. Base responses ONLY on provided context below
+5. If information is missing from context, say "I don't have information about that"
+6. DO NOT use markdown headers without citations after each point
 
 Agent Mode: ${agentType}
 
 Context:
 ${this.buildContextText(context)}`;
 
-    // Wrap user prompt with citation enforcement
     const wrappedUserPrompt = `${userPrompt}
 
-IMPORTANT: Remember to cite EVERY fact using [Source: Title] format. Do NOT use any other citation style.`;
+CRITICAL REMINDER: You MUST cite EVERY fact using [Source: Title] format. Use the exact source titles listed in the system prompt. Every factual statement needs a citation.`;
 
     return {
       system: systemPrompt,
