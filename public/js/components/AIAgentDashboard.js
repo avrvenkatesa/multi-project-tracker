@@ -7,14 +7,29 @@ class AIAgentDashboard {
 
   async initialize(projectId) {
     this.currentProjectId = projectId;
+    await this.loadProjectName();
     this.render();
+  }
+
+  async loadProjectName() {
+    try {
+      const response = await fetch(`/api/projects/${this.currentProjectId}`, {
+        credentials: 'include'
+      });
+      const project = await response.json();
+      const headerTitle = document.getElementById('project-title');
+      if (headerTitle && project.name) {
+        headerTitle.textContent = project.name;
+      }
+    } catch (error) {
+      console.error('Failed to load project name:', error);
+    }
   }
 
   render() {
     this.container.innerHTML = `
       <div class="ai-agent-dashboard">
         <div class="agent-header">
-          <h2>🤖 AI Project Manager</h2>
           <div class="agent-controls">
             <select id="agent-type-select">
               <option value="knowledge_explorer">Knowledge Explorer</option>

@@ -70,6 +70,21 @@ function setupEventListeners() {
       window.location.href = 'templates.html';
     }
   });
+  document.getElementById('view-schedules-btn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `schedules.html?projectId=${currentProjectId}`;
+    }
+  });
+  document.getElementById('view-ai-agent-btn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `ai-agent.html?projectId=${currentProjectId}`;
+    }
+  });
+  document.getElementById('view-proposals-btn')?.addEventListener('click', () => {
+    if (currentProjectId) {
+      window.location.href = `proposals.html?projectId=${currentProjectId}`;
+    }
+  });
   
   // Create dropdown navigation
   document.getElementById('create-issue-btn')?.addEventListener('click', () => {
