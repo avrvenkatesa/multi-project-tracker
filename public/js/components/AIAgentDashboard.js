@@ -370,7 +370,7 @@ class AIAgentDashboard {
       }
 
       container.innerHTML = data.sessions.map(session => `
-        <div class="session-card" data-session-id="${session.id}" data-agent-type="${session.agent_type}" style="cursor: pointer;">
+        <div class="session-card" data-session-id="${session.session_id}" data-agent-type="${session.agent_type}" style="cursor: pointer;">
           <div class="session-type">${this.formatAgentType(session.agent_type)}</div>
           <div class="session-prompt">${session.user_prompt.substring(0, 100)}...</div>
           <div class="session-meta">
