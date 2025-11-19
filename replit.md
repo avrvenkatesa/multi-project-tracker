@@ -51,7 +51,7 @@ AI features include AI Meeting Analysis, AI Checklist Generation, AI Document Cl
 - mammoth
 - file-type
 - OpenAI (GPT-3.5-Turbo, GPT-4o)
-- Anthropic (Claude Sonnet 4)
+- Anthropic (Claude Sonnet 4.5)
 - @neondatabase/serverless
 - drizzle-orm
 - drizzle-kit
