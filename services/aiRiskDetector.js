@@ -397,47 +397,67 @@ class AIRiskDetector {
 
     for (const risk of detectedRisks) {
       if (risk.confidence >= confidenceThreshold) {
-        // Generate risk ID
-        const riskIdResult = await pool.query(
-          'SELECT COUNT(*) as count FROM risks WHERE project_id = $1',
-          [projectId]
+        // Find next available risk ID by checking for gaps
+        const existingIds = await pool.query(`
+          SELECT risk_id FROM risks 
+          WHERE project_id = $1 
+            AND risk_id ~ '^RISK-[0-9]+$'
+          ORDER BY risk_id
+        `, [projectId]);
+        
+        let nextNumber = 1;
+        const usedNumbers = new Set(
+          existingIds.rows.map(r => parseInt(r.risk_id.substring(5)))
         );
-        const count = parseInt(riskIdResult.rows[0].count) + 1;
-        const riskId = `RISK-${count.toString().padStart(3, '0')}`;
+        
+        // Find first gap in sequence
+        while (usedNumbers.has(nextNumber)) {
+          nextNumber++;
+        }
+        
+        const riskId = `RISK-${nextNumber.toString().padStart(3, '0')}`;
 
-        // Create risk directly (no approval needed)
-        const result = await pool.query(`
-          INSERT INTO risks (
-            risk_id,
-            project_id,
-            title,
-            description,
-            category,
-            probability,
-            impact,
-            status,
-            ai_detected,
-            ai_confidence,
-            detection_source,
-            created_by
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11)
-          RETURNING *
-        `, [
-          riskId,
-          projectId,
-          risk.title,
-          risk.description,
-          risk.type,
-          risk.probability,
-          risk.impact,
-          'Open',
-          risk.confidence,
-          risk.type,
-          1 // System user
-        ]);
+        try {
+          // Create risk directly (no approval needed)
+          const result = await pool.query(`
+            INSERT INTO risks (
+              risk_id,
+              project_id,
+              title,
+              description,
+              category,
+              probability,
+              impact,
+              status,
+              ai_detected,
+              ai_confidence,
+              detection_source,
+              created_by
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11)
+            RETURNING *
+          `, [
+            riskId,
+            projectId,
+            risk.title,
+            risk.description,
+            risk.type,
+            risk.probability,
+            risk.impact,
+            'identified',
+            risk.confidence,
+            risk.type,
+            1 // System user
+          ]);
 
-        autoCreated.push(result.rows[0]);
+          autoCreated.push(result.rows[0]);
+        } catch (err) {
+          // Skip if duplicate risk_id (edge case with concurrent requests or manual risks)
+          if (err.code !== '23505') {
+            throw err;
+          }
+          console.log(`Skipped creating ${riskId} - already exists`);
+        }
       }
     }
 
