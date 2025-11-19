@@ -185,11 +185,10 @@ class AIAgentDashboard {
     if (messageEl) {
       const contentEl = messageEl.querySelector('.message-content');
       contentEl.innerHTML = this.formatMessage(content);
-      const wasLoading = contentEl.classList.contains('loading');
       contentEl.classList.remove('loading');
 
-      // Add action buttons if this was a loading message that's now complete
-      if (wasLoading && sessionId) {
+      // Add action buttons if sessionId is provided and buttons don't exist yet
+      if (sessionId) {
         const wrapper = messageEl.querySelector('.message-wrapper');
         if (wrapper && !wrapper.querySelector('.message-actions')) {
           const actionButtons = `
