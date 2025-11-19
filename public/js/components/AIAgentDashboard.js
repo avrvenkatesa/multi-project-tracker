@@ -15,27 +15,32 @@ class AIAgentDashboard {
       <div class="ai-agent-dashboard">
         <div class="agent-header">
           <h2>🤖 AI Project Manager</h2>
-          <select id="agent-type-select">
-            <option value="knowledge_explorer">Knowledge Explorer</option>
-            <option value="decision_assistant">Decision Assistant</option>
-            <option value="risk_detector">Risk Detector</option>
-            <option value="meeting_analyzer">Meeting Analyzer</option>
-          </select>
+          <div class="agent-controls">
+            <select id="agent-type-select">
+              <option value="knowledge_explorer">Knowledge Explorer</option>
+              <option value="decision_assistant">Decision Assistant</option>
+              <option value="risk_detector">Risk Detector</option>
+              <option value="meeting_analyzer">Meeting Analyzer</option>
+            </select>
+            <button id="scan-risks-btn">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              Scan for Risks
+            </button>
+          </div>
         </div>
 
         <div class="chat-container">
           <div id="chat-messages" class="chat-messages"></div>
 
-          <div class="chat-input-wrapper">
-            <div class="chat-input-container">
-              <textarea id="chat-input" placeholder="Ask the AI agent..." rows="3"></textarea>
-              <button id="send-btn" class="send-icon-btn" title="Send message">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                </svg>
-              </button>
-            </div>
-            <button id="scan-risks-btn">🔍 Scan Risks</button>
+          <div class="chat-input-container">
+            <textarea id="chat-input" placeholder="Ask the AI agent..." rows="3"></textarea>
+            <button id="send-btn" class="send-icon-btn" title="Send message">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
+            </button>
           </div>
         </div>
 
