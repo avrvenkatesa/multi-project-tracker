@@ -17,9 +17,13 @@ class AIAgentDashboard {
         credentials: 'include'
       });
       const project = await response.json();
-      const headerTitle = document.getElementById('project-title');
-      if (headerTitle && project.name) {
-        headerTitle.textContent = project.name;
+      const projectNameEl = document.getElementById('project-name');
+      const projectContext = document.getElementById('project-context');
+      if (projectNameEl && project.name) {
+        projectNameEl.textContent = project.name;
+        if (projectContext) {
+          projectContext.classList.remove('hidden');
+        }
       }
     } catch (error) {
       console.error('Failed to load project name:', error);

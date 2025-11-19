@@ -22,7 +22,7 @@
     <div class="max-w-7xl mx-auto">
       <p class="text-sm text-blue-100 mb-1">Multi-Project Tracker</p>
       <div class="flex justify-between items-center mb-2">
-        <h1 id="project-title" class="text-3xl font-bold">AI Agent</h1>
+        <h1 class="text-3xl font-bold">AI Project Manager</h1>
         <div class="flex gap-2">
           <button id="back-to-projects-btn" onclick="window.location.href='/'" 
             class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all">
@@ -42,6 +42,11 @@
 
   <!-- Main Content -->
   <div class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Project Context -->
+    <div id="project-context" class="mb-6">
+      <p class="text-sm text-gray-600">Managing AI for:</p>
+      <h2 id="project-name" class="text-xl font-bold text-gray-800">Loading project...</h2>
+    </div>
     <!-- View Dropdown -->
     <div class="bg-white rounded-lg shadow-md p-4 mb-6">
       <div class="flex items-center gap-4">
