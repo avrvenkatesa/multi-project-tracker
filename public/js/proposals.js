@@ -53,6 +53,10 @@ function initializeDropdowns() {
     window.location.href = `/risks.html?projectId=${projectId}`;
   });
 
+  document.getElementById('view-documents-btn')?.addEventListener('click', () => {
+    window.location.href = `/documents.html?projectId=${projectId}`;
+  });
+
   document.getElementById('view-ai-agent-btn')?.addEventListener('click', () => {
     window.location.href = `/ai-agent.html?projectId=${projectId}`;
   });

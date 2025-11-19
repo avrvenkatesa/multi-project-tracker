@@ -79,6 +79,7 @@ const aiAgentRouter = require('./routes/aiAgent');
 const aiDecisionMakerRouter = require('./routes/aiDecisionMaker');
 const aiRiskDetectorRouter = require('./routes/aiRiskDetector');
 const aiAgentStreamingRouter = require('./routes/aiAgentStreaming');
+const documentsRouter = require('./routes/documents');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -847,6 +848,7 @@ app.use('/api/aipm', authenticateToken, aiAgentRouter); // AI Agent routes
 app.use('/api/aipm', authenticateToken, aiDecisionMakerRouter); // AI Decision Maker routes
 app.use('/api/aipm', authenticateToken, aiRiskDetectorRouter); // AI Risk Detector routes
 app.use('/api/aipm', authenticateToken, aiAgentStreamingRouter); // AI Agent Streaming routes
+app.use('/api', authenticateToken, documentsRouter); // Document Library routes
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 
@@ -13603,9 +13605,65 @@ app.post('/api/projects/:projectId/analyze-documents', authenticateToken, async 
       }
     );
     
-    // Return analysis results
+    // ENHANCED: Store documents in RAG for future AI reference
+    const documentIds = [];
     if (analysisResult.success) {
       console.log(`[ANALYZE DOCS] Success! Created ${analysisResult.created?.total || 0} hierarchical issues`);
+      console.log(`[ANALYZE DOCS] Storing documents in RAG...`);
+      
+      for (const doc of documents) {
+        try {
+          const wordCount = doc.text.split(/\s+/).length;
+          
+          // ENHANCED: Metadata validation
+          const meta = {
+            analyzed_at: new Date().toISOString(),
+            created_entities: {
+              issues: analysisResult.created.issues || 0,
+              action_items: analysisResult.created.actionItems || 0,
+              epics: analysisResult.created.epics || 0,
+              total: analysisResult.created.total || 0
+            },
+            analysis_metadata: {
+              ai_cost: analysisResult.extraction.metadata.cost,
+              model: 'gpt-4o',
+              extraction_type: 'hierarchy'
+            },
+            upload_method: 'ai_analysis',
+            filename: doc.name
+          };
+
+          const result = await pool.query(`
+            INSERT INTO rag_documents (
+              project_id, source_type, title, content, 
+              uploaded_by, word_count, original_filename, meta
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, title, word_count
+          `, [
+            id,
+            'ai_analysis_doc',
+            doc.name,
+            doc.text,
+            req.user.id,
+            wordCount,
+            doc.name,
+            JSON.stringify(meta)
+          ]);
+
+          documentIds.push({
+            id: result.rows[0].id,
+            title: result.rows[0].title,
+            wordCount: result.rows[0].word_count,
+            storedInRAG: true
+          });
+          
+          console.log(`[ANALYZE DOCS] Stored document "${doc.name}" in RAG (ID: ${result.rows[0].id})`);
+        } catch (error) {
+          console.error(`[ANALYZE DOCS] Failed to store document "${doc.name}" in RAG:`, error);
+          // Continue even if RAG storage fails
+        }
+      }
+      
       const response = {
         success: true,
         hierarchy: analysisResult.hierarchy,
@@ -13613,9 +13671,10 @@ app.post('/api/projects/:projectId/analyze-documents', authenticateToken, async 
         schedule: analysisResult.schedule,
         validation: analysisResult.validation,
         extraction: analysisResult.extraction,
+        documents: documentIds,
         creationErrors: analysisResult.creationErrors || [],
         aiCost: analysisResult.extraction?.metadata?.cost || 0,
-        message: `Successfully analyzed ${documents.length} document(s) and created ${analysisResult.created?.total || 0} hierarchical issues with automatic schedule`
+        message: `Successfully analyzed ${documents.length} document(s), created ${analysisResult.created?.total || 0} hierarchical issues, and stored documents for AI reference`
       };
       
       res.json(response);

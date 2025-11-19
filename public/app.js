@@ -604,6 +604,11 @@ function setupEventListeners() {
             window.location.href = 'checklists.html';
         }
     });
+    document.getElementById('view-documents-btn')?.addEventListener('click', () => {
+        if (currentProject) {
+            window.location.href = `documents.html?projectId=${currentProject.id}`;
+        }
+    });
     document.getElementById('view-templates-btn')?.addEventListener('click', () => {
         if (currentProject) {
             window.location.href = `templates.html?project=${currentProject.id}`;

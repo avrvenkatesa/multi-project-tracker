@@ -126,6 +126,115 @@ router.get('/agent/sessions/:sessionId', async (req, res) => {
 });
 
 /**
+ * GET /api/aipm/sessions/:sessionId/citations
+ * Get citations for an AI session (ENHANCED with URL generation)
+ */
+router.get('/sessions/:sessionId/citations', async (req, res) => {
+  const { sessionId } = req.params;
+  const { pool } = require('../db');
+
+  try {
+    // FIXED: Combined query with proper type handling (PKG + RAG citations)
+    const result = await pool.query(`
+      -- PKG node citations
+      SELECT
+        'pkg_node' as citation_type,
+        e.quote_text as source_ref,
+        e.source_type,
+        e.source_id,
+        p.type as node_type,
+        p.attrs
+      FROM evidence e
+      LEFT JOIN pkg_nodes p ON e.source_type = p.source_table 
+        AND e.source_id = p.source_id::text
+      WHERE e.entity_type = 'ai_session'
+        AND e.entity_id = $1
+        AND e.source_type != 'rag_documents'
+
+      UNION ALL
+
+      -- RAG document citations
+      SELECT
+        'rag_document' as citation_type,
+        e.quote_text as source_ref,
+        e.source_type,
+        e.source_id,
+        NULL as node_type,
+        jsonb_build_object(
+          'id', r.id,
+          'title', r.title,
+          'source_type', r.source_type
+        ) as attrs
+      FROM evidence e
+      LEFT JOIN rag_documents r ON e.source_id = r.id::text
+      WHERE e.entity_type = 'ai_session'
+        AND e.entity_id = $1
+        AND e.source_type = 'rag_documents'
+    `, [sessionId]);
+
+    // FIXED: URL generation with proper encoding and validation
+    const citations = result.rows.map(row => {
+      const baseInfo = {
+        type: row.citation_type,
+        sourceRef: row.source_ref
+      };
+
+      if (row.citation_type === 'pkg_node') {
+        // SECURITY: Allowlist of valid node types and their URLs
+        const urlMap = {
+          'Decision': '/decisions.html',
+          'Meeting': '/meetings.html',
+          'Risk': '/risks.html',
+          'Task': '/issues.html'
+        };
+        
+        // SECURITY: Validate and encode source ID
+        const safeSourceId = String(row.source_id || '').replace(/[^\w-]/g, '');
+        const basePath = urlMap[row.node_type];
+        
+        if (!basePath) {
+          console.warn(`Unknown PKG node type: ${row.node_type}`);
+          return {
+            ...baseInfo,
+            nodeType: row.node_type,
+            url: '#',
+            tooltip: 'Unknown entity type'
+          };
+        }
+
+        return {
+          ...baseInfo,
+          nodeType: row.node_type,
+          sourceTable: row.source_type,
+          sourceId: safeSourceId,
+          title: row.attrs?.title || row.source_ref,
+          url: `${basePath}?id=${encodeURIComponent(safeSourceId)}`,
+          tooltip: `View ${row.node_type?.toLowerCase() || 'entity'}: ${(row.attrs?.title || row.source_ref || '').substring(0, 100)}`
+        };
+      } else {
+        // SECURITY: Validate and encode RAG document ID
+        const safeDocId = String(row.attrs?.id || '').replace(/[^\w-]/g, '');
+        
+        return {
+          ...baseInfo,
+          docId: safeDocId,
+          sourceType: row.attrs?.source_type,
+          title: row.attrs?.title || row.source_ref,
+          url: `/documents.html?id=${encodeURIComponent(safeDocId)}`,
+          tooltip: `View document: ${(row.attrs?.title || row.source_ref || '').substring(0, 100)}`
+        };
+      }
+    });
+
+    res.json({ citations });
+
+  } catch (error) {
+    console.error('Error fetching citations:', error);
+    res.status(500).json({ error: 'Failed to fetch citations' });
+  }
+});
+
+/**
  * GET /api/aipm/agent/health
  * Health check for AI agent service
  */

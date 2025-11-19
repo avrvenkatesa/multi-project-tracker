@@ -306,3 +306,40 @@
   border-radius: 12px;
   font-size: 12px;
 }
+
+/* ENHANCED: Citation link styles */
+.citation-link {
+  color: #7C3AED;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(124, 58, 237, 0.1);
+  transition: all 0.2s ease;
+  display: inline-block;
+  margin: 0 2px;
+  font-size: 0.9em;
+}
+
+.citation-link:hover {
+  background: rgba(124, 58, 237, 0.2);
+  text-decoration: underline;
+  transform: translateY(-1px);
+}
+
+.citation-link:active {
+  transform: translateY(0);
+}
+
+/* Citation count badge */
+.citation-count-badge {
+  display: inline-block;
+  background: #7C3AED;
+  color: white;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}

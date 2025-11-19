@@ -117,6 +117,7 @@ class AIAgentDashboard {
     this.eventSource = new EventSource(url);
     let fullResponse = '';
     let sessionId = null;
+    let citations = [];
 
     this.eventSource.onmessage = (event) => {
       try {
@@ -133,8 +134,12 @@ class AIAgentDashboard {
           fullResponse += data.text;
           this.updateMessage(loadingMessageId, fullResponse);
         } else if (data.type === 'complete') {
-          // Add action buttons now that response is complete
-          this.updateMessage(loadingMessageId, fullResponse, sessionId);
+          console.log('Response complete, waiting for citations...');
+        } else if (data.type === 'citations') {
+          // ENHANCED: Citations received as separate event
+          citations = data.citations || [];
+          console.log('Citations received:', citations.length);
+          this.updateMessage(loadingMessageId, fullResponse, sessionId, citations);
           this.eventSource.close();
           this.loadRecentSessions(); // Refresh
         } else if (data.type === 'error') {
@@ -210,12 +215,24 @@ class AIAgentDashboard {
     return messageId;
   }
 
-  updateMessage(messageId, content, sessionId = null) {
+  updateMessage(messageId, content, sessionId = null, citations = []) {
     const messageEl = document.getElementById(messageId);
     if (messageEl) {
       const contentEl = messageEl.querySelector('.message-content');
-      contentEl.innerHTML = this.formatMessage(content);
+      contentEl.innerHTML = this.formatMessage(content, citations);
       contentEl.classList.remove('loading');
+
+      // ENHANCED: Show citation count badge if citations are present
+      if (citations && citations.length > 0) {
+        const wrapper = messageEl.querySelector('.message-wrapper');
+        const existingBadge = wrapper.querySelector('.citation-count-badge');
+        if (!existingBadge) {
+          const badge = document.createElement('span');
+          badge.className = 'citation-count-badge';
+          badge.textContent = `${citations.length} source${citations.length > 1 ? 's' : ''} cited`;
+          wrapper.insertBefore(badge, contentEl);
+        }
+      }
 
       // Add action buttons if sessionId is provided and buttons don't exist yet
       if (sessionId) {
@@ -251,17 +268,58 @@ class AIAgentDashboard {
     }
   }
 
-  formatMessage(content) {
+  /**
+   * ENHANCED: Format message with clickable citations
+   */
+  formatMessage(content, citations = []) {
     // Handle null/undefined content
     if (!content) {
       return '<em class="text-gray-500">No content available</em>';
     }
     
     // Basic markdown-like formatting
-    return content
+    let formatted = content
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
       .replace(/\n/g, '<br>');
+
+    // ENHANCED: Replace citation references with clickable links
+    if (citations && citations.length > 0) {
+      citations.forEach(citation => {
+        const citationText = `[Source: ${citation.sourceRef}]`;
+        const escapedText = this.escapeRegex(citationText);
+        const citationLink = this.buildCitationLink(citation);
+        formatted = formatted.replace(new RegExp(escapedText, 'g'), citationLink);
+      });
+    }
+
+    return formatted;
+  }
+
+  /**
+   * Build clickable citation link (URLs pre-built and validated by backend)
+   */
+  buildCitationLink(citation) {
+    // SECURITY: Validate URL format (must start with / for relative URLs)
+    const safeUrl = (citation.url && citation.url.startsWith('/')) ? citation.url : '#';
+    return `<a href="${this.escapeHtml(safeUrl)}" class="citation-link" title="${this.escapeHtml(citation.tooltip)}" rel="noopener noreferrer" target="_blank">[Source: ${this.escapeHtml(citation.sourceRef)}]</a>`;
+  }
+
+  /**
+   * Escape regex special characters
+   */
+  escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Escape HTML for XSS protection
+   */
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   attachMessageActionListeners(messageId, sessionId) {

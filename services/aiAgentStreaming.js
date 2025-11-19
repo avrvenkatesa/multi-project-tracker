@@ -66,6 +66,9 @@ class AIAgentStreaming {
         responseStream
       });
 
+      // FIXED: Extract citations directly from response
+      const citations = aiAgentService.extractCitations(llmResult.fullResponse, context);
+      
       // 4. Complete session
       await aiAgentService.completeSession({
         sessionId: session.session_id,
@@ -74,13 +77,23 @@ class AIAgentStreaming {
         pkgNodesUsed: context.pkgNodes.map(n => n.id),
         ragDocsUsed: context.ragDocuments.map(d => d.id),
         tokensUsed: llmResult.tokensUsed,
-        latency: llmResult.latency
+        latency: llmResult.latency,
+        citations: citations
       });
 
       // Send completion
       if (responseStream.writable) {
         responseStream.write(`data: ${JSON.stringify({ type: 'complete', sessionId: session.session_id })}\n\n`);
       }
+
+      // FIXED: Always send citations event (even if empty) so frontend can finalize
+      if (responseStream.writable) {
+        responseStream.write(`data: ${JSON.stringify({ 
+          type: 'citations', 
+          citations: citations || []
+        })}\n\n`);
+      }
+
       streamActive = false;
       clearInterval(heartbeat);
       responseStream.end();

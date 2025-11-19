@@ -30,6 +30,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.href = `/risks.html?projectId=${projectId}`;
   });
 
+  document.getElementById('view-documents-btn')?.addEventListener('click', () => {
+    window.location.href = `/documents.html?projectId=${projectId}`;
+  });
+
   document.getElementById('view-proposals-btn')?.addEventListener('click', () => {
     window.location.href = `/proposals.html?projectId=${projectId}`;
   });
