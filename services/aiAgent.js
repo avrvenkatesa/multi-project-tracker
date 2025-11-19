@@ -177,6 +177,9 @@ class AIAgentService {
     // Build grounded prompt with citation instructions
     const { system, user } = this.buildGroundedPrompt(userPrompt, context, agentType);
 
+    // DEBUG: Verify prompt construction
+    this.debugPromptConstruction(context, system);
+
     // Prepare messages for LLM
     const messages = [
       {
@@ -494,79 +497,84 @@ class AIAgentService {
   }
 
   /**
+   * Debug helper to verify prompt construction
+   */
+  debugPromptConstruction(context, systemPrompt) {
+    const sources = this.extractAvailableSourceTitles(context);
+    console.log('=== PROMPT CONSTRUCTION DEBUG ===');
+    console.log('Available sources count:', sources.length);
+    console.log('Sample sources:', sources.slice(0, 5));
+    console.log('System prompt includes sources?', systemPrompt.includes('AVAILABLE SOURCES'));
+    console.log('Context includes [SOURCE: markers?', this.buildContextText(context).includes('[SOURCE:'));
+    console.log('==================================');
+  }
+
+  /**
    * Build grounded prompt with citation instructions
    * ENHANCED: Ultra-explicit with visual separators and concrete examples
    */
   buildGroundedPrompt(userPrompt, context, agentType) {
-    // Extract actual available source titles
+    // Extract actual available source titles for concrete examples
     const availableSources = this.extractAvailableSourceTitles(context);
 
-    // Build concrete examples using actual sources from context
-    const concreteExamples = availableSources.slice(0, 3).map(source =>
-      `✓ "This information comes from the project [Source: ${source}]."`
+    // Build concrete citation examples using actual sources
+    const exampleCitations = availableSources.slice(0, 3).map(source =>
+      `✓ "Information from the project [Source: ${source}]."`
     ).join('\n');
 
-    // Build the sources list with visual separators
+    // Build the sources list for the prompt
     const sourcesListText = availableSources.length > 0
-      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAVAILABLE SOURCES (use these exact titles):\n${availableSources.slice(0, 15).map((s, i) => `${i + 1}. "${s}"`).join('\n')}\n${availableSources.length > 15 ? `... and ${availableSources.length - 15} more sources\n` : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAVAILABLE SOURCES (use exact titles):\n${availableSources.slice(0, 15).map((s, i) => `${i + 1}. "${s}"`).join('\n')}\n${availableSources.length > 15 ? `... and ${availableSources.length - 15} more\n` : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
       : '';
 
     const systemPrompt = `You are an AI project management assistant.
 
-⚠️ CRITICAL REQUIREMENT - READ CAREFULLY ⚠️
+⚠️ CRITICAL REQUIREMENT ⚠️
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-YOU MUST ADD A CITATION AFTER EVERY SINGLE FACT OR CLAIM.
-
-The citation format is: [Source: Title]
-
-NO EXCEPTIONS. NO EXCUSES.
+YOU MUST ADD [Source: Title] AFTER EVERY FACT.
+NO EXCEPTIONS.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${sourcesListText}
 
-📋 CITATION RULES (MANDATORY):
+📋 CITATION FORMAT:
 
-1. EVERY factual statement MUST end with [Source: Title]
-2. Use the EXACT titles from the "AVAILABLE SOURCES" list above
-3. Place citation at the END of each sentence with a fact
-4. DO NOT write responses without citations
-5. DO NOT use markdown headers without citations for the facts under them
-6. DO NOT use bullet points without citations after each point
+Each source in the context is marked as [SOURCE: Title].
+When you reference information from a source, you MUST add [Source: Title] at the end of the sentence.
 
 ✅ CORRECT EXAMPLES:
-${concreteExamples || `✓ "The migration uses 7 steps [Source: Migration Strategy]."\n✓ "Three risks were identified [Source: Risk Assessment]."`}
+${exampleCitations || '✓ "The project uses a 7-step migration [Source: Migration Strategy]."\n✓ "Three risks were identified [Source: Risk Assessment]."'}
 
-❌ WRONG EXAMPLES (DO NOT DO THIS):
-✗ "The project uses a 7-step migration approach." (MISSING CITATION!)
-✗ "## Decision: Use AWS" (MISSING CITATION!)
-✗ "- Status: Done" (MISSING CITATION!)
-✗ "Context: This was chosen..." (MISSING CITATION!)
+❌ WRONG (DO NOT DO THIS):
+✗ "The project uses a 7-step migration." (NO CITATION!)
+✗ "## Decision Made" (NO CITATION!)
+✗ "- Status: Done" (NO CITATION!)
 
-🎯 YOUR TASK:
-For EVERY fact you state, add [Source: Title] immediately after it.
-If you don't have a source for something, DON'T STATE IT.
+🎯 MANDATORY RULES:
+
+1. Every factual statement MUST have [Source: Title] at the end
+2. Use EXACT titles from the AVAILABLE SOURCES list above
+3. Look for [SOURCE: ...] markers in the context below - those are what you cite
+4. If you don't have a source for something, don't state it
+5. Do NOT write responses without citations
 
 Agent Mode: ${agentType}
 
-📚 Context (cite these sources):
+Context (each section has [SOURCE: Title] markers - cite these):
 ${this.buildContextText(context)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ REMINDER: ADD [Source: Title] AFTER EVERY FACT ⚠️
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+⚠️ REMEMBER: ADD [Source: Title] AFTER EVERY FACT ⚠━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
     const wrappedUserPrompt = `${userPrompt}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️ CRITICAL REMINDER ⚠️
-You MUST include [Source: Title] after EVERY fact in your response.
-Use the exact source titles from the AVAILABLE SOURCES list.
+Add [Source: Title] after EVERY fact in your response.
+Use the exact titles from the AVAILABLE SOURCES list.
 
-Example format for your response:
-"The project completed the VM inventory task [Source: Create VM Inventory]. The RPO and RTO requirements were defined [Source: Define RPO and RTO Requirements]."
+Your response should look like:
+"The VM inventory was created [Source: Create VM Inventory]. The RPO and RTO requirements were defined [Source: Define RPO and RTO Requirements]."
 
-DO NOT forget citations. Every fact needs one.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+Every sentence with a fact needs [Source: ...] at the end.`;
 
     return {
       system: systemPrompt,
@@ -645,37 +653,39 @@ Always explain your reasoning and cite sources.`
           // Guard against null/undefined attrs
           const attrs = node.attrs || {};
           
-          // Extract title/identifier from attrs
+          // Extract title/identifier from attrs - MUST MATCH extractAvailableSourceTitles
           const title = attrs.title || 
                        attrs.risk_id || 
                        attrs.decision_id || 
+                       attrs.meeting_id ||
                        attrs.issue_id ||
+                       attrs.task_id ||
                        `${type} #${node.id}`;
           
-          text += `**${title}**\n`;
+          // **CRITICAL**: Show the source identifier clearly so LLM can cite it
+          text += `### [SOURCE: ${title}]\n\n`;
           
           // Add description if available
           if (attrs.description) {
-            const desc = attrs.description.substring(0, 200);
-            text += `  ${desc}${attrs.description.length > 200 ? '...' : ''}\n`;
+            const desc = attrs.description.substring(0, 300);
+            text += `${desc}${attrs.description.length > 300 ? '...' : ''}\n\n`;
           }
           
-          // Add status if available
-          if (attrs.status) {
-            text += `  Status: ${attrs.status}\n`;
-          }
+          // Add metadata in structured format
+          const metadata = [];
+          if (attrs.status) metadata.push(`Status: ${attrs.status}`);
+          if (attrs.priority) metadata.push(`Priority: ${attrs.priority}`);
+          if (attrs.owner) metadata.push(`Owner: ${attrs.owner}`);
+          if (attrs.due_date) metadata.push(`Due: ${attrs.due_date}`);
           
-          // Add priority if available
-          if (attrs.priority) {
-            text += `  Priority: ${attrs.priority}\n`;
+          if (metadata.length > 0) {
+            text += metadata.join(' | ') + '\n\n';
           }
           
           // Add AI detection info
           if (node.created_by_ai) {
-            text += `  _(AI-detected, confidence: ${node.ai_confidence})_\n`;
+            text += `_(AI-detected, confidence: ${node.ai_confidence})_\n\n`;
           }
-          
-          text += '\n';
         });
       });
     }
@@ -706,11 +716,16 @@ Always explain your reasoning and cite sources.`
       text += '## Relevant Documents\n\n';
       context.ragDocuments.forEach((doc, idx) => {
         const title = doc.title || doc.meta?.title || 'Document';
-        text += `### ${idx + 1}. ${title} (${doc.source_type})\n`;
+        
+        // **CRITICAL**: Show the source identifier clearly
+        text += `### [SOURCE: ${title}]\n\n`;
+        
+        text += `Type: ${doc.source_type}\n\n`;
+        
         // Use snippet from ts_headline (highlighted excerpts) if available, otherwise fallback to content
         const content = doc.snippet || doc.content;
         if (content) {
-          text += `${content.substring(0, 300)}...\n\n`;
+          text += `${content.substring(0, 400)}...\n\n`;
         }
       });
     }
