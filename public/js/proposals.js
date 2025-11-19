@@ -12,7 +12,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   projectId = urlParams.get('projectId');
 
   if (!projectId) {
-    showError('No project selected');
+    showError('No project selected. Redirecting to dashboard...');
+    setTimeout(() => {
+      window.location.href = '/dashboard.html';
+    }, 2000);
     return;
   }
 
@@ -61,9 +64,7 @@ function initializeDropdowns() {
 async function loadProposals() {
   try {
     const response = await fetch(`/api/aipm/projects/${projectId}/agent/proposals`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -212,9 +213,9 @@ async function approveProposal(proposalId) {
     const response = await fetch(`/api/aipm/agent/proposals/${proposalId}/approve`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
         'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({ userId: 1 }) // TODO: Get from auth context
     });
 
@@ -245,9 +246,9 @@ async function rejectProposal(proposalId) {
     const response = await fetch(`/api/aipm/agent/proposals/${proposalId}/reject`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
         'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({ 
         userId: 1, // TODO: Get from auth context
         reason: 'Reviewed and determined not a risk'
