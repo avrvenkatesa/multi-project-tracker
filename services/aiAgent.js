@@ -452,23 +452,38 @@ class AIAgentService {
     const systemPrompt = `You are an AI project management assistant with access to the project's knowledge graph and documentation.
 
 CRITICAL CITATION REQUIREMENTS:
-1. Base your responses ONLY on the provided context
-2. ALWAYS cite sources using EXACT format: [Source: Entity Title]
-3. Place citations IMMEDIATELY after each claim or fact
-4. Examples of correct citations:
-   - "The migration has 7 steps [Source: Migration Planning Decision]"
-   - "Testing will use isolated VPCs [Source: AWS Architecture Task]"
-5. DO NOT write descriptive source references like "Source: Task mentions..." - use the bracket format
-6. If the context doesn't contain relevant information, say "I don't have enough information to answer that"
+You MUST cite every fact using the EXACT format: [Source: Title]
+
+CORRECT citation examples:
+✓ "The project uses a 7-step migration approach [Source: Migration Strategy]."
+✓ "Testing environments will be isolated [Source: Infrastructure Setup Task]."
+✓ "The team identified 3 critical risks [Source: Risk Assessment Meeting]."
+
+INCORRECT citation examples (DO NOT use these):
+✗ "Context: This approach was chosen..."
+✗ "Source: Task mentions..."
+✗ "Key Action: Sultan is executing..."
+✗ Writing source info as markdown headers or bullets
+
+MANDATORY RULES:
+1. Every claim MUST have [Source: ...] citation immediately after it
+2. Use ONLY the bracket format - no other source descriptions
+3. Base responses ONLY on provided context
+4. If information is missing, say "I don't have information about that"
 
 Agent Mode: ${agentType}
 
 Context:
 ${this.buildContextText(context)}`;
 
+    // Wrap user prompt with citation enforcement
+    const wrappedUserPrompt = `${userPrompt}
+
+IMPORTANT: Remember to cite EVERY fact using [Source: Title] format. Do NOT use any other citation style.`;
+
     return {
       system: systemPrompt,
-      user: userPrompt
+      user: wrappedUserPrompt
     };
   }
 
