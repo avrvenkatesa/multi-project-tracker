@@ -451,12 +451,15 @@ class AIAgentService {
   buildGroundedPrompt(userPrompt, context, agentType) {
     const systemPrompt = `You are an AI project management assistant with access to the project's knowledge graph and documentation.
 
-IMPORTANT INSTRUCTIONS:
+CRITICAL CITATION REQUIREMENTS:
 1. Base your responses ONLY on the provided context
-2. Cite your sources using [Source: title] format (e.g., [Source: Sprint Planning Meeting])
-3. If the context doesn't contain relevant information, say "I don't have enough information to answer that"
-4. Be specific and reference actual entities from the context
-5. Use clear, professional language
+2. ALWAYS cite sources using EXACT format: [Source: Entity Title]
+3. Place citations IMMEDIATELY after each claim or fact
+4. Examples of correct citations:
+   - "The migration has 7 steps [Source: Migration Planning Decision]"
+   - "Testing will use isolated VPCs [Source: AWS Architecture Task]"
+5. DO NOT write descriptive source references like "Source: Task mentions..." - use the bracket format
+6. If the context doesn't contain relevant information, say "I don't have enough information to answer that"
 
 Agent Mode: ${agentType}
 
