@@ -94,6 +94,9 @@ function setupEventListeners() {
   document.getElementById('view-ai-agent-btn')?.addEventListener('click', () => {
     window.location.href = `ai-agent.html?projectId=${currentProjectId}`;
   });
+  document.getElementById('view-proposals-btn')?.addEventListener('click', () => {
+    window.location.href = `proposals.html?projectId=${currentProjectId}`;
+  });
   
   // Create dropdown navigation
   document.getElementById('create-issue-btn')?.addEventListener('click', () => {
