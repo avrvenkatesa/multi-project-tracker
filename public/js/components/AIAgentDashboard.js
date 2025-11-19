@@ -444,8 +444,8 @@ class AIAgentDashboard {
       // Display user message
       this.addMessage('user', session.user_prompt || 'No prompt available');
 
-      // Display AI response (handle missing response gracefully)
-      this.addMessage('assistant', session.ai_response || 'Response not available', sessionId);
+      // Display AI response (use correct column name: agent_response)
+      this.addMessage('assistant', session.agent_response || 'Response not available', sessionId);
 
       // Scroll to bottom
       chatMessages.scrollTop = chatMessages.scrollHeight;
