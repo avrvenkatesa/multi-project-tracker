@@ -69,6 +69,17 @@ const hierarchyExtractor = require('./services/hierarchy-extractor');
 const multiDocAnalyzer = require('./services/multi-document-analyzer');
 const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 
+// AIPM Route modules
+const decisionsRouter = require('./routes/decisions');
+const meetingsRouter = require('./routes/meetings');
+const evidenceRouter = require('./routes/evidence');
+const ragRouter = require('./routes/aipm-rag');
+const pkgRouter = require('./routes/aipm-pkg');
+const aiAgentRouter = require('./routes/aiAgent');
+const aiDecisionMakerRouter = require('./routes/aiDecisionMaker');
+const aiRiskDetectorRouter = require('./routes/aiRiskDetector');
+const aiAgentStreamingRouter = require('./routes/aiAgentStreaming');
+
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
 
@@ -807,6 +818,35 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
     role: req.user.role
   });
 });
+
+// ============= PUBLIC AIPM ROUTES =============
+// AI Agent health check (public, no auth required)
+const aiAgentService = require('./services/aiAgent');
+app.get('/api/aipm/agent/health', async (req, res) => {
+  try {
+    const hasApiKey = !!aiAgentService.apiKey;
+    res.json({
+      status: hasApiKey ? 'operational' : 'no_api_key',
+      model: aiAgentService.defaultModel,
+      apiKeyConfigured: hasApiKey
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Health check failed' });
+  }
+});
+
+// ============= AIPM ROUTES =============
+// Mount AIPM route modules with authentication middleware
+// These routes are mounted AFTER auth routes to avoid route conflicts
+app.use('/api', authenticateToken, decisionsRouter);
+app.use('/api', authenticateToken, meetingsRouter);
+app.use('/api', authenticateToken, evidenceRouter);
+app.use('/api', authenticateToken, ragRouter);
+app.use('/api', authenticateToken, pkgRouter);
+app.use('/api/aipm', authenticateToken, aiAgentRouter); // AI Agent routes
+app.use('/api/aipm', authenticateToken, aiDecisionMakerRouter); // AI Decision Maker routes
+app.use('/api/aipm', authenticateToken, aiRiskDetectorRouter); // AI Risk Detector routes
+app.use('/api/aipm', authenticateToken, aiAgentStreamingRouter); // AI Agent Streaming routes
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 
@@ -15988,25 +16028,31 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Multi-Project Tracker running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
-  console.log(`📋 API Endpoints:`);
-  console.log(`   POST /api/auth/register`);
-  console.log(`   POST /api/auth/login`);
-  console.log(`   POST /api/auth/logout`);
-  console.log(`   GET  /api/auth/me`);
-  console.log(`   GET  /api/projects`);
-  console.log(`   POST /api/projects`);
-  console.log(`   GET  /api/issues`);
-  console.log(`   POST /api/issues`);
-  console.log(`   GET  /api/action-items`);
-  console.log(`   POST /api/action-items`);
-  console.log(`   GET  /api/users`);
-  console.log(`   🤖 POST /api/analyze/extract-hierarchy`);
-  console.log(`   🤖 POST /api/projects/:projectId/analyze-documents`);
-  
-  // Initialize daily notification jobs
-  initializeDailyJobs();
-});
+// Only start server if not in test mode
+if (require.main === module) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Multi-Project Tracker running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
+    console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
+    console.log(`📋 API Endpoints:`);
+    console.log(`   POST /api/auth/register`);
+    console.log(`   POST /api/auth/login`);
+    console.log(`   POST /api/auth/logout`);
+    console.log(`   GET  /api/auth/me`);
+    console.log(`   GET  /api/projects`);
+    console.log(`   POST /api/projects`);
+    console.log(`   GET  /api/issues`);
+    console.log(`   POST /api/issues`);
+    console.log(`   GET  /api/action-items`);
+    console.log(`   POST /api/action-items`);
+    console.log(`   GET  /api/users`);
+    console.log(`   🤖 POST /api/analyze/extract-hierarchy`);
+    console.log(`   🤖 POST /api/projects/:projectId/analyze-documents`);
+    
+    // Initialize daily notification jobs
+    initializeDailyJobs();
+  });
+}
+
+// Export app for testing
+module.exports = app;

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Agent - Multi-Project Tracker</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/ai-agent.css">
+</head>
+<body>
+  <nav class="navbar">
+    <h1>🤖 AI Project Manager</h1>
+    <div class="nav-links">
+      <a href="/dashboard.html">Dashboard</a>
+      <a href="/decisions.html">Decisions</a>
+      <a href="/meetings.html">Meetings</a>
+      <a href="/ai-agent.html" class="active">AI Agent</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div id="ai-agent-container"></div>
+  </div>
+
+  <script src="/js/components/AIAgentDashboard.js"></script>
+  <script>
+    // Create global instance immediately (before DOMContentLoaded)
+    // This ensures onclick handlers can reference it
+    window.aiDashboard = null;
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      const projectId = new URLSearchParams(window.location.search).get('projectId') || 1;
+      window.aiDashboard = new AIAgentDashboard('ai-agent-container');
+      window.aiDashboard.initialize(projectId);
+    });
+  </script>
+</body>
+</html>
