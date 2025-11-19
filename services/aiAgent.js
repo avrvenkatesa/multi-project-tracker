@@ -525,6 +525,36 @@ Always explain your reasoning and cite sources.`
 
     return result.rows;
   }
+
+  /**
+   * Submit user feedback on an AI agent response
+   */
+  async submitFeedback({ sessionId, projectId, userId, feedbackType, feedbackText = null, feedbackTags = null }) {
+    try {
+      const result = await pool.query(`
+        INSERT INTO ai_agent_session_feedback (
+          session_id,
+          project_id,
+          user_id,
+          feedback_type,
+          feedback_text,
+          feedback_tags
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (session_id, user_id)
+        DO UPDATE SET
+          feedback_type = EXCLUDED.feedback_type,
+          feedback_text = EXCLUDED.feedback_text,
+          feedback_tags = EXCLUDED.feedback_tags,
+          created_at = NOW()
+        RETURNING *
+      `, [sessionId, projectId, userId, feedbackType, feedbackText, feedbackTags]);
+
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new AIAgentService();

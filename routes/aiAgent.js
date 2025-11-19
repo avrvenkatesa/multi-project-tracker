@@ -142,4 +142,37 @@ router.get('/agent/health', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/aipm/agent/feedback
+ * Submit user feedback on an AI agent response
+ */
+router.post('/agent/feedback', async (req, res) => {
+  try {
+    const { sessionId, feedbackType, projectId, feedbackText, feedbackTags } = req.body;
+    const userId = req.user.id;
+
+    if (!sessionId || !feedbackType) {
+      return res.status(400).json({ error: 'Session ID and feedback type are required' });
+    }
+
+    if (!['positive', 'negative'].includes(feedbackType)) {
+      return res.status(400).json({ error: 'Feedback type must be "positive" or "negative"' });
+    }
+
+    const feedback = await aiAgentService.submitFeedback({
+      sessionId,
+      projectId: parseInt(projectId),
+      userId,
+      feedbackType,
+      feedbackText,
+      feedbackTags
+    });
+
+    res.json({ success: true, feedback });
+  } catch (error) {
+    console.error('Error submitting feedback:', error);
+    res.status(500).json({ error: 'Failed to submit feedback', details: error.message });
+  }
+});
+
 module.exports = router;
