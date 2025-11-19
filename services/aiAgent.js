@@ -74,8 +74,9 @@ class AIAgentService {
         id,
         source_type,
         source_id,
-        content_text,
-        metadata,
+        title,
+        content,
+        meta,
         ts_rank(content_tsv, to_tsquery('english', $1)) as relevance
       FROM rag_documents
       WHERE project_id = $2
@@ -454,8 +455,11 @@ Always explain your reasoning and cite sources.`
     if (context.ragDocuments && context.ragDocuments.length > 0) {
       text += '## Relevant Documents\n\n';
       context.ragDocuments.forEach((doc, idx) => {
-        text += `### ${idx + 1}. ${doc.metadata?.title || 'Document'} (${doc.source_type})\n`;
-        text += `${doc.content_text.substring(0, 300)}...\n\n`;
+        const title = doc.title || doc.meta?.title || 'Document';
+        text += `### ${idx + 1}. ${title} (${doc.source_type})\n`;
+        if (doc.content) {
+          text += `${doc.content.substring(0, 300)}...\n\n`;
+        }
       });
     }
 
