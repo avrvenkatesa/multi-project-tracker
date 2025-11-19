@@ -26,9 +26,15 @@ class AIAgentDashboard {
         <div class="chat-container">
           <div id="chat-messages" class="chat-messages"></div>
 
-          <div class="chat-input-container">
-            <textarea id="chat-input" placeholder="Ask the AI agent..." rows="3"></textarea>
-            <button id="send-btn">Send</button>
+          <div class="chat-input-wrapper">
+            <div class="chat-input-container">
+              <textarea id="chat-input" placeholder="Ask the AI agent..." rows="3"></textarea>
+              <button id="send-btn" class="send-icon-btn" title="Send message">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+              </button>
+            </div>
             <button id="scan-risks-btn">🔍 Scan Risks</button>
           </div>
         </div>
