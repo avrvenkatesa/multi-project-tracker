@@ -365,22 +365,86 @@ class AIAgentDashboard {
 
       const container = document.getElementById('recent-sessions');
       if (data.sessions.length === 0) {
-        container.innerHTML = '<p>No recent sessions</p>';
+        container.innerHTML = '<p class="text-gray-500 text-sm">No recent sessions</p>';
         return;
       }
 
       container.innerHTML = data.sessions.map(session => `
-        <div class="session-card">
-          <div class="session-type">${session.agent_type}</div>
+        <div class="session-card" data-session-id="${session.id}" data-agent-type="${session.agent_type}" style="cursor: pointer;">
+          <div class="session-type">${this.formatAgentType(session.agent_type)}</div>
           <div class="session-prompt">${session.user_prompt.substring(0, 100)}...</div>
           <div class="session-meta">
             ${session.confidence_score ? `Confidence: ${(session.confidence_score * 100).toFixed(0)}%` : ''}
+            <span class="text-gray-400">•</span>
             ${new Date(session.created_at).toLocaleString()}
           </div>
         </div>
       `).join('');
+
+      // Add click handlers to session cards
+      container.querySelectorAll('.session-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const sessionId = card.dataset.sessionId;
+          const agentType = card.dataset.agentType;
+          this.loadSession(sessionId, agentType);
+        });
+      });
     } catch (error) {
       console.error('Error loading sessions:', error);
+    }
+  }
+
+  formatAgentType(type) {
+    const typeNames = {
+      'knowledge_explorer': '💡 Knowledge Explorer',
+      'decision_assistant': '🎯 Decision Assistant',
+      'risk_detector': '⚠️ Risk Detector',
+      'meeting_analyzer': '📊 Meeting Analyzer'
+    };
+    return typeNames[type] || type;
+  }
+
+  async loadSession(sessionId, agentType) {
+    try {
+      // Clear current chat
+      const chatMessages = document.getElementById('chat-messages');
+      chatMessages.innerHTML = '<div class="loading-session">Loading conversation...</div>';
+
+      // Fetch session details
+      const response = await fetch(`/api/aipm/agent/sessions/${sessionId}`, {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load session');
+      }
+
+      const data = await response.json();
+      const session = data.session;
+
+      // Clear chat and display the session
+      chatMessages.innerHTML = '';
+
+      // Set the agent type
+      const agentTypeSelect = document.getElementById('agent-type-select');
+      if (agentTypeSelect) {
+        agentTypeSelect.value = agentType;
+      }
+
+      // Display user message
+      this.addMessage('user', session.user_prompt);
+
+      // Display AI response
+      this.addMessage('assistant', session.ai_response, sessionId);
+
+      // Scroll to bottom
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      console.log(`✅ Loaded session ${sessionId}`);
+    } catch (error) {
+      console.error('Error loading session:', error);
+      const chatMessages = document.getElementById('chat-messages');
+      chatMessages.innerHTML = '<div class="error-message">❌ Failed to load conversation. Please try again.</div>';
     }
   }
 
