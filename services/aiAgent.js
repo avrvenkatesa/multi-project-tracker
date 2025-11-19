@@ -9,7 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 class AIAgentService {
   constructor() {
     this.apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
-    this.defaultModel = process.env.AI_MODEL || 'claude-sonnet-4-20250514';
+    this.defaultModel = process.env.AI_MODEL || 'claude-sonnet-4-5-20250929';
   }
 
   /**
