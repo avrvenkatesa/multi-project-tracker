@@ -481,56 +481,92 @@ class AIAgentService {
   }
 
   /**
+   * Debug citation context - helps troubleshoot citation issues
+   */
+  debugCitationContext(context) {
+    const sources = this.extractAvailableSourceTitles(context);
+    console.log('=== CITATION DEBUG ===');
+    console.log(`Total sources available: ${sources.length}`);
+    console.log('Sample sources:', sources.slice(0, 5));
+    console.log('PKG nodes:', context.pkgNodes?.length || 0);
+    console.log('RAG documents:', context.ragDocuments?.length || 0);
+    console.log('======================');
+  }
+
+  /**
    * Build grounded prompt with citation instructions
-   * ENHANCED: Shows actual available sources from context for concrete examples
+   * ENHANCED: Ultra-explicit with visual separators and concrete examples
    */
   buildGroundedPrompt(userPrompt, context, agentType) {
-    // Extract actual available source titles for concrete examples
+    // Extract actual available source titles
     const availableSources = this.extractAvailableSourceTitles(context);
 
-    // Build the sources list for the prompt (show up to 10)
+    // Build concrete examples using actual sources from context
+    const concreteExamples = availableSources.slice(0, 3).map(source =>
+      `✓ "This information comes from the project [Source: ${source}]."`
+    ).join('\n');
+
+    // Build the sources list with visual separators
     const sourcesListText = availableSources.length > 0
-      ? `\nAVAILABLE SOURCES IN THIS PROJECT:\n${availableSources.slice(0, 10).map(s => `- "${s}"`).join('\n')}\n${availableSources.length > 10 ? `... and ${availableSources.length - 10} more sources\n` : ''}`
+      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAVAILABLE SOURCES (use these exact titles):\n${availableSources.slice(0, 15).map((s, i) => `${i + 1}. "${s}"`).join('\n')}\n${availableSources.length > 15 ? `... and ${availableSources.length - 15} more sources\n` : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
       : '';
 
-    const systemPrompt = `You are an AI project management assistant with access to the project's knowledge graph and documentation.
+    const systemPrompt = `You are an AI project management assistant.
 
-CRITICAL CITATION REQUIREMENTS:
-You MUST cite EVERY fact using the EXACT format: [Source: Title]
+⚠️ CRITICAL REQUIREMENT - READ CAREFULLY ⚠️
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+YOU MUST ADD A CITATION AFTER EVERY SINGLE FACT OR CLAIM.
+
+The citation format is: [Source: Title]
+
+NO EXCEPTIONS. NO EXCUSES.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${sourcesListText}
-CITATION FORMAT (MANDATORY):
-- Use [Source: Title] immediately after EACH claim or fact
-- Use the exact titles from the available sources listed above
-- Place the citation at the END of the sentence, before the period
 
-CORRECT citation examples:
-✓ "The project uses a 7-step migration approach [Source: Migration Strategy]."
-✓ "Testing environments will be isolated [Source: Infrastructure Setup Task]."
-✓ "The team identified 3 critical risks [Source: Risk Assessment Meeting]."
+📋 CITATION RULES (MANDATORY):
 
-INCORRECT citation examples (DO NOT use these):
-✗ "Context: This approach was chosen..." (no citation!)
-✗ "Source: Task mentions..." (wrong format!)
-✗ "Key Action: Sultan is executing..." (no citation!)
-✗ Writing source info as markdown headers or bullets without citations
-✗ ## Decisions Made (no citations!)
+1. EVERY factual statement MUST end with [Source: Title]
+2. Use the EXACT titles from the "AVAILABLE SOURCES" list above
+3. Place citation at the END of each sentence with a fact
+4. DO NOT write responses without citations
+5. DO NOT use markdown headers without citations for the facts under them
+6. DO NOT use bullet points without citations after each point
 
-MANDATORY RULES:
-1. EVERY sentence with a factual claim MUST have [Source: ...] citation
-2. Use ONLY the bracket format [Source: Title] - no other source descriptions
-3. Use exact titles from the AVAILABLE SOURCES list above
-4. Base responses ONLY on provided context below
-5. If information is missing from context, say "I don't have information about that"
-6. DO NOT use markdown headers without citations after each point
+✅ CORRECT EXAMPLES:
+${concreteExamples || `✓ "The migration uses 7 steps [Source: Migration Strategy]."\n✓ "Three risks were identified [Source: Risk Assessment]."`}
+
+❌ WRONG EXAMPLES (DO NOT DO THIS):
+✗ "The project uses a 7-step migration approach." (MISSING CITATION!)
+✗ "## Decision: Use AWS" (MISSING CITATION!)
+✗ "- Status: Done" (MISSING CITATION!)
+✗ "Context: This was chosen..." (MISSING CITATION!)
+
+🎯 YOUR TASK:
+For EVERY fact you state, add [Source: Title] immediately after it.
+If you don't have a source for something, DON'T STATE IT.
 
 Agent Mode: ${agentType}
 
-Context:
-${this.buildContextText(context)}`;
+📚 Context (cite these sources):
+${this.buildContextText(context)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ REMINDER: ADD [Source: Title] AFTER EVERY FACT ⚠️
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
     const wrappedUserPrompt = `${userPrompt}
 
-CRITICAL REMINDER: You MUST cite EVERY fact using [Source: Title] format. Use the exact source titles listed in the system prompt. Every factual statement needs a citation.`;
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ CRITICAL REMINDER ⚠️
+You MUST include [Source: Title] after EVERY fact in your response.
+Use the exact source titles from the AVAILABLE SOURCES list.
+
+Example format for your response:
+"The project completed the VM inventory task [Source: Create VM Inventory]. The RPO and RTO requirements were defined [Source: Define RPO and RTO Requirements]."
+
+DO NOT forget citations. Every fact needs one.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
     return {
       system: systemPrompt,
