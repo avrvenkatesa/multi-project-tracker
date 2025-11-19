@@ -67,26 +67,33 @@ class AIAgentService {
 
   /**
    * Perform RAG search for relevant documents
+   * ENHANCED: Uses ts_headline for snippets with highlighted keywords
    */
-  async performRAGSearch(projectId, userPrompt) {
+  async performRAGSearch(projectId, userPrompt, limit = 10) {
+    const searchQuery = this.prepareSearchQuery(userPrompt);
+
     const result = await pool.query(`
       SELECT
         id,
+        title,
         source_type,
         source_id,
-        title,
-        content,
+        ts_headline('english', content, plainto_tsquery('english', $1),
+          'MaxWords=50, MinWords=25, HighlightAll=false') as snippet,
+        ts_rank(content_tsv, plainto_tsquery('english', $1)) as relevance,
         meta,
-        ts_rank(content_tsv, to_tsquery('english', $1)) as relevance
+        created_at
       FROM rag_documents
       WHERE project_id = $2
-        AND content_tsv @@ to_tsquery('english', $1)
+        AND content_tsv @@ plainto_tsquery('english', $1)
       ORDER BY relevance DESC
-      LIMIT 10
-    `, [this.prepareSearchQuery(userPrompt), projectId]);
+      LIMIT $3
+    `, [searchQuery, projectId, limit]);
 
     return {
-      documents: result.rows
+      documents: result.rows,
+      searchQuery: searchQuery,
+      resultCount: result.rows.length
     };
   }
 
@@ -160,20 +167,21 @@ class AIAgentService {
   /**
    * Call LLM with assembled context
    */
+  /**
+   * Call LLM with grounded context
+   * ENHANCED: Uses grounded prompts with citation extraction
+   */
   async callLLM({ sessionId, context, userPrompt, agentType }) {
     const startTime = Date.now();
 
-    // Build system prompt based on agent type
-    const systemPrompt = this.buildSystemPrompt(agentType);
-
-    // Build context section
-    const contextText = this.buildContextText(context);
+    // Build grounded prompt with citation instructions
+    const { system, user } = this.buildGroundedPrompt(userPrompt, context, agentType);
 
     // Prepare messages for LLM
     const messages = [
       {
         role: 'user',
-        content: `${contextText}\n\nUser Question: ${userPrompt}`
+        content: user
       }
     ];
 
@@ -183,10 +191,10 @@ class AIAgentService {
     try {
       // Call LLM API (example with Anthropic Claude)
       if (this.defaultModel.startsWith('claude')) {
-        response = await this.callClaude(systemPrompt, messages);
+        response = await this.callClaude(system, messages);
         tokensUsed = response.usage?.input_tokens + response.usage?.output_tokens || 0;
       } else if (this.defaultModel.startsWith('gpt')) {
-        response = await this.callOpenAI(systemPrompt, messages);
+        response = await this.callOpenAI(system, messages);
         tokensUsed = response.usage?.total_tokens || 0;
       } else {
         throw new Error(`Unsupported model: ${this.defaultModel}`);
@@ -194,20 +202,28 @@ class AIAgentService {
 
       const latency = Date.now() - startTime;
 
+      // Extract citations from response
+      const citations = this.extractCitations(response.content, context);
+
       // Log to audit trail
       await this.logAction({
         sessionId,
-        actionType: 'llm_call',
-        actionDescription: `Called ${this.defaultModel}`,
-        inputData: { userPrompt, contextDocsCount: context.ragDocuments.length },
-        outputData: { responseLength: response.content?.length || 0 },
+        actionType: 'llm_call_grounded',
+        actionDescription: `Called ${this.defaultModel} with PKG/RAG grounding`,
+        inputData: { userPrompt, contextSize: system.length },
+        outputData: { 
+          responseLength: response.content?.length || 0,
+          tokensUsed,
+          citationCount: citations.length
+        },
         executionTimeMs: latency
       });
 
       return {
         response: response.content,
         tokensUsed,
-        latency
+        latency,
+        citations
       };
     } catch (error) {
       console.error('LLM call failed:', error);
@@ -288,9 +304,10 @@ class AIAgentService {
   }
 
   /**
-   * Complete agent session
+   * Complete agent session with citations
+   * ENHANCED: Now accepts and stores citations as evidence
    */
-  async completeSession({ sessionId, response, confidenceScore, pkgNodesUsed, ragDocsUsed, tokensUsed, latency }) {
+  async completeSession({ sessionId, response, confidenceScore, pkgNodesUsed, ragDocsUsed, tokensUsed, latency, citations }) {
     const result = await pool.query(`
       UPDATE ai_agent_sessions
       SET
@@ -306,7 +323,93 @@ class AIAgentService {
       RETURNING *
     `, [response, confidenceScore, pkgNodesUsed, ragDocsUsed, tokensUsed, latency, sessionId]);
 
+    // Store citations as evidence
+    if (citations && citations.length > 0) {
+      await this.storeCitations(sessionId, citations);
+    }
+
     return result.rows[0];
+  }
+
+  /**
+   * Extract citations from AI response
+   * Parses [Source: ...] format and links to PKG/RAG entities
+   */
+  extractCitations(response, context) {
+    const citations = [];
+    const citationRegex = /\[Source:\s*([^\]]+)\]/g;
+    let match;
+
+    while ((match = citationRegex.exec(response)) !== null) {
+      const sourceRef = match[1].trim();
+
+      // Find matching PKG node
+      const pkgNode = context.pkgNodes.find(node => {
+        const attrs = node.attrs || {};
+        return attrs.decision_id === sourceRef ||
+               attrs.meeting_id === sourceRef ||
+               attrs.risk_id === sourceRef ||
+               attrs.title === sourceRef ||
+               attrs.issue_id === sourceRef;
+      });
+
+      // Find matching RAG document
+      const ragDoc = context.ragDocuments.find(doc =>
+        doc.title === sourceRef ||
+        (doc.meta && doc.meta.meeting_id === sourceRef)
+      );
+
+      if (pkgNode) {
+        citations.push({
+          type: 'pkg_node',
+          sourceRef,
+          nodeId: pkgNode.id,
+          nodeType: pkgNode.type,
+          sourceTable: pkgNode.source_table,
+          sourceId: pkgNode.source_id
+        });
+      } else if (ragDoc) {
+        citations.push({
+          type: 'rag_document',
+          sourceRef,
+          docId: ragDoc.id,
+          sourceType: ragDoc.source_type,
+          sourceId: ragDoc.source_id
+        });
+      }
+    }
+
+    return citations;
+  }
+
+  /**
+   * Store citations as evidence links
+   * Creates evidence records linking AI response → source entities
+   */
+  async storeCitations(sessionId, citations) {
+    for (const citation of citations) {
+      if (citation.type === 'pkg_node') {
+        // Create evidence record linking AI response → PKG entity
+        try {
+          await pool.query(`
+            INSERT INTO evidence (
+              entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `, [
+            'ai_session',
+            sessionId,
+            'citation',
+            citation.sourceTable,
+            citation.sourceId,
+            citation.sourceRef,
+            'high'
+          ]);
+        } catch (error) {
+          console.error('Failed to store citation:', error);
+          // Continue with next citation even if one fails
+        }
+      }
+    }
   }
 
   /**
@@ -324,6 +427,31 @@ class AIAgentService {
   /**
    * Helper: Build system prompt based on agent type
    */
+  /**
+   * Build grounded prompt with citation instructions
+   * ENHANCED: Explicit grounding and citation requirements
+   */
+  buildGroundedPrompt(userPrompt, context, agentType) {
+    const systemPrompt = `You are an AI project management assistant with access to the project's knowledge graph and documentation.
+
+IMPORTANT INSTRUCTIONS:
+1. Base your responses ONLY on the provided context
+2. Cite your sources using [Source: title] format (e.g., [Source: Sprint Planning Meeting])
+3. If the context doesn't contain relevant information, say "I don't have enough information to answer that"
+4. Be specific and reference actual entities from the context
+5. Use clear, professional language
+
+Agent Mode: ${agentType}
+
+Context:
+${this.buildContextText(context)}`;
+
+    return {
+      system: systemPrompt,
+      user: userPrompt
+    };
+  }
+
   buildSystemPrompt(agentType) {
     const prompts = {
       decision_assistant: `You are an AI Project Manager assistant specialized in architectural decisions.

@@ -49,7 +49,7 @@ router.post('/projects/:projectId/agent/chat', async (req, res) => {
       agentType
     });
 
-    // 4. Complete session
+    // 4. Complete session with citations
     const completedSession = await aiAgentService.completeSession({
       sessionId: session.session_id,
       response: llmResult.response,
@@ -57,7 +57,8 @@ router.post('/projects/:projectId/agent/chat', async (req, res) => {
       pkgNodesUsed: context.pkgNodes.map(n => n.id),
       ragDocsUsed: context.ragDocuments.map(d => d.id),
       tokensUsed: llmResult.tokensUsed,
-      latency: llmResult.latency
+      latency: llmResult.latency,
+      citations: llmResult.citations || []
     });
 
     res.json({
