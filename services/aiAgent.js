@@ -31,12 +31,45 @@ class AIAgentService {
 
   /**
    * Assemble context from PKG and RAG for LLM
+   * ENHANCED: Now uses modular helper methods for better maintainability
    */
   async assembleContext({ projectId, userPrompt, agentType }) {
     const startTime = Date.now();
 
-    // 1. RAG Search - Find relevant documents
-    const ragResults = await pool.query(`
+    try {
+      // 1. RAG Search - Find relevant documents
+      const ragResults = await this.performRAGSearch(projectId, userPrompt);
+
+      // 2. PKG Query - Get relevant nodes
+      const pkgResults = await this.queryPKG(projectId, userPrompt, agentType);
+
+      // 3. PKG Edges - Get relationships between entities
+      const pkgEdges = await this.queryPKGEdges(projectId, pkgResults.nodeIds);
+
+      const executionTime = Date.now() - startTime;
+
+      return {
+        ragDocuments: ragResults.documents,
+        pkgNodes: pkgResults.nodes,
+        pkgEdges: pkgEdges,
+        metadata: {
+          executionTimeMs: executionTime,
+          ragDocsCount: ragResults.documents.length,
+          pkgNodesCount: pkgResults.nodes.length,
+          pkgEdgesCount: pkgEdges.length
+        }
+      };
+    } catch (error) {
+      console.error('Context assembly error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Perform RAG search for relevant documents
+   */
+  async performRAGSearch(projectId, userPrompt) {
+    const result = await pool.query(`
       SELECT
         id,
         source_type,
@@ -51,8 +84,27 @@ class AIAgentService {
       LIMIT 10
     `, [this.prepareSearchQuery(userPrompt), projectId]);
 
-    // 2. PKG Query - Get relevant nodes based on agent type
-    let pkgQuery = `
+    return {
+      documents: result.rows
+    };
+  }
+
+  /**
+   * Query PKG for relevant nodes based on agent type and user prompt
+   */
+  async queryPKG(projectId, userPrompt, agentType) {
+    // Agent-specific PKG type filters
+    const typeFilters = {
+      'knowledge_explorer': ['Task', 'Risk', 'Decision', 'Meeting'],
+      'decision_assistant': ['Decision', 'Risk', 'Task'],
+      'risk_detector': ['Risk', 'Task', 'Decision'],
+      'meeting_analyzer': ['Meeting', 'Decision', 'Task']
+    };
+
+    const relevantTypes = typeFilters[agentType] || ['Task', 'Risk', 'Decision'];
+
+    // Query PKG nodes with type filtering and AI priority
+    const result = await pool.query(`
       SELECT
         id,
         type,
@@ -60,56 +112,48 @@ class AIAgentService {
         source_table,
         source_id,
         created_by_ai,
-        ai_confidence
+        ai_confidence,
+        created_at
       FROM pkg_nodes
       WHERE project_id = $1
-    `;
-
-    // Filter by agent type
-    if (agentType === 'decision_assistant') {
-      pkgQuery += ` AND type IN ('Decision', 'Task', 'Risk')`;
-    } else if (agentType === 'risk_detector') {
-      pkgQuery += ` AND type IN ('Risk', 'Issue', 'Decision')`;
-    } else if (agentType === 'meeting_analyzer') {
-      pkgQuery += ` AND type IN ('Meeting', 'Decision', 'Task')`;
-    }
-
-    pkgQuery += ` ORDER BY created_at DESC LIMIT 20`;
-
-    const pkgResults = await pool.query(pkgQuery, [projectId]);
-
-    // 3. Get PKG edges for relationships
-    const pkgNodeIds = pkgResults.rows.map(n => n.id);
-    let edgeResults = { rows: [] };
-
-    if (pkgNodeIds.length > 0) {
-      edgeResults = await pool.query(`
-        SELECT
-          id,
-          type,
-          from_node_id,
-          to_node_id,
-          attrs
-        FROM pkg_edges
-        WHERE project_id = $1
-          AND (from_node_id = ANY($2) OR to_node_id = ANY($2))
-        LIMIT 50
-      `, [projectId, pkgNodeIds]);
-    }
-
-    const executionTime = Date.now() - startTime;
+        AND type = ANY($2)
+      ORDER BY
+        CASE
+          WHEN created_by_ai THEN 1
+          ELSE 0
+        END DESC,
+        created_at DESC
+      LIMIT 50
+    `, [projectId, relevantTypes]);
 
     return {
-      ragDocuments: ragResults.rows,
-      pkgNodes: pkgResults.rows,
-      pkgEdges: edgeResults.rows,
-      metadata: {
-        executionTimeMs: executionTime,
-        ragDocsCount: ragResults.rows.length,
-        pkgNodesCount: pkgResults.rows.length,
-        pkgEdgesCount: edgeResults.rows.length
-      }
+      nodes: result.rows,
+      nodeIds: result.rows.map(n => n.id)
     };
+  }
+
+  /**
+   * Query PKG edges for relationships between entities
+   */
+  async queryPKGEdges(projectId, nodeIds) {
+    if (nodeIds.length === 0) return [];
+
+    const result = await pool.query(`
+      SELECT
+        id,
+        type,
+        from_node_id,
+        to_node_id,
+        attrs,
+        confidence,
+        evidence_quote
+      FROM pkg_edges
+      WHERE project_id = $1
+        AND (from_node_id = ANY($2) OR to_node_id = ANY($2))
+      LIMIT 50
+    `, [projectId, nodeIds]);
+
+    return result.rows;
   }
 
   /**
@@ -329,35 +373,90 @@ Always explain your reasoning and cite sources.`
 
   /**
    * Helper: Build context text for LLM
+   * ENHANCED: Now formats PKG nodes by type with better structure
    */
   buildContextText(context) {
     let text = '# Project Context\n\n';
 
-    // Add RAG documents
-    if (context.ragDocuments.length > 0) {
-      text += '## Relevant Documents\n\n';
-      context.ragDocuments.forEach((doc, idx) => {
-        text += `### Document ${idx + 1} (${doc.source_type})\n`;
-        text += `${doc.content_text.substring(0, 1000)}...\n\n`;
+    // 1. PKG Nodes (grouped by type)
+    if (context.pkgNodes && context.pkgNodes.length > 0) {
+      const nodesByType = {};
+      context.pkgNodes.forEach(node => {
+        if (!nodesByType[node.type]) {
+          nodesByType[node.type] = [];
+        }
+        nodesByType[node.type].push(node);
+      });
+
+      Object.keys(nodesByType).forEach(type => {
+        text += `## ${type}s\n\n`;
+        nodesByType[type].forEach(node => {
+          // Guard against null/undefined attrs
+          const attrs = node.attrs || {};
+          
+          // Extract title/identifier from attrs
+          const title = attrs.title || 
+                       attrs.risk_id || 
+                       attrs.decision_id || 
+                       attrs.issue_id ||
+                       `${type} #${node.id}`;
+          
+          text += `**${title}**\n`;
+          
+          // Add description if available
+          if (attrs.description) {
+            const desc = attrs.description.substring(0, 200);
+            text += `  ${desc}${attrs.description.length > 200 ? '...' : ''}\n`;
+          }
+          
+          // Add status if available
+          if (attrs.status) {
+            text += `  Status: ${attrs.status}\n`;
+          }
+          
+          // Add priority if available
+          if (attrs.priority) {
+            text += `  Priority: ${attrs.priority}\n`;
+          }
+          
+          // Add AI detection info
+          if (node.created_by_ai) {
+            text += `  _(AI-detected, confidence: ${node.ai_confidence})_\n`;
+          }
+          
+          text += '\n';
+        });
       });
     }
 
-    // Add PKG nodes
-    if (context.pkgNodes.length > 0) {
-      text += '## Project Knowledge Graph Nodes\n\n';
-      context.pkgNodes.forEach((node, idx) => {
-        text += `### Node ${idx + 1}: ${node.type}\n`;
-        text += `Attributes: ${JSON.stringify(node.attrs, null, 2)}\n\n`;
-      });
-    }
-
-    // Add PKG edges
-    if (context.pkgEdges.length > 0) {
+    // 2. PKG Relationships
+    if (context.pkgEdges && context.pkgEdges.length > 0) {
       text += '## Relationships\n\n';
-      context.pkgEdges.forEach((edge, idx) => {
-        text += `- ${edge.type}: Node ${edge.from_node_id} → Node ${edge.to_node_id}\n`;
+      context.pkgEdges.forEach(edge => {
+        text += `- **${edge.type}**: ${edge.from_node_id} → ${edge.to_node_id}`;
+        
+        // Add confidence if available
+        if (edge.confidence) {
+          text += ` (confidence: ${edge.confidence})`;
+        }
+        
+        text += '\n';
+        
+        // Add evidence quote if available
+        if (edge.evidence_quote) {
+          text += `  Evidence: "${edge.evidence_quote}"\n`;
+        }
       });
       text += '\n';
+    }
+
+    // 3. RAG Documents (relevant excerpts)
+    if (context.ragDocuments && context.ragDocuments.length > 0) {
+      text += '## Relevant Documents\n\n';
+      context.ragDocuments.forEach((doc, idx) => {
+        text += `### ${idx + 1}. ${doc.metadata?.title || 'Document'} (${doc.source_type})\n`;
+        text += `${doc.content_text.substring(0, 300)}...\n\n`;
+      });
     }
 
     return text;
