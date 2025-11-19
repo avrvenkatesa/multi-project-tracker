@@ -421,6 +421,28 @@ class AIAgentDashboard {
     }
   }
 
+  /**
+   * Fetch citations for a session (for loading historical messages)
+   * Citations are also delivered via SSE during streaming
+   */
+  async fetchSessionCitations(sessionId) {
+    try {
+      const response = await fetch(`/api/aipm/sessions/${sessionId}/citations`, {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch session citations');
+      }
+
+      const data = await response.json();
+      return data.citations || [];
+    } catch (error) {
+      console.error('Error fetching session citations:', error);
+      return [];
+    }
+  }
+
   async loadRecentSessions() {
     try {
       const response = await fetch(`/api/aipm/projects/${this.currentProjectId}/agent/sessions?limit=5`);
