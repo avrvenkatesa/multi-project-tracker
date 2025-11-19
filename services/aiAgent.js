@@ -372,9 +372,9 @@ class AIAgentService {
         citations.push({
           type: 'rag_document',
           sourceRef,
-          docId: ragDoc.id,
+          docId: ragDoc.id,           // Primary key of rag_documents table
           sourceType: ragDoc.source_type,
-          sourceId: ragDoc.source_id
+          sourceId: ragDoc.id          // Use document ID as source_id for evidence linking
         });
       }
     }
@@ -385,12 +385,13 @@ class AIAgentService {
   /**
    * Store citations as evidence links
    * Creates evidence records linking AI response → source entities
+   * ENHANCED: Now stores both PKG node and RAG document citations
    */
   async storeCitations(sessionId, citations) {
     for (const citation of citations) {
-      if (citation.type === 'pkg_node') {
-        // Create evidence record linking AI response → PKG entity
-        try {
+      try {
+        if (citation.type === 'pkg_node') {
+          // Create evidence record linking AI response → PKG entity
           await pool.query(`
             INSERT INTO evidence (
               entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence
@@ -404,10 +405,26 @@ class AIAgentService {
             citation.sourceRef,
             'high'
           ]);
-        } catch (error) {
-          console.error('Failed to store citation:', error);
-          // Continue with next citation even if one fails
+        } else if (citation.type === 'rag_document') {
+          // Create evidence record linking AI response → RAG document
+          // Use docId (primary key) for proper linkage
+          await pool.query(`
+            INSERT INTO evidence (
+              entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `, [
+            'ai_session',
+            sessionId,
+            'citation',
+            'rag_documents',
+            citation.docId,              // Use document primary key for proper linkage
+            citation.sourceRef,
+            'high'
+          ]);
         }
+      } catch (error) {
+        console.error('Failed to store citation:', error);
+        // Continue with next citation even if one fails
       }
     }
   }
@@ -585,8 +602,10 @@ Always explain your reasoning and cite sources.`
       context.ragDocuments.forEach((doc, idx) => {
         const title = doc.title || doc.meta?.title || 'Document';
         text += `### ${idx + 1}. ${title} (${doc.source_type})\n`;
-        if (doc.content) {
-          text += `${doc.content.substring(0, 300)}...\n\n`;
+        // Use snippet from ts_headline (highlighted excerpts) if available, otherwise fallback to content
+        const content = doc.snippet || doc.content;
+        if (content) {
+          text += `${content.substring(0, 300)}...\n\n`;
         }
       });
     }
