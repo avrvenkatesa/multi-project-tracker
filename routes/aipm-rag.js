@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const { pool } = require('../db');
 const { extractTextFromFile } = require('../services/file-processor');
+const { embedDocument, hybridSearch } = require('../services/embeddingService');
 
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
@@ -91,6 +92,7 @@ router.post('/aipm/projects/:projectId/rag/docs',
       const content = await extractTextFromFile(file.path, file.mimetype);
 
       // Create RAG document
+      const docTitle = title || file.originalname;
       const result = await pool.query(`
         INSERT INTO rag_documents (project_id, source_type, title, content, meta)
         VALUES ($1, $2, $3, $4, $5)
@@ -98,7 +100,7 @@ router.post('/aipm/projects/:projectId/rag/docs',
       `, [
         projectId,
         source_type,
-        title || file.originalname,
+        docTitle,
         content,
         JSON.stringify({
           filename: file.originalname,
@@ -108,8 +110,15 @@ router.post('/aipm/projects/:projectId/rag/docs',
         })
       ]);
 
+      const documentId = result.rows[0].id;
+
+      // Generate and store embedding asynchronously (don't block response)
+      embedDocument(documentId, `${docTitle}\n\n${content}`).catch(err => {
+        console.error(`Failed to generate embedding for document ${documentId}:`, err);
+      });
+
       res.status(201).json({
-        id: result.rows[0].id,
+        id: documentId,
         projectId: result.rows[0].project_id,
         sourceType: result.rows[0].source_type,
         sourceId: result.rows[0].source_id,

@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { pool } = require('../db');
 const { extractTextFromFile } = require('../services/file-processor');
+const { embedDocument } = require('../services/embeddingService');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -118,8 +119,10 @@ router.post('/issues/:issueId/attachments', upload.single('file'), async (req, r
     const attachment = insertResult.rows[0];
 
     // If text was extracted successfully, index into RAG
+    let ragDocumentId = null;
     if (extractedText && extractedText.trim().length > 0) {
-      await client.query(`
+      const docTitle = `📎 ${file.originalname}`;
+      const ragResult = await client.query(`
         INSERT INTO rag_documents (
           project_id,
           source_type,
@@ -131,11 +134,12 @@ router.post('/issues/:issueId/attachments', upload.single('file'), async (req, r
           uploaded_by,
           meta
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id
       `, [
         issue.project_id,
         'attachment',
         attachment.id,
-        `📎 ${file.originalname}`,
+        docTitle,
         extractedText,
         extractedText.split(/\s+/).length,
         file.originalname,
@@ -149,9 +153,18 @@ router.post('/issues/:issueId/attachments', upload.single('file'), async (req, r
           attachment_id: attachment.id
         })
       ]);
+      ragDocumentId = ragResult.rows[0].id;
     }
 
     await client.query('COMMIT');
+
+    // Generate embedding asynchronously after transaction commit (don't block response)
+    if (ragDocumentId) {
+      const docTitle = `📎 ${file.originalname}`;
+      embedDocument(ragDocumentId, `${docTitle}\n\n${extractedText}`).catch(err => {
+        console.error(`Failed to generate embedding for RAG document ${ragDocumentId}:`, err);
+      });
+    }
 
     res.json({
       id: attachment.id,
@@ -255,8 +268,10 @@ router.post('/action-items/:actionItemId/attachments', upload.single('file'), as
     const attachment = insertResult.rows[0];
 
     // If text was extracted successfully, index into RAG
+    let ragDocumentId = null;
     if (extractedText && extractedText.trim().length > 0) {
-      await client.query(`
+      const docTitle = `📎 ${file.originalname}`;
+      const ragResult = await client.query(`
         INSERT INTO rag_documents (
           project_id,
           source_type,
@@ -268,11 +283,12 @@ router.post('/action-items/:actionItemId/attachments', upload.single('file'), as
           uploaded_by,
           meta
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id
       `, [
         actionItem.project_id,
         'attachment',
         attachment.id,
-        `📎 ${file.originalname}`,
+        docTitle,
         extractedText,
         extractedText.split(/\s+/).length,
         file.originalname,
@@ -286,9 +302,18 @@ router.post('/action-items/:actionItemId/attachments', upload.single('file'), as
           attachment_id: attachment.id
         })
       ]);
+      ragDocumentId = ragResult.rows[0].id;
     }
 
     await client.query('COMMIT');
+
+    // Generate embedding asynchronously after transaction commit (don't block response)
+    if (ragDocumentId) {
+      const docTitle = `📎 ${file.originalname}`;
+      embedDocument(ragDocumentId, `${docTitle}\n\n${extractedText}`).catch(err => {
+        console.error(`Failed to generate embedding for RAG document ${ragDocumentId}:`, err);
+      });
+    }
 
     res.json({
       id: attachment.id,
