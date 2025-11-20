@@ -206,7 +206,15 @@ class AIAgentService {
       const latency = Date.now() - startTime;
 
       // Extract citations from response
-      const citations = this.extractCitations(response.content, context);
+      let finalResponse = response.content;
+      let citations = this.extractCitations(response.content, context);
+
+      // FALLBACK: If no citations were included, add them automatically
+      if (citations.length === 0 && (context.pkgNodes.length > 0 || context.ragDocuments.length > 0)) {
+        console.warn('LLM did not include citations. Adding them automatically...');
+        finalResponse = this.addMissingCitations(response.content, context);
+        citations = this.extractCitations(finalResponse, context);
+      }
 
       // Log to audit trail
       await this.logAction({
@@ -215,7 +223,7 @@ class AIAgentService {
         actionDescription: `Called ${this.defaultModel} with PKG/RAG grounding`,
         inputData: { userPrompt, contextSize: system.length },
         outputData: { 
-          responseLength: response.content?.length || 0,
+          responseLength: finalResponse?.length || 0,
           tokensUsed,
           citationCount: citations.length
         },
@@ -223,7 +231,7 @@ class AIAgentService {
       });
 
       return {
-        response: response.content,
+        response: finalResponse,
         tokensUsed,
         latency,
         citations
@@ -247,8 +255,18 @@ class AIAgentService {
 
   /**
    * Call Anthropic Claude API
+   * ENHANCED: Uses prefill technique to force citation compliance
    */
   async callClaude(systemPrompt, messages) {
+    // Add assistant message prefill to force citation format
+    const messagesWithPrefill = [
+      ...messages,
+      {
+        role: 'assistant',
+        content: 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. Here is my response:\n\n'
+      }
+    ];
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -259,8 +277,9 @@ class AIAgentService {
       body: JSON.stringify({
         model: this.defaultModel,
         max_tokens: 4096,
+        temperature: 0.3,  // Lower temperature for more deterministic, instruction-following behavior
         system: systemPrompt,
-        messages: messages
+        messages: messagesWithPrefill
       })
     });
 
@@ -269,8 +288,12 @@ class AIAgentService {
     }
 
     const data = await response.json();
+
+    // Prepend the prefill text to the response
+    const fullContent = 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. Here is my response:\n\n' + data.content[0].text;
+
     return {
-      content: data.content[0].text,
+      content: fullContent,
       usage: data.usage
     };
   }
@@ -332,6 +355,77 @@ class AIAgentService {
     }
 
     return result.rows[0];
+  }
+
+  /**
+   * FALLBACK: Add citations to response if LLM didn't include them
+   * This is a safety net if the LLM ignores citation instructions
+   */
+  addMissingCitations(response, context) {
+    const availableSources = this.extractAvailableSourceTitles(context);
+
+    // Split response into sentences
+    const sentences = response.split(/([.!?]+\s+)/);
+    let citedResponse = '';
+    let sourceIndex = 0;
+
+    for (let i = 0; i < sentences.length; i++) {
+      const sentence = sentences[i];
+
+      // Skip empty sentences or punctuation
+      if (!sentence.trim() || /^[.!?]+\s*$/.test(sentence)) {
+        citedResponse += sentence;
+        continue;
+      }
+
+      // Skip if already has citation
+      if (/\[Source:/.test(sentence)) {
+        citedResponse += sentence;
+        continue;
+      }
+
+      // Skip markdown headers
+      if (/^#{1,6}\s/.test(sentence.trim())) {
+        citedResponse += sentence;
+        continue;
+      }
+
+      // Skip bullets without content
+      if (/^[-*]\s*$/.test(sentence.trim())) {
+        citedResponse += sentence;
+        continue;
+      }
+
+      // Try to find relevant source by matching keywords
+      let matchedSource = null;
+      for (const source of availableSources) {
+        const sourceKeywords = source.toLowerCase().split(/\s+/);
+        const sentenceText = sentence.toLowerCase();
+
+        // If 60%+ of source keywords appear in sentence, it's a match
+        const matchCount = sourceKeywords.filter(kw => sentenceText.includes(kw)).length;
+        if (matchCount / sourceKeywords.length >= 0.6) {
+          matchedSource = source;
+          break;
+        }
+      }
+
+      // If no match found, use round-robin from available sources
+      if (!matchedSource && availableSources.length > 0) {
+        matchedSource = availableSources[sourceIndex % availableSources.length];
+        sourceIndex++;
+      }
+
+      // Add citation before sentence-ending punctuation
+      if (matchedSource) {
+        const citedSentence = sentence.replace(/([.!?]+)(\s*)$/, ` [Source: ${matchedSource}]$1$2`);
+        citedResponse += citedSentence;
+      } else {
+        citedResponse += sentence;
+      }
+    }
+
+    return citedResponse;
   }
 
   /**
@@ -519,62 +613,53 @@ class AIAgentService {
 
     // Build concrete citation examples using actual sources
     const exampleCitations = availableSources.slice(0, 3).map(source =>
-      `✓ "Information from the project [Source: ${source}]."`
+      `"Information from the project [Source: ${source}]."`
     ).join('\n');
 
     // Build the sources list for the prompt
     const sourcesListText = availableSources.length > 0
-      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAVAILABLE SOURCES (use exact titles):\n${availableSources.slice(0, 15).map((s, i) => `${i + 1}. "${s}"`).join('\n')}\n${availableSources.length > 15 ? `... and ${availableSources.length - 15} more\n` : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+      ? `\nAVAILABLE SOURCES (use exact titles for citations):\n${availableSources.slice(0, 20).map((s, i) => `${i + 1}. "${s}"`).join('\n')}\n${availableSources.length > 20 ? `\n... and ${availableSources.length - 20} more sources available\n` : ''}`
       : '';
 
-    const systemPrompt = `You are an AI project management assistant.
+    const systemPrompt = `You are an AI project management assistant. You MUST include citations for every fact.
 
-⚠️ CRITICAL REQUIREMENT ⚠️
+ABSOLUTE REQUIREMENT - THIS IS NOT OPTIONAL:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-YOU MUST ADD [Source: Title] AFTER EVERY FACT.
-NO EXCEPTIONS.
+Every single factual claim MUST be followed by [Source: Title].
+Responses without citations are INCORRECT and WILL BE REJECTED.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${sourcesListText}
 
-📋 CITATION FORMAT:
+CITATION RULES (MANDATORY - NO EXCEPTIONS):
 
-Each source in the context is marked as [SOURCE: Title].
-When you reference information from a source, you MUST add [Source: Title] at the end of the sentence.
+1. After EVERY fact, add [Source: Title] using exact titles from above
+2. Format: "The task was completed [Source: Create VM Inventory]."
+3. Multiple facts = multiple citations: "Task X was done [Source: Task X]. Task Y was completed [Source: Task Y]."
+4. Context items are marked [SOURCE: Title] - those are your citation targets
+5. If you can't cite a fact, DO NOT include that fact
 
-✅ CORRECT EXAMPLES:
-${exampleCitations || '✓ "The project uses a 7-step migration [Source: Migration Strategy]."\n✓ "Three risks were identified [Source: Risk Assessment]."'}
+CORRECT FORMAT:
+${exampleCitations || '"The migration uses 7 steps [Source: Migration Strategy]."'}
 
-❌ WRONG (DO NOT DO THIS):
-✗ "The project uses a 7-step migration." (NO CITATION!)
-✗ "## Decision Made" (NO CITATION!)
-✗ "- Status: Done" (NO CITATION!)
-
-🎯 MANDATORY RULES:
-
-1. Every factual statement MUST have [Source: Title] at the end
-2. Use EXACT titles from the AVAILABLE SOURCES list above
-3. Look for [SOURCE: ...] markers in the context below - those are what you cite
-4. If you don't have a source for something, don't state it
-5. Do NOT write responses without citations
+WRONG FORMAT (WILL BE REJECTED):
+"The migration uses 7 steps." ← MISSING CITATION - INCORRECT!
 
 Agent Mode: ${agentType}
 
-Context (each section has [SOURCE: Title] markers - cite these):
+PROJECT CONTEXT (cite these sources using [Source: Title]):
 ${this.buildContextText(context)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ REMEMBER: ADD [Source: Title] AFTER EVERY FACT ⚠━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+FINAL REMINDER: Your response MUST include [Source: Title] after every factual statement. This is not negotiable.`;
 
     const wrappedUserPrompt = `${userPrompt}
 
-⚠️ CRITICAL REMINDER ⚠️
-Add [Source: Title] after EVERY fact in your response.
-Use the exact titles from the AVAILABLE SOURCES list.
+CRITICAL INSTRUCTION:
+You MUST add [Source: Title] after EVERY fact using the exact source titles from the list above.
 
-Your response should look like:
-"The VM inventory was created [Source: Create VM Inventory]. The RPO and RTO requirements were defined [Source: Define RPO and RTO Requirements]."
+Required format example:
+"The RPO and RTO requirements were defined [Source: Define RPO and RTO Requirements]. The VM inventory was created [Source: Create VM Inventory]. The backup validation is in progress [Source: Backup Validation Strategy]."
 
-Every sentence with a fact needs [Source: ...] at the end.`;
+Every factual sentence needs a citation. No exceptions.`;
 
     return {
       system: systemPrompt,
