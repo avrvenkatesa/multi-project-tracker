@@ -9,60 +9,116 @@ const { embedDocument, hybridSearch } = require('../services/embeddingService');
 const upload = multer({ dest: 'uploads/' });
 
 // GET /api/aipm/projects/:projectId/rag/search
-// Full-text search with relevance ranking
+// Hybrid search combining keyword and semantic search (default)
+// Use ?mode=keyword for keyword-only, ?mode=semantic for semantic-only
 router.get('/aipm/projects/:projectId/rag/search', async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { q, limit = 10, source_type } = req.query;
+    const { q, limit = 10, source_type, mode = 'hybrid', keyword_weight = 0.3, semantic_weight = 0.7 } = req.query;
 
     if (!q || q.trim() === '') {
       return res.status(400).json({ error: 'Query parameter "q" is required' });
     }
 
-    // Build query with full-text search
-    let query = `
-      SELECT
-        id,
-        title,
-        source_type,
-        source_id,
-        ts_headline('english', content, plainto_tsquery('english', $1),
-          'MaxWords=50, MinWords=25, HighlightAll=false') as snippet,
-        ts_rank(content_tsv, plainto_tsquery('english', $1)) as relevance,
-        meta,
-        created_at
-      FROM rag_documents
-      WHERE project_id = $2
-        AND content_tsv @@ plainto_tsquery('english', $1)
-    `;
+    // Mode selection: keyword, semantic, or hybrid
+    if (mode === 'semantic') {
+      // Semantic-only search using embeddings
+      const { semanticSearch } = require('../services/embeddingService');
+      const results = await semanticSearch(parseInt(projectId), q, parseInt(limit), source_type || null);
+      
+      return res.json({
+        query: q,
+        mode: 'semantic',
+        count: results.length,
+        results: results.map(row => ({
+          id: row.id,
+          title: row.title,
+          sourceType: row.source_type,
+          sourceId: row.source_id,
+          content: row.content,
+          similarity: parseFloat(row.similarity),
+          meta: row.meta,
+          createdAt: row.created_at
+        }))
+      });
+    } else if (mode === 'keyword') {
+      // Keyword-only search (original full-text search)
+      let query = `
+        SELECT
+          id,
+          title,
+          source_type,
+          source_id,
+          ts_headline('english', content, plainto_tsquery('english', $1),
+            'MaxWords=50, MinWords=25, HighlightAll=false') as snippet,
+          ts_rank(content_tsv, plainto_tsquery('english', $1)) as relevance,
+          meta,
+          created_at
+        FROM rag_documents
+        WHERE project_id = $2
+          AND content_tsv @@ plainto_tsquery('english', $1)
+      `;
 
-    const params = [q, projectId];
+      const params = [q, projectId];
 
-    // Optional filter by source type
-    if (source_type) {
-      params.push(source_type);
-      query += ` AND source_type = $${params.length}`;
+      if (source_type) {
+        params.push(source_type);
+        query += ` AND source_type = $${params.length}`;
+      }
+
+      query += ` ORDER BY relevance DESC LIMIT $${params.length + 1}`;
+      params.push(limit);
+
+      const result = await pool.query(query, params);
+
+      return res.json({
+        query: q,
+        mode: 'keyword',
+        count: result.rows.length,
+        results: result.rows.map(row => ({
+          id: row.id,
+          title: row.title,
+          sourceType: row.source_type,
+          sourceId: row.source_id,
+          snippet: row.snippet,
+          relevance: parseFloat(row.relevance),
+          meta: row.meta,
+          createdAt: row.created_at
+        }))
+      });
+    } else {
+      // Hybrid search (default) - combines keyword + semantic
+      const results = await hybridSearch(
+        parseInt(projectId),
+        q,
+        parseInt(limit),
+        source_type || null,
+        parseFloat(keyword_weight),
+        parseFloat(semantic_weight)
+      );
+
+      return res.json({
+        query: q,
+        mode: 'hybrid',
+        weights: {
+          keyword: parseFloat(keyword_weight),
+          semantic: parseFloat(semantic_weight)
+        },
+        count: results.length,
+        results: results.map(row => ({
+          id: row.id,
+          title: row.title,
+          sourceType: row.source_type,
+          sourceId: row.source_id,
+          snippet: row.snippet,
+          keywordScore: parseFloat(row.keyword_score || 0),
+          semanticScore: parseFloat(row.semantic_score || 0),
+          combinedScore: parseFloat(row.combined_score || 0),
+          meta: row.meta,
+          createdAt: row.created_at
+        }))
+      });
     }
-
-    query += ` ORDER BY relevance DESC LIMIT $${params.length + 1}`;
-    params.push(limit);
-
-    const result = await pool.query(query, params);
-
-    res.json({
-      query: q,
-      count: result.rows.length,
-      results: result.rows.map(row => ({
-        id: row.id,
-        title: row.title,
-        sourceType: row.source_type,
-        sourceId: row.source_id,
-        snippet: row.snippet,
-        relevance: parseFloat(row.relevance),
-        meta: row.meta,
-        createdAt: row.created_at
-      }))
-    });
   } catch (error) {
     console.error('Error searching RAG:', error);
     res.status(500).json({ error: 'Failed to search RAG documents' });

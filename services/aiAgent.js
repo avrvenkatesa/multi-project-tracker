@@ -1,5 +1,6 @@
 const { pool } = require('../db');
 const { v4: uuidv4 } = require('uuid');
+const { hybridSearch } = require('./embeddingService');
 
 /**
  * AI Agent Service
@@ -67,33 +68,40 @@ class AIAgentService {
 
   /**
    * Perform RAG search for relevant documents
-   * ENHANCED: Uses ts_headline for snippets with highlighted keywords
+   * ENHANCED: Uses hybrid search combining keyword + semantic similarity
    */
   async performRAGSearch(projectId, userPrompt, limit = 10) {
     const searchQuery = this.prepareSearchQuery(userPrompt);
 
-    const result = await pool.query(`
-      SELECT
-        id,
-        title,
-        source_type,
-        source_id,
-        ts_headline('english', content, plainto_tsquery('english', $1),
-          'MaxWords=50, MinWords=25, HighlightAll=false') as snippet,
-        ts_rank(content_tsv, plainto_tsquery('english', $1)) as relevance,
-        meta,
-        created_at
-      FROM rag_documents
-      WHERE project_id = $2
-        AND content_tsv @@ plainto_tsquery('english', $1)
-      ORDER BY relevance DESC
-      LIMIT $3
-    `, [searchQuery, projectId, limit]);
+    // Use hybrid search (keyword + semantic) for better results
+    // Weight: 30% keyword, 70% semantic for natural language queries
+    const results = await hybridSearch(
+      projectId,
+      searchQuery,
+      limit,
+      null, // no source_type filter
+      0.3,  // keyword weight
+      0.7   // semantic weight
+    );
+
+    // Map results to match expected format
+    const documents = results.map(row => ({
+      id: row.id,
+      title: row.title,
+      source_type: row.source_type,
+      source_id: row.source_id,
+      snippet: row.snippet,
+      relevance: row.combined_score, // Use combined score as relevance
+      keyword_score: row.keyword_score,
+      semantic_score: row.semantic_score,
+      meta: row.meta,
+      created_at: row.created_at
+    }));
 
     return {
-      documents: result.rows,
+      documents: documents,
       searchQuery: searchQuery,
-      resultCount: result.rows.length
+      resultCount: documents.length
     };
   }
 
