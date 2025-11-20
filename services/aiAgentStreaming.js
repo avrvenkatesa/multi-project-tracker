@@ -136,7 +136,7 @@ class AIAgentStreaming {
               AND e.source_type = 'rag_documents'
           `, [sessionIntId]);
 
-          // Transform citations with URLs and tooltips
+          // Transform citations with URLs and tooltips (including projectId)
           enrichedCitations = result.rows.map(row => {
             const baseInfo = {
               type: row.citation_type,
@@ -169,7 +169,7 @@ class AIAgentStreaming {
                 sourceTable: row.source_type,
                 sourceId: safeSourceId,
                 title: row.attrs?.title || row.source_ref,
-                url: `${basePath}?id=${encodeURIComponent(safeSourceId)}`,
+                url: `${basePath}?projectId=${encodeURIComponent(projectId)}&id=${encodeURIComponent(safeSourceId)}`,
                 tooltip: `View ${row.node_type?.toLowerCase() || 'entity'}: ${(row.attrs?.title || row.source_ref || '').substring(0, 100)}`
               };
             } else if (row.citation_type === 'rag_document') {
@@ -181,7 +181,7 @@ class AIAgentStreaming {
                 docId: safeDocId,
                 sourceType: row.attrs?.source_type,
                 title: row.attrs?.title || row.source_ref,
-                url: `/documents.html?id=${encodeURIComponent(safeDocId)}`,
+                url: `/documents.html?projectId=${encodeURIComponent(projectId)}&id=${encodeURIComponent(safeDocId)}`,
                 tooltip: `View document: ${(row.attrs?.title || row.source_ref || '').substring(0, 100)}`
               };
             }
