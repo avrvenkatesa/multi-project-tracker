@@ -11194,35 +11194,57 @@ async function checkHashAndOpenModal() {
   
   console.log(`[HASH] Project loaded: ${currentProject.name} (ID: ${currentProject.id})`);
   
-  try {
-    // Determine item type - #task can be either issue or action-item
-    // Try issue first, if that fails try action-item
-    if (type === 'task' || type === 'issue') {
+  // Determine item type - #task can be either issue or action-item
+  // Try issue first, if that fails try action-item
+  if (type === 'task' || type === 'issue') {
+    let modalOpened = false;
+    
+    // Try as issue first
+    try {
+      console.log(`[HASH] Trying to load as issue: ${itemId}`);
+      await openEditModal(itemId, 'issue');
+      console.log(`[HASH] Successfully opened issue modal`);
+      modalOpened = true;
+    } catch (issueError) {
+      console.log(`[HASH] Not an issue (${issueError.message}), trying action-item for ID ${itemId}`);
+      
+      // Try as action-item
       try {
-        console.log(`[HASH] Trying to load as issue: ${itemId}`);
-        await openEditModal(itemId, 'issue');
-        console.log(`[HASH] Successfully opened issue modal`);
-      } catch (issueError) {
-        // If issue fetch fails, try action-item
-        console.log(`[HASH] Not an issue, trying action-item for ID ${itemId}`, issueError);
         await openEditModal(itemId, 'action-item');
         console.log(`[HASH] Successfully opened action-item modal`);
+        modalOpened = true;
+      } catch (actionError) {
+        console.error(`[HASH] Failed to load as both issue and action-item:`, actionError);
+        const errorMsg = actionError.response?.data?.error || actionError.message || 'Unknown error';
+        alert(`Failed to load item data: ${errorMsg}\n\nThe item may not exist or you may not have permission to view it.`);
+        return;
       }
-    } else if (type === 'action-item') {
-      console.log(`[HASH] Loading action-item: ${itemId}`);
-      await openEditModal(itemId, 'action-item');
-    } else if (type === 'decision' || type === 'meeting') {
-      // Decisions and meetings are stored as issues with special categories
-      console.log(`[HASH] Loading ${type}: ${itemId}`);
-      await openEditModal(itemId, 'issue');
     }
     
-    // Clear hash to prevent reopening on refresh
-    history.replaceState(null, null, ' ');
-  } catch (error) {
-    console.error('[HASH] Failed to auto-open modal:', error);
-    const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
-    alert(`Failed to load item data: ${errorMsg}\n\nThe item may not exist or you may not have permission to view it.`);
+    if (modalOpened) {
+      // Clear hash to prevent reopening on refresh
+      history.replaceState(null, null, ' ');
+    }
+  } else if (type === 'action-item') {
+    try {
+      console.log(`[HASH] Loading action-item: ${itemId}`);
+      await openEditModal(itemId, 'action-item');
+      history.replaceState(null, null, ' ');
+    } catch (error) {
+      console.error('[HASH] Failed to load action-item:', error);
+      const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
+      alert(`Failed to load action-item: ${errorMsg}`);
+    }
+  } else if (type === 'decision' || type === 'meeting') {
+    try {
+      console.log(`[HASH] Loading ${type}: ${itemId}`);
+      await openEditModal(itemId, 'issue');
+      history.replaceState(null, null, ' ');
+    } catch (error) {
+      console.error(`[HASH] Failed to load ${type}:`, error);
+      const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
+      alert(`Failed to load ${type}: ${errorMsg}`);
+    }
   }
 }
 
