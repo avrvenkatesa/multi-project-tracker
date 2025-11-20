@@ -183,7 +183,13 @@ router.get('/sessions/:sessionId/citations', async (req, res) => {
         AND e.source_type = 'rag_documents'
     `, [sessionIntId]);
 
-    // FIXED: URL generation with proper encoding and validation
+    // Get project ID from the session for URL generation
+    const sessionProjectResult = await pool.query(`
+      SELECT project_id FROM ai_agent_sessions WHERE id = $1
+    `, [sessionIntId]);
+    const projectId = sessionProjectResult.rows[0]?.project_id || '';
+
+    // FIXED: URL generation with hash fragments for auto-opening modals
     const citations = result.rows.map(row => {
       const baseInfo = {
         type: row.citation_type,
@@ -191,27 +197,45 @@ router.get('/sessions/:sessionId/citations', async (req, res) => {
       };
 
       if (row.citation_type === 'pkg_node') {
-        // SECURITY: Allowlist of valid node types and their URLs
-        const urlMap = {
-          'Decision': '/decisions.html',
-          'Meeting': '/meetings.html',
-          'Risk': '/risks.html',
-          'Task': '/issues.html'
-        };
-        
         // SECURITY: Validate and encode source ID
         const safeSourceId = String(row.source_id || '').replace(/[^\w-]/g, '');
-        const basePath = urlMap[row.node_type];
         
-        if (!basePath) {
-          console.warn(`Unknown PKG node type: ${row.node_type}`);
-          return {
-            ...baseInfo,
-            nodeType: row.node_type,
-            url: '#',
-            tooltip: 'Unknown entity type'
-          };
+        // Map node types to pages and hash fragments (matching aiAgentStreaming.js logic)
+        let basePath, hashFragment, projectParam;
+        
+        switch(row.node_type) {
+          case 'Task':
+            basePath = '/index.html';
+            projectParam = 'project';
+            hashFragment = `#task-${safeSourceId}`;
+            break;
+          case 'Risk':
+            basePath = '/risks.html';
+            projectParam = 'projectId';
+            hashFragment = `#risk-${safeSourceId}`;
+            break;
+          case 'Decision':
+            basePath = '/index.html';
+            projectParam = 'project';
+            hashFragment = `#decision-${safeSourceId}`;
+            break;
+          case 'Meeting':
+            basePath = '/index.html';
+            projectParam = 'project';
+            hashFragment = `#meeting-${safeSourceId}`;
+            break;
+          default:
+            console.warn(`Unknown PKG node type: ${row.node_type}`);
+            return {
+              ...baseInfo,
+              nodeType: row.node_type,
+              url: '#',
+              tooltip: 'Unknown entity type'
+            };
         }
+
+        // Build URL with hash fragment for auto-opening modals
+        const citationUrl = `${basePath}?${projectParam}=${encodeURIComponent(projectId)}${hashFragment}`;
 
         return {
           ...baseInfo,
@@ -219,7 +243,7 @@ router.get('/sessions/:sessionId/citations', async (req, res) => {
           sourceTable: row.source_type,
           sourceId: safeSourceId,
           title: row.attrs?.title || row.source_ref,
-          url: `${basePath}?id=${encodeURIComponent(safeSourceId)}`,
+          url: citationUrl,
           tooltip: `View ${row.node_type?.toLowerCase() || 'entity'}: ${(row.attrs?.title || row.source_ref || '').substring(0, 100)}`
         };
       } else if (row.citation_type === 'rag_document') {
