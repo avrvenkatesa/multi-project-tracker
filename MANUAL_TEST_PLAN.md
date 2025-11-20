@@ -347,5 +347,294 @@ If any test fails, please note:
 
 ---
 
-**Total Tests: 23**
-**Estimated Test Time: 30-45 minutes**
+## Story: Hybrid Search with pgvector Semantic Search
+
+### Test 24: Verify pgvector Extension Installation
+**Steps:**
+1. Open terminal/database client
+2. Run: `psql $DATABASE_URL -c "\dx"`
+3. Look for "vector" extension
+
+**Expected Results:**
+- pgvector extension (v0.8.0 or higher) is installed
+- Extension description shows "vector data type and ivfflat and hnsw access methods"
+- No errors
+
+---
+
+### Test 25: Automatic Embedding Generation on Document Upload
+**Steps:**
+1. Navigate to Documents page
+2. Click "Upload Document" button
+3. Upload a text file or PDF with unique content
+4. Wait for upload to complete
+5. Check browser network tab for async embedding generation
+
+**Expected Results:**
+- Document uploads successfully (HTTP 201)
+- Upload response doesn't wait for embedding (fast response)
+- Embedding generation happens asynchronously in background
+- No errors in console
+
+---
+
+### Test 26: Hybrid Search API - Default Mode
+**Steps:**
+1. Using browser DevTools or terminal, make API call:
+   ```
+   GET /api/aipm/projects/1/rag/search?q=database+migration
+   ```
+2. Examine response JSON
+
+**Expected Results:**
+- Response includes `"mode": "hybrid"`
+- Response includes `weights: { keyword: 0.3, semantic: 0.7 }`
+- Results include `keywordScore`, `semanticScore`, and `combinedScore`
+- Documents ranked by `combinedScore` (descending)
+
+---
+
+### Test 27: Keyword-Only Search Mode
+**Steps:**
+1. Make API call:
+   ```
+   GET /api/aipm/projects/1/rag/search?q=migration&mode=keyword
+   ```
+2. Examine response
+
+**Expected Results:**
+- Response shows `"mode": "keyword"`
+- Results include `relevance` score (from ts_rank)
+- Results include `snippet` with highlighted keywords
+- Only documents with exact keyword matches appear
+
+---
+
+### Test 28: Semantic-Only Search Mode
+**Steps:**
+1. Make API call:
+   ```
+   GET /api/aipm/projects/1/rag/search?q=database+upgrade&mode=semantic
+   ```
+2. Examine response
+
+**Expected Results:**
+- Response shows `"mode": "semantic"`
+- Results include `similarity` score (0-1 range)
+- May include documents WITHOUT exact keyword "upgrade" but similar meaning
+- Results ordered by similarity score
+
+---
+
+### Test 29: Semantic Search Finds Synonyms
+**Prerequisites:**
+- Upload document A: "Our SQL Server migration plan"
+- Upload document B: "Database relocation strategy"
+
+**Steps:**
+1. Wait 5 seconds for embeddings to generate
+2. Search: `GET /api/aipm/projects/1/rag/search?q=database+migration&mode=semantic`
+
+**Expected Results:**
+- Both document A and B appear in results
+- Document B appears even though it says "relocation" not "migration"
+- Semantic similarity recognizes synonyms and related concepts
+
+---
+
+### Test 30: AI Agent Uses Hybrid Search
+**Steps:**
+1. Navigate to AI Agent page
+2. Select a project
+3. Ask: "What are the security requirements for this project?"
+4. Wait for response
+
+**Expected Results:**
+- AI Agent finds documents about "authentication", "authorization", "access control"
+- Not just documents with exact phrase "security requirements"
+- Better context assembly with semantic understanding
+
+---
+
+### Test 31: Attachment Auto-Indexing with Embeddings
+**Steps:**
+1. Navigate to Kanban Board
+2. Open an issue detail modal
+3. Upload a PDF attachment with unique content
+4. Wait 5 seconds for processing
+5. Navigate to Documents page
+6. Filter by "Attachments" type
+
+**Expected Results:**
+- Attachment appears in Document Library
+- Green "📎 Attachment" badge displayed
+- Embedding generated automatically (verify in database)
+- Searchable by AI Agent immediately after upload
+
+---
+
+### Test 32: Backfill Script - Dry Run
+**Steps:**
+1. Open terminal
+2. Run: `node scripts/backfill-embeddings.js --dry-run`
+
+**Expected Results:**
+- Script shows count of documents without embeddings
+- Lists first 10 documents that would be processed
+- Shows document IDs, titles, and source types
+- No actual changes made (dry run mode)
+- Message: "Run without --dry-run to process these documents"
+
+---
+
+### Test 33: Backfill Script - Generate Embeddings
+**Steps:**
+1. Run: `node scripts/backfill-embeddings.js --batch-size 3 --delay 1000`
+2. Observe progress output
+
+**Expected Results:**
+- Script processes 3 documents at a time
+- Shows progress: `✓ [1/35] risk_description: ...`
+- Waits 1 second between batches (rate limiting)
+- Completes successfully with summary:
+  - Successfully processed: X
+  - Failed: 0 (or small number with error details)
+
+---
+
+### Test 34: Custom Search Weights
+**Steps:**
+1. Make API call with custom weights:
+   ```
+   GET /api/aipm/projects/1/rag/search?q=security&keyword_weight=0.5&semantic_weight=0.5
+   ```
+2. Compare results to default weights
+
+**Expected Results:**
+- Response shows `weights: { keyword: 0.5, semantic: 0.5 }`
+- Different ranking than default (30/70 split)
+- Combined score reflects equal weighting
+
+---
+
+### Test 35: Verify HNSW Index Usage
+**Steps:**
+1. In terminal, run query plan analysis:
+   ```sql
+   EXPLAIN ANALYZE
+   SELECT id FROM rag_documents
+   WHERE embedding IS NOT NULL
+   ORDER BY embedding <=> '[0.1, 0.2, ...]'::vector
+   LIMIT 10;
+   ```
+
+**Expected Results:**
+- Query plan shows "Index Scan using idx_rag_docs_embedding"
+- Uses HNSW index (not sequential scan)
+- Query executes in <100ms even with many documents
+
+---
+
+### Test 36: Empty Embeddings Handling
+**Steps:**
+1. Upload a very short document (< 10 characters)
+2. Check if embedding still generates
+
+**Expected Results:**
+- Short document still gets embedded
+- No errors in logs
+- Document searchable (though may rank lower in results)
+
+---
+
+### Test 37: Embedding Cost Tracking
+**Steps:**
+1. Upload 10 new documents
+2. Check server logs for OpenAI API calls
+3. Monitor embedding generation success/failure
+
+**Expected Results:**
+- Each document triggers one embedding API call
+- Calls to `text-embedding-3-small` model
+- Successful embedding updates logged
+- Failed embeddings logged with error details (not crashes)
+
+---
+
+### Test 38: Semantic Search Across Document Types
+**Prerequisites:**
+- Meeting transcript mentioning "authentication"
+- Uploaded doc about "user login"
+- Attachment about "access control"
+
+**Steps:**
+1. Search: `GET /api/aipm/projects/1/rag/search?q=security+authentication&mode=semantic`
+
+**Expected Results:**
+- All three documents appear in results
+- Semantic search works across all source types:
+  - meeting_transcript
+  - uploaded_doc
+  - attachment
+  - ai_analysis_doc
+
+---
+
+### Test 39: No Embedding Graceful Fallback
+**Steps:**
+1. Query documents where some have embeddings, some don't
+2. Use hybrid search mode
+
+**Expected Results:**
+- Documents without embeddings still appear (via keyword search)
+- Documents with embeddings get boost from semantic score
+- No errors or crashes
+- Combined score handles missing embeddings gracefully
+
+---
+
+### Test 40: Filter by Source Type with Semantic Search
+**Steps:**
+1. Make API call:
+   ```
+   GET /api/aipm/projects/1/rag/search?q=migration&mode=semantic&source_type=attachment
+   ```
+
+**Expected Results:**
+- Only attachments returned
+- Semantic search still works within filtered type
+- Correct filtering + semantic matching combination
+
+---
+
+## Success Criteria Summary (Semantic Search)
+
+### Hybrid Search Implementation
+- ✅ pgvector extension installed and functional
+- ✅ Embeddings auto-generate on document upload (async)
+- ✅ Three search modes work: keyword, semantic, hybrid
+- ✅ Hybrid search combines both effectively (30/70 default)
+- ✅ HNSW index provides fast vector search (<100ms)
+
+### Semantic Matching
+- ✅ Finds synonyms and related concepts
+- ✅ Works across all document types
+- ✅ AI Agent uses hybrid search for better results
+- ✅ Custom weight configuration supported
+
+### Backfill & Maintenance
+- ✅ Backfill script processes existing documents
+- ✅ Dry-run mode works correctly
+- ✅ Batch processing with rate limiting
+- ✅ Error handling doesn't crash script
+
+### Performance & Reliability
+- ✅ Async embedding doesn't block uploads
+- ✅ Graceful handling of missing embeddings
+- ✅ Query performance acceptable (<100ms)
+- ✅ Cost tracking and error logging functional
+
+---
+
+**Total Tests: 40**
+**Estimated Test Time: 60-75 minutes**
