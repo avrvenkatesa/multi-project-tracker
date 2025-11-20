@@ -349,9 +349,9 @@ class AIAgentService {
       RETURNING *
     `, [response, confidenceScore, pkgNodesUsed, ragDocsUsed, tokensUsed, latency, sessionId]);
 
-    // Store citations as evidence
-    if (citations && citations.length > 0) {
-      await this.storeCitations(sessionId, citations);
+    // Store citations as evidence using the integer ID (not UUID session_id)
+    if (citations && citations.length > 0 && result.rows[0]) {
+      await this.storeCitations(result.rows[0].id, citations);
     }
 
     return result.rows[0];
@@ -483,8 +483,10 @@ class AIAgentService {
    * Store citations as evidence links
    * Creates evidence records linking AI response → source entities
    * ENHANCED: Now stores both PKG node and RAG document citations
+   * @param {number} sessionIntId - The integer ID from ai_agent_sessions.id (NOT the UUID session_id)
+   * @param {Array} citations - Array of citation objects
    */
-  async storeCitations(sessionId, citations) {
+  async storeCitations(sessionIntId, citations) {
     for (const citation of citations) {
       try {
         if (citation.type === 'pkg_node') {
@@ -492,10 +494,10 @@ class AIAgentService {
           await pool.query(`
             INSERT INTO evidence (
               entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence
-            ) VALUES ($1, $2::text, $3, $4, $5::text, $6, $7)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
           `, [
             'ai_session',
-            sessionId,
+            sessionIntId,          // Use integer ID
             'citation',
             citation.sourceTable,
             citation.sourceId,
@@ -508,13 +510,13 @@ class AIAgentService {
           await pool.query(`
             INSERT INTO evidence (
               entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence
-            ) VALUES ($1, $2::text, $3, $4, $5::text, $6, $7)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
           `, [
             'ai_session',
-            sessionId,
+            sessionIntId,          // Use integer ID
             'citation',
             'rag_documents',
-            citation.docId,              // Use document primary key for proper linkage
+            citation.docId,        // Use document primary key for proper linkage
             citation.sourceRef,
             'high'
           ]);
