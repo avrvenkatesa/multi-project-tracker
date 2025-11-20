@@ -657,8 +657,11 @@ class AIAgentDashboard {
     }
 
     // Add view link if URL exists and points to valid pages
-    if (citation.url && citation.url.startsWith('/') && 
-        (citation.url.includes('/risks.html') || citation.url.includes('/documents.html'))) {
+    const validPages = ['/risks.html', '/documents.html', '/issues.html', '/meetings.html', '/decisions.html'];
+    const isValidUrl = citation.url && citation.url.startsWith('/') && 
+                       validPages.some(page => citation.url.includes(page));
+    
+    if (isValidUrl) {
       content += `
         <div class="citation-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
           <a href="${this.escapeHtml(citation.url)}" target="_blank" rel="noopener noreferrer" class="btn-primary">
