@@ -98,9 +98,9 @@ class AIAgentStreaming {
         if (sessionResult.rows.length > 0) {
           const sessionIntId = sessionResult.rows[0].id;
 
-          // Fetch enriched citations with PKG node data and RAG document data
+          // Fetch enriched citations with PKG node data ONLY
+          // NOTE: RAG document citations are not stored in evidence table (UUID incompatibility)
           const result = await pool.query(`
-            -- PKG node citations
             SELECT
               'pkg_node' as citation_type,
               e.quote_text as source_ref,
@@ -110,30 +110,9 @@ class AIAgentStreaming {
               p.attrs
             FROM evidence e
             LEFT JOIN pkg_nodes p ON e.source_type = p.source_table 
-              AND e.source_id = p.source_id::text
+              AND e.source_id = p.source_id
             WHERE e.entity_type = 'ai_session'
               AND e.entity_id = $1
-              AND e.source_type != 'rag_documents'
-
-            UNION ALL
-
-            -- RAG document citations
-            SELECT
-              'rag_document' as citation_type,
-              e.quote_text as source_ref,
-              e.source_type,
-              e.source_id,
-              NULL as node_type,
-              jsonb_build_object(
-                'id', r.id,
-                'title', r.title,
-                'source_type', r.source_type
-              ) as attrs
-            FROM evidence e
-            LEFT JOIN rag_documents r ON e.source_id = r.id::text
-            WHERE e.entity_type = 'ai_session'
-              AND e.entity_id = $1
-              AND e.source_type = 'rag_documents'
           `, [sessionIntId]);
 
           // Transform citations with URLs and tooltips

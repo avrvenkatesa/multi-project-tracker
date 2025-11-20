@@ -145,9 +145,8 @@ router.get('/sessions/:sessionId/citations', async (req, res) => {
 
     const sessionIntId = sessionResult.rows[0].id;
 
-    // FIXED: Combined query with proper type handling (PKG + RAG citations)
+    // FIXED: Query only PKG node citations (RAG not supported in evidence table due to UUID vs integer)
     const result = await pool.query(`
-      -- PKG node citations
       SELECT
         'pkg_node' as citation_type,
         e.quote_text as source_ref,
@@ -157,30 +156,9 @@ router.get('/sessions/:sessionId/citations', async (req, res) => {
         p.attrs
       FROM evidence e
       LEFT JOIN pkg_nodes p ON e.source_type = p.source_table 
-        AND e.source_id = p.source_id::text
+        AND e.source_id = p.source_id
       WHERE e.entity_type = 'ai_session'
         AND e.entity_id = $1
-        AND e.source_type != 'rag_documents'
-
-      UNION ALL
-
-      -- RAG document citations
-      SELECT
-        'rag_document' as citation_type,
-        e.quote_text as source_ref,
-        e.source_type,
-        e.source_id,
-        NULL as node_type,
-        jsonb_build_object(
-          'id', r.id,
-          'title', r.title,
-          'source_type', r.source_type
-        ) as attrs
-      FROM evidence e
-      LEFT JOIN rag_documents r ON e.source_id = r.id::text
-      WHERE e.entity_type = 'ai_session'
-        AND e.entity_id = $1
-        AND e.source_type = 'rag_documents'
     `, [sessionIntId]);
 
     // FIXED: URL generation with proper encoding and validation
