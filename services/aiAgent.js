@@ -346,12 +346,12 @@ class AIAgentService {
         latency_ms = $6,
         completed_at = NOW()
       WHERE session_id = $7
-      RETURNING *
+      RETURNING id, user_id
     `, [response, confidenceScore, pkgNodesUsed, ragDocsUsed, tokensUsed, latency, sessionId]);
 
-    // Store citations as evidence using the integer ID (not UUID session_id)
+    // Store citations as evidence using the integer ID and user ID
     if (citations && citations.length > 0 && result.rows[0]) {
-      await this.storeCitations(result.rows[0].id, citations);
+      await this.storeCitations(result.rows[0].id, result.rows[0].user_id, citations);
     }
 
     return result.rows[0];
@@ -484,17 +484,18 @@ class AIAgentService {
    * Creates evidence records linking AI response → source entities
    * ENHANCED: Now stores both PKG node and RAG document citations
    * @param {number} sessionIntId - The integer ID from ai_agent_sessions.id (NOT the UUID session_id)
+   * @param {number} userId - The user ID who created the session
    * @param {Array} citations - Array of citation objects
    */
-  async storeCitations(sessionIntId, citations) {
+  async storeCitations(sessionIntId, userId, citations) {
     for (const citation of citations) {
       try {
         if (citation.type === 'pkg_node') {
           // Create evidence record linking AI response → PKG entity
           await pool.query(`
             INSERT INTO evidence (
-              entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+              entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence, created_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [
             'ai_session',
             sessionIntId,          // Use integer ID
@@ -502,15 +503,16 @@ class AIAgentService {
             citation.sourceTable,
             citation.sourceId,
             citation.sourceRef,
-            'high'
+            'high',
+            userId                 // User who created the session
           ]);
         } else if (citation.type === 'rag_document') {
           // Create evidence record linking AI response → RAG document
           // Use docId (primary key) for proper linkage
           await pool.query(`
             INSERT INTO evidence (
-              entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+              entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence, created_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [
             'ai_session',
             sessionIntId,          // Use integer ID
@@ -518,7 +520,8 @@ class AIAgentService {
             'rag_documents',
             citation.docId,        // Use document primary key for proper linkage
             citation.sourceRef,
-            'high'
+            'high',
+            userId                 // User who created the session
           ]);
         }
       } catch (error) {
