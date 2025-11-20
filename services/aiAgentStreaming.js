@@ -137,6 +137,7 @@ class AIAgentStreaming {
           `, [sessionIntId]);
 
           // Transform citations with URLs and tooltips (including projectId)
+          console.log(`🔍 Building citation URLs with projectId: ${projectId}`);
           enrichedCitations = result.rows.map(row => {
             const baseInfo = {
               type: row.citation_type,
@@ -163,13 +164,16 @@ class AIAgentStreaming {
                 };
               }
 
+              const citationUrl = `${basePath}?projectId=${encodeURIComponent(projectId)}&id=${encodeURIComponent(safeSourceId)}`;
+              console.log(`📎 Citation URL for ${row.node_type}:`, citationUrl);
+              
               return {
                 ...baseInfo,
                 nodeType: row.node_type,
                 sourceTable: row.source_type,
                 sourceId: safeSourceId,
                 title: row.attrs?.title || row.source_ref,
-                url: `${basePath}?projectId=${encodeURIComponent(projectId)}&id=${encodeURIComponent(safeSourceId)}`,
+                url: citationUrl,
                 tooltip: `View ${row.node_type?.toLowerCase() || 'entity'}: ${(row.attrs?.title || row.source_ref || '').substring(0, 100)}`
               };
             } else if (row.citation_type === 'rag_document') {
