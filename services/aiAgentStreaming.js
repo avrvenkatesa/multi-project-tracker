@@ -145,10 +145,10 @@ class AIAgentStreaming {
 
             if (row.citation_type === 'pkg_node') {
               const urlMap = {
-                'Decision': '/dashboard.html',
-                'Meeting': '/dashboard.html',
+                'Decision': '/index.html',
+                'Meeting': '/index.html',
                 'Risk': '/risks.html',
-                'Task': '/dashboard.html'
+                'Task': '/index.html'
               };
               
               const safeSourceId = String(row.source_id || '').replace(/[^\w-]/g, '');
@@ -163,7 +163,9 @@ class AIAgentStreaming {
                 };
               }
 
-              const citationUrl = `${basePath}?projectId=${encodeURIComponent(projectId)}&id=${encodeURIComponent(safeSourceId)}`;
+              // Use 'project' param for index.html (Kanban board), 'projectId' for others
+              const projectParam = basePath === '/index.html' ? 'project' : 'projectId';
+              const citationUrl = `${basePath}?${projectParam}=${encodeURIComponent(projectId)}&id=${encodeURIComponent(safeSourceId)}`;
               
               return {
                 ...baseInfo,

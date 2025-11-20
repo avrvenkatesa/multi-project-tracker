@@ -657,7 +657,7 @@ class AIAgentDashboard {
     }
 
     // Add view link if URL exists and points to valid pages
-    const validPages = ['/risks.html', '/documents.html', '/dashboard.html'];
+    const validPages = ['/risks.html', '/documents.html', '/index.html'];
     const isValidUrl = citation.url && citation.url.startsWith('/') && 
                        validPages.some(page => citation.url.includes(page));
     
