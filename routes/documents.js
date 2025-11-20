@@ -102,7 +102,7 @@ router.get('/projects/:projectId/documents', async (req, res) => {
         r.meta,
         LEFT(r.content, 200) as preview,
         u.id as uploader_id,
-        u.name as uploader_name
+        u.username as uploader_name
       FROM rag_documents r
       LEFT JOIN users u ON r.uploaded_by = u.id
       ${whereClause}
@@ -164,7 +164,7 @@ router.get('/documents/:docId', async (req, res) => {
         r.created_at,
         r.meta,
         u.id as uploader_id,
-        u.name as uploader_name,
+        u.username as uploader_name,
         u.email as uploader_email
       FROM rag_documents r
       LEFT JOIN users u ON r.uploaded_by = u.id
