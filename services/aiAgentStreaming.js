@@ -1,5 +1,6 @@
 const { pool } = require('../db');
 const aiAgentService = require('./aiAgent');
+const axios = require('axios');
 
 /**
  * AI Agent Streaming Service
@@ -69,7 +70,7 @@ class AIAgentStreaming {
       // FIXED: Extract citations directly from response
       const citations = aiAgentService.extractCitations(llmResult.fullResponse, context);
       
-      // 4. Complete session
+      // 4. Complete session (this saves citations to database)
       await aiAgentService.completeSession({
         sessionId: session.session_id,
         response: llmResult.fullResponse,
@@ -86,11 +87,118 @@ class AIAgentStreaming {
         responseStream.write(`data: ${JSON.stringify({ type: 'complete', sessionId: session.session_id })}\n\n`);
       }
 
-      // FIXED: Always send citations event (even if empty) so frontend can finalize
+      // FIXED: Fetch enriched citations from database (with URLs and tooltips for frontend)
+      let enrichedCitations = [];
+      try {
+        // Query database directly instead of HTTP call (more efficient)
+        const sessionResult = await pool.query(`
+          SELECT id FROM ai_agent_sessions WHERE session_id = $1
+        `, [session.session_id]);
+
+        if (sessionResult.rows.length > 0) {
+          const sessionIntId = sessionResult.rows[0].id;
+
+          // Fetch enriched citations with PKG node data and RAG document data
+          const result = await pool.query(`
+            -- PKG node citations
+            SELECT
+              'pkg_node' as citation_type,
+              e.quote_text as source_ref,
+              e.source_type,
+              e.source_id,
+              p.type as node_type,
+              p.attrs
+            FROM evidence e
+            LEFT JOIN pkg_nodes p ON e.source_type = p.source_table 
+              AND e.source_id = p.source_id::text
+            WHERE e.entity_type = 'ai_session'
+              AND e.entity_id = $1
+              AND e.source_type != 'rag_documents'
+
+            UNION ALL
+
+            -- RAG document citations
+            SELECT
+              'rag_document' as citation_type,
+              e.quote_text as source_ref,
+              e.source_type,
+              e.source_id,
+              NULL as node_type,
+              jsonb_build_object(
+                'id', r.id,
+                'title', r.title,
+                'source_type', r.source_type
+              ) as attrs
+            FROM evidence e
+            LEFT JOIN rag_documents r ON e.source_id = r.id::text
+            WHERE e.entity_type = 'ai_session'
+              AND e.entity_id = $1
+              AND e.source_type = 'rag_documents'
+          `, [sessionIntId]);
+
+          // Transform citations with URLs and tooltips
+          enrichedCitations = result.rows.map(row => {
+            const baseInfo = {
+              type: row.citation_type,
+              sourceRef: row.source_ref
+            };
+
+            if (row.citation_type === 'pkg_node') {
+              const urlMap = {
+                'Decision': '/decisions.html',
+                'Meeting': '/meetings.html',
+                'Risk': '/risks.html',
+                'Task': '/issues.html'
+              };
+              
+              const safeSourceId = String(row.source_id || '').replace(/[^\w-]/g, '');
+              const basePath = urlMap[row.node_type];
+              
+              if (!basePath) {
+                return {
+                  ...baseInfo,
+                  nodeType: row.node_type,
+                  url: '#',
+                  tooltip: 'Unknown entity type'
+                };
+              }
+
+              return {
+                ...baseInfo,
+                nodeType: row.node_type,
+                sourceTable: row.source_type,
+                sourceId: safeSourceId,
+                title: row.attrs?.title || row.source_ref,
+                url: `${basePath}?id=${encodeURIComponent(safeSourceId)}`,
+                tooltip: `View ${row.node_type?.toLowerCase() || 'entity'}: ${(row.attrs?.title || row.source_ref || '').substring(0, 100)}`
+              };
+            } else {
+              const safeDocId = String(row.attrs?.id || '').replace(/[^\w-]/g, '');
+              
+              return {
+                ...baseInfo,
+                docId: safeDocId,
+                sourceType: row.attrs?.source_type,
+                title: row.attrs?.title || row.source_ref,
+                url: `/documents.html?id=${encodeURIComponent(safeDocId)}`,
+                tooltip: `View document: ${(row.attrs?.title || row.source_ref || '').substring(0, 100)}`
+              };
+            }
+          });
+
+          console.log(`✅ Fetched ${enrichedCitations.length} enriched citations for session ${session.session_id}`);
+        }
+      } catch (err) {
+        console.error('Failed to fetch enriched citations:', err);
+        // Fallback: send empty citations if fetch fails
+        enrichedCitations = [];
+      }
+
+      // FIXED: Send enriched citations with URLs and tooltips (not raw citations)
       if (responseStream.writable) {
         responseStream.write(`data: ${JSON.stringify({ 
           type: 'citations', 
-          citations: citations || []
+          citations: enrichedCitations
         })}\n\n`);
       }
 
