@@ -111,6 +111,11 @@ class DocumentLibrary {
    * Load documents with caching and loading states
    */
   async loadDocuments() {
+    // Don't load documents if no project is selected
+    if (!this.currentProjectId) {
+      return;
+    }
+
     this.showLoadingState();
 
     // Check cache first
