@@ -5337,7 +5337,7 @@ function showTranscriptsList() {
 // ============= EDIT/DELETE FUNCTIONALITY =============
 
 // Open edit modal for issue or action item
-async function openEditModal(itemId, itemType) {
+async function openEditModal(itemId, itemType, showAlert = true) {
   try {
     const endpoint = itemType === 'issue' ? 'issues' : 'action-items';
     const response = await axios.get(`/api/${endpoint}/${itemId}`, {
@@ -5418,7 +5418,10 @@ async function openEditModal(itemId, itemType) {
     }
   } catch (error) {
     console.error('Error loading item for edit:', error);
-    alert('Failed to load item data. Please try again.');
+    if (showAlert) {
+      alert('Failed to load item data. Please try again.');
+    }
+    throw error; // Re-throw so caller can handle it
   }
 }
 
@@ -11199,24 +11202,23 @@ async function checkHashAndOpenModal() {
   if (type === 'task' || type === 'issue') {
     let modalOpened = false;
     
-    // Try as issue first
+    // Try as issue first (suppress alert since we'll retry)
     try {
       console.log(`[HASH] Trying to load as issue: ${itemId}`);
-      await openEditModal(itemId, 'issue');
+      await openEditModal(itemId, 'issue', false);
       console.log(`[HASH] Successfully opened issue modal`);
       modalOpened = true;
     } catch (issueError) {
       console.log(`[HASH] Not an issue (${issueError.message}), trying action-item for ID ${itemId}`);
       
-      // Try as action-item
+      // Try as action-item (show alert on final failure)
       try {
-        await openEditModal(itemId, 'action-item');
+        await openEditModal(itemId, 'action-item', true);
         console.log(`[HASH] Successfully opened action-item modal`);
         modalOpened = true;
       } catch (actionError) {
         console.error(`[HASH] Failed to load as both issue and action-item:`, actionError);
-        const errorMsg = actionError.response?.data?.error || actionError.message || 'Unknown error';
-        alert(`Failed to load item data: ${errorMsg}\n\nThe item may not exist or you may not have permission to view it.`);
+        // Alert already shown by openEditModal
         return;
       }
     }
