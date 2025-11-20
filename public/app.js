@@ -11160,24 +11160,40 @@ async function checkHashAndOpenModal() {
   if (!hash || hash === '#') return;
   
   // Parse hash fragment (e.g., #task-125, #issue-86, #action-item-42)
-  const match = hash.match(/^#(task|issue|action-item)-(\d+)$/);
+  const match = hash.match(/^#(task|issue|action-item|decision|meeting)-(\d+)$/);
   if (!match) return;
   
   const [, type, id] = match;
-  const itemType = (type === 'task' || type === 'issue') ? 'issue' : 'action-item';
   const itemId = parseInt(id);
   
-  console.log(`Auto-opening ${itemType} modal for ID: ${itemId}`);
+  console.log(`Auto-opening modal for ${type}-${itemId}`);
   
   // Wait a bit for the page to fully load before opening modal
   await new Promise(resolve => setTimeout(resolve, 500));
   
   try {
-    await openEditModal(itemId, itemType);
+    // Determine item type - #task can be either issue or action-item
+    // Try issue first, if that fails try action-item
+    if (type === 'task' || type === 'issue') {
+      try {
+        await openEditModal(itemId, 'issue');
+      } catch (issueError) {
+        // If issue fetch fails, try action-item
+        console.log(`Not an issue, trying action-item for ID ${itemId}`);
+        await openEditModal(itemId, 'action-item');
+      }
+    } else if (type === 'action-item') {
+      await openEditModal(itemId, 'action-item');
+    } else if (type === 'decision' || type === 'meeting') {
+      // Decisions and meetings are stored as issues with special categories
+      await openEditModal(itemId, 'issue');
+    }
+    
     // Clear hash to prevent reopening on refresh
     history.replaceState(null, null, ' ');
   } catch (error) {
     console.error('Failed to auto-open modal:', error);
+    alert(`Failed to load item data. The item may not exist or you may not have permission to view it.`);
   }
 }
 
