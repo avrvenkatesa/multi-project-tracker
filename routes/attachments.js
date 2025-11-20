@@ -67,6 +67,7 @@ router.post('/issues/:issueId/attachments', upload.single('file'), async (req, r
     );
 
     if (issueResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       await fs.unlink(file.path);
       return res.status(404).json({ error: 'Issue not found' });
     }
@@ -203,6 +204,7 @@ router.post('/action-items/:actionItemId/attachments', upload.single('file'), as
     );
 
     if (actionItemResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       await fs.unlink(file.path);
       return res.status(404).json({ error: 'Action item not found' });
     }
