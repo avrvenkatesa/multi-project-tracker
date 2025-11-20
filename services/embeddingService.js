@@ -1,9 +1,13 @@
-const OpenAI = require('openai');
-const { pool } = require('../db');
+/**
+ * Embedding Service - Backward compatibility wrapper for VectorStore abstraction
+ * 
+ * This service now delegates to the VectorStore abstraction layer (PgVectorStore).
+ * Existing code using embeddingService will continue to work without changes.
+ * 
+ * Migration path: New code should use vectorStore directly from services/vectorStore
+ */
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+const vectorStore = require('./vectorStore');
 
 /**
  * Generate embedding vector for text using OpenAI API
@@ -11,34 +15,22 @@ const openai = new OpenAI({
  * @returns {Promise<number[]>} - 1536-dimensional embedding vector
  */
 async function generateEmbedding(text) {
-  if (!text || text.trim() === '') {
-    throw new Error('Text cannot be empty');
-  }
-
-  try {
-    const response = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: text.slice(0, 8000), // Limit to ~8k chars to stay under token limit
-      encoding_format: 'float'
-    });
-
-    return response.data[0].embedding;
-  } catch (error) {
-    console.error('Error generating embedding:', error);
-    throw error;
-  }
+  return vectorStore.generateEmbedding(text);
 }
 
 /**
  * Generate and store embedding for a RAG document
+ * Now uses VectorStore abstraction for full consistency
  * @param {string} documentId - UUID of the document
  * @param {string} text - Combined title + content to embed
  * @returns {Promise<void>}
  */
 async function embedDocument(documentId, text) {
+  const { pool } = require('../db');
   const embedding = await generateEmbedding(text);
   
-  // Format embedding as PostgreSQL vector literal
+  // Update via direct SQL for backward compatibility
+  // (VectorStore.upsertDocuments is for full document upserts)
   const vectorString = `[${embedding.join(',')}]`;
   
   await pool.query(
@@ -53,26 +45,7 @@ async function embedDocument(documentId, text) {
  * @returns {Promise<{success: number, failed: number, errors: Array}>}
  */
 async function batchEmbedDocuments(documents) {
-  const results = {
-    success: 0,
-    failed: 0,
-    errors: []
-  };
-
-  for (const doc of documents) {
-    try {
-      await embedDocument(doc.id, doc.text);
-      results.success++;
-    } catch (error) {
-      results.failed++;
-      results.errors.push({
-        documentId: doc.id,
-        error: error.message
-      });
-    }
-  }
-
-  return results;
+  return vectorStore.batchEmbedDocuments(documents);
 }
 
 /**
@@ -84,54 +57,25 @@ async function batchEmbedDocuments(documents) {
  * @returns {Promise<Array>} - Array of matching documents with similarity scores
  */
 async function semanticSearch(projectId, query, limit = 10, sourceType = null) {
-  // Generate embedding for the query
-  const queryEmbedding = await generateEmbedding(query);
-  const vectorString = `[${queryEmbedding.join(',')}]`;
+  const results = await vectorStore.query({
+    projectId,
+    queryText: query,
+    k: limit,
+    mode: 'semantic',
+    filters: { sourceType }
+  });
 
-  // Build query with optional source type filter
-  let sqlQuery;
-  const params = [vectorString, projectId, limit];
-  
-  if (sourceType) {
-    params.push(sourceType);
-    sqlQuery = `
-      SELECT
-        id,
-        title,
-        source_type,
-        source_id,
-        content,
-        meta,
-        created_at,
-        1 - (embedding <=> $1::vector) as similarity
-      FROM rag_documents
-      WHERE project_id = $2
-        AND embedding IS NOT NULL
-        AND source_type = $4
-      ORDER BY embedding <=> $1::vector
-      LIMIT $3
-    `;
-  } else {
-    sqlQuery = `
-      SELECT
-        id,
-        title,
-        source_type,
-        source_id,
-        content,
-        meta,
-        created_at,
-        1 - (embedding <=> $1::vector) as similarity
-      FROM rag_documents
-      WHERE project_id = $2
-        AND embedding IS NOT NULL
-      ORDER BY embedding <=> $1::vector
-      LIMIT $3
-    `;
-  }
-
-  const result = await pool.query(sqlQuery, params);
-  return result.rows;
+  // Map to legacy format for backward compatibility
+  return results.map(r => ({
+    id: r.id,
+    title: r.title,
+    source_type: r.sourceType,
+    source_id: r.sourceId,
+    content: r.content,
+    meta: r.meta,
+    created_at: r.createdAt,
+    similarity: r.score
+  }));
 }
 
 /**
@@ -145,103 +89,30 @@ async function semanticSearch(projectId, query, limit = 10, sourceType = null) {
  * @returns {Promise<Array>} - Array of documents with combined scores
  */
 async function hybridSearch(projectId, query, limit = 10, sourceType = null, keywordWeight = 0.3, semanticWeight = 0.7) {
-  // Generate embedding for the query
-  const queryEmbedding = await generateEmbedding(query);
-  const vectorString = `[${queryEmbedding.join(',')}]`;
+  const results = await vectorStore.query({
+    projectId,
+    queryText: query,
+    k: limit,
+    mode: 'hybrid',
+    filters: { sourceType },
+    keywordWeight,
+    semanticWeight
+  });
 
-  // Hybrid search query combining full-text and vector similarity
-  let sqlQuery;
-  let params;
-  
-  if (sourceType) {
-    params = [query, projectId, sourceType, vectorString, keywordWeight, semanticWeight, limit];
-    sqlQuery = `
-      WITH keyword_search AS (
-        SELECT
-          id,
-          ts_rank(content_tsv, plainto_tsquery('english', $1)) as keyword_score
-        FROM rag_documents
-        WHERE project_id = $2
-          AND content_tsv @@ plainto_tsquery('english', $1)
-          AND source_type = $3
-      ),
-      semantic_search AS (
-        SELECT
-          id,
-          1 - (embedding <=> $4::vector) as semantic_score
-        FROM rag_documents
-        WHERE project_id = $2
-          AND embedding IS NOT NULL
-          AND source_type = $3
-      )
-      SELECT
-        r.id,
-        r.title,
-        r.source_type,
-        r.source_id,
-        ts_headline('english', r.content, plainto_tsquery('english', $1),
-          'MaxWords=50, MinWords=25, HighlightAll=false') as snippet,
-        r.content,
-        r.meta,
-        r.created_at,
-        COALESCE(k.keyword_score, 0) as keyword_score,
-        COALESCE(s.semantic_score, 0) as semantic_score,
-        (COALESCE(k.keyword_score, 0) * $5 + 
-         COALESCE(s.semantic_score, 0) * $6) as combined_score
-      FROM rag_documents r
-      LEFT JOIN keyword_search k ON r.id = k.id
-      LEFT JOIN semantic_search s ON r.id = s.id
-      WHERE r.project_id = $2
-        AND r.source_type = $3
-        AND (k.id IS NOT NULL OR s.id IS NOT NULL)
-      ORDER BY combined_score DESC
-      LIMIT $7
-    `;
-  } else {
-    params = [query, projectId, vectorString, keywordWeight, semanticWeight, limit];
-    sqlQuery = `
-      WITH keyword_search AS (
-        SELECT
-          id,
-          ts_rank(content_tsv, plainto_tsquery('english', $1)) as keyword_score
-        FROM rag_documents
-        WHERE project_id = $2
-          AND content_tsv @@ plainto_tsquery('english', $1)
-      ),
-      semantic_search AS (
-        SELECT
-          id,
-          1 - (embedding <=> $3::vector) as semantic_score
-        FROM rag_documents
-        WHERE project_id = $2
-          AND embedding IS NOT NULL
-      )
-      SELECT
-        r.id,
-        r.title,
-        r.source_type,
-        r.source_id,
-        ts_headline('english', r.content, plainto_tsquery('english', $1),
-          'MaxWords=50, MinWords=25, HighlightAll=false') as snippet,
-        r.content,
-        r.meta,
-        r.created_at,
-        COALESCE(k.keyword_score, 0) as keyword_score,
-        COALESCE(s.semantic_score, 0) as semantic_score,
-        (COALESCE(k.keyword_score, 0) * $4 + 
-         COALESCE(s.semantic_score, 0) * $5) as combined_score
-      FROM rag_documents r
-      LEFT JOIN keyword_search k ON r.id = k.id
-      LEFT JOIN semantic_search s ON r.id = s.id
-      WHERE r.project_id = $2
-        AND (k.id IS NOT NULL OR s.id IS NOT NULL)
-      ORDER BY combined_score DESC
-      LIMIT $6
-    `;
-  }
-
-  const result = await pool.query(sqlQuery, params);
-  return result.rows;
+  // Map to legacy format for backward compatibility
+  return results.map(r => ({
+    id: r.id,
+    title: r.title,
+    source_type: r.sourceType,
+    source_id: r.sourceId,
+    snippet: r.snippet,
+    content: r.content,
+    meta: r.meta,
+    created_at: r.createdAt,
+    keyword_score: r.keywordScore,
+    semantic_score: r.semanticScore,
+    combined_score: r.score
+  }));
 }
 
 module.exports = {
