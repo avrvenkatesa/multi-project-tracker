@@ -146,9 +146,9 @@ router.get('/sessions/:sessionId/citations', async (req, res) => {
         p.attrs
       FROM evidence e
       LEFT JOIN pkg_nodes p ON e.source_type = p.source_table 
-        AND e.source_id = p.source_id::text
+        AND e.source_id::text = p.source_id::text
       WHERE e.entity_type = 'ai_session'
-        AND e.entity_id = $1
+        AND e.entity_id = $1::text
         AND e.source_type != 'rag_documents'
 
       UNION ALL
@@ -166,9 +166,9 @@ router.get('/sessions/:sessionId/citations', async (req, res) => {
           'source_type', r.source_type
         ) as attrs
       FROM evidence e
-      LEFT JOIN rag_documents r ON e.source_id = r.id::text
+      LEFT JOIN rag_documents r ON e.source_id::text = r.id::text
       WHERE e.entity_type = 'ai_session'
-        AND e.entity_id = $1
+        AND e.entity_id = $1::text
         AND e.source_type = 'rag_documents'
     `, [sessionId]);
 
