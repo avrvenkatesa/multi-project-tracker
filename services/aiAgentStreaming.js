@@ -124,12 +124,24 @@ class AIAgentStreaming {
     let fullResponse = '';
     let tokensUsed = 0;
 
-    const systemPrompt = aiAgentService.buildSystemPrompt(agentType);
-    const contextText = aiAgentService.buildContextText(context);
+    // FIXED: Use grounded prompt with citation instructions
+    const { system: systemPrompt, user: userPromptWrapped } = aiAgentService.buildGroundedPrompt(userPrompt, context, agentType);
+
+    // DEBUG: Verify prompt construction
+    aiAgentService.debugPromptConstruction(context, systemPrompt);
 
     try {
       // Stream from Anthropic Claude
       if (aiAgentService.defaultModel.startsWith('claude')) {
+        // ENHANCED: Add prefill to force citation format
+        const messagesWithPrefill = [
+          { role: 'user', content: userPromptWrapped },
+          { 
+            role: 'assistant', 
+            content: 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. Here is my response:\n\n'
+          }
+        ];
+
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -140,11 +152,9 @@ class AIAgentStreaming {
           body: JSON.stringify({
             model: aiAgentService.defaultModel,
             max_tokens: 4096,
+            temperature: 0.3,  // Lower temperature for instruction-following
             system: systemPrompt,
-            messages: [{
-              role: 'user',
-              content: `${contextText}\n\nUser Question: ${userPrompt}`
-            }],
+            messages: messagesWithPrefill,
             stream: true
           })
         });
@@ -217,9 +227,10 @@ class AIAgentStreaming {
             model: aiAgentService.defaultModel,
             messages: [
               { role: 'system', content: systemPrompt },
-              { role: 'user', content: `${contextText}\n\nUser Question: ${userPrompt}` }
+              { role: 'user', content: userPromptWrapped }
             ],
             max_tokens: 4096,
+            temperature: 0.3,
             stream: true
           })
         });
@@ -278,13 +289,29 @@ class AIAgentStreaming {
 
       const latency = Date.now() - startTime;
 
+      // ENHANCED: Prepend prefill text for Claude responses
+      if (aiAgentService.defaultModel.startsWith('claude')) {
+        fullResponse = 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. Here is my response:\n\n' + fullResponse;
+      }
+
+      // FALLBACK: If no citations were included, add them automatically
+      let citations = aiAgentService.extractCitations(fullResponse, context);
+      if (citations.length === 0 && (context.pkgNodes.length > 0 || context.ragDocuments.length > 0)) {
+        console.warn('⚠️ LLM did not include citations. Adding them automatically...');
+        fullResponse = aiAgentService.addMissingCitations(fullResponse, context);
+        citations = aiAgentService.extractCitations(fullResponse, context);
+        console.log(`✅ Added ${citations.length} citations automatically`);
+      } else {
+        console.log(`✅ LLM included ${citations.length} citations`);
+      }
+
       // Log to audit
       await aiAgentService.logAction({
         sessionId,
         actionType: 'llm_call_streaming',
         actionDescription: `Streamed response from ${aiAgentService.defaultModel}`,
         inputData: { userPrompt },
-        outputData: { responseLength: fullResponse.length, tokensUsed },
+        outputData: { responseLength: fullResponse.length, tokensUsed, citationCount: citations.length },
         executionTimeMs: latency
       });
 
