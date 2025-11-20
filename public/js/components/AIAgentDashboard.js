@@ -102,25 +102,16 @@ class AIAgentDashboard {
     
     // Event delegation for citation links (since they're dynamically added)
     document.getElementById('chat-messages').addEventListener('click', (e) => {
-      console.log('Click detected on:', e.target);
-      console.log('Has citation-link class?', e.target.classList.contains('citation-link'));
-      console.log('Target classes:', e.target.className);
-      
       if (e.target.classList.contains('citation-link')) {
         e.preventDefault();
-        console.log('✅ Citation link clicked!');
         const citationData = e.target.dataset.citation;
-        console.log('Citation data:', citationData);
         if (citationData) {
           try {
             const citation = JSON.parse(citationData);
-            console.log('Parsed citation:', citation);
             this.showCitationModal(citation);
           } catch (err) {
             console.error('Failed to parse citation data:', err);
           }
-        } else {
-          console.error('⚠️ No citation data found on element');
         }
       }
     });
@@ -622,16 +613,9 @@ class AIAgentDashboard {
    * Show citation details in modal
    */
   showCitationModal(citation) {
-    console.log('🎯 showCitationModal called with:', citation);
-    
     const modal = document.getElementById('citation-modal');
     const modalBody = document.getElementById('citation-modal-body');
     const modalTitle = document.getElementById('citation-modal-title');
-
-    console.log('Modal element:', modal);
-    console.log('Modal body:', modalBody);
-    console.log('Modal title:', modalTitle);
-    console.log('Modal current classes:', modal?.className);
 
     // Set modal title
     modalTitle.textContent = citation.sourceRef || 'Citation Details';
@@ -690,14 +674,8 @@ class AIAgentDashboard {
     content += `</div>`;
     modalBody.innerHTML = content;
 
-    console.log('About to show modal...');
-    console.log('Modal classes before remove:', modal.className);
-    
     // Show modal
     modal.classList.remove('hidden');
-    
-    console.log('Modal classes after remove:', modal.className);
-    console.log('✅ Modal should now be visible!');
   }
 
   /**
