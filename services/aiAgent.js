@@ -501,15 +501,27 @@ class AIAgentService {
             sessionIntId,          // Use integer ID
             'citation',
             citation.sourceTable,
-            citation.sourceId,     // Integer ID from PKG node
+            String(citation.sourceId),  // Convert to string for text column
             citation.sourceRef,
             'high',
             userId                 // User who created the session
           ]);
         } else if (citation.type === 'rag_document') {
-          // SKIP RAG document citations for now - evidence.source_id is integer but rag_documents.id is UUID
-          // TODO: Store RAG citations in a separate table or extend evidence to support UUID source_id
-          console.warn(`⚠️ Skipping RAG document citation (UUID not supported in evidence table): ${citation.sourceRef}`);
+          // FIXED: Now storing RAG document citations (source_id is now TEXT)
+          await pool.query(`
+            INSERT INTO evidence (
+              entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence, created_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `, [
+            'ai_session',
+            sessionIntId,          // Use integer ID
+            'citation',
+            'rag_documents',
+            citation.docId,        // UUID stored as text
+            citation.sourceRef,
+            'high',
+            userId                 // User who created the session
+          ]);
         }
       } catch (error) {
         console.error('Failed to store citation:', error);

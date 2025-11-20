@@ -534,7 +534,7 @@ export const evidence = pgTable('evidence', {
   entityId: integer('entity_id').notNull(), // ID in the respective table
   evidenceType: varchar('evidence_type', { length: 50 }), // transcript_quote, document_excerpt, meeting_note, user_statement, email_excerpt
   sourceType: varchar('source_type', { length: 50 }), // meeting, document, manual, email
-  sourceId: integer('source_id'), // references meeting.id or document.id
+  sourceId: text('source_id'), // CHANGED: text to support both integers and UUIDs (for PKG nodes and RAG documents)
   quoteText: text('quote_text').notNull(),
   pageNumber: integer('page_number'), // for document evidence
   timestampSeconds: integer('timestamp_seconds'), // for video/audio transcripts
