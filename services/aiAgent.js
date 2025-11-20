@@ -263,7 +263,7 @@ class AIAgentService {
       ...messages,
       {
         role: 'assistant',
-        content: 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. Here is my response:\n\n'
+        content: 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact.'
       }
     ];
 
@@ -290,7 +290,7 @@ class AIAgentService {
     const data = await response.json();
 
     // Prepend the prefill text to the response
-    const fullContent = 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. Here is my response:\n\n' + data.content[0].text;
+    const fullContent = 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. ' + data.content[0].text;
 
     return {
       content: fullContent,

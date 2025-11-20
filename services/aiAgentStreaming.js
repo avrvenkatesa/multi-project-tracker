@@ -138,7 +138,7 @@ class AIAgentStreaming {
           { role: 'user', content: userPromptWrapped },
           { 
             role: 'assistant', 
-            content: 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. Here is my response:\n\n'
+            content: 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact.'
           }
         ];
 
@@ -291,7 +291,7 @@ class AIAgentStreaming {
 
       // ENHANCED: Prepend prefill text for Claude responses
       if (aiAgentService.defaultModel.startsWith('claude')) {
-        fullResponse = 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. Here is my response:\n\n' + fullResponse;
+        fullResponse = 'I will provide a comprehensive answer with citations in [Source: Title] format after every fact. ' + fullResponse;
       }
 
       // FALLBACK: If no citations were included, add them automatically
