@@ -11149,3 +11149,40 @@ async function collapseAllKanbanCards() {
   // Re-render Kanban board
   await renderKanbanBoard();
 }
+
+// ============= AUTO-OPEN MODAL FROM URL HASH =============
+/**
+ * Check URL hash and auto-open modal for specific item
+ * Supports hash formats: #task-123, #issue-123, #action-item-123
+ */
+async function checkHashAndOpenModal() {
+  const hash = window.location.hash;
+  if (!hash || hash === '#') return;
+  
+  // Parse hash fragment (e.g., #task-125, #issue-86, #action-item-42)
+  const match = hash.match(/^#(task|issue|action-item)-(\d+)$/);
+  if (!match) return;
+  
+  const [, type, id] = match;
+  const itemType = (type === 'task' || type === 'issue') ? 'issue' : 'action-item';
+  const itemId = parseInt(id);
+  
+  console.log(`Auto-opening ${itemType} modal for ID: ${itemId}`);
+  
+  // Wait a bit for the page to fully load before opening modal
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  try {
+    await openEditModal(itemId, itemType);
+    // Clear hash to prevent reopening on refresh
+    history.replaceState(null, null, ' ');
+  } catch (error) {
+    console.error('Failed to auto-open modal:', error);
+  }
+}
+
+// Listen for hash changes (when user navigates using browser back/forward)
+window.addEventListener('hashchange', checkHashAndOpenModal);
+
+// Check hash on initial page load
+window.addEventListener('load', checkHashAndOpenModal);

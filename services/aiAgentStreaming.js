@@ -164,8 +164,13 @@ class AIAgentStreaming {
               }
 
               // Use 'project' param for index.html (Kanban board), 'projectId' for others
+              // Use URL hash fragment to auto-open the modal for the specific item
               const projectParam = basePath === '/index.html' ? 'project' : 'projectId';
-              const citationUrl = `${basePath}?${projectParam}=${encodeURIComponent(projectId)}&id=${encodeURIComponent(safeSourceId)}`;
+              const hashFragment = row.node_type === 'Task' ? `#task-${safeSourceId}` : 
+                                   row.node_type === 'Risk' ? `#risk-${safeSourceId}` :
+                                   row.node_type === 'Decision' ? `#decision-${safeSourceId}` :
+                                   row.node_type === 'Meeting' ? `#meeting-${safeSourceId}` : '';
+              const citationUrl = `${basePath}?${projectParam}=${encodeURIComponent(projectId)}${hashFragment}`;
               
               return {
                 ...baseInfo,

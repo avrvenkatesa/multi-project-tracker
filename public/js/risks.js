@@ -1162,3 +1162,45 @@ async function loadTagsForEditRisk(riskId) {
     tagSelect.innerHTML = '<option value="" disabled>Error loading tags</option>';
   }
 }
+
+
+// ============= AUTO-OPEN RISK DETAILS FROM URL HASH =============
+/**
+ * Check URL hash and auto-open risk details panel
+ * Supports hash format: #risk-42
+ */
+async function checkHashAndShowRisk() {
+  const hash = window.location.hash;
+  if (!hash || hash === "#") return;
+  
+  // Parse hash fragment (e.g., #risk-42)
+  const match = hash.match(/^#risk-(\d+)$/);
+  if (!match) return;
+  
+  const riskId = parseInt(match[1]);
+  console.log(`Auto-opening risk details for ID: ${riskId}`);
+  
+  // Wait for risks to load
+  await new Promise(resolve => setTimeout(resolve, 800));
+  
+  try {
+    // Find the risk in the loaded risks array
+    const risk = risks.find(r => r.id === riskId);
+    if (risk) {
+      showRiskDetails(risk);
+      document.getElementById("detailPanel").style.display = "block";
+      // Clear hash to prevent reopening on refresh
+      history.replaceState(null, null, " ");
+    } else {
+      console.warn(`Risk with ID ${riskId} not found`);
+    }
+  } catch (error) {
+    console.error("Failed to auto-open risk details:", error);
+  }
+}
+
+// Listen for hash changes
+window.addEventListener("hashchange", checkHashAndShowRisk);
+
+// Check hash on page load
+window.addEventListener("load", checkHashAndShowRisk);
