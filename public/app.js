@@ -11166,34 +11166,55 @@ async function checkHashAndOpenModal() {
   const [, type, id] = match;
   const itemId = parseInt(id);
   
-  console.log(`Auto-opening modal for ${type}-${itemId}`);
+  console.log(`[HASH] Auto-opening modal for ${type}-${itemId}`);
   
-  // Wait a bit for the page to fully load before opening modal
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // Wait longer for the page to fully load, including project selection
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  
+  // Verify we have a current project selected
+  if (!currentProject) {
+    console.error('[HASH] No project selected, waiting for project to load...');
+    // Wait another second for project to load
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    if (!currentProject) {
+      console.error('[HASH] Still no project selected, cannot open modal');
+      alert('Please select a project first, then navigate to the item.');
+      return;
+    }
+  }
+  
+  console.log(`[HASH] Current project: ${currentProject}`);
   
   try {
     // Determine item type - #task can be either issue or action-item
     // Try issue first, if that fails try action-item
     if (type === 'task' || type === 'issue') {
       try {
+        console.log(`[HASH] Trying to load as issue: ${itemId}`);
         await openEditModal(itemId, 'issue');
+        console.log(`[HASH] Successfully opened issue modal`);
       } catch (issueError) {
         // If issue fetch fails, try action-item
-        console.log(`Not an issue, trying action-item for ID ${itemId}`);
+        console.log(`[HASH] Not an issue, trying action-item for ID ${itemId}`, issueError);
         await openEditModal(itemId, 'action-item');
+        console.log(`[HASH] Successfully opened action-item modal`);
       }
     } else if (type === 'action-item') {
+      console.log(`[HASH] Loading action-item: ${itemId}`);
       await openEditModal(itemId, 'action-item');
     } else if (type === 'decision' || type === 'meeting') {
       // Decisions and meetings are stored as issues with special categories
+      console.log(`[HASH] Loading ${type}: ${itemId}`);
       await openEditModal(itemId, 'issue');
     }
     
     // Clear hash to prevent reopening on refresh
     history.replaceState(null, null, ' ');
   } catch (error) {
-    console.error('Failed to auto-open modal:', error);
-    alert(`Failed to load item data. The item may not exist or you may not have permission to view it.`);
+    console.error('[HASH] Failed to auto-open modal:', error);
+    const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
+    alert(`Failed to load item data: ${errorMsg}\n\nThe item may not exist or you may not have permission to view it.`);
   }
 }
 

@@ -664,7 +664,7 @@ class AIAgentDashboard {
     if (isValidUrl) {
       content += `
         <div class="citation-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
-          <a href="${this.escapeHtml(citation.url)}" target="_blank" rel="noopener noreferrer" class="btn-primary">
+          <a href="${this.escapeHtml(citation.url)}" class="btn-primary">
             View Full Details →
           </a>
         </div>
