@@ -80,6 +80,7 @@ const aiDecisionMakerRouter = require('./routes/aiDecisionMaker');
 const aiRiskDetectorRouter = require('./routes/aiRiskDetector');
 const aiAgentStreamingRouter = require('./routes/aiAgentStreaming');
 const documentsRouter = require('./routes/documents');
+const attachmentsRouter = require('./routes/attachments');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -849,6 +850,7 @@ app.use('/api/aipm', authenticateToken, aiDecisionMakerRouter); // AI Decision M
 app.use('/api/aipm', authenticateToken, aiRiskDetectorRouter); // AI Risk Detector routes
 app.use('/api/aipm', authenticateToken, aiAgentStreamingRouter); // AI Agent Streaming routes
 app.use('/api', authenticateToken, documentsRouter); // Document Library routes
+app.use('/api', authenticateToken, attachmentsRouter); // Attachments routes
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 

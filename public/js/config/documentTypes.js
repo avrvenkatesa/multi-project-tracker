@@ -21,6 +21,12 @@ const DOCUMENT_TYPE_CONFIG = {
     badgeClass: 'badge-uploaded',
     color: 'gray'
   },
+  'attachment': {
+    icon: '📎',
+    label: 'Attachment',
+    badgeClass: 'badge-attachment',
+    color: 'green'
+  },
   'decision_doc': {
     icon: '⚖️',
     label: 'Decision Document',
