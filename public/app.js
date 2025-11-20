@@ -607,6 +607,8 @@ function setupEventListeners() {
     document.getElementById('view-documents-btn')?.addEventListener('click', () => {
         if (currentProject) {
             window.location.href = `documents.html?projectId=${currentProject.id}`;
+        } else {
+            window.location.href = 'documents.html';
         }
     });
     document.getElementById('view-templates-btn')?.addEventListener('click', () => {

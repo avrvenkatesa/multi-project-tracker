@@ -61,14 +61,35 @@ class DocumentLibrary {
   }
 
   /**
-   * Load current project from cookie
+   * Load current project from cookie or URL
    */
   async loadCurrentProject() {
-    const projectId = this.getProjectIdFromCookie();
+    // Try URL parameter first
+    const urlParams = new URLSearchParams(window.location.search);
+    let projectId = urlParams.get('projectId');
+    
+    // Fallback to cookie
     if (!projectId) {
-      window.location.href = '/index.html';
+      projectId = this.getProjectIdFromCookie();
+    }
+    
+    if (!projectId) {
+      // No project selected - show project selector
+      document.getElementById('project-name').textContent = 'No project selected - Please select a project from the main page';
+      document.getElementById('documents-container').innerHTML = `
+        <div class="text-center py-12">
+          <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+          </svg>
+          <p class="text-gray-600 text-lg mb-4">No project selected</p>
+          <button onclick="window.location.href='/index.html'" class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+            Select a Project
+          </button>
+        </div>
+      `;
       return;
     }
+    
     this.currentProjectId = projectId;
 
     try {
@@ -82,6 +103,7 @@ class DocumentLibrary {
       }
     } catch (error) {
       console.error('Error loading project:', error);
+      document.getElementById('project-name').textContent = 'Error loading project';
     }
   }
 
