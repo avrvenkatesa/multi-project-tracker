@@ -137,7 +137,6 @@ class AIAgentStreaming {
           `, [sessionIntId]);
 
           // Transform citations with URLs and tooltips (including projectId)
-          console.log(`🔍 Building citation URLs with projectId: ${projectId}`);
           enrichedCitations = result.rows.map(row => {
             const baseInfo = {
               type: row.citation_type,
@@ -146,10 +145,10 @@ class AIAgentStreaming {
 
             if (row.citation_type === 'pkg_node') {
               const urlMap = {
-                'Decision': '/decisions.html',
-                'Meeting': '/meetings.html',
+                'Decision': '/dashboard.html',
+                'Meeting': '/dashboard.html',
                 'Risk': '/risks.html',
-                'Task': '/issues.html'
+                'Task': '/dashboard.html'
               };
               
               const safeSourceId = String(row.source_id || '').replace(/[^\w-]/g, '');
@@ -165,7 +164,6 @@ class AIAgentStreaming {
               }
 
               const citationUrl = `${basePath}?projectId=${encodeURIComponent(projectId)}&id=${encodeURIComponent(safeSourceId)}`;
-              console.log(`📎 Citation URL for ${row.node_type}:`, citationUrl);
               
               return {
                 ...baseInfo,

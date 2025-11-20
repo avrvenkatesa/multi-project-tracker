@@ -613,9 +613,6 @@ class AIAgentDashboard {
    * Show citation details in modal
    */
   showCitationModal(citation) {
-    console.log('🎯 Citation received in modal:', citation);
-    console.log('📎 Citation URL:', citation.url);
-    
     const modal = document.getElementById('citation-modal');
     const modalBody = document.getElementById('citation-modal-body');
     const modalTitle = document.getElementById('citation-modal-title');
@@ -660,7 +657,7 @@ class AIAgentDashboard {
     }
 
     // Add view link if URL exists and points to valid pages
-    const validPages = ['/risks.html', '/documents.html', '/issues.html', '/meetings.html', '/decisions.html'];
+    const validPages = ['/risks.html', '/documents.html', '/dashboard.html'];
     const isValidUrl = citation.url && citation.url.startsWith('/') && 
                        validPages.some(page => citation.url.includes(page));
     
