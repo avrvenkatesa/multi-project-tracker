@@ -492,7 +492,7 @@ class AIAgentService {
           await pool.query(`
             INSERT INTO evidence (
               entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ) VALUES ($1, $2::text, $3, $4, $5::text, $6, $7)
           `, [
             'ai_session',
             sessionId,
@@ -508,7 +508,7 @@ class AIAgentService {
           await pool.query(`
             INSERT INTO evidence (
               entity_type, entity_id, evidence_type, source_type, source_id, quote_text, confidence
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ) VALUES ($1, $2::text, $3, $4, $5::text, $6, $7)
           `, [
             'ai_session',
             sessionId,
