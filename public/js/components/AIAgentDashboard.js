@@ -67,6 +67,19 @@ class AIAgentDashboard {
           <h3>Recent Insights</h3>
           <div id="recent-sessions"></div>
         </div>
+
+        <!-- Citation Modal -->
+        <div id="citation-modal" class="modal hidden">
+          <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+              <h2 id="citation-modal-title">Citation Details</h2>
+              <button id="close-citation-modal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" id="citation-modal-body">
+              <!-- Citation details populated here -->
+            </div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -81,6 +94,25 @@ class AIAgentDashboard {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         this.sendMessage();
+      }
+    });
+
+    // Add citation modal event listeners
+    document.getElementById('close-citation-modal').addEventListener('click', () => this.closeCitationModal());
+    
+    // Event delegation for citation links (since they're dynamically added)
+    document.getElementById('chat-messages').addEventListener('click', (e) => {
+      if (e.target.classList.contains('citation-link')) {
+        e.preventDefault();
+        const citationData = e.target.dataset.citation;
+        if (citationData) {
+          try {
+            const citation = JSON.parse(citationData);
+            this.showCitationModal(citation);
+          } catch (err) {
+            console.error('Failed to parse citation data:', err);
+          }
+        }
       }
     });
   }
@@ -300,9 +332,9 @@ class AIAgentDashboard {
    * Build clickable citation link (URLs pre-built and validated by backend)
    */
   buildCitationLink(citation) {
-    // SECURITY: Validate URL format (must start with / for relative URLs)
-    const safeUrl = (citation.url && citation.url.startsWith('/')) ? citation.url : '#';
-    return `<a href="${this.escapeHtml(safeUrl)}" class="citation-link" title="${this.escapeHtml(citation.tooltip)}" rel="noopener noreferrer" target="_blank">[Source: ${this.escapeHtml(citation.sourceRef)}]</a>`;
+    // ENHANCED: Use data attributes for modal popup instead of direct links
+    const citationData = this.escapeHtml(JSON.stringify(citation));
+    return `<a href="#" class="citation-link" data-citation='${citationData}' title="${this.escapeHtml(citation.tooltip)}">[Source: ${this.escapeHtml(citation.sourceRef)}]</a>`;
   }
 
   /**
@@ -568,6 +600,80 @@ class AIAgentDashboard {
       btn.disabled = false;
       btn.textContent = '🔍 Scan Risks';
     }
+  }
+
+  /**
+   * Show citation details in modal
+   */
+  showCitationModal(citation) {
+    const modal = document.getElementById('citation-modal');
+    const modalBody = document.getElementById('citation-modal-body');
+    const modalTitle = document.getElementById('citation-modal-title');
+
+    // Set modal title
+    modalTitle.textContent = citation.sourceRef || 'Citation Details';
+
+    // Build modal content based on citation type
+    let content = `
+      <div class="citation-details">
+        <div class="citation-field">
+          <strong>Source:</strong>
+          <span>${this.escapeHtml(citation.title || citation.sourceRef)}</span>
+        </div>
+    `;
+
+    if (citation.nodeType) {
+      content += `
+        <div class="citation-field">
+          <strong>Type:</strong>
+          <span>${this.escapeHtml(citation.nodeType)}</span>
+        </div>
+      `;
+    }
+
+    if (citation.sourceType) {
+      content += `
+        <div class="citation-field">
+          <strong>Document Type:</strong>
+          <span>${this.escapeHtml(citation.sourceType)}</span>
+        </div>
+      `;
+    }
+
+    if (citation.tooltip) {
+      content += `
+        <div class="citation-field">
+          <strong>Description:</strong>
+          <span>${this.escapeHtml(citation.tooltip)}</span>
+        </div>
+      `;
+    }
+
+    // Add view link if URL exists and points to valid pages
+    if (citation.url && citation.url.startsWith('/') && 
+        (citation.url.includes('/risks.html') || citation.url.includes('/documents.html'))) {
+      content += `
+        <div class="citation-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+          <a href="${this.escapeHtml(citation.url)}" target="_blank" rel="noopener noreferrer" class="btn-primary">
+            View Full Details →
+          </a>
+        </div>
+      `;
+    }
+
+    content += `</div>`;
+    modalBody.innerHTML = content;
+
+    // Show modal
+    modal.classList.remove('hidden');
+  }
+
+  /**
+   * Close citation modal
+   */
+  closeCitationModal() {
+    const modal = document.getElementById('citation-modal');
+    modal.classList.add('hidden');
   }
 }
 
