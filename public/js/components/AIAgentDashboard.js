@@ -102,16 +102,25 @@ class AIAgentDashboard {
     
     // Event delegation for citation links (since they're dynamically added)
     document.getElementById('chat-messages').addEventListener('click', (e) => {
+      console.log('Click detected on:', e.target);
+      console.log('Has citation-link class?', e.target.classList.contains('citation-link'));
+      console.log('Target classes:', e.target.className);
+      
       if (e.target.classList.contains('citation-link')) {
         e.preventDefault();
+        console.log('✅ Citation link clicked!');
         const citationData = e.target.dataset.citation;
+        console.log('Citation data:', citationData);
         if (citationData) {
           try {
             const citation = JSON.parse(citationData);
+            console.log('Parsed citation:', citation);
             this.showCitationModal(citation);
           } catch (err) {
             console.error('Failed to parse citation data:', err);
           }
+        } else {
+          console.error('⚠️ No citation data found on element');
         }
       }
     });
