@@ -11168,23 +11168,31 @@ async function checkHashAndOpenModal() {
   
   console.log(`[HASH] Auto-opening modal for ${type}-${itemId}`);
   
-  // Wait longer for the page to fully load, including project selection
-  await new Promise(resolve => setTimeout(resolve, 1500));
+  // Get project ID from URL
+  const params = new URLSearchParams(window.location.search);
+  const urlProjectId = params.get('project') || params.get('projectId');
   
-  // Verify we have a current project selected
-  if (!currentProject) {
-    console.error('[HASH] No project selected, waiting for project to load...');
-    // Wait another second for project to load
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  // Wait for projects to load and be selected
+  let attempts = 0;
+  while ((!currentProject || !projects || projects.length === 0) && attempts < 20) {
+    console.log(`[HASH] Waiting for projects to load... attempt ${attempts + 1}/20`);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    attempts++;
     
-    if (!currentProject) {
-      console.error('[HASH] Still no project selected, cannot open modal');
-      alert('Please select a project first, then navigate to the item.');
-      return;
+    // Try to manually select project if URL has projectId and projects are loaded
+    if (urlProjectId && projects && projects.length > 0 && !currentProject) {
+      console.log(`[HASH] Manually selecting project ${urlProjectId}`);
+      await selectProject(parseInt(urlProjectId));
     }
   }
   
-  console.log(`[HASH] Current project: ${currentProject}`);
+  if (!currentProject) {
+    console.error('[HASH] Failed to load project after 6 seconds');
+    alert('Failed to load project. Please refresh the page and try again.');
+    return;
+  }
+  
+  console.log(`[HASH] Project loaded: ${currentProject.name} (ID: ${currentProject.id})`);
   
   try {
     // Determine item type - #task can be either issue or action-item
