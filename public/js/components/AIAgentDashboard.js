@@ -527,16 +527,19 @@ class AIAgentDashboard {
       const chatMessages = document.getElementById('chat-messages');
       chatMessages.innerHTML = '<div class="loading-session">Loading conversation...</div>';
 
-      // Fetch session details
-      const response = await fetch(`/api/aipm/agent/sessions/${sessionId}`, {
-        credentials: 'include'
-      });
+      // Fetch session details and citations in parallel
+      const [sessionResponse, citations] = await Promise.all([
+        fetch(`/api/aipm/agent/sessions/${sessionId}`, {
+          credentials: 'include'
+        }),
+        this.fetchSessionCitations(sessionId)
+      ]);
 
-      if (!response.ok) {
+      if (!sessionResponse.ok) {
         throw new Error('Failed to load session');
       }
 
-      const data = await response.json();
+      const data = await sessionResponse.json();
       const session = data.session;
 
       // Validate session data
@@ -556,14 +559,18 @@ class AIAgentDashboard {
       // Display user message
       this.addMessage('user', session.user_prompt || 'No prompt available');
 
-      // Display AI response (use correct column name: agent_response)
-      // Note: Must pass isLoading=false explicitly before sessionId
-      this.addMessage('assistant', session.agent_response || 'Response not available', false, sessionId);
+      // Display AI response with citations
+      const messageId = this.addMessage('assistant', session.agent_response || 'Response not available', false, sessionId);
+      
+      // Update message with citations if available
+      if (citations && citations.length > 0) {
+        this.updateMessage(messageId, session.agent_response, sessionId, citations);
+      }
 
       // Scroll to bottom
       chatMessages.scrollTop = chatMessages.scrollHeight;
 
-      console.log(`✅ Loaded session ${sessionId}`);
+      console.log(`✅ Loaded session ${sessionId} with ${citations.length} citations`);
     } catch (error) {
       console.error('Error loading session:', error);
       const chatMessages = document.getElementById('chat-messages');
