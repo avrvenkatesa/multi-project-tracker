@@ -82,11 +82,22 @@ class DocumentLibrary {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
           </svg>
           <p class="text-gray-600 text-lg mb-4">No project selected</p>
-          <button onclick="window.location.href='/index.html'" class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+          <button id="select-project-btn" class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
             Select a Project
           </button>
         </div>
       `;
+      
+      // Add event listener for the Select Project button
+      setTimeout(() => {
+        const selectProjectBtn = document.getElementById('select-project-btn');
+        if (selectProjectBtn) {
+          selectProjectBtn.addEventListener('click', () => {
+            window.location.href = '/index.html';
+          });
+        }
+      }, 0);
+      
       return;
     }
     
@@ -442,6 +453,14 @@ class DocumentLibrary {
    * Attach event listeners
    */
   attachEventListeners() {
+    // Back to Projects button in header
+    const backToProjectsBtn = document.getElementById('back-to-projects-btn');
+    if (backToProjectsBtn) {
+      backToProjectsBtn.addEventListener('click', () => {
+        window.location.href = '/index.html';
+      });
+    }
+
     // Search input
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
