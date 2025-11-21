@@ -41,6 +41,18 @@ class AIAgentDashboard {
               <option value="risk_detector">Risk Detector</option>
               <option value="meeting_analyzer">Meeting Analyzer</option>
             </select>
+            <button id="new-chat-btn" title="Start a new chat">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+              New Chat
+            </button>
+            <button id="clear-chat-btn" title="Clear current chat">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+              Clear Chat
+            </button>
             <button id="scan-risks-btn">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -88,6 +100,8 @@ class AIAgentDashboard {
     // Add event listeners using proper DOM event handlers (not inline onclick)
     document.getElementById('send-btn').addEventListener('click', () => this.sendMessage());
     document.getElementById('scan-risks-btn').addEventListener('click', () => this.scanRisks());
+    document.getElementById('new-chat-btn').addEventListener('click', () => this.startNewChat());
+    document.getElementById('clear-chat-btn').addEventListener('click', () => this.clearChat());
     
     // Add enter key handler
     document.getElementById('chat-input').addEventListener('keydown', (e) => {
@@ -606,6 +620,35 @@ class AIAgentDashboard {
     } finally {
       btn.disabled = false;
       btn.textContent = '🔍 Scan Risks';
+    }
+  }
+
+  /**
+   * Start a new chat - clears current conversation
+   */
+  startNewChat() {
+    if (confirm('Start a new chat? This will clear the current conversation.')) {
+      this.clearChat();
+      this.addMessage('assistant', 'Started a new chat. How can I help you today?');
+    }
+  }
+
+  /**
+   * Clear current chat messages
+   */
+  clearChat() {
+    const chatMessages = document.getElementById('chat-messages');
+    if (chatMessages) {
+      // Close any active streaming connection
+      if (this.eventSource) {
+        this.eventSource.close();
+        this.eventSource = null;
+      }
+      
+      // Clear all messages
+      chatMessages.innerHTML = '';
+      
+      console.log('Chat cleared');
     }
   }
 
