@@ -176,75 +176,127 @@ Generate 3 alternative approaches to this decision.`;
 
   /**
    * Create a decision proposal (HITL workflow)
+   * ENHANCED: Creates PKG node for decision tracking with transaction safety
    */
   async createProposal({ sessionId, projectId, userId, decisionData, analysisResults, confidence }) {
-    const proposalId = await this.generateProposalId();
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
 
-    // Prepare proposed data
-    const proposedData = {
-      title: decisionData.title,
-      description: decisionData.description,
-      decision_type: decisionData.decision_type || 'technical',
-      impact_level: decisionData.impact_level || 'medium',
-      status: 'proposed',
-      rationale: decisionData.rationale,
-      alternatives_considered: decisionData.alternatives || [],
-      impacted_entities: analysisResults.impactedNodes.map(n => ({
-        type: n.type,
-        id: n.source_id,
-        table: n.source_table
-      })),
-      related_risks: analysisResults.relatedRisks.map(r => r.id),
-      ai_analysis: {
-        related_decisions: analysisResults.relatedDecisions.length,
-        potential_conflicts: analysisResults.potentialConflicts.length,
-        execution_time_ms: analysisResults.analysisMetadata.executionTimeMs
-      }
-    };
+      const proposalId = await this.generateProposalId();
 
-    const result = await pool.query(`
-      INSERT INTO ai_agent_proposals (
-        proposal_id,
-        session_id,
-        project_id,
-        proposal_type,
-        title,
-        description,
-        rationale,
-        confidence_score,
-        proposed_data,
-        status
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING *
-    `, [
-      proposalId,
-      sessionId,
-      projectId,
-      'decision',
-      decisionData.title,
-      decisionData.description,
-      decisionData.rationale,
-      confidence,
-      JSON.stringify(proposedData),
-      'pending_review'
-    ]);
+      // 1. Generate decision_id for PKG node attrs
+      const decisionIdResult = await client.query(
+        'SELECT generate_decision_id($1) as decision_id',
+        [projectId]
+      );
+      const decisionId = decisionIdResult.rows[0].decision_id;
 
-    // Log proposal creation
-    await aiAgentService.logAction({
-      sessionId,
-      actionType: 'proposal_created',
-      actionDescription: `Created decision proposal ${proposalId}`,
-      inputData: { title: decisionData.title },
-      outputData: { proposalId, confidence },
-      executionTimeMs: 0
-    });
+      // 2. Create PKG node FIRST (before proposal)
+      const pkgAttrs = {
+        decision_id: decisionId,
+        title: decisionData.title,
+        description: decisionData.description,
+        decision_type: decisionData.decision_type || 'technical',
+        impact_level: decisionData.impact_level || 'medium',
+        status: 'proposed',
+        rationale: decisionData.rationale,
+        alternatives_considered: decisionData.alternatives || []
+      };
 
-    return result.rows[0];
+      const pkgNodeResult = await client.query(`
+        INSERT INTO pkg_nodes (
+          project_id,
+          type,
+          attrs,
+          created_by_ai,
+          ai_confidence,
+          created_by
+        )
+        VALUES ($1, 'Decision', $2, true, $3, $4)
+        RETURNING id
+      `, [projectId, JSON.stringify(pkgAttrs), confidence, userId]);
+
+      const pkgNodeId = pkgNodeResult.rows[0].id;
+
+      // 3. Prepare proposed data with PKG link
+      const proposedData = {
+        decision_id: decisionId,
+        pkg_node_id: pkgNodeId,
+        title: decisionData.title,
+        description: decisionData.description,
+        decision_type: decisionData.decision_type || 'technical',
+        impact_level: decisionData.impact_level || 'medium',
+        status: 'proposed',
+        rationale: decisionData.rationale,
+        alternatives_considered: decisionData.alternatives || [],
+        impacted_entities: analysisResults.impactedNodes.map(n => ({
+          type: n.type,
+          id: n.source_id,
+          table: n.source_table
+        })),
+        related_risks: analysisResults.relatedRisks.map(r => r.id),
+        ai_analysis: {
+          related_decisions: analysisResults.relatedDecisions.length,
+          potential_conflicts: analysisResults.potentialConflicts.length,
+          execution_time_ms: analysisResults.analysisMetadata.executionTimeMs
+        }
+      };
+
+      const result = await client.query(`
+        INSERT INTO ai_agent_proposals (
+          proposal_id,
+          session_id,
+          project_id,
+          proposal_type,
+          title,
+          description,
+          rationale,
+          confidence_score,
+          proposed_data,
+          status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING *
+      `, [
+        proposalId,
+        sessionId,
+        projectId,
+        'decision',
+        decisionData.title,
+        decisionData.description,
+        decisionData.rationale,
+        confidence,
+        JSON.stringify(proposedData),
+        'pending_review'
+      ]);
+
+      await client.query('COMMIT');
+
+      // Log proposal creation (outside transaction)
+      await aiAgentService.logAction({
+        sessionId,
+        actionType: 'proposal_created',
+        actionDescription: `Created decision proposal ${proposalId} with PKG node ${pkgNodeId}`,
+        inputData: { title: decisionData.title },
+        outputData: { proposalId, pkgNodeId, confidence },
+        executionTimeMs: 0
+      });
+
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Failed to create proposal with PKG node:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**
    * Approve a proposal and create the actual entity
+   * ENHANCED: Wraps all PKG operations in a transaction for atomicity
    */
   async approveProposal({ proposalId, userId, reviewNotes, modifications }) {
     const proposal = await this.getProposal(proposalId);
@@ -268,139 +320,226 @@ Generate 3 alternative approaches to this decision.`;
       };
     }
 
-    let createdEntityId;
-    let createdEntityType = proposal.proposal_type;
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
 
-    // Create the actual entity based on proposal type
-    if (proposal.proposal_type === 'decision') {
-      // Generate decision_id
-      const decisionIdResult = await pool.query(
-        'SELECT generate_decision_id($1) as decision_id',
-        [proposal.project_id]
-      );
-      const decisionId = decisionIdResult.rows[0].decision_id;
+      let createdEntityId;
+      let createdEntityType = proposal.proposal_type;
 
-      const decision = await pool.query(`
-        INSERT INTO decisions (
-          decision_id,
-          project_id,
-          title,
-          description,
-          decision_type,
-          impact_level,
-          status,
-          rationale,
-          alternatives_considered,
-          created_by,
-          created_by_ai,
-          ai_confidence
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11)
-        RETURNING id
-      `, [
-        decisionId,
-        proposal.project_id,
-        finalData.title,
-        finalData.description,
-        finalData.decision_type,
-        finalData.impact_level,
-        'approved',
-        finalData.rationale,
-        JSON.stringify(finalData.alternatives_considered || []),
-        userId,
-        proposal.confidence_score
-      ]);
+      // Create the actual entity based on proposal type
+      if (proposal.proposal_type === 'decision') {
+        // Use decision_id from proposal (created in createProposal)
+        const decisionId = finalData.decision_id;
+        const pkgNodeId = finalData.pkg_node_id;
 
-      createdEntityId = decision.rows[0].id;
-    } else if (proposal.proposal_type === 'risk') {
-      const risk = await pool.query(`
-        INSERT INTO risks (
-          project_id,
-          title,
-          description,
-          category,
-          probability,
-          impact,
-          status,
-          created_by,
-          ai_detected,
-          ai_confidence
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9)
-        RETURNING id
-      `, [
-        proposal.project_id,
-        finalData.title,
-        finalData.description,
-        finalData.category || 'technical',
-        finalData.probability || 3,
-        finalData.impact || 3,
-        'Open',
-        userId,
-        proposal.confidence_score
-      ]);
+        // Create decision with PKG node link
+        const decision = await client.query(`
+          INSERT INTO decisions (
+            decision_id,
+            project_id,
+            title,
+            description,
+            decision_type,
+            impact_level,
+            status,
+            rationale,
+            alternatives_considered,
+            created_by,
+            created_by_ai,
+            ai_confidence,
+            pkg_node_id
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11, $12)
+          RETURNING id
+        `, [
+          decisionId,
+          proposal.project_id,
+          finalData.title,
+          finalData.description,
+          finalData.decision_type,
+          finalData.impact_level,
+          'approved',
+          finalData.rationale,
+          JSON.stringify(finalData.alternatives_considered || []),
+          userId,
+          proposal.confidence_score,
+          pkgNodeId
+        ]);
 
-      createdEntityId = risk.rows[0].id;
-    } else if (proposal.proposal_type === 'action_item') {
-      const action = await pool.query(`
-        INSERT INTO action_items (
-          project_id,
-          title,
-          description,
-          priority,
-          status,
-          assigned_to,
-          created_by,
-          ai_generated,
-          ai_confidence
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8)
-        RETURNING id
-      `, [
-        proposal.project_id,
-        finalData.title,
-        finalData.description,
-        finalData.priority || 'Medium',
-        'To Do',
-        finalData.assigned_to || null,
-        userId,
-        proposal.confidence_score
-      ]);
+        createdEntityId = decision.rows[0].id;
 
-      createdEntityId = action.rows[0].id;
-    }
+        // Update PKG node with source_id for bi-directional sync
+        if (pkgNodeId) {
+          await client.query(`
+            UPDATE pkg_nodes
+            SET
+              source_table = 'decisions',
+              source_id = $1,
+              attrs = $2
+            WHERE id = $3
+          `, [
+            createdEntityId.toString(),
+            JSON.stringify({
+              ...finalData,
+              status: 'approved',
+              approved_by: userId
+            }),
+            pkgNodeId
+          ]);
+        }
+      } else if (proposal.proposal_type === 'risk') {
+        // Get or create PKG node for risk
+        let pkgNodeId = finalData.pkg_node_id;
 
-    // Update proposal status
-    const updatedProposal = await pool.query(`
-      UPDATE ai_agent_proposals
-      SET
-        status = $1,
-        reviewed_by = $2,
-        review_notes = $3,
-        reviewed_at = NOW(),
-        modifications = $4,
-        created_entity_type = $5,
-        created_entity_id = $6,
-        updated_at = NOW()
-      WHERE proposal_id = $7
-      RETURNING *
-    `, [
-      modifications ? 'modified' : 'approved',
-      userId,
-      reviewNotes,
-      modifications ? JSON.stringify(modifications) : null,
-      createdEntityType,
-      createdEntityId,
-      proposalId
-    ]);
+        // If no PKG node exists (e.g., old proposals), create one
+        if (!pkgNodeId) {
+          const pkgAttrs = {
+            title: finalData.title,
+            description: finalData.description,
+            category: finalData.category || 'technical',
+            probability: finalData.probability || 3,
+            impact: finalData.impact || 3,
+            status: 'Open'
+          };
 
-    return {
-      proposal: updatedProposal.rows[0],
-      createdEntity: {
-        type: createdEntityType,
-        id: createdEntityId
+          const pkgNodeResult = await client.query(`
+            INSERT INTO pkg_nodes (
+              project_id,
+              type,
+              attrs,
+              created_by_ai,
+              ai_confidence,
+              created_by
+            )
+            VALUES ($1, 'Risk', $2, true, $3, $4)
+            RETURNING id
+          `, [proposal.project_id, JSON.stringify(pkgAttrs), proposal.confidence_score, userId]);
+
+          pkgNodeId = pkgNodeResult.rows[0].id;
+        }
+
+        // Create risk with PKG node link
+        const risk = await client.query(`
+          INSERT INTO risks (
+            project_id,
+            title,
+            description,
+            category,
+            probability,
+            impact,
+            status,
+            created_by,
+            ai_detected,
+            ai_confidence,
+            pkg_node_id
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10)
+          RETURNING id
+        `, [
+          proposal.project_id,
+          finalData.title,
+          finalData.description,
+          finalData.category || 'technical',
+          finalData.probability || 3,
+          finalData.impact || 3,
+          'Open',
+          userId,
+          proposal.confidence_score,
+          pkgNodeId
+        ]);
+
+        createdEntityId = risk.rows[0].id;
+
+        // Update PKG node with source_id for bi-directional sync
+        if (pkgNodeId) {
+          await client.query(`
+            UPDATE pkg_nodes
+            SET
+              source_table = 'risks',
+              source_id = $1,
+              attrs = $2
+            WHERE id = $3
+          `, [
+            createdEntityId.toString(),
+            JSON.stringify({
+              ...finalData,
+              status: 'Open',
+              approved_by: userId
+            }),
+            pkgNodeId
+          ]);
+        }
+      } else if (proposal.proposal_type === 'action_item') {
+        const action = await client.query(`
+          INSERT INTO action_items (
+            project_id,
+            title,
+            description,
+            priority,
+            status,
+            assigned_to,
+            created_by,
+            ai_generated,
+            ai_confidence
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8)
+          RETURNING id
+        `, [
+          proposal.project_id,
+          finalData.title,
+          finalData.description,
+          finalData.priority || 'Medium',
+          'To Do',
+          finalData.assigned_to || null,
+          userId,
+          proposal.confidence_score
+        ]);
+
+        createdEntityId = action.rows[0].id;
       }
-    };
+
+      // Update proposal status
+      const updatedProposal = await client.query(`
+        UPDATE ai_agent_proposals
+        SET
+          status = $1,
+          reviewed_by = $2,
+          review_notes = $3,
+          reviewed_at = NOW(),
+          modifications = $4,
+          created_entity_type = $5,
+          created_entity_id = $6,
+          updated_at = NOW()
+        WHERE proposal_id = $7
+        RETURNING *
+      `, [
+        modifications ? 'modified' : 'approved',
+        userId,
+        reviewNotes,
+        modifications ? JSON.stringify(modifications) : null,
+        createdEntityType,
+        createdEntityId,
+        proposalId
+      ]);
+
+      await client.query('COMMIT');
+
+      return {
+        proposal: updatedProposal.rows[0],
+        createdEntity: {
+          type: createdEntityType,
+          id: createdEntityId
+        }
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Failed to approve proposal with PKG sync:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**

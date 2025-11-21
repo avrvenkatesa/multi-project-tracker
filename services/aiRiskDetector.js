@@ -391,6 +391,7 @@ class AIRiskDetector {
 
   /**
    * Auto-create high-confidence risks
+   * ENHANCED: Creates PKG nodes and evidence edges with transaction safety
    */
   async autoCreateHighConfidenceRisks({ projectId, detectedRisks, confidenceThreshold = 0.9 }) {
     const autoCreated = [];
@@ -404,20 +405,53 @@ class AIRiskDetector {
 
     // Create risks with atomic deduplication via unique index
     for (const risk of highConfidenceRisks) {
+      const client = await pool.connect();
+      
       try {
+        await client.query('BEGIN');
+
         // Generate stable source identifier for deduplication
         const sourceId = risk.source?.id || risk.source?.title || risk.title;
         const sourceIdentifier = `${risk.type}:${sourceId}`;
 
         // Generate unique risk ID atomically (safe for concurrent requests)
-        const riskIdResult = await pool.query(
+        const riskIdResult = await client.query(
           'SELECT generate_risk_id($1) as risk_id',
           [projectId]
         );
         const riskId = riskIdResult.rows[0].risk_id;
 
-        // Create risk with ON CONFLICT DO NOTHING for atomic deduplication
-        const result = await pool.query(`
+        // 1. Create PKG node FIRST (before risk entity)
+        const pkgAttrs = {
+          risk_id: riskId,
+          title: risk.title,
+          description: risk.description,
+          category: risk.type,
+          probability: risk.probability,
+          impact: risk.impact,
+          severity: risk.severity,
+          status: 'identified',
+          detection_source: risk.type,
+          source: risk.source
+        };
+
+        const pkgNodeResult = await client.query(`
+          INSERT INTO pkg_nodes (
+            project_id,
+            type,
+            attrs,
+            created_by_ai,
+            ai_confidence,
+            created_by
+          )
+          VALUES ($1, 'Risk', $2, true, $3, $4)
+          RETURNING id
+        `, [projectId, JSON.stringify(pkgAttrs), risk.confidence, 1]);
+
+        const pkgNodeId = pkgNodeResult.rows[0].id;
+
+        // 2. Create risk with PKG node link and ON CONFLICT for atomic deduplication
+        const result = await client.query(`
           INSERT INTO risks (
             risk_id,
             project_id,
@@ -431,9 +465,10 @@ class AIRiskDetector {
             ai_confidence,
             detection_source,
             source_identifier,
-            created_by
+            created_by,
+            pkg_node_id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11, $12)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11, $12, $13)
           ON CONFLICT (project_id, detection_source, source_identifier) 
           WHERE ai_detected = TRUE AND source_identifier IS NOT NULL
           DO NOTHING
@@ -450,18 +485,78 @@ class AIRiskDetector {
           risk.confidence,
           risk.type,
           sourceIdentifier,
-          1 // System user
+          1, // System user
+          pkgNodeId
         ]);
 
-        // Only add to autoCreated if actually inserted (not skipped by ON CONFLICT)
-        if (result.rows.length > 0) {
-          autoCreated.push(result.rows[0]);
-        } else {
+        // Check if risk was actually inserted (not skipped by ON CONFLICT)
+        if (result.rows.length === 0) {
+          // Conflict detected - rollback to remove orphaned PKG node
+          await client.query('ROLLBACK');
           console.log(`Skipped duplicate risk: ${risk.title} (${sourceIdentifier})`);
+          // Note: client.release() is handled in finally block
+          continue;
         }
+
+        const createdRisk = result.rows[0];
+
+        // 3. Update PKG node with source_id for bi-directional sync
+        await client.query(`
+          UPDATE pkg_nodes
+          SET
+            source_table = 'risks',
+            source_id = $1
+          WHERE id = $2
+        `, [createdRisk.id.toString(), pkgNodeId]);
+
+        // 4. Create PKG edge for evidence relationship (if source exists)
+        if (risk.source?.type && risk.source?.id) {
+          // Find source PKG node
+          const sourcePkgNode = await client.query(`
+            SELECT id FROM pkg_nodes
+            WHERE project_id = $1
+              AND source_table = $2
+              AND source_id = $3
+            LIMIT 1
+          `, [projectId, risk.source.type + 's', risk.source.id.toString()]);
+
+          if (sourcePkgNode.rows.length > 0) {
+            const sourceNodeId = sourcePkgNode.rows[0].id;
+
+            // Create evidence edge: source -> risk
+            await client.query(`
+              INSERT INTO pkg_edges (
+                project_id,
+                type,
+                from_node_id,
+                to_node_id,
+                confidence,
+                evidence_quote,
+                created_by_ai,
+                created_by
+              )
+              VALUES ($1, 'evidence_of', $2, $3, $4, $5, true, $6)
+              ON CONFLICT DO NOTHING
+            `, [
+              projectId,
+              sourceNodeId,
+              pkgNodeId,
+              risk.confidence,
+              risk.description.substring(0, 200), // Use first 200 chars as evidence quote
+              1
+            ]);
+          }
+        }
+
+        // Commit transaction - all PKG operations succeeded
+        await client.query('COMMIT');
+        autoCreated.push(createdRisk);
       } catch (err) {
-        // Log error but continue with next risk
+        // Rollback on any error to maintain PKG consistency
+        await client.query('ROLLBACK');
         console.error(`Failed to create risk "${risk.title}":`, err.message);
+      } finally {
+        client.release();
       }
     }
 
