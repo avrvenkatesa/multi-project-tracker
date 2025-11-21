@@ -1,93 +1,116 @@
 const express = require('express');
 const router = express.Router();
-const thoughtCaptureService = require('../services/thoughtCapture');
-const { authenticateToken, checkProjectAccess } = require('../middleware/auth');
+const { Pool } = require('@neondatabase/serverless');
+const { authenticateToken } = require('../middleware/auth');
+const thoughtCaptureService = require('../services/thoughtCaptureService');
+const multer = require('multer');
 
-router.post('/projects/:projectId', authenticateToken, checkProjectAccess, async (req, res) => {
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 100 * 1024 * 1024
+  }
+});
+
+router.post('/thoughts', authenticateToken, upload.single('audioFile'), async (req, res) => {
   try {
-    const { projectId } = req.params;
     const {
+      projectId,
       contentType,
       textContent,
-      audioUrl,
-      fileUrl,
-      transcript,
       thoughtType,
-      tags,
-      captureSource,
-      deviceInfo
+      tags
     } = req.body;
 
-    const thought = await thoughtCaptureService.createThought({
+    if (!projectId) {
+      return res.status(400).json({ error: 'Project ID is required' });
+    }
+
+    if (!contentType || !['text', 'voice'].includes(contentType)) {
+      return res.status(400).json({ error: 'Content type must be "text" or "voice"' });
+    }
+
+    if (contentType === 'text' && !textContent) {
+      return res.status(400).json({ error: 'Text content is required for text captures' });
+    }
+
+    if (contentType === 'voice' && !req.file) {
+      return res.status(400).json({ error: 'Audio file is required for voice captures' });
+    }
+
+    const result = await thoughtCaptureService.processThought({
       projectId: parseInt(projectId),
-      userId: req.user.userId,
+      userId: req.user.id,
       contentType,
       textContent,
-      audioUrl,
-      fileUrl,
-      transcript,
-      thoughtType,
-      tags,
-      captureSource,
-      deviceInfo
+      audioFile: req.file,
+      thoughtType: thoughtType || 'auto',
+      tags: tags ? JSON.parse(tags) : []
     });
 
-    res.status(201).json({ thought });
-  } catch (error) {
-    console.error('Error creating thought:', error);
-    res.status(400).json({ error: error.message });
-  }
-});
-
-router.get('/projects/:projectId', authenticateToken, checkProjectAccess, async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { userId, thoughtType, analyzed, limit } = req.query;
-
-    const filters = {};
-    if (userId) filters.userId = parseInt(userId);
-    if (thoughtType) filters.thoughtType = thoughtType;
-    if (analyzed !== undefined) filters.analyzed = analyzed === 'true';
-    if (limit) filters.limit = parseInt(limit);
-
-    const thoughts = await thoughtCaptureService.getThoughtsByProject(parseInt(projectId), filters);
-    res.json({ thoughts });
-  } catch (error) {
-    console.error('Error fetching thoughts:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.get('/:thoughtId', authenticateToken, async (req, res) => {
-  try {
-    const { thoughtId } = req.params;
-    const thought = await thoughtCaptureService.getThoughtById(parseInt(thoughtId));
-    res.json({ thought });
-  } catch (error) {
-    console.error('Error fetching thought:', error);
-    res.status(404).json({ error: error.message });
-  }
-});
-
-router.post('/:thoughtId/analyze', authenticateToken, async (req, res) => {
-  try {
-    const { thoughtId } = req.params;
-    const result = await thoughtCaptureService.analyzeThought(parseInt(thoughtId), req.user.userId);
     res.json(result);
   } catch (error) {
-    console.error('Error analyzing thought:', error);
-    res.status(400).json({ error: error.message });
+    console.error('Thought capture error:', error);
+    res.status(500).json({
+      error: 'Failed to process thought',
+      details: error.message
+    });
   }
 });
 
-router.delete('/:thoughtId', authenticateToken, async (req, res) => {
+router.get('/thoughts', authenticateToken, async (req, res) => {
   try {
-    const { thoughtId } = req.params;
-    await thoughtCaptureService.deleteThought(parseInt(thoughtId), req.user.userId);
-    res.json({ success: true });
+    const { projectId, limit } = req.query;
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'Project ID is required' });
+    }
+
+    const result = await pool.query(`
+      SELECT * FROM thought_captures
+      WHERE project_id = $1 AND created_by = $2
+      ORDER BY created_at DESC
+      LIMIT $3
+    `, [projectId, req.user.id, limit ? parseInt(limit) : 20]);
+
+    res.json({
+      success: true,
+      thoughts: result.rows
+    });
   } catch (error) {
-    console.error('Error deleting thought:', error);
-    res.status(400).json({ error: error.message });
+    console.error('Get thought history error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch thought history',
+      details: error.message
+    });
+  }
+});
+
+router.get('/thoughts/:captureId', authenticateToken, async (req, res) => {
+  try {
+    const { captureId } = req.params;
+
+    const result = await pool.query(
+      'SELECT * FROM thought_captures WHERE id = $1 AND created_by = $2',
+      [captureId, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Thought capture not found' });
+    }
+
+    res.json({
+      success: true,
+      thought: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Get thought details error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch thought details',
+      details: error.message
+    });
   }
 });
 
