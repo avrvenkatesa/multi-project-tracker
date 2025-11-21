@@ -28,6 +28,15 @@ router.post('/thoughts', authenticateToken, upload.single('audioFile'), async (r
       return res.status(400).json({ error: 'Project ID is required' });
     }
 
+    const projectAccess = await pool.query(`
+      SELECT * FROM project_members 
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+
+    if (projectAccess.rows.length === 0 && req.user.role !== 'System Administrator') {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+
     if (!contentType || !['text', 'voice'].includes(contentType)) {
       return res.status(400).json({ error: 'Content type must be "text" or "voice"' });
     }
@@ -68,6 +77,15 @@ router.get('/thoughts', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Project ID is required' });
     }
 
+    const projectAccess = await pool.query(`
+      SELECT * FROM project_members 
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+
+    if (projectAccess.rows.length === 0 && req.user.role !== 'System Administrator') {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+
     const result = await pool.query(`
       SELECT * FROM thought_captures
       WHERE project_id = $1 AND created_by = $2
@@ -93,12 +111,22 @@ router.get('/thoughts/:captureId', authenticateToken, async (req, res) => {
     const { captureId } = req.params;
 
     const result = await pool.query(
-      'SELECT * FROM thought_captures WHERE id = $1 AND created_by = $2',
-      [captureId, req.user.id]
+      'SELECT * FROM thought_captures WHERE id = $1',
+      [captureId]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Thought capture not found' });
+    }
+
+    const projectId = result.rows[0].project_id;
+    const projectAccess = await pool.query(`
+      SELECT * FROM project_members 
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+
+    if (projectAccess.rows.length === 0 && req.user.role !== 'System Administrator') {
+      return res.status(403).json({ error: 'Access denied to this project' });
     }
 
     res.json({

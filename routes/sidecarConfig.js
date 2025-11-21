@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { Pool } = require('@neondatabase/serverless');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, checkProjectAccess, requireAuthority } = require('../middleware/auth');
 const emailProcessor = require('../services/emailProcessor');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-router.get('/projects/:projectId/sidecar/config', authenticateToken, async (req, res) => {
+router.get('/projects/:projectId/sidecar/config', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId } = req.params;
 
@@ -36,7 +36,7 @@ router.get('/projects/:projectId/sidecar/config', authenticateToken, async (req,
   }
 });
 
-router.put('/projects/:projectId/sidecar/config', authenticateToken, async (req, res) => {
+router.put('/projects/:projectId/sidecar/config', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId } = req.params;
     const config = req.body;
@@ -50,7 +50,7 @@ router.put('/projects/:projectId/sidecar/config', authenticateToken, async (req,
       LIMIT 1
     `, [req.user.id, projectId]);
 
-    if (userRole.rows.length === 0 || userRole.rows[0].authority_level < 4) {
+    if ((userRole.rows.length === 0 || userRole.rows[0].authority_level < 4) && req.user.role !== 'System Administrator') {
       return res.status(403).json({ error: 'Only managers and admins can configure Sidecar' });
     }
 
@@ -120,7 +120,7 @@ router.put('/projects/:projectId/sidecar/config', authenticateToken, async (req,
   }
 });
 
-router.post('/projects/:projectId/sidecar/test-connection', authenticateToken, async (req, res) => {
+router.post('/projects/:projectId/sidecar/test-connection', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { platform } = req.body;
@@ -164,9 +164,22 @@ router.post('/projects/:projectId/sidecar/test-connection', authenticateToken, a
   }
 });
 
-router.post('/projects/:projectId/sidecar/enable', authenticateToken, async (req, res) => {
+router.post('/projects/:projectId/sidecar/enable', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId } = req.params;
+
+    const userRole = await pool.query(`
+      SELECT r.authority_level
+      FROM user_role_assignments ur
+      JOIN custom_roles r ON ur.role_id = r.id
+      WHERE ur.user_id = $1 AND ur.project_id = $2
+      ORDER BY r.authority_level DESC
+      LIMIT 1
+    `, [req.user.id, projectId]);
+
+    if ((userRole.rows.length === 0 || userRole.rows[0].authority_level < 4) && req.user.role !== 'System Administrator') {
+      return res.status(403).json({ error: 'Only managers and admins can enable Sidecar' });
+    }
 
     await pool.query(
       'UPDATE sidecar_config SET enabled = true, updated_at = NOW() WHERE project_id = $1',
@@ -183,9 +196,22 @@ router.post('/projects/:projectId/sidecar/enable', authenticateToken, async (req
   }
 });
 
-router.post('/projects/:projectId/sidecar/disable', authenticateToken, async (req, res) => {
+router.post('/projects/:projectId/sidecar/disable', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId } = req.params;
+
+    const userRole = await pool.query(`
+      SELECT r.authority_level
+      FROM user_role_assignments ur
+      JOIN custom_roles r ON ur.role_id = r.id
+      WHERE ur.user_id = $1 AND ur.project_id = $2
+      ORDER BY r.authority_level DESC
+      LIMIT 1
+    `, [req.user.id, projectId]);
+
+    if ((userRole.rows.length === 0 || userRole.rows[0].authority_level < 4) && req.user.role !== 'System Administrator') {
+      return res.status(403).json({ error: 'Only managers and admins can disable Sidecar' });
+    }
 
     await pool.query(
       'UPDATE sidecar_config SET enabled = false, updated_at = NOW() WHERE project_id = $1',

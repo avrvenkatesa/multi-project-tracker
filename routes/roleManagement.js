@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { Pool } = require('@neondatabase/serverless');
 const rolePermissionService = require('../services/rolePermissionService');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, checkProjectAccess, requireAuthority, checkResourceProjectAccess } = require('../middleware/auth');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-router.get('/projects/:projectId/roles', authenticateToken, async (req, res) => {
+router.get('/projects/:projectId/roles', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId } = req.params;
 
@@ -22,7 +22,7 @@ router.get('/projects/:projectId/roles', authenticateToken, async (req, res) => 
   }
 });
 
-router.get('/projects/:projectId/roles/hierarchy', authenticateToken, async (req, res) => {
+router.get('/projects/:projectId/roles/hierarchy', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId } = req.params;
 
@@ -39,7 +39,7 @@ router.get('/projects/:projectId/roles/hierarchy', authenticateToken, async (req
   }
 });
 
-router.post('/projects/:projectId/roles', authenticateToken, async (req, res) => {
+router.post('/projects/:projectId/roles', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId } = req.params;
     const {
@@ -52,6 +52,21 @@ router.post('/projects/:projectId/roles', authenticateToken, async (req, res) =>
       icon,
       color
     } = req.body;
+
+    if (req.user.role !== 'System Administrator') {
+      const userRole = await pool.query(`
+        SELECT r.authority_level
+        FROM user_role_assignments ur
+        JOIN custom_roles r ON ur.role_id = r.id
+        WHERE ur.user_id = $1 AND ur.project_id = $2
+        ORDER BY r.authority_level DESC
+        LIMIT 1
+      `, [req.user.id, projectId]);
+
+      if (userRole.rows.length === 0 || userRole.rows[0].authority_level < 4) {
+        return res.status(403).json({ error: 'Only managers and admins can create roles' });
+      }
+    }
 
     if (!roleName || !roleCode) {
       return res.status(400).json({ error: 'Role name and code are required' });
@@ -108,12 +123,37 @@ router.put('/roles/:roleId', authenticateToken, async (req, res) => {
     } = req.body;
 
     const roleCheck = await pool.query(
-      'SELECT is_system_role FROM custom_roles WHERE id = $1',
+      'SELECT is_system_role, project_id FROM custom_roles WHERE id = $1',
       [roleId]
     );
 
     if (roleCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Role not found' });
+    }
+
+    const projectId = roleCheck.rows[0].project_id;
+    const projectAccess = await pool.query(`
+      SELECT * FROM project_members 
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+
+    if (projectAccess.rows.length === 0 && req.user.role !== 'System Administrator') {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+
+    if (req.user.role !== 'System Administrator') {
+      const userRole = await pool.query(`
+        SELECT r.authority_level
+        FROM user_role_assignments ur
+        JOIN custom_roles r ON ur.role_id = r.id
+        WHERE ur.user_id = $1 AND ur.project_id = $2
+        ORDER BY r.authority_level DESC
+        LIMIT 1
+      `, [req.user.id, projectId]);
+
+      if (userRole.rows.length === 0 || userRole.rows[0].authority_level < 4) {
+        return res.status(403).json({ error: 'Only managers and admins can modify roles' });
+      }
     }
 
     if (roleCheck.rows[0].is_system_role) {
@@ -154,12 +194,37 @@ router.delete('/roles/:roleId', authenticateToken, async (req, res) => {
     const { roleId } = req.params;
 
     const roleCheck = await pool.query(
-      'SELECT is_system_role FROM custom_roles WHERE id = $1',
+      'SELECT is_system_role, project_id FROM custom_roles WHERE id = $1',
       [roleId]
     );
 
     if (roleCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Role not found' });
+    }
+
+    const projectId = roleCheck.rows[0].project_id;
+    const projectAccess = await pool.query(`
+      SELECT * FROM project_members 
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+
+    if (projectAccess.rows.length === 0 && req.user.role !== 'System Administrator') {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+
+    if (req.user.role !== 'System Administrator') {
+      const userRole = await pool.query(`
+        SELECT r.authority_level
+        FROM user_role_assignments ur
+        JOIN custom_roles r ON ur.role_id = r.id
+        WHERE ur.user_id = $1 AND ur.project_id = $2
+        ORDER BY r.authority_level DESC
+        LIMIT 1
+      `, [req.user.id, projectId]);
+
+      if (userRole.rows.length === 0 || userRole.rows[0].authority_level < 4) {
+        return res.status(403).json({ error: 'Only managers and admins can delete roles' });
+      }
     }
 
     if (roleCheck.rows[0].is_system_role) {
@@ -185,6 +250,25 @@ router.get('/roles/:roleId/permissions', authenticateToken, async (req, res) => 
   try {
     const { roleId } = req.params;
 
+    const roleCheck = await pool.query(
+      'SELECT project_id FROM custom_roles WHERE id = $1',
+      [roleId]
+    );
+
+    if (roleCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Role not found' });
+    }
+
+    const projectId = roleCheck.rows[0].project_id;
+    const projectAccess = await pool.query(`
+      SELECT * FROM project_members 
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+
+    if (projectAccess.rows.length === 0 && req.user.role !== 'System Administrator') {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+
     const result = await pool.query(
       'SELECT * FROM role_permissions WHERE role_id = $1 ORDER BY entity_type',
       [roleId]
@@ -203,6 +287,41 @@ router.get('/roles/:roleId/permissions', authenticateToken, async (req, res) => 
 router.post('/roles/:roleId/permissions', authenticateToken, async (req, res) => {
   try {
     const { roleId } = req.params;
+
+    const roleCheck = await pool.query(
+      'SELECT project_id FROM custom_roles WHERE id = $1',
+      [roleId]
+    );
+
+    if (roleCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Role not found' });
+    }
+
+    const projectId = roleCheck.rows[0].project_id;
+    const projectAccess = await pool.query(`
+      SELECT * FROM project_members 
+      WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+    `, [req.user.id, projectId]);
+
+    if (projectAccess.rows.length === 0 && req.user.role !== 'System Administrator') {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+
+    if (req.user.role !== 'System Administrator') {
+      const userRole = await pool.query(`
+        SELECT r.authority_level
+        FROM user_role_assignments ur
+        JOIN custom_roles r ON ur.role_id = r.id
+        WHERE ur.user_id = $1 AND ur.project_id = $2
+        ORDER BY r.authority_level DESC
+        LIMIT 1
+      `, [req.user.id, projectId]);
+
+      if (userRole.rows.length === 0 || userRole.rows[0].authority_level < 4) {
+        return res.status(403).json({ error: 'Only managers and admins can modify permissions' });
+      }
+    }
+
     const {
       entityType,
       canCreate,
@@ -262,13 +381,28 @@ router.post('/roles/:roleId/permissions', authenticateToken, async (req, res) =>
   }
 });
 
-router.post('/projects/:projectId/users/:userId/assign-role', authenticateToken, async (req, res) => {
+router.post('/projects/:projectId/users/:userId/assign-role', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId, userId } = req.params;
     const { roleId, isPrimary } = req.body;
 
     if (!roleId) {
       return res.status(400).json({ error: 'Role ID is required' });
+    }
+
+    if (req.user.role !== 'System Administrator') {
+      const userRole = await pool.query(`
+        SELECT r.authority_level
+        FROM user_role_assignments ur
+        JOIN custom_roles r ON ur.role_id = r.id
+        WHERE ur.user_id = $1 AND ur.project_id = $2
+        ORDER BY r.authority_level DESC
+        LIMIT 1
+      `, [req.user.id, projectId]);
+
+      if (userRole.rows.length === 0 || userRole.rows[0].authority_level < 4) {
+        return res.status(403).json({ error: 'Only managers and admins can assign roles' });
+      }
     }
 
     const assignment = await rolePermissionService.assignRole(
@@ -289,7 +423,7 @@ router.post('/projects/:projectId/users/:userId/assign-role', authenticateToken,
   }
 });
 
-router.get('/projects/:projectId/users/:userId/role', authenticateToken, async (req, res) => {
+router.get('/projects/:projectId/users/:userId/role', authenticateToken, checkProjectAccess, async (req, res) => {
   try {
     const { projectId, userId } = req.params;
 

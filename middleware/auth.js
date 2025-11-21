@@ -88,10 +88,82 @@ async function checkProjectAccess(req, res, next) {
   }
 }
 
+async function requireAuthority(minLevel) {
+  return async (req, res, next) => {
+    if (req.user.role === 'System Administrator') {
+      return next();
+    }
+
+    const projectId = req.params.projectId || req.params.resolvedProjectId;
+    if (!projectId) {
+      return res.status(400).json({ error: 'Project ID required for authority check' });
+    }
+
+    try {
+      const result = await pool.query(`
+        SELECT r.authority_level
+        FROM user_role_assignments ur
+        JOIN custom_roles r ON ur.role_id = r.id
+        WHERE ur.user_id = $1 AND ur.project_id = $2
+        ORDER BY r.authority_level DESC
+        LIMIT 1
+      `, [req.user.userId || req.user.id, projectId]);
+
+      if (result.rows.length === 0 || result.rows[0].authority_level < minLevel) {
+        return res.status(403).json({ 
+          error: `Requires authority level ${minLevel} or higher`,
+          current: result.rows.length > 0 ? result.rows[0].authority_level : 0
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error('Error checking authority:', error);
+      return res.status(500).json({ error: 'Error checking authority' });
+    }
+  };
+}
+
+async function checkResourceProjectAccess(resourceQuery) {
+  return async (req, res, next) => {
+    if (req.user.role === 'System Administrator') {
+      return next();
+    }
+
+    try {
+      const result = await pool.query(resourceQuery.sql, resourceQuery.params(req));
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: resourceQuery.notFoundMessage || 'Resource not found' });
+      }
+
+      const projectId = result.rows[0].project_id;
+      const userId = req.user.userId || req.user.id;
+
+      const access = await pool.query(`
+        SELECT * FROM project_members 
+        WHERE user_id = $1 AND project_id = $2 AND status = 'active'
+      `, [userId, projectId]);
+
+      if (access.rows.length === 0) {
+        return res.status(403).json({ error: 'Access denied to this project' });
+      }
+
+      req.params.resolvedProjectId = projectId;
+      next();
+    } catch (error) {
+      console.error('Error checking resource project access:', error);
+      return res.status(500).json({ error: 'Error checking access' });
+    }
+  };
+}
+
 module.exports = {
   authenticateToken,
   requireAdmin,
   requireRole,
   checkProjectAccess,
+  requireAuthority,
+  checkResourceProjectAccess,
   ROLE_HIERARCHY
 };
