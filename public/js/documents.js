@@ -34,6 +34,7 @@ class DocumentLibrary {
   async loadAvailableProjects() {
     try {
       const response = await fetch('/api/projects', {
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' }
       });
       
@@ -162,7 +163,9 @@ class DocumentLibrary {
       params.append('limit', this.pageSize);
       params.append('offset', offset);
 
-      const response = await fetch(`/api/projects/${this.currentProjectId}/documents?${params}`);
+      const response = await fetch(`/api/projects/${this.currentProjectId}/documents?${params}`, {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       
       const data = await response.json();
@@ -351,7 +354,9 @@ class DocumentLibrary {
    */
   async viewDocument(docId) {
     try {
-      const response = await fetch(`/api/documents/${docId}`);
+      const response = await fetch(`/api/documents/${docId}`, {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error('Failed to load document');
       
       const doc = await response.json();
@@ -411,7 +416,9 @@ class DocumentLibrary {
    */
   async downloadDocument(docId) {
     try {
-      const response = await fetch(`/api/documents/${docId}/download`);
+      const response = await fetch(`/api/documents/${docId}/download`, {
+        credentials: 'include'
+      });
       if (!response.ok) {
         throw new Error(`Download failed: ${response.statusText}`);
       }
@@ -443,6 +450,7 @@ class DocumentLibrary {
     try {
       const response = await fetch(`/api/documents/${docId}`, { 
         method: 'DELETE',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' }
       });
       
