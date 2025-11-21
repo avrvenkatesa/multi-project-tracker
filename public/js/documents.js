@@ -432,6 +432,151 @@ class DocumentLibrary {
   }
 
   /**
+   * Show upload modal
+   */
+  showUploadModal() {
+    if (!this.currentProjectId) {
+      alert('Please select a project first');
+      return;
+    }
+    
+    const modal = document.getElementById('upload-modal');
+    const form = document.getElementById('upload-form');
+    const titleInput = document.getElementById('document-title');
+    const fileInput = document.getElementById('file-input');
+    const progressDiv = document.getElementById('upload-progress');
+    const submitBtn = document.getElementById('submit-upload-btn');
+    
+    // Reset form
+    if (form) form.reset();
+    if (titleInput) titleInput.value = '';
+    if (fileInput) fileInput.value = '';
+    if (progressDiv) progressDiv.classList.add('hidden');
+    if (submitBtn) submitBtn.disabled = false;
+    
+    modal.classList.remove('hidden');
+  }
+
+  /**
+   * Close upload modal
+   */
+  closeUploadModal() {
+    const modal = document.getElementById('upload-modal');
+    const form = document.getElementById('upload-form');
+    modal.classList.add('hidden');
+    if (form) form.reset();
+  }
+
+  /**
+   * Handle file upload
+   */
+  async handleFileUpload() {
+    const fileInput = document.getElementById('file-input');
+    const titleInput = document.getElementById('document-title');
+    const progressDiv = document.getElementById('upload-progress');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const statusText = document.getElementById('upload-status');
+    const submitBtn = document.getElementById('submit-upload-btn');
+    
+    const file = fileInput.files[0];
+    if (!file) {
+      alert('Please select a file');
+      submitBtn.disabled = false;
+      return;
+    }
+
+    // Validate file size (50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      alert('File size must be less than 50MB');
+      submitBtn.disabled = false;
+      return;
+    }
+
+    try {
+      // Show progress
+      progressDiv.classList.remove('hidden');
+      progressBar.style.width = '0%';
+      statusText.textContent = 'Uploading...';
+      submitBtn.disabled = true;
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append('file', file);
+      if (titleInput.value.trim()) {
+        formData.append('title', titleInput.value.trim());
+      }
+
+      // Upload with progress tracking
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = (e.loaded / e.total) * 100;
+          progressBar.style.width = percentComplete + '%';
+          statusText.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+        }
+      });
+
+      xhr.addEventListener('load', async () => {
+        if (xhr.status === 200) {
+          const result = JSON.parse(xhr.responseText);
+          statusText.textContent = 'Processing document...';
+          progressBar.style.width = '100%';
+          
+          // Wait a bit to show success, then reset UI and close
+          setTimeout(async () => {
+            progressDiv.classList.add('hidden');
+            submitBtn.disabled = false;
+            fileInput.value = ''; // Clear file input for next upload
+            this.closeUploadModal();
+            // Clear cache before reloading to ensure new document appears
+            this.cache.clear();
+            // Guard against navigation/project switch during delay
+            if (this.currentProjectId) {
+              await this.loadDocuments();
+            }
+            alert('✅ Document uploaded successfully!');
+          }, 500);
+        } else {
+          // Handle error response
+          let errorMessage = 'Upload failed';
+          try {
+            const error = JSON.parse(xhr.responseText);
+            errorMessage = error.error || errorMessage;
+          } catch (e) {
+            errorMessage = `HTTP ${xhr.status}: ${xhr.statusText}`;
+          }
+          
+          alert(`Failed to upload document: ${errorMessage}`);
+          progressDiv.classList.add('hidden');
+          submitBtn.disabled = false;
+          fileInput.value = ''; // Clear file input to allow retry
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        alert('Network error during upload');
+        progressDiv.classList.add('hidden');
+        submitBtn.disabled = false;
+        fileInput.value = ''; // Clear file input to allow retry
+      });
+
+      xhr.open('POST', `/api/projects/${this.currentProjectId}/documents/upload`);
+      xhr.setRequestHeader('Accept', 'application/json');
+      // Credentials are sent automatically with XHR
+      xhr.withCredentials = true;
+      xhr.send(formData);
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert(`Failed to upload document: ${error.message}`);
+      if (progressDiv) progressDiv.classList.add('hidden');
+      if (submitBtn) submitBtn.disabled = false;
+      if (fileInput) fileInput.value = ''; // Clear file input to allow retry
+    }
+  }
+
+  /**
    * Download document with proper error handling
    */
   async downloadDocument(docId) {
@@ -567,7 +712,36 @@ class DocumentLibrary {
     const uploadBtn = document.getElementById('upload-btn');
     if (uploadBtn) {
       uploadBtn.addEventListener('click', () => {
-        alert('Upload functionality coming soon! For now, use the AI Analysis feature to upload and analyze documents.');
+        this.showUploadModal();
+      });
+    }
+
+    // Upload modal controls
+    const closeUploadModal = document.getElementById('close-upload-modal');
+    const cancelUploadBtn = document.getElementById('cancel-upload-btn');
+    const uploadForm = document.getElementById('upload-form');
+    const uploadModal = document.getElementById('upload-modal');
+
+    if (closeUploadModal) {
+      closeUploadModal.addEventListener('click', () => this.closeUploadModal());
+    }
+
+    if (cancelUploadBtn) {
+      cancelUploadBtn.addEventListener('click', () => this.closeUploadModal());
+    }
+
+    if (uploadModal) {
+      uploadModal.addEventListener('click', (e) => {
+        if (e.target === uploadModal) {
+          this.closeUploadModal();
+        }
+      });
+    }
+
+    if (uploadForm) {
+      uploadForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleFileUpload();
       });
     }
 

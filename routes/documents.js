@@ -1,6 +1,49 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs').promises;
 const { pool } = require('../db');
+const { extractTextFromFile } = require('../services/file-processor');
+const { embedDocument } = require('../services/embeddingService');
+
+// Configure multer for document uploads
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const uploadDir = 'uploads/documents';
+    try {
+      await fs.mkdir(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error);
+    }
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /pdf|docx|doc|txt|md|csv|xlsx|xls|pptx|ppt/i;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = file.mimetype.includes('pdf') || 
+                     file.mimetype.includes('word') ||
+                     file.mimetype.includes('text') ||
+                     file.mimetype.includes('document') ||
+                     file.mimetype.includes('spreadsheet') ||
+                     file.mimetype.includes('presentation');
+    
+    if (extname || mimetype) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF, DOCX, TXT, MD, CSV, XLSX, PPTX files are allowed.'));
+    }
+  }
+});
 
 /**
  * Helper function to check project access
@@ -141,6 +184,125 @@ router.get('/projects/:projectId/documents', async (req, res) => {
   } catch (error) {
     console.error('Error listing documents:', error);
     res.status(500).json({ error: 'Failed to list documents' });
+  }
+});
+
+/**
+ * POST /api/projects/:projectId/documents/upload
+ * Upload a document to the project
+ */
+router.post('/projects/:projectId/documents/upload', upload.single('file'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { projectId } = req.params;
+    const file = req.file;
+    const { title } = req.body;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Verify project access
+    const hasAccess = await checkProjectAccess(req.user.id, projectId, req.user.role);
+    if (!hasAccess) {
+      await fs.unlink(file.path);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    await client.query('BEGIN');
+
+    // Extract text from file
+    let extractedText = '';
+    let processingError = null;
+    
+    try {
+      extractedText = await extractTextFromFile(file.path, file.mimetype);
+    } catch (error) {
+      console.error('Error extracting text:', error);
+      processingError = error.message;
+    }
+
+    // Use provided title or fallback to filename
+    const docTitle = title || file.originalname;
+
+    // Insert into RAG documents
+    const ragResult = await client.query(`
+      INSERT INTO rag_documents (
+        project_id,
+        source_type,
+        source_id,
+        title,
+        content,
+        word_count,
+        original_filename,
+        uploaded_by,
+        meta
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `, [
+      projectId,
+      'uploaded_doc',
+      null,
+      docTitle,
+      extractedText || 'File uploaded but text extraction failed',
+      extractedText ? extractedText.split(/\s+/).length : 0,
+      file.originalname,
+      req.user.id,
+      JSON.stringify({
+        file_type: file.mimetype,
+        file_size: file.size,
+        file_path: file.path,
+        processing_error: processingError
+      })
+    ]);
+
+    const document = ragResult.rows[0];
+
+    await client.query('COMMIT');
+
+    // Generate embedding asynchronously after transaction commit
+    if (extractedText && extractedText.trim().length > 0) {
+      embedDocument(document.id, `${docTitle}\n\n${extractedText}`).catch(err => {
+        console.error(`Failed to generate embedding for document ${document.id}:`, err);
+      });
+    }
+
+    // Return complete document info matching the GET format
+    res.json({
+      success: true,
+      document: {
+        id: document.id,
+        title: document.title,
+        sourceType: document.source_type,
+        sourceId: document.source_id,
+        wordCount: document.word_count,
+        originalFilename: document.original_filename,
+        preview: extractedText ? extractedText.substring(0, 200) : '',
+        uploadedBy: {
+          id: req.user.id,
+          name: req.user.username
+        },
+        createdAt: document.created_at,
+        meta: document.meta
+      }
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error uploading document:', error);
+    
+    // Clean up uploaded file on error
+    if (req.file) {
+      try {
+        await fs.unlink(req.file.path);
+      } catch (unlinkError) {
+        console.error('Error deleting file:', unlinkError);
+      }
+    }
+    
+    res.status(500).json({ error: 'Failed to upload document' });
+  } finally {
+    client.release();
   }
 });
 
