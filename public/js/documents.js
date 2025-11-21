@@ -798,25 +798,53 @@ class DocumentLibrary {
    * Setup view dropdown navigation
    */
   setupViewDropdown() {
-    const viewDropdown = document.getElementById('view-dropdown');
-    if (viewDropdown) {
-      viewDropdown.addEventListener('change', (e) => {
-        const view = e.target.value;
-        const projectId = this.getProjectIdFromCookie();
-        
-        if (view === 'projects') {
-          window.location.href = '/index.html';
-        } else if (view === 'checklists') {
-          window.location.href = `/checklists.html?projectId=${projectId}`;
-        } else if (view === 'documents') {
-          // Already on documents page
-        } else if (view === 'ai-agent') {
-          window.location.href = `/ai-agent.html?projectId=${projectId}`;
-        } else if (view === 'proposals') {
-          window.location.href = `/proposals.html?projectId=${projectId}`;
-        }
-      });
-    }
+    const dropdownBtn = document.getElementById('view-dropdown-btn');
+    const dropdownMenu = document.getElementById('view-dropdown-menu');
+    
+    if (!dropdownBtn || !dropdownMenu) return;
+    
+    // Toggle dropdown on button click
+    dropdownBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = dropdownMenu.classList.contains('hidden');
+      dropdownMenu.classList.toggle('hidden');
+      dropdownBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!dropdownMenu.classList.contains('hidden') && 
+          !dropdownBtn.contains(e.target) && 
+          !dropdownMenu.contains(e.target)) {
+        dropdownMenu.classList.add('hidden');
+        dropdownBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    
+    // Get project ID for navigation
+    const projectId = this.getProjectIdFromCookie();
+    
+    // Setup menu item click handlers
+    const menuItems = {
+      'dashboard-btn': '/index.html',
+      'view-checklists-btn': `/checklists.html?projectId=${projectId}`,
+      'view-documents-btn': null, // Current page
+      'view-tags-btn': `/tags.html?projectId=${projectId}`,
+      'view-risks-btn': `/risks.html?projectId=${projectId}`,
+      'view-templates-btn': `/templates.html?projectId=${projectId}`,
+      'view-schedules-btn': `/schedules.html?projectId=${projectId}`,
+      'view-ai-agent-btn': `/ai-agent.html?projectId=${projectId}`,
+      'view-proposals-btn': `/proposals.html?projectId=${projectId}`
+    };
+    
+    Object.entries(menuItems).forEach(([btnId, url]) => {
+      const btn = document.getElementById(btnId);
+      if (btn && url) {
+        btn.addEventListener('click', () => {
+          window.location.href = url;
+        });
+      }
+    });
   }
 
   /**
