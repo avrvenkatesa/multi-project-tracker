@@ -41,7 +41,16 @@
           </button>
         </div>
       </div>
-      <p id="project-name" class="text-sm text-blue-100">Loading...</p>
+      <!-- Project Selector -->
+      <div class="flex items-center gap-3">
+        <label for="project-selector" class="text-sm text-blue-100">Project:</label>
+        <select 
+          id="project-selector" 
+          class="px-4 py-2 bg-white text-gray-800 rounded-lg shadow-sm border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-300 min-w-[300px]"
+        >
+          <option value="">Select a project...</option>
+        </select>
+      </div>
     </div>
   </header>
 

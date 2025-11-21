@@ -20,11 +20,44 @@ class DocumentLibrary {
 
   async init() {
     this.loadFiltersFromURL();
+    await this.loadAvailableProjects();
     await this.loadCurrentProject();
     await this.loadDocuments();
     this.attachEventListeners();
     this.setupKeyboardShortcuts();
     this.setupViewDropdown();
+  }
+
+  /**
+   * Load available projects and populate dropdown
+   */
+  async loadAvailableProjects() {
+    try {
+      const response = await fetch('/api/projects', {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch projects');
+      
+      const projects = await response.json();
+      const selector = document.getElementById('project-selector');
+      
+      if (!selector) return;
+      
+      // Clear existing options except the first one
+      selector.innerHTML = '<option value="">Select a project...</option>';
+      
+      // Populate with available projects
+      projects.forEach(project => {
+        const option = document.createElement('option');
+        option.value = project.id;
+        option.textContent = project.name;
+        selector.appendChild(option);
+      });
+      
+    } catch (error) {
+      console.error('Error loading projects:', error);
+    }
   }
 
   /**
@@ -73,48 +106,28 @@ class DocumentLibrary {
       projectId = this.getProjectIdFromCookie();
     }
     
+    const selector = document.getElementById('project-selector');
+    
     if (!projectId) {
-      // No project selected - show project selector
-      document.getElementById('project-name').textContent = 'No project selected - Please select a project from the main page';
+      // No project selected - show helpful message
+      if (selector) selector.value = '';
       document.getElementById('documents-container').innerHTML = `
         <div class="text-center py-12">
           <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
           </svg>
           <p class="text-gray-600 text-lg mb-4">No project selected</p>
-          <button id="select-project-btn" class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
-            Select a Project
-          </button>
+          <p class="text-gray-500">Please select a project from the dropdown above</p>
         </div>
       `;
-      
-      // Add event listener for the Select Project button
-      setTimeout(() => {
-        const selectProjectBtn = document.getElementById('select-project-btn');
-        if (selectProjectBtn) {
-          selectProjectBtn.addEventListener('click', () => {
-            window.location.href = '/index.html';
-          });
-        }
-      }, 0);
-      
       return;
     }
     
     this.currentProjectId = projectId;
-
-    try {
-      const response = await fetch(`/api/projects/${projectId}`, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (response.ok) {
-        const project = await response.json();
-        document.getElementById('project-name').textContent = project.name;
-      }
-    } catch (error) {
-      console.error('Error loading project:', error);
-      document.getElementById('project-name').textContent = 'Error loading project';
+    
+    // Set the dropdown value to current project
+    if (selector) {
+      selector.value = projectId;
     }
   }
 
@@ -461,6 +474,41 @@ class DocumentLibrary {
       });
     }
 
+    // Project selector dropdown
+    const projectSelector = document.getElementById('project-selector');
+    if (projectSelector) {
+      projectSelector.addEventListener('change', async (e) => {
+        const selectedProjectId = e.target.value;
+        
+        if (!selectedProjectId) {
+          // Clear current project
+          this.currentProjectId = null;
+          this.setProjectIdCookie('');
+          this.cache.clear();
+          
+          // Show "no project selected" message
+          document.getElementById('documents-container').innerHTML = `
+            <div class="text-center py-12">
+              <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              </svg>
+              <p class="text-gray-600 text-lg mb-4">No project selected</p>
+              <p class="text-gray-500">Please select a project from the dropdown above</p>
+            </div>
+          `;
+          return;
+        }
+        
+        // Update current project and reload documents
+        this.currentProjectId = selectedProjectId;
+        this.setProjectIdCookie(selectedProjectId);
+        this.currentPage = 1;
+        this.cache.clear();
+        
+        await this.loadDocuments();
+      });
+    }
+
     // Search input
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
@@ -581,6 +629,18 @@ class DocumentLibrary {
       }
     }
     return null;
+  }
+
+  /**
+   * Helper: Set project ID in cookie
+   */
+  setProjectIdCookie(projectId) {
+    if (projectId) {
+      document.cookie = `selectedProjectId=${projectId}; path=/; max-age=86400`;
+    } else {
+      // Clear cookie
+      document.cookie = 'selectedProjectId=; path=/; max-age=0';
+    }
   }
 
   /**
