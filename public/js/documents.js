@@ -377,8 +377,8 @@ class DocumentLibrary {
     const label = getDocTypeLabel(doc.sourceType);
     
     modal.innerHTML = `
-      <div class="modal-overlay" onclick="documentLibrary.closeModal()">
-        <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-overlay" data-modal-action="close">
+        <div class="modal-content" data-modal-action="stop-propagation">
           <div class="modal-header">
             <div>
               <h2 class="text-2xl font-bold">${icon} ${this.escapeHtml(doc.title)}</h2>
@@ -386,7 +386,7 @@ class DocumentLibrary {
                 ${label} • ${this.formatDate(doc.createdAt)} • ${doc.wordCount ? doc.wordCount.toLocaleString() : 0} words
               </p>
             </div>
-            <button onclick="documentLibrary.closeModal()" class="text-gray-500 hover:text-gray-700 text-2xl">
+            <button data-modal-action="close" class="text-gray-500 hover:text-gray-700 text-2xl">
               ✕
             </button>
           </div>
@@ -402,6 +402,29 @@ class DocumentLibrary {
     contentDiv.className = 'document-content';
     contentDiv.textContent = doc.content;
     document.getElementById('modal-content-placeholder').appendChild(contentDiv);
+    
+    // Add event listeners for modal actions
+    const overlay = modal.querySelector('.modal-overlay');
+    const closeBtn = modal.querySelector('[data-modal-action="close"]');
+    const modalContent = modal.querySelector('.modal-content');
+    
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          this.closeModal();
+        }
+      });
+    }
+    
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeModal());
+    }
+    
+    if (modalContent) {
+      modalContent.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+    }
     
     modal.classList.remove('hidden');
   }
