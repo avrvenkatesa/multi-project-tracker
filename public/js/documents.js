@@ -376,10 +376,10 @@ class DocumentLibrary {
     const icon = getDocTypeIcon(doc.sourceType);
     const label = getDocTypeLabel(doc.sourceType);
     
-    // The #document-modal div already has overlay styling, just insert the content
+    // Use inline Tailwind classes (CDN doesn't process @apply in CSS files)
     modal.innerHTML = `
-      <div class="modal-content">
-        <div class="modal-header">
+      <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        <div class="p-6 border-b flex justify-between items-start">
           <div>
             <h2 class="text-2xl font-bold">${icon} ${this.escapeHtml(doc.title)}</h2>
             <p class="text-gray-600 mt-1">
@@ -390,7 +390,7 @@ class DocumentLibrary {
             ✕
           </button>
         </div>
-        <div class="modal-body">
+        <div class="p-6 overflow-y-auto max-h-[60vh]">
           <div id="modal-content-placeholder"></div>
         </div>
       </div>
@@ -398,13 +398,13 @@ class DocumentLibrary {
     
     // Insert safe content using textContent (XSS protection)
     const contentDiv = document.createElement('div');
-    contentDiv.className = 'document-content';
+    contentDiv.className = 'whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded';
     contentDiv.textContent = doc.content;
     document.getElementById('modal-content-placeholder').appendChild(contentDiv);
     
     // Add event listeners for modal actions
     const closeBtn = modal.querySelector('[data-modal-action="close"]');
-    const modalContent = modal.querySelector('.modal-content');
+    const modalContent = modal.querySelector('.bg-white');
     
     // Close on overlay click (clicking outside modal content)
     modal.addEventListener('click', (e) => {
