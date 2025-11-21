@@ -376,23 +376,22 @@ class DocumentLibrary {
     const icon = getDocTypeIcon(doc.sourceType);
     const label = getDocTypeLabel(doc.sourceType);
     
+    // The #document-modal div already has overlay styling, just insert the content
     modal.innerHTML = `
-      <div class="modal-overlay" data-modal-action="close">
-        <div class="modal-content" data-modal-action="stop-propagation">
-          <div class="modal-header">
-            <div>
-              <h2 class="text-2xl font-bold">${icon} ${this.escapeHtml(doc.title)}</h2>
-              <p class="text-gray-600 mt-1">
-                ${label} • ${this.formatDate(doc.createdAt)} • ${doc.wordCount ? doc.wordCount.toLocaleString() : 0} words
-              </p>
-            </div>
-            <button data-modal-action="close" class="text-gray-500 hover:text-gray-700 text-2xl">
-              ✕
-            </button>
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h2 class="text-2xl font-bold">${icon} ${this.escapeHtml(doc.title)}</h2>
+            <p class="text-gray-600 mt-1">
+              ${label} • ${this.formatDate(doc.createdAt)} • ${doc.wordCount ? doc.wordCount.toLocaleString() : 0} words
+            </p>
           </div>
-          <div class="modal-body">
-            <div id="modal-content-placeholder"></div>
-          </div>
+          <button data-modal-action="close" class="text-gray-500 hover:text-gray-700 text-2xl">
+            ✕
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="modal-content-placeholder"></div>
         </div>
       </div>
     `;
@@ -404,17 +403,15 @@ class DocumentLibrary {
     document.getElementById('modal-content-placeholder').appendChild(contentDiv);
     
     // Add event listeners for modal actions
-    const overlay = modal.querySelector('.modal-overlay');
     const closeBtn = modal.querySelector('[data-modal-action="close"]');
     const modalContent = modal.querySelector('.modal-content');
     
-    if (overlay) {
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-          this.closeModal();
-        }
-      });
-    }
+    // Close on overlay click (clicking outside modal content)
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        this.closeModal();
+      }
+    });
     
     if (closeBtn) {
       closeBtn.addEventListener('click', () => this.closeModal());
