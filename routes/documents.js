@@ -420,9 +420,9 @@ router.delete('/documents/:docId', async (req, res) => {
     // Get document details first
     const docResult = await pool.query(`
       SELECT r.*, 
-        (SELECT COUNT(*) FROM evidence WHERE source_type = 'rag_documents' AND source_id = $1::text) as evidence_count
+        (SELECT COUNT(*) FROM evidence WHERE source_type = 'rag_documents' AND source_id = $1) as evidence_count
       FROM rag_documents r
-      WHERE r.id = $1
+      WHERE r.id = $1::uuid
     `, [docId]);
 
     if (docResult.rows.length === 0) {
@@ -442,11 +442,11 @@ router.delete('/documents/:docId', async (req, res) => {
     // Delete evidence records first (source_id is text type)
     await pool.query(`
       DELETE FROM evidence
-      WHERE source_type = 'rag_documents' AND source_id = $1::text
+      WHERE source_type = 'rag_documents' AND source_id = $1
     `, [docId]);
 
-    // Delete document
-    await pool.query('DELETE FROM rag_documents WHERE id = $1', [docId]);
+    // Delete document (id is uuid type)
+    await pool.query('DELETE FROM rag_documents WHERE id = $1::uuid', [docId]);
 
     await pool.query('COMMIT');
 
