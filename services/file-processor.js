@@ -7,13 +7,17 @@ async function extractTextFromFile(filePath, mimeType) {
   try {
     console.log(`Extracting text from: ${filePath} (${mimeType})`);
     
+    // Get file extension as fallback for MIME type detection
+    const ext = path.extname(filePath).toLowerCase();
+    
     if (mimeType === 'application/pdf') {
       return await extractFromPDF(filePath);
     } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       return await extractFromDOCX(filePath);
     } else if (mimeType === 'application/msword') {
       return await extractFromDOC(filePath);
-    } else if (mimeType === 'text/plain') {
+    } else if (mimeType === 'text/plain' || mimeType === 'text/markdown' || mimeType === 'text/x-markdown' || ext === '.txt' || ext === '.md') {
+      // Handle text/markdown files (including those with incorrect MIME types)
       return await extractFromTXT(filePath);
     } else if (mimeType && mimeType.startsWith('image/')) {
       return '[Image file - text extraction not yet supported. OCR coming soon.]';
@@ -120,7 +124,9 @@ function getSupportedMimeTypes() {
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/msword',
-    'text/plain'
+    'text/plain',
+    'text/markdown',
+    'text/x-markdown'
   ];
 }
 
