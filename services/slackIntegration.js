@@ -31,8 +31,8 @@ class SlackAdapter extends ChatPlatformAdapter {
         channelId: response.channel
       };
     } catch (error) {
-      console.error('Slack sendMessage error:', error);
-      throw error;
+      console.error('Slack sendMessage error:', error.message || 'Unknown error');
+      throw new Error('Failed to send Slack message');
     }
   }
 
@@ -50,8 +50,8 @@ class SlackAdapter extends ChatPlatformAdapter {
         text: text
       });
     } catch (error) {
-      console.error('Slack sendDirectMessage error:', error);
-      throw error;
+      console.error('Slack sendDirectMessage error:', error.message || 'Unknown error');
+      throw new Error('Failed to send Slack DM');
     }
   }
 
@@ -74,8 +74,8 @@ class SlackAdapter extends ChatPlatformAdapter {
         threadId: msg.thread_ts
       }));
     } catch (error) {
-      console.error('Slack getChannelHistory error:', error);
-      throw error;
+      console.error('Slack getChannelHistory error:', error.message || 'Unknown error');
+      throw new Error('Failed to fetch Slack channel history');
     }
   }
 
@@ -95,8 +95,8 @@ class SlackAdapter extends ChatPlatformAdapter {
         avatar: response.user.profile.image_72
       };
     } catch (error) {
-      console.error('Slack getUserInfo error:', error);
-      throw error;
+      console.error('Slack getUserInfo error:', error.message || 'Unknown error');
+      throw new Error('Failed to fetch Slack user info');
     }
   }
 

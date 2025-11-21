@@ -61,7 +61,8 @@ class ChatPlatformAdapter {
  */
 class ChatPlatformFactory {
   static async create(projectId) {
-    const pool = require('../config/database');
+    const { Pool } = require('@neondatabase/serverless');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
     const result = await pool.query(`
       SELECT * FROM sidecar_config WHERE project_id = $1

@@ -1,4 +1,5 @@
-const pool = require('../config/database');
+const { Pool } = require('@neondatabase/serverless');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 /**
  * Role Permission Service
@@ -56,7 +57,9 @@ class RolePermissionService {
         auto_create_enabled: false,
         requires_approval: true,
         can_capture_thoughts: true,
-        can_record_meetings: false
+        can_record_meetings: false,
+        auto_create_threshold: 0.8,
+        approval_from_role_id: null
       };
     }
 

@@ -42,8 +42,8 @@ class TeamsAdapter extends ChatPlatformAdapter {
         channelId: channelId
       };
     } catch (error) {
-      console.error('Teams sendMessage error:', error);
-      throw error;
+      console.error('Teams sendMessage error:', error.message || 'Unknown error');
+      throw new Error('Failed to send Teams message');
     }
   }
 
@@ -62,8 +62,8 @@ class TeamsAdapter extends ChatPlatformAdapter {
 
       return { success: true };
     } catch (error) {
-      console.error('Teams sendDirectMessage error:', error);
-      throw error;
+      console.error('Teams sendDirectMessage error:', error.message || 'Unknown error');
+      throw new Error('Failed to send Teams DM');
     }
   }
 
