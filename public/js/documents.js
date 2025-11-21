@@ -252,15 +252,15 @@ class DocumentLibrary {
         ${this.renderLinkedEntities(doc.linkedEntities)}
 
         <div class="document-actions">
-          <button onclick="documentLibrary.viewDocument('${doc.id}')" 
+          <button data-action="view" data-doc-id="${doc.id}"
                   class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
             👁️ View
           </button>
-          <button onclick="documentLibrary.downloadDocument('${doc.id}')" 
+          <button data-action="download" data-doc-id="${doc.id}"
                   class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition">
             📥 Download
           </button>
-          <button onclick="documentLibrary.deleteDocument('${doc.id}')" 
+          <button data-action="delete" data-doc-id="${doc.id}"
                   class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition">
             🗑️ Delete
           </button>
@@ -304,7 +304,7 @@ class DocumentLibrary {
       <button 
         class="pagination-button ${this.currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}"
         ${this.currentPage === 1 ? 'disabled' : ''}
-        onclick="documentLibrary.prevPage()">
+        data-action="prev-page">
         ← Previous
       </button>
       <span class="px-4 py-2 text-gray-700">
@@ -313,7 +313,7 @@ class DocumentLibrary {
       <button 
         class="pagination-button ${this.currentPage === this.totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}"
         ${this.currentPage === this.totalPages ? 'disabled' : ''}
-        onclick="documentLibrary.nextPage()">
+        data-action="next-page">
         Next →
       </button>
     `;
@@ -494,6 +494,33 @@ class DocumentLibrary {
         alert('Upload functionality coming soon! For now, use the AI Analysis feature to upload and analyze documents.');
       });
     }
+
+    // Event delegation for dynamically created buttons (documents list and pagination)
+    document.addEventListener('click', (e) => {
+      const target = e.target.closest('[data-action]');
+      if (!target) return;
+
+      const action = target.dataset.action;
+      const docId = target.dataset.docId;
+
+      switch (action) {
+        case 'view':
+          this.viewDocument(docId);
+          break;
+        case 'download':
+          this.downloadDocument(docId);
+          break;
+        case 'delete':
+          this.deleteDocument(docId);
+          break;
+        case 'prev-page':
+          this.prevPage();
+          break;
+        case 'next-page':
+          this.nextPage();
+          break;
+      }
+    });
   }
 
   /**
