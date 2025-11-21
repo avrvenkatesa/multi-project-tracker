@@ -82,6 +82,12 @@ const aiAgentStreamingRouter = require('./routes/aiAgentStreaming');
 const documentsRouter = require('./routes/documents');
 const attachmentsRouter = require('./routes/attachments');
 
+// Sidecar Bot Foundation Route modules
+const customRolesRouter = require('./routes/customRoles');
+const thoughtCaptureRouter = require('./routes/thoughtCapture');
+const meetingTranscriptionRouter = require('./routes/meetingTranscription');
+const sidecarConfigRouter = require('./routes/sidecarConfig');
+
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
 
@@ -851,6 +857,12 @@ app.use('/api/aipm', authenticateToken, aiRiskDetectorRouter); // AI Risk Detect
 app.use('/api/aipm', authenticateToken, aiAgentStreamingRouter); // AI Agent Streaming routes
 app.use('/api', authenticateToken, documentsRouter); // Document Library routes
 app.use('/api', authenticateToken, attachmentsRouter); // Attachments routes
+
+// ============= SIDECAR BOT FOUNDATION ROUTES =============
+app.use('/api/roles', authenticateToken, customRolesRouter); // Custom Roles routes
+app.use('/api/thoughts', authenticateToken, thoughtCaptureRouter); // Thought Capture routes
+app.use('/api/transcriptions', authenticateToken, meetingTranscriptionRouter); // Meeting Transcription routes
+app.use('/api/sidecar', authenticateToken, sidecarConfigRouter); // Sidecar Config routes
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 
