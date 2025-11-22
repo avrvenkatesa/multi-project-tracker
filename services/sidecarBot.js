@@ -84,7 +84,7 @@ class SidecarBot {
         workflow: workflowResult,
         context: {
           assemblyTime: context.assemblyTime,
-          qualityScore: context.qualityScore
+          contextQuality: context.qualityScore
         },
         llm: {
           provider: llmResult.provider,
