@@ -37,6 +37,11 @@ A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance t
 
 **Sidecar Bot AI Analysis Engine** (`services/sidecarBot.js`) analyzes content from platform integrations (Slack, Teams, Email, GitHub) using OpenAI GPT-4 Turbo to detect and classify project entities (tasks, bugs, features, issues). The engine extracts structured information including title, description, priority, complexity, requirements, and mentioned users. It supports auto-creation of entities based on AI confidence levels (≥0.7) and user authority (authority_level ≥3), or creates proposals for review when confidence is lower. Fallback keyword-based analysis ensures resilience when AI is unavailable. The service integrates with the role permission system for authority-based workflows and stores proposals in the thought_captures table.
 
+**Multi-Provider AI Analysis Engine (Story 5.4.2)** provides intelligent entity extraction from conversations with support for multiple LLM providers:
+- **Context Assembly Service** (`services/contextAssembly.js`) - Assembles rich context by querying PKG (Project Knowledge Graph) and RAG (Retrieval-Augmented Generation) systems, extracting keywords, and calculating context quality scores. Executes all queries in parallel for <500ms p95 latency.
+- **Prompt Builder Service** (`services/promptBuilder.js`) - Constructs provider-optimized prompts for Claude (Anthropic), GPT-4 (OpenAI), and Gemini (Google). Adapts formatting (XML for Claude, Markdown for OpenAI, plain text for Gemini) and includes few-shot examples, entity schemas, and project context.
+- **LLM Client Service** (`services/llmClient.js`) - Handles API calls to multiple LLM providers with automatic fallback, retry logic with exponential backoff, response validation, and token usage tracking. Supports Claude 3.5 Sonnet, GPT-4 Turbo, and Gemini 1.5 Pro with cost estimation and analytics.
+
 ## External Dependencies
 
 - Express.js
@@ -54,8 +59,9 @@ A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance t
 - pdf-parse
 - mammoth
 - file-type
-- OpenAI (GPT-3.5-Turbo, GPT-4o, GPT-4 Turbo)
-- Anthropic (Claude Sonnet 4.5)
+- OpenAI (GPT-3.5-Turbo, GPT-4o, GPT-4 Turbo, GPT-4 Turbo Preview)
+- Anthropic (Claude Sonnet 4.5, Claude 3.5 Sonnet)
+- Google Generative AI (Gemini 1.5 Pro)
 - @neondatabase/serverless
 - drizzle-orm
 - drizzle-kit

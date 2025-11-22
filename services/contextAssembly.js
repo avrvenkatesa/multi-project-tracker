@@ -72,11 +72,9 @@ class ContextAssemblyService {
     const result = await pool.query(
       `SELECT 
         id, 
-        project_name, 
-        project_code, 
+        name, 
         description,
-        created_at,
-        updated_at
+        created_at
       FROM projects 
       WHERE id = $1`,
       [projectId]
@@ -202,7 +200,6 @@ class ContextAssemblyService {
         u.id,
         u.email,
         u.username,
-        u.full_name,
         ura.role_id,
         cr.role_name,
         cr.role_code,
@@ -225,7 +222,6 @@ class ContextAssemblyService {
       userId: user.id,
       email: user.email,
       username: user.username,
-      fullName: user.full_name,
       role: user.role_id ? {
         id: user.role_id,
         name: user.role_name,

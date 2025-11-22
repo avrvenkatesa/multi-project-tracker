@@ -25,6 +25,7 @@
     "@anthropic-ai/sdk": "^0.65.0",
     "@babel/core": "^7.28.5",
     "@babel/preset-env": "^7.28.5",
+    "@google/generative-ai": "^0.24.1",
     "@neondatabase/serverless": "^1.0.1",
     "@slack/web-api": "^7.12.0",
     "axios": "^1.12.2",
