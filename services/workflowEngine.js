@@ -139,6 +139,15 @@ class WorkflowEngineService {
       };
     }
 
+    // RULE 4 Part 1: Low Authority → Proposal (check this BEFORE permission-based)
+    if (userAuthority < 3) {
+      return {
+        action: 'create_proposal',
+        reason: `Insufficient authority (${userAuthority}), requires level 3+`,
+        approverRoleId: permission.approval_from_role_id
+      };
+    }
+
     // RULE 1: High Confidence + High Authority → Auto-Create
     if (confidence >= autoCreateThreshold && userAuthority >= 3) {
       return {
@@ -159,11 +168,11 @@ class WorkflowEngineService {
       };
     }
 
-    // RULE 4: Low Confidence or Low Authority → Proposal
-    if (confidence < 0.7 || userAuthority < 3) {
+    // RULE 4 Part 2: Low Confidence → Proposal
+    if (confidence < 0.7) {
       return {
         action: 'create_proposal',
-        reason: `Low confidence (${confidence}) or insufficient authority (${userAuthority})`,
+        reason: `Low confidence (${confidence})`,
         approverRoleId: permission.approval_from_role_id
       };
     }
@@ -225,6 +234,7 @@ class WorkflowEngineService {
         entityType,
         source,
         entity.citations || [],
+        userId,
         client
       );
 
@@ -322,8 +332,10 @@ class WorkflowEngineService {
 
   /**
    * Create evidence record linking entity to source
+   * Note: evidence table uses integer entity_id, but pkg_nodes uses UUID.
+   * For PKG entities, we use 0 as a placeholder and store the UUID in quote_text.
    */
-  async createEvidence(entityId, entityType, source, citations, client = null) {
+  async createEvidence(entityId, entityType, source, citations, userId, client = null) {
     const db = client || pool;
 
     const result = await db.query(`
@@ -336,19 +348,21 @@ class WorkflowEngineService {
         quote_text,
         context,
         confidence,
-        extraction_method
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        extraction_method,
+        created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
     `, [
       entityType,
-      entityId,
+      0, // Placeholder for PKG entities (which use UUID, not integer)
       'ai_extraction',
       source?.type || 'unknown',
       source?.id || null,
-      citations.join(' | '),
+      `PKG_NODE:${entityId} | ${citations.join(' | ')}`,
       JSON.stringify(source?.metadata || {}),
       'High',
-      'llm_analysis'
+      'llm_analysis',
+      userId
     ]);
 
     return result.rows[0].id;
@@ -477,6 +491,7 @@ class WorkflowEngineService {
           metadata: proposalData.source_metadata
         },
         proposalData.ai_analysis?.citations || [],
+        reviewerId,
         client
       );
 

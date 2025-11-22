@@ -16,6 +16,8 @@ describe('Workflow Engine - Story 5.4.2', function() {
   let testApproverRoleId;
 
   before(async function() {
+    const uniqueSuffix = Date.now();
+    
     const projectResult = await pool.query(`
       INSERT INTO projects (name, description, created_by)
       VALUES ('Workflow Test Project', 'Test project for workflow engine', 1)
@@ -25,9 +27,9 @@ describe('Workflow Engine - Story 5.4.2', function() {
 
     const userResult = await pool.query(`
       INSERT INTO users (username, email, password)
-      VALUES ('workflow_tester', 'workflow@test.com', 'hashed_password')
+      VALUES ($1, $2, 'hashed_password')
       RETURNING id
-    `);
+    `, [`workflow_tester_${uniqueSuffix}`, `workflow${uniqueSuffix}@test.com`]);
     testUserId = userResult.rows[0].id;
 
     const roleResult = await pool.query(`
@@ -71,26 +73,34 @@ describe('Workflow Engine - Story 5.4.2', function() {
   });
 
   after(async function() {
-    if (testUserId) {
-      await pool.query(`DELETE FROM user_role_assignments WHERE user_id = $1`, [testUserId]);
-    }
-    if (testRoleId || testApproverRoleId) {
-      await pool.query(`DELETE FROM role_permissions WHERE role_id IN ($1, $2)`, [testRoleId, testApproverRoleId]);
-    }
-    if (testProjectId) {
-      await pool.query(`DELETE FROM entity_proposals WHERE project_id = $1`, [testProjectId]);
-      await pool.query(`DELETE FROM evidence WHERE source_type = 'test'`);
-      await pool.query(`DELETE FROM pkg_nodes WHERE project_id = $1`, [testProjectId]);
-      await pool.query(`DELETE FROM sidecar_config WHERE project_id = $1`, [testProjectId]);
-    }
-    if (testRoleId || testApproverRoleId) {
-      await pool.query(`DELETE FROM custom_roles WHERE id IN ($1, $2)`, [testRoleId || 0, testApproverRoleId || 0]);
-    }
-    if (testUserId) {
-      await pool.query(`DELETE FROM users WHERE id = $1`, [testUserId]);
-    }
-    if (testProjectId) {
-      await pool.query(`DELETE FROM projects WHERE id = $1`, [testProjectId]);
+    // Delete in correct order to respect foreign key constraints
+    try {
+      if (testUserId) {
+        await pool.query(`DELETE FROM user_role_assignments WHERE user_id = $1`, [testUserId]);
+      }
+      if (testProjectId) {
+        await pool.query(`DELETE FROM entity_proposals WHERE project_id = $1`, [testProjectId]);
+        await pool.query(`DELETE FROM evidence WHERE source_type = 'test'`);
+        await pool.query(`DELETE FROM pkg_nodes WHERE project_id = $1`, [testProjectId]);
+        await pool.query(`DELETE FROM sidecar_config WHERE project_id = $1`, [testProjectId]);
+        // Delete ALL role_permissions that reference our test roles (via role_id or approval_from_role_id)
+        await pool.query(`
+          DELETE FROM role_permissions 
+          WHERE role_id IN (SELECT id FROM custom_roles WHERE project_id = $1)
+             OR approval_from_role_id IN (SELECT id FROM custom_roles WHERE project_id = $1)
+        `, [testProjectId]);
+        // Now safe to delete custom_roles (no more FK references)
+        await pool.query(`DELETE FROM custom_roles WHERE project_id = $1`, [testProjectId]);
+      }
+      if (testUserId) {
+        await pool.query(`DELETE FROM users WHERE id = $1`, [testUserId]);
+      }
+      if (testProjectId) {
+        await pool.query(`DELETE FROM projects WHERE id = $1`, [testProjectId]);
+      }
+    } catch (error) {
+      console.error('Cleanup error:', error.message);
+      // Don't throw, allow tests to complete
     }
   });
 
@@ -232,7 +242,7 @@ describe('Workflow Engine - Story 5.4.2', function() {
       );
 
       expect(decision.action).to.equal('create_proposal');
-      expect(decision.reason).to.include('insufficient authority');
+      expect(decision.reason).to.include('Insufficient authority');
     });
   });
 
