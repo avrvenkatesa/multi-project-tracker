@@ -35,7 +35,16 @@ The **AI Agent API & Integration** provides a real-time AI assistant interface w
 
 A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance through custom roles, thought capture, and meeting transcription. This includes tables for custom roles, role permissions, user role assignments, custom entity types, project-level sidecar configuration, thought captures, and meeting transcriptions.
 
-**Sidecar Bot AI Analysis Engine** (`services/sidecarBot.js`) analyzes content from platform integrations (Slack, Teams, Email, GitHub) using OpenAI GPT-4 Turbo to detect and classify project entities (tasks, bugs, features, issues). The engine extracts structured information including title, description, priority, complexity, requirements, and mentioned users. It supports auto-creation of entities based on AI confidence levels (≥0.7) and user authority (authority_level ≥3), or creates proposals for review when confidence is lower. Fallback keyword-based analysis ensures resilience when AI is unavailable. The service integrates with the role permission system for authority-based workflows and stores proposals in the thought_captures table.
+**Sidecar Bot AI Analysis Engine** (`services/sidecarBot.js`) provides complete AI-powered entity detection through a 5-step pipeline: (1) Context Assembly from PKG and RAG systems, (2) Provider-optimized prompt building, (3) Multi-provider LLM entity extraction with automatic fallback, (4) Role-based workflow processing, (5) Entity creation or proposal generation. The engine supports Claude, OpenAI, and Gemini with intelligent fallback, extracting structured entities with confidence scores, citations, and AI reasoning. Integration with the Workflow Engine provides authority-based auto-creation (RULE 1-4) or Human-in-the-Loop proposals. Fallback keyword-based analysis ensures resilience when AI is unavailable. Returns comprehensive results including workflow outcomes, context quality, LLM usage, and cost tracking.
+
+**Multi-Provider AI Analysis Engine (Story 5.4.2)** provides intelligent entity extraction from conversations with support for multiple LLM providers:
+- **Context Assembly Service** (`services/contextAssembly.js`) - Assembles rich context by querying PKG (Project Knowledge Graph) and RAG (Retrieval-Augmented Generation) systems, extracting keywords, and calculating context quality scores. Executes all queries in parallel for <500ms p95 latency.
+- **Prompt Builder Service** (`services/promptBuilder.js`) - Constructs provider-optimized prompts for Claude (Anthropic), GPT-4 (OpenAI), and Gemini (Google). Adapts formatting (XML for Claude, Markdown for OpenAI, plain text for Gemini) and includes few-shot examples, entity schemas, and project context.
+- **LLM Client Service** (`services/llmClient.js`) - Handles API calls to multiple LLM providers with automatic fallback, retry logic with exponential backoff, response validation, and token usage tracking. Supports Claude 3.5 Sonnet, GPT-4 Turbo, and Gemini 1.5 Pro with cost estimation and analytics.
+
+**Role-Based Auto-Creation Workflow Engine (Story 5.4.2)** (`services/workflowEngine.js`) determines whether extracted entities should be auto-created or sent for approval based on user authority levels, AI confidence scores, and role permissions. Implements four decision rules: (1) High confidence + high authority → auto-create, (2) Permission-based auto-create for medium confidence, (3) Critical impact always requires review, (4) Low confidence or low authority → proposal. Features atomic transactions for entity creation, evidence tracking with full attribution, proposal management (approve/reject), and integration with PKG, sidecar config, and role permission systems. Stores proposals in `entity_proposals` table pending approval from designated roles. **Test Coverage: 19/19 tests passing (100%)**
+
+**Complete AI Pipeline Integration** - The Sidecar Bot now orchestrates the full AI analysis pipeline, connecting Context Assembly → Prompt Builder → LLM Client → Workflow Engine → Entity Creation. Webhooks (Slack, Teams, Email, Thought Capture) can integrate with `sidecarBot.analyzeContent()` for end-to-end intelligent entity extraction. Returns structured results with workflow outcomes, context quality scores, LLM usage metadata, and cost tracking. **Integration Test Coverage: 6 tests for end-to-end validation**
 
 ## External Dependencies
 
@@ -54,8 +63,9 @@ A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance t
 - pdf-parse
 - mammoth
 - file-type
-- OpenAI (GPT-3.5-Turbo, GPT-4o, GPT-4 Turbo)
-- Anthropic (Claude Sonnet 4.5)
+- OpenAI (GPT-3.5-Turbo, GPT-4o, GPT-4 Turbo, GPT-4 Turbo Preview)
+- Anthropic (Claude Sonnet 4.5, Claude 3.5 Sonnet)
+- Google Generative AI (Gemini 1.5 Pro)
 - @neondatabase/serverless
 - drizzle-orm
 - drizzle-kit
