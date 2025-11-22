@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS custom_roles (
 
   -- Hierarchy
   reports_to_role_id INTEGER REFERENCES custom_roles(id) ON DELETE SET NULL,
-  authority_level INTEGER DEFAULT 1 CHECK (authority_level BETWEEN 1 AND 5),
+  authority_level INTEGER DEFAULT 1 CHECK (authority_level BETWEEN 0 AND 5),
 
   -- Status
   is_active BOOLEAN DEFAULT true,
@@ -494,7 +494,7 @@ BEGIN
 
   -- Create default Sidecar config
   INSERT INTO sidecar_config (project_id, customer_id, enabled)
-  VALUES (NEW.id, NEW.customer_id, false);
+  VALUES (NEW.id, NULL, false);
 
   RETURN NEW;
 END;

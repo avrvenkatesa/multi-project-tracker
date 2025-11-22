@@ -13,7 +13,10 @@
 
 const request = require('supertest');
 const { expect } = require('chai');
-const { Pool } = require('@neondatabase/serverless');
+const { Pool, neonConfig } = require('@neondatabase/serverless');
+const ws = require('ws');
+
+neonConfig.webSocketConstructor = ws;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const BASE_URL = 'http://localhost:5000';
@@ -98,8 +101,8 @@ describe('Story 5.4.1: Sidecar Bot Foundation - Automated Tests', function() {
 
       const columns = result.rows.map(r => r.column_name);
       expect(columns).to.include.members([
-        'id', 'project_id', 'role_name', 'authority_level',
-        'description', 'created_at', 'updated_at'
+        'id', 'project_id', 'role_name', 'role_code', 'authority_level',
+        'is_system_role', 'created_at', 'updated_at'
       ]);
     });
 
@@ -113,7 +116,8 @@ describe('Story 5.4.1: Sidecar Bot Foundation - Automated Tests', function() {
 
       const columns = result.rows.map(r => r.column_name);
       expect(columns).to.include.members([
-        'id', 'role_id', 'permission_key', 'can_perform', 'created_at'
+        'id', 'role_id', 'entity_type', 'can_create', 'can_read',
+        'can_update', 'can_delete', 'created_at'
       ]);
     });
 
@@ -127,8 +131,8 @@ describe('Story 5.4.1: Sidecar Bot Foundation - Automated Tests', function() {
 
       const columns = result.rows.map(r => r.column_name);
       expect(columns).to.include.members([
-        'id', 'project_id', 'platform_type', 'enabled', 'platform_config',
-        'auto_create_threshold', 'notification_settings', 'created_at', 'updated_at'
+        'id', 'project_id', 'enabled', 'slack_enabled', 'teams_enabled',
+        'github_enabled', 'created_at', 'updated_at'
       ]);
     });
 
