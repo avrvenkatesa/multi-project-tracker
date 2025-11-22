@@ -13,28 +13,26 @@
 
 const request = require('supertest');
 const { expect } = require('chai');
-const app = require('../server');
 const { Pool } = require('@neondatabase/serverless');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const BASE_URL = 'http://localhost:5000';
 
 describe('Story 5.4.1: Sidecar Bot Foundation - Automated Tests', function() {
   this.timeout(10000);
 
-  let agent;
+  let authToken;
   let testProjectId;
   let testUserId;
   let testRoleId;
   let testConfigId;
 
   before(async () => {
-    agent = request.agent(app);
-    
     const timestamp = Date.now();
     const testEmail = `test-${timestamp}@example.com`;
     const testUsername = `testuser-${timestamp}`;
     
-    const registerRes = await agent
+    const registerRes = await request(BASE_URL)
       .post('/api/auth/register')
       .send({
         username: testUsername,
@@ -46,30 +44,30 @@ describe('Story 5.4.1: Sidecar Bot Foundation - Automated Tests', function() {
       throw new Error(`Failed to register test user: ${JSON.stringify(registerRes.body)}`);
     }
 
-    const loginRes = await agent
-      .post('/api/auth/login')
-      .send({
-        email: testEmail,
-        password: 'testpassword123'
-      });
-
-    if (!loginRes.body.user || !loginRes.body.user.id) {
-      throw new Error(`Failed to login: ${JSON.stringify(loginRes.body)}`);
-    }
-
-    testUserId = loginRes.body.user.id;
+    testUserId = registerRes.body.user.id;
 
     await pool.query('UPDATE users SET role = $1 WHERE id = $2', ['System Administrator', testUserId]);
 
-    await agent
+    const loginRes = await request(BASE_URL)
       .post('/api/auth/login')
       .send({
         email: testEmail,
         password: 'testpassword123'
       });
 
-    const projectRes = await agent
+    console.log('DEBUG: Login response status:', loginRes.status);
+    console.log('DEBUG: Login response body:', JSON.stringify(loginRes.body, null, 2));
+
+    if (!loginRes.body.token) {
+      throw new Error(`Failed to get auth token: ${JSON.stringify(loginRes.body)}`);
+    }
+
+    authToken = loginRes.body.token;
+    console.log('DEBUG: Got auth token:', authToken.substring(0, 20) + '...');
+
+    const projectRes = await request(BASE_URL)
       .post('/api/projects')
+      .set('Authorization', `Bearer ${authToken}`)
       .send({
         name: 'Sidecar Test Project',
         description: 'Project for testing Sidecar Bot Foundation'

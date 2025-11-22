@@ -9,6 +9,7 @@
     "test": "jest",
     "test:5.1.1": "jest __tests__/story-5.1.1.test.js",
     "test:sidecar": "mocha tests/sidecar-foundation.test.js --timeout 10000",
+    "test:sidecar-simple": "mocha tests/sidecar-foundation-simplified.test.js --timeout 10000",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"

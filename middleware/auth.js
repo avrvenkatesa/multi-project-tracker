@@ -19,16 +19,29 @@ const ROLE_HIERARCHY = {
 };
 
 function authenticateToken(req, res, next) {
-  const token = req.cookies.token;
+  let token = req.cookies.token;
+  console.log('[AUTH] Cookie token:', token ? 'present' : 'missing');
 
   if (!token) {
+    const authHeader = req.headers['authorization'];
+    console.log('[AUTH] Authorization header:', authHeader);
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+      console.log('[AUTH] Extracted Bearer token:', token ? token.substring(0, 20) + '...' : 'none');
+    }
+  }
+
+  if (!token) {
+    console.log('[AUTH] No token found, rejecting request');
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
+      console.log('[AUTH] Token verification failed:', err.message);
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
+    console.log('[AUTH] Token verified successfully for user:', user.email);
     req.user = user;
     next();
   });

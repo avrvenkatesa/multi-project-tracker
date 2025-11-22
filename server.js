@@ -796,6 +796,7 @@ app.post("/api/auth/login", async (req, res) => {
     console.log('[LOGIN] Success! Sending response...');
     res.json({
       message: 'Login successful',
+      token: token,
       user: {
         id: user.id,
         username: user.username,
