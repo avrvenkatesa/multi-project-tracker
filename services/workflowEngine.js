@@ -407,6 +407,10 @@ class WorkflowEngineService {
    * Normalize entity type for PKG storage
    */
   normalizeEntityType(entityType) {
+    if (!entityType) {
+      return 'unknown';
+    }
+
     const typeMap = {
       'Decision': 'decision',
       'Risk': 'risk',

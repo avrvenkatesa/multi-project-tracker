@@ -408,7 +408,7 @@ class TranscriptionService {
       if (isFinal) {
         await pool.query(`
           UPDATE meeting_transcriptions 
-          SET full_transcript = COALESCE(full_transcript, '') || $1 || E'\n'
+          SET transcript_full = COALESCE(transcript_full, '') || $1 || E'\n'
           WHERE id = $2
         `, [
           `[${speaker}] ${content}`,
@@ -704,11 +704,11 @@ class TranscriptionService {
 
       // Get full transcript
       const { rows: [meeting] } = await pool.query(
-        'SELECT full_transcript, project_id FROM meeting_transcriptions WHERE id = $1',
+        'SELECT transcript_full, project_id FROM meeting_transcriptions WHERE id = $1',
         [dbMeetingId]
       );
 
-      if (!meeting || !meeting.full_transcript) {
+      if (!meeting || !meeting.transcript_full) {
         console.log('[Summary] No transcript available');
         return;
       }

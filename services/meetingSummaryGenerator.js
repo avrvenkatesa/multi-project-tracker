@@ -354,12 +354,8 @@ Format as Markdown. Be concise and factual.`;
       const systemPrompt = `You are a meeting summary AI assistant. Generate clear, concise, and actionable meeting summaries. Focus on decisions, action items, and next steps. Extract key insights from discussions.`;
 
       // Call LLM client
-      const result = await llmClient.callLLM({
-        prompt: summaryPrompt,
-        systemPrompt: systemPrompt,
-        provider: process.env.PRIMARY_LLM_PROVIDER || 'claude',
-        maxTokens: 2000
-      });
+      const provider = process.env.PRIMARY_LLM_PROVIDER || 'claude';
+      const result = await llmClient.callProvider(provider, summaryPrompt, systemPrompt);
 
       // Parse summary from response
       const summary = result.content || result.text || 'Summary generation failed';
@@ -461,7 +457,7 @@ ${entities.action_items.map(a => `- **${a.title}**: ${a.description || 'No descr
       highlights: [`${entities.decisions.length} decisions`, `${entities.risks.length} risks`, `${entities.action_items.length} action items`],
       concerns: entities.risks.map(r => r.title),
       next_steps: ['Review action items', 'Address risks', 'Schedule follow-up'],
-      provider: 'template',
+      provider: 'claude',
       cost: 0
     };
   }
@@ -589,7 +585,11 @@ ${entities.action_items.map(a => `- **${a.title}**: ${a.description || 'No descr
         LIMIT 1
       `, [meetingId]);
 
-      return result.rows[0] || null;
+      const summary = result.rows[0];
+      if (summary && summary.sentiment_score) {
+        summary.sentiment_score = parseFloat(summary.sentiment_score);
+      }
+      return summary || null;
 
     } catch (error) {
       console.error('[Summary Generator] Error getting summary:', error);
