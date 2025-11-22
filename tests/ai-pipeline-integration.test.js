@@ -204,17 +204,19 @@ describe('AI Pipeline Integration Tests - End-to-End', function() {
         testUserId, testRoleId,
         testLowAuthUserId, testLowAuthRoleId]);
 
-    // Set up role permissions
+    // Set up role permissions (matching workflow-engine.test.js pattern)
     await pool.query(`
-      INSERT INTO role_permissions (role_id, entity_type, auto_create_enabled, required_confidence)
-      VALUES 
-        ($1, 'decision', true, 0.8),
-        ($1, 'risk', true, 0.8),
-        ($1, 'task', true, 0.7),
-        ($2, 'decision', true, 0.8),
-        ($2, 'risk', true, 0.8),
-        ($2, 'task', true, 0.7),
-        ($3, 'task', true, 0.9)
+      INSERT INTO role_permissions (
+        role_id, entity_type, can_create, auto_create_enabled,
+        requires_approval, auto_create_threshold, approval_from_role_id
+      ) VALUES 
+        ($1, 'decision', true, true, false, 0.8, NULL),
+        ($1, 'risk', true, true, false, 0.8, NULL),
+        ($1, 'task', true, true, false, 0.7, NULL),
+        ($2, 'decision', true, true, false, 0.8, $1),
+        ($2, 'risk', true, true, false, 0.8, $1),
+        ($2, 'task', true, true, false, 0.7, $1),
+        ($3, 'task', true, true, true, 0.9, $2)
     `, [testHighAuthRoleId, testRoleId, testLowAuthRoleId]);
 
     // Configure sidecar
@@ -228,18 +230,21 @@ describe('AI Pipeline Integration Tests - End-to-End', function() {
   after(async function() {
     try {
       if (testProjectId) {
+        // Delete in correct order to respect FK constraints
         await pool.query(`DELETE FROM entity_proposals WHERE project_id = $1`, [testProjectId]);
-        await pool.query(`DELETE FROM evidence WHERE source_type IN ('slack', 'teams', 'email', 'github', 'test')`);
+        await pool.query(`DELETE FROM evidence WHERE created_by IN ($1, $2, $3)`, 
+          [testHighAuthUserId, testUserId, testLowAuthUserId]);
         await pool.query(`DELETE FROM pkg_nodes WHERE project_id = $1`, [testProjectId]);
         await pool.query(`DELETE FROM sidecar_config WHERE project_id = $1`, [testProjectId]);
         await pool.query(`
           DELETE FROM role_permissions 
           WHERE role_id IN (SELECT id FROM custom_roles WHERE project_id = $1)
         `, [testProjectId]);
+        await pool.query(`DELETE FROM user_role_assignments WHERE user_id IN ($1, $2, $3)`, 
+          [testHighAuthUserId, testUserId, testLowAuthUserId]);
         await pool.query(`DELETE FROM custom_roles WHERE project_id = $1`, [testProjectId]);
       }
-      await pool.query(`DELETE FROM user_role_assignments WHERE user_id IN ($1, $2, $3)`, 
-        [testHighAuthUserId, testUserId, testLowAuthUserId]);
+      // Delete users after all FK references are removed
       await pool.query(`DELETE FROM users WHERE id IN ($1, $2, $3)`, 
         [testHighAuthUserId, testUserId, testLowAuthUserId]);
       if (testProjectId) {

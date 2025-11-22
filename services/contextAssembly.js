@@ -93,20 +93,18 @@ class ContextAssemblyService {
     const result = await pool.query(
       `SELECT 
         id,
-        node_type,
-        entity_id,
-        title,
-        description,
-        metadata,
+        type,
+        source_id,
+        attrs,
         created_at,
         ts_rank(
-          to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(description, '')),
+          to_tsvector('english', COALESCE((attrs->>'title')::text, '') || ' ' || COALESCE((attrs->>'description')::text, '')),
           to_tsquery('english', $2)
         ) as relevance_score
       FROM pkg_nodes
       WHERE project_id = $1
-        AND deleted_at IS NULL
-        AND to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(description, '')) @@ to_tsquery('english', $2)
+        AND superseded_by IS NULL
+        AND to_tsvector('english', COALESCE((attrs->>'title')::text, '') || ' ' || COALESCE((attrs->>'description')::text, '')) @@ to_tsquery('english', $2)
       ORDER BY relevance_score DESC, created_at DESC
       LIMIT 10`,
       [projectId, searchPattern]
@@ -114,11 +112,11 @@ class ContextAssemblyService {
 
     return result.rows.map(row => ({
       id: row.id,
-      type: row.node_type,
-      entityId: row.entity_id,
-      title: row.title,
-      description: row.description,
-      metadata: row.metadata,
+      type: row.type,
+      entityId: row.source_id,
+      title: row.attrs?.title || '',
+      description: row.attrs?.description || '',
+      metadata: row.attrs,
       relevanceScore: parseFloat(row.relevance_score) || 0,
       createdAt: row.created_at
     }));
@@ -134,11 +132,10 @@ class ContextAssemblyService {
     const result = await pool.query(
       `SELECT 
         id,
-        doc_type,
+        source_type,
         title,
         content,
-        source_url,
-        metadata,
+        meta,
         created_at,
         ts_rank(
           to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, '')),
@@ -146,7 +143,6 @@ class ContextAssemblyService {
         ) as relevance_score
       FROM rag_documents
       WHERE project_id = $1
-        AND deleted_at IS NULL
         AND to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, '')) @@ to_tsquery('english', $2)
       ORDER BY relevance_score DESC, created_at DESC
       LIMIT 5`,
@@ -155,11 +151,11 @@ class ContextAssemblyService {
 
     return result.rows.map(row => ({
       id: row.id,
-      type: row.doc_type,
+      type: row.source_type,
       title: row.title,
       content: row.content,
-      sourceUrl: row.source_url,
-      metadata: row.metadata,
+      sourceUrl: row.meta?.url || '',
+      metadata: row.meta,
       relevanceScore: parseFloat(row.relevance_score) || 0,
       createdAt: row.created_at
     }));
@@ -169,28 +165,25 @@ class ContextAssemblyService {
     const result = await pool.query(
       `SELECT 
         id,
-        project_id,
         evidence_type,
-        content,
+        quote_text,
         source_type,
         created_by,
-        created_at
+        created_date
       FROM evidence
-      WHERE project_id = $1
-        AND source_type = $2
-        AND deleted_at IS NULL
-      ORDER BY created_at DESC
-      LIMIT $3`,
-      [projectId, source, limit]
+      WHERE source_type = $1
+      ORDER BY created_date DESC
+      LIMIT $2`,
+      [source, limit]
     );
 
     return result.rows.map(row => ({
       id: row.id,
       type: row.evidence_type,
-      content: row.content,
+      content: row.quote_text || '',
       sourceType: row.source_type,
       createdBy: row.created_by,
-      createdAt: row.created_at
+      createdAt: row.created_date
     }));
   }
 

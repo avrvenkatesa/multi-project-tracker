@@ -28,7 +28,9 @@ class SidecarBot {
         userId
       });
 
-      console.log(`[Sidecar Bot] Context assembled: ${context.relatedEntities.decisions.length} decisions, ${context.relatedEntities.risks.length} risks`);
+      const decisionsCount = (context.pkgEntities || []).filter(e => e.type === 'decision').length;
+      const risksCount = (context.pkgEntities || []).filter(e => e.type === 'risk').length;
+      console.log(`[Sidecar Bot] Context assembled: ${decisionsCount} decisions, ${risksCount} risks`);
 
       // Step 2: Build provider-optimized prompt
       const { prompt, systemPrompt } = await promptBuilder.buildExtractionPrompt({
@@ -81,8 +83,8 @@ class SidecarBot {
         entities: validEntities,
         workflow: workflowResult,
         context: {
-          assemblyTime: context.metadata.assemblyTime,
-          contextQuality: contextAssembly.calculateContextQuality(context)
+          assemblyTime: context.assemblyTime,
+          qualityScore: context.qualityScore
         },
         llm: {
           provider: llmResult.provider,
