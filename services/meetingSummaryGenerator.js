@@ -579,7 +579,7 @@ ${entities.action_items.map(a => `- **${a.title}**: ${a.description || 'No descr
           ms.*,
           mt.meeting_id as external_meeting_id,
           mt.meeting_title,
-          mt.meeting_platform,
+          mt.platform as meeting_platform,
           mt.started_at,
           mt.ended_at
         FROM meeting_summaries ms

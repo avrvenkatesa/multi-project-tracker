@@ -31,7 +31,7 @@ class LiveEntityDetector {
 
       // Get meeting record
       const meetingResult = await pool.query(
-        `SELECT mt.id as db_id, mt.project_id, mt.started_by, mt.meeting_title, mt.meeting_platform
+        `SELECT mt.id as db_id, mt.project_id, mt.organizer_id as started_by, mt.meeting_title, mt.platform as meeting_platform
          FROM meeting_transcriptions mt
          WHERE mt.meeting_id = $1 AND mt.status = 'active'`,
         [meetingId]
