@@ -89,6 +89,7 @@ const thoughtCaptureRouter = require('./routes/thoughtCapture');
 const meetingTranscriptionRouter = require('./routes/meetingTranscription');
 const sidecarConfigRouter = require('./routes/sidecarConfig');
 const sidecarWebhooksRouter = require('./routes/sidecarWebhooks');
+const meetingWebhooksRouter = require('./routes/meetingWebhooks');
 
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
@@ -875,6 +876,7 @@ app.use('/api/sidecar', thoughtCaptureRouter); // Thought Capture routes
 app.use('/api/transcriptions', authenticateToken, meetingTranscriptionRouter); // Meeting Transcription routes
 app.use('/api', sidecarConfigRouter); // Sidecar Config routes
 app.use('/webhooks', sidecarWebhooksRouter); // Webhook routes (no auth - webhooks verify themselves)
+app.use('/api', meetingWebhooksRouter); // Meeting Webhooks & API routes (comprehensive transcription system)
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 
