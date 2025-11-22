@@ -35,6 +35,8 @@ The **AI Agent API & Integration** provides a real-time AI assistant interface w
 
 A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance through custom roles, thought capture, and meeting transcription. This includes tables for custom roles, role permissions, user role assignments, custom entity types, project-level sidecar configuration, thought captures, and meeting transcriptions.
 
+**Sidecar Bot AI Analysis Engine** (`services/sidecarBot.js`) analyzes content from platform integrations (Slack, Teams, Email, GitHub) using OpenAI GPT-4 Turbo to detect and classify project entities (tasks, bugs, features, issues). The engine extracts structured information including title, description, priority, complexity, requirements, and mentioned users. It supports auto-creation of entities based on AI confidence levels (≥0.7) and user authority (authority_level ≥3), or creates proposals for review when confidence is lower. Fallback keyword-based analysis ensures resilience when AI is unavailable. The service integrates with the role permission system for authority-based workflows and stores proposals in the thought_captures table.
+
 ## External Dependencies
 
 - Express.js
@@ -52,7 +54,7 @@ A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance t
 - pdf-parse
 - mammoth
 - file-type
-- OpenAI (GPT-3.5-Turbo, GPT-4o)
+- OpenAI (GPT-3.5-Turbo, GPT-4o, GPT-4 Turbo)
 - Anthropic (Claude Sonnet 4.5)
 - @neondatabase/serverless
 - drizzle-orm
