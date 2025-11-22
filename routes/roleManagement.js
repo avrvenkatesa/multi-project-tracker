@@ -322,6 +322,46 @@ router.post('/roles/:roleId/permissions', authenticateToken, async (req, res) =>
       }
     }
 
+    // Handle both array format (from tests) and single permission format
+    const { permissions } = req.body;
+
+    if (permissions && Array.isArray(permissions)) {
+      // Batch update permissions from array
+      const updatedPermissions = [];
+      
+      for (const perm of permissions) {
+        const { permissionKey, canPerform } = perm;
+        const [entityType, action] = permissionKey.split('.');
+        
+        // Map action to column name
+        const actionMap = {
+          'create': 'can_create',
+          'read': 'can_read',
+          'update': 'can_update',
+          'delete': 'can_delete'
+        };
+        
+        const column = actionMap[action];
+        if (!column) continue;
+        
+        const result = await pool.query(`
+          INSERT INTO role_permissions (role_id, entity_type, ${column})
+          VALUES ($1, $2, $3)
+          ON CONFLICT (role_id, entity_type)
+          DO UPDATE SET ${column} = $3
+          RETURNING *
+        `, [roleId, entityType, canPerform]);
+        
+        updatedPermissions.push(result.rows[0]);
+      }
+      
+      return res.json({
+        success: true,
+        permissions: updatedPermissions
+      });
+    }
+
+    // Original single permission format
     const {
       entityType,
       canCreate,
@@ -339,7 +379,7 @@ router.post('/roles/:roleId/permissions', authenticateToken, async (req, res) =>
     } = req.body;
 
     if (!entityType) {
-      return res.status(400).json({ error: 'Entity type is required' });
+      return res.status(400).json({ error: 'Entity type or permissions array is required' });
     }
 
     const result = await pool.query(`
