@@ -82,6 +82,14 @@ const aiAgentStreamingRouter = require('./routes/aiAgentStreaming');
 const documentsRouter = require('./routes/documents');
 const attachmentsRouter = require('./routes/attachments');
 
+// Sidecar Bot Foundation Route modules
+const customRolesRouter = require('./routes/customRoles');
+const roleManagementRouter = require('./routes/roleManagement');
+const thoughtCaptureRouter = require('./routes/thoughtCapture');
+const meetingTranscriptionRouter = require('./routes/meetingTranscription');
+const sidecarConfigRouter = require('./routes/sidecarConfig');
+const sidecarWebhooksRouter = require('./routes/sidecarWebhooks');
+
 // Configure WebSocket for Node.js < v22
 neonConfig.webSocketConstructor = ws;
 
@@ -398,7 +406,14 @@ const ROLE_HIERARCHY = {
 
 // JWT Authentication Middleware
 function authenticateToken(req, res, next) {
-  const token = req.cookies.token;
+  let token = req.cookies.token;
+
+  if (!token) {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
 
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -788,6 +803,7 @@ app.post("/api/auth/login", async (req, res) => {
     console.log('[LOGIN] Success! Sending response...');
     res.json({
       message: 'Login successful',
+      token: token,
       user: {
         id: user.id,
         username: user.username,
@@ -851,6 +867,14 @@ app.use('/api/aipm', authenticateToken, aiRiskDetectorRouter); // AI Risk Detect
 app.use('/api/aipm', authenticateToken, aiAgentStreamingRouter); // AI Agent Streaming routes
 app.use('/api', authenticateToken, documentsRouter); // Document Library routes
 app.use('/api', authenticateToken, attachmentsRouter); // Attachments routes
+
+// ============= SIDECAR BOT FOUNDATION ROUTES =============
+app.use('/api/roles', authenticateToken, customRolesRouter); // Custom Roles routes (old)
+app.use('/api', roleManagementRouter); // Role Management routes (new comprehensive)
+app.use('/api/sidecar', thoughtCaptureRouter); // Thought Capture routes
+app.use('/api/transcriptions', authenticateToken, meetingTranscriptionRouter); // Meeting Transcription routes
+app.use('/api', sidecarConfigRouter); // Sidecar Config routes
+app.use('/webhooks', sidecarWebhooksRouter); // Webhook routes (no auth - webhooks verify themselves)
 
 // ============= NOTIFICATION PREFERENCES ROUTES =============
 
