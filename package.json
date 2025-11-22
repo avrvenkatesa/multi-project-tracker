@@ -10,6 +10,7 @@
     "test:5.1.1": "jest __tests__/story-5.1.1.test.js",
     "test:sidecar": "mocha tests/sidecar-foundation.test.js --timeout 10000",
     "test:sidecar-simple": "mocha tests/sidecar-foundation-simplified.test.js --timeout 10000",
+    "test:meeting-transcription": "mocha tests/meeting-transcription-integration.test.js --timeout 60000",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"
@@ -25,6 +26,7 @@
     "@anthropic-ai/sdk": "^0.65.0",
     "@babel/core": "^7.28.5",
     "@babel/preset-env": "^7.28.5",
+    "@deepgram/sdk": "^4.11.2",
     "@google/generative-ai": "^0.24.1",
     "@neondatabase/serverless": "^1.0.1",
     "@slack/web-api": "^7.12.0",
@@ -52,6 +54,7 @@
     "jsonwebtoken": "^9.0.2",
     "mailparser": "^3.9.0",
     "mammoth": "^1.11.0",
+    "microsoft-cognitiveservices-speech-sdk": "^1.47.0",
     "mocha": "^11.7.5",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
