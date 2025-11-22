@@ -406,7 +406,14 @@ const ROLE_HIERARCHY = {
 
 // JWT Authentication Middleware
 function authenticateToken(req, res, next) {
-  const token = req.cookies.token;
+  let token = req.cookies.token;
+
+  if (!token) {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
 
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
