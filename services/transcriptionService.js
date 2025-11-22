@@ -62,15 +62,14 @@ class TranscriptionService {
       // Create meeting transcription record
       const result = await pool.query(`
         INSERT INTO meeting_transcriptions (
-          project_id, meeting_platform, meeting_id, meeting_title,
-          started_by, activation_mode, transcription_provider, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (meeting_platform, meeting_id) 
+          project_id, platform, meeting_id, meeting_title,
+          organizer_id, activation_mode, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'active')
+        ON CONFLICT (platform, meeting_id) 
         DO UPDATE SET 
           status = 'active',
           started_at = NOW(),
-          ended_at = NULL,
-          error_message = NULL
+          ended_at = NULL
         RETURNING id, started_at
       `, [
         projectId,
@@ -78,9 +77,7 @@ class TranscriptionService {
         meetingId,
         meetingTitle,
         userId,
-        activationMode,
-        platform === 'zoom' ? 'deepgram' : 'azure_speech',
-        'active'
+        activationMode
       ]);
 
       const dbMeetingId = result.rows[0].id;

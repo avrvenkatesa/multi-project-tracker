@@ -113,7 +113,7 @@ class MeetingManager {
       // Validate meeting doesn't already exist with active status
       const existing = await pool.query(
         `SELECT id, status FROM meeting_transcriptions 
-         WHERE meeting_platform = $1 AND meeting_id = $2`,
+         WHERE platform = $1 AND meeting_id = $2`,
         [platform, meetingId]
       );
 
@@ -442,7 +442,7 @@ class MeetingManager {
         SELECT
           mt.id as db_meeting_id,
           mt.meeting_id,
-          mt.meeting_platform,
+          mt.platform as meeting_platform,
           mt.meeting_title,
           mt.started_at,
           mt.ended_at,
@@ -498,16 +498,17 @@ class MeetingManager {
         `, [projectId, mode]);
       } else {
         // Use sidecar_config metadata as fallback
+        const modeValue = mode; // PostgreSQL needs explicit variable for type resolution
         await pool.query(`
           INSERT INTO sidecar_config (project_id, enabled, metadata)
-          VALUES ($1, true, jsonb_build_object('meeting_activation_mode', $2))
+          VALUES ($1::integer, true, jsonb_build_object('meeting_activation_mode', $2::text))
           ON CONFLICT (project_id)
           DO UPDATE SET metadata = jsonb_set(
             COALESCE(sidecar_config.metadata, '{}'::jsonb),
             '{meeting_activation_mode}',
             to_jsonb($2::text)
           )
-        `, [projectId, mode]);
+        `, [projectId, modeValue]);
       }
 
       console.log(`[Meeting Manager] Set activation mode for project ${projectId}: ${mode}`);
