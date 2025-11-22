@@ -686,23 +686,34 @@ Sarah: I'll take that action item. Also, we should document the migration plan a
     it('Should bulk promote high-confidence detections', async () => {
       console.log('\n[TC7] Testing bulk entity promotion');
 
+      // Start an active meeting for bulk promotion testing
+      const tc7MeetingId = `test-tc7-${Date.now()}`;
+      await meetingManager.startMeeting({
+        meetingId: tc7MeetingId,
+        platform: 'zoom',
+        title: 'TC7 Bulk Promotion Test',
+        projectId: testProjectId,
+        userId: testUserId,
+        activationMode: 'manual'
+      });
+
       // Mock sidecarBot with high-confidence entities
       const sidecarStub = sinon.stub(sidecarBot, 'analyzeContent').resolves(mockAIDetectionResult);
       stubs.push(sidecarStub);
 
       // Detect entities
       await liveEntityDetector.detectFromTranscript({
-        meetingId: testMeetingId,
+        meetingId: tc7MeetingId,
         transcript: mockTranscriptChunks.map(c => `${c.speaker}: ${c.content}`).join('\n'),
         chunks: mockTranscriptChunks
       });
 
       // Bulk promote with 0.8 threshold
-      const result = await liveEntityDetector.bulkPromoteDetections(testMeetingId, 0.8);
+      const result = await liveEntityDetector.bulkPromoteDetections(tc7MeetingId, 0.8);
 
       expect(result).to.exist;
-      expect(result.promoted).to.be.at.least(0);
-      console.log(`✅ Promoted ${result.promoted} high-confidence detections`);
+      expect(result.promoted).to.equal(3);
+      console.log(`✅ Promoted ${result.promoted}/3 high-confidence detections`);
 
       console.log('✅ TC7 PASSED: Bulk promotion working');
     });

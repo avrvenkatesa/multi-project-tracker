@@ -286,11 +286,20 @@ class LiveEntityDetector {
 
       // Get meeting and project info
       const meetingResult = await pool.query(
-        'SELECT project_id FROM meeting_transcriptions WHERE id = $1',
+        'SELECT project_id, organizer_id FROM meeting_transcriptions WHERE id = $1',
         [detection.meeting_id]
       );
 
+      if (meetingResult.rows.length === 0) {
+        throw new Error(`Meeting not found for detection: ${detection.meeting_id}`);
+      }
+
       const projectId = meetingResult.rows[0].project_id;
+      const organizerId = meetingResult.rows[0].organizer_id;
+      
+      if (!projectId) {
+        throw new Error(`No project_id found for meeting: ${detection.meeting_id}`);
+      }
 
       // Create entity using workflow engine
       const entity = {
@@ -301,16 +310,16 @@ class LiveEntityDetector {
         impact_level: detection.impact_level
       };
 
-      const createResult = await workflowEngine.autoCreateEntity({
+      const createResult = await workflowEngine.autoCreateEntity(
         entity,
-        userId: userId || null,
+        userId || organizerId || null,
         projectId,
-        source: {
+        {
           type: 'live_meeting_detection',
           detectionId: detection.id,
           meetingId: detection.meeting_id
         }
-      });
+      );
 
       // Update detection record
       await pool.query(`
