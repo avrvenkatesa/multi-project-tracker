@@ -42,6 +42,8 @@ A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance t
 - **Prompt Builder Service** (`services/promptBuilder.js`) - Constructs provider-optimized prompts for Claude (Anthropic), GPT-4 (OpenAI), and Gemini (Google). Adapts formatting (XML for Claude, Markdown for OpenAI, plain text for Gemini) and includes few-shot examples, entity schemas, and project context.
 - **LLM Client Service** (`services/llmClient.js`) - Handles API calls to multiple LLM providers with automatic fallback, retry logic with exponential backoff, response validation, and token usage tracking. Supports Claude 3.5 Sonnet, GPT-4 Turbo, and Gemini 1.5 Pro with cost estimation and analytics.
 
+**Role-Based Auto-Creation Workflow Engine (Story 5.4.2)** (`services/workflowEngine.js`) determines whether extracted entities should be auto-created or sent for approval based on user authority levels, AI confidence scores, and role permissions. Implements four decision rules: (1) High confidence + high authority → auto-create, (2) Permission-based auto-create for medium confidence, (3) Critical impact always requires review, (4) Low confidence or low authority → proposal. Features atomic transactions for entity creation, evidence tracking, proposal management (approve/reject), and integration with PKG, sidecar config, and role permission systems. Stores proposals in `entity_proposals` table pending approval from designated roles.
+
 ## External Dependencies
 
 - Express.js
