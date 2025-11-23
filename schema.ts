@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb, date, decimal, uuid } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, text, timestamp, integer, boolean, jsonb, date, decimal, uuid, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const users = pgTable('users', {
@@ -43,7 +43,9 @@ export const projectMembers = pgTable('project_members', {
   lastActive: timestamp('last_active'),
   removedAt: timestamp('removed_at'),
   removedBy: integer('removed_by').references(() => users.id),
-});
+}, (table) => ({
+  uniqueProjectUser: unique().on(table.projectId, table.userId)
+}));
 
 export const issues = pgTable('issues', {
   id: serial('id').primaryKey(),

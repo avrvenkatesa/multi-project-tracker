@@ -1,7 +1,7 @@
 # Multi-Project Tracker
 
 ## Overview
-The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights like Meeting Analysis, Checklist Generation, Checklist Validation, PDF/CSV reporting, and an enhanced comment system. The project aims to be a leading solution for centralized project oversight and efficient team collaboration, providing AI-powered insights, robust security, and advanced project scheduling with critical path analysis.
+The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. **Production-ready with full CI/CD pipeline to AWS ECS.** It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights like Meeting Analysis, Checklist Generation, Checklist Validation, PDF/CSV reporting, and an enhanced comment system. The project aims to be a leading solution for centralized project oversight and efficient team collaboration, providing AI-powered insights, robust security, and advanced project scheduling with critical path analysis.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -45,6 +45,29 @@ A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance t
 **Role-Based Auto-Creation Workflow Engine (Story 5.4.2)** (`services/workflowEngine.js`) determines whether extracted entities should be auto-created or sent for approval based on user authority levels, AI confidence scores, and role permissions. Implements four decision rules: (1) High confidence + high authority → auto-create, (2) Permission-based auto-create for medium confidence, (3) Critical impact always requires review, (4) Low confidence or low authority → proposal. Features atomic transactions for entity creation, evidence tracking with full attribution, proposal management (approve/reject), and integration with PKG, sidecar config, and role permission systems. Stores proposals in `entity_proposals` table pending approval from designated roles. **Test Coverage: 19/19 tests passing (100%)**
 
 **Complete AI Pipeline Integration** - The Sidecar Bot now orchestrates the full AI analysis pipeline, connecting Context Assembly → Prompt Builder → LLM Client → Workflow Engine → Entity Creation. Webhooks (Slack, Teams, Email, Thought Capture) can integrate with `sidecarBot.analyzeContent()` for end-to-end intelligent entity extraction. Returns structured results with workflow outcomes, context quality scores, LLM usage metadata, and cost tracking. **Integration Test Coverage: 6 tests for end-to-end validation**
+
+**AI-Powered Meeting Transcription System** - Production-ready transcription system with real-time transcription from Zoom/Teams, live entity detection with manual triggering, intelligent activation modes, comprehensive post-meeting summaries with Markdown support, full REST API with webhook integration, complete integration test coverage (13/13 tests passing), and Dockerfile for containerized deployment.
+
+### Production Deployment
+**CI/CD Pipeline** - Automated GitHub Actions workflow (`.github/workflows/ci-cd-staging.yml`) for continuous deployment to AWS ECS. Features include:
+- Automated testing with PostgreSQL service container
+- Database schema migration via Drizzle ORM
+- Multi-stage Docker build for optimized images
+- Automated push to Amazon ECR
+- Force deployment to ECS staging environment
+- Environment-aware database driver (standard pg for local/test, Neon serverless for production)
+
+**Database Configuration** (`db.js`) - Intelligent database connection with automatic driver selection:
+- Detects test/local environments (NODE_ENV=test or localhost in DATABASE_URL)
+- Uses standard `pg` library for local PostgreSQL and CI tests
+- Uses `@neondatabase/serverless` with WebSocket pooling for production
+- Ensures compatibility across development, testing, and production environments
+
+**Docker Configuration** (`Dockerfile`) - Multi-stage build for production deployment:
+- Build stage: Install dependencies and prepare application
+- Production stage: Minimal runtime image with only production dependencies
+- Health check endpoint for AWS ECS monitoring
+- Optimized for cloud deployment
 
 ## External Dependencies
 
