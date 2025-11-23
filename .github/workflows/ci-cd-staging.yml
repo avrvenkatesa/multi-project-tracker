@@ -13,6 +13,21 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
       - name: Checkout code
@@ -25,6 +40,38 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Set up database schema
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/testdb
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: test
+          PGPASSWORD: test
+          PGDATABASE: testdb
+        run: |
+          # Install PostgreSQL client
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          
+          # Push Drizzle schema to database
+          echo "Applying base schema with Drizzle..."
+          npm run db:push -- --force || echo "Drizzle schema push failed, continuing..."
+          
+          # Apply additional migrations in order
+          echo "Applying additional migrations from migrations/..."
+          for file in migrations/*.sql; do
+            [ -f "$file" ] || continue
+            echo "Applying migration: $file"
+            psql -h localhost -U test -d testdb -f "$file" || echo "Migration $file failed or already applied, continuing..."
+          done
+          
+          echo "Applying migrations from db/..."
+          for file in db/*.sql; do
+            [ -f "$file" ] || continue
+            echo "Applying migration: $file"
+            psql -h localhost -U test -d testdb -f "$file" || echo "Migration $file failed or already applied, continuing..."
+          done
 
       - name: Run tests
         env:
