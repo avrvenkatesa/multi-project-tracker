@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Quick Capture - Multi-Project Tracker</title>
+
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
+
+    .header h1 { font-size: 28px; margin-bottom: 8px; }
+    .header p { font-size: 14px; opacity: 0.9; }
+
+    .capture-card {
+      background: white;
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+
+    .tab-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #667eea;
+      background: white;
+      color: #667eea;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .tab-btn.active {
+      background: #667eea;
+      color: white;
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .voice-recorder {
+      text-align: center;
+    }
+
+    .record-button {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      font-size: 48px;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+      transition: all 0.3s;
+      margin: 20px auto;
+      display: block;
+    }
+
+    .record-button:active { transform: scale(0.95); }
+    .record-button.recording {
+      background: #ef4444;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .recording-status {
+      font-size: 14px;
+      color: #666;
+      margin-top: 10px;
+      min-height: 20px;
+    }
+
+    .text-input {
+      width: 100%;
+      min-height: 120px;
+      padding: 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 16px;
+      font-family: inherit;
+      resize: vertical;
+      margin-bottom: 16px;
+    }
+
+    .text-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .project-select {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 16px;
+      margin-bottom: 16px;
+      background: white;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .thought-item {
+      padding: 16px;
+      background: #f9fafb;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    .thought-meta {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .thought-content {
+      font-size: 14px;
+      color: #1f2937;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #667eea;
+    }
+
+    .spinner {
+      border: 3px solid #f3f4f6;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1f2937;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 1000;
+      animation: slideUp 0.3s;
+    }
+
+    @keyframes slideUp {
+      from { bottom: -50px; opacity: 0; }
+      to { bottom: 20px; opacity: 1; }
+    }
+
+    .offline-badge {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #ef4444;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      display: none;
+    }
+
+    .offline-badge.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="offline-badge" id="offlineBadge">📡 Offline Mode</div>
+
+  <div class="container">
+    <div class="header">
+      <h1>✨ Quick Capture</h1>
+      <p>Capture thoughts instantly with voice or text</p>
+    </div>
+
+    <div class="capture-card">
+      <div class="tab-buttons">
+        <button class="tab-btn active" onclick="switchTab('voice')">🎤 Voice</button>
+        <button class="tab-btn" onclick="switchTab('text')">✍️ Text</button>
+        <button class="tab-btn" onclick="switchTab('recent')">📋 Recent</button>
+      </div>
+
+      <div id="voiceTab" class="tab-content active">
+        <div class="voice-recorder">
+          <button id="recordBtn" class="record-button" onclick="toggleRecording()">
+            <span id="recordIcon">🎤</span>
+          </button>
+          <div class="recording-status" id="recordingStatus">Tap to record</div>
+
+          <select id="voiceProject" class="project-select">
+            <option value="">Select Project (Optional)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="textTab" class="tab-content">
+        <textarea
+          id="textInput"
+          class="text-input"
+          placeholder="What's on your mind? Type your thought here..."></textarea>
+
+        <select id="textProject" class="project-select">
+          <option value="">Select Project (Optional)</option>
+        </select>
+
+        <button class="submit-btn" onclick="submitText()">Capture Thought</button>
+      </div>
+
+      <div id="recentTab" class="tab-content">
+        <div id="recentThoughts">
+          <div class="loading">
+            <div class="spinner"></div>
+            Loading recent thoughts...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin + '/api';
+    let authToken = localStorage.getItem('auth_token');
+    let mediaRecorder;
+    let audioChunks = [];
+    let isRecording = false;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await checkAuth();
+      await loadProjects();
+      await loadRecentThoughts();
+      setupServiceWorker();
+      setupOfflineDetection();
+    });
+
+    async function checkAuth() {
+      if (!authToken) {
+        const username = prompt('Enter username:');
+        const password = prompt('Enter password:');
+
+        try {
+          const response = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+
+          const data = await response.json();
+          authToken = data.token;
+          localStorage.setItem('auth_token', authToken);
+          showToast('✅ Logged in successfully');
+        } catch (error) {
+          showToast('❌ Login failed');
+        }
+      }
+    }
+
+    async function loadProjects() {
+      try {
+        const response = await fetch(`${API_BASE}/projects`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        const options = data.projects.map(p =>
+          `<option value="${p.id}">${p.name}</option>`
+        ).join('');
+
+        document.getElementById('voiceProject').innerHTML += options;
+        document.getElementById('textProject').innerHTML += options;
+      } catch (error) {
+        console.error('Failed to load projects:', error);
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+      event.target.classList.add('active');
+      document.getElementById(tab + 'Tab').classList.add('active');
+
+      if (tab === 'recent') {
+        loadRecentThoughts();
+      }
+    }
+
+    async function toggleRecording() {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        await startRecording();
+      }
+    }
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          await uploadVoice(audioBlob);
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+
+        document.getElementById('recordBtn').classList.add('recording');
+        document.getElementById('recordIcon').textContent = '⏹️';
+        document.getElementById('recordingStatus').textContent = 'Recording... Tap to stop';
+
+      } catch (error) {
+        showToast('❌ Microphone access denied');
+        console.error('Recording error:', error);
+      }
+    }
+
+    function stopRecording() {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      isRecording = false;
+
+      document.getElementById('recordBtn').classList.remove('recording');
+      document.getElementById('recordIcon').textContent = '🎤';
+      document.getElementById('recordingStatus').textContent = 'Processing...';
+    }
+
+    async function uploadVoice(audioBlob) {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      const projectId = document.getElementById('voiceProject').value;
+      if (projectId) formData.append('projectId', projectId);
+
+      try {
+        const response = await fetch(`${API_BASE}/quick-capture/voice`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}` },
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showToast('✅ Voice captured successfully!');
+          document.getElementById('recordingStatus').textContent = `"${data.content}"`;
+          setTimeout(() => {
+            document.getElementById('recordingStatus').textContent = 'Tap to record';
+          }, 3000);
+        } else {
+          throw new Error(data.error);
+        }
+      } catch (error) {
+        showToast('❌ Failed to upload voice');
+        document.getElementById('recordingStatus').textContent = 'Failed. Tap to retry';
+        console.error('Upload error:', error);
+      }
+    }
+
+    async function submitText() {
+      const content = document.getElementById('textInput').value.trim();
+      if (!content) {
+        showToast('⚠️ Please enter some text');
+        return;
+      }
+
+      const projectId = document.getElementById('textProject').value || null;
+
+      try {
+        const response = await fetch(`${API_BASE}/quick-capture/text`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ content, projectId })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showToast('✅ Thought captured!');
+          document.getElementById('textInput').value = '';
+        } else {
+          throw new Error(data.error);
+        }
+      } catch (error) {
+        showToast('❌ Failed to capture thought');
+        console.error('Submit error:', error);
+      }
+    }
+
+    async function loadRecentThoughts() {
+      try {
+        const response = await fetch(`${API_BASE}/quick-capture?limit=10`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        const html = data.thoughts.map(t => `
+          <div class="thought-item">
+            <div class="thought-meta">
+              ${t.capture_method === 'voice' ? '🎤' : '✍️'}
+              ${new Date(t.created_at).toLocaleString()}
+              ${t.detected_entity_type ? ` · ${t.detected_entity_type}` : ''}
+            </div>
+            <div class="thought-content">${t.content}</div>
+          </div>
+        `).join('');
+
+        document.getElementById('recentThoughts').innerHTML = html || '<p>No thoughts yet</p>';
+      } catch (error) {
+        document.getElementById('recentThoughts').innerHTML = '<p>Failed to load thoughts</p>';
+      }
+    }
+
+    function setupServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+          .then(() => console.log('Service Worker registered'))
+          .catch(err => console.error('SW registration failed:', err));
+      }
+    }
+
+    function setupOfflineDetection() {
+      const badge = document.getElementById('offlineBadge');
+
+      window.addEventListener('online', () => {
+        badge.classList.remove('show');
+        showToast('📡 Back online');
+      });
+
+      window.addEventListener('offline', () => {
+        badge.classList.add('show');
+        showToast('📡 Offline mode');
+      });
+
+      if (!navigator.onLine) {
+        badge.classList.add('show');
+      }
+    }
+
+    function showToast(message) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.remove();
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
