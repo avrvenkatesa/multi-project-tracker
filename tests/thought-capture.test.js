@@ -24,11 +24,20 @@ describe('Thought Capture System Integration Tests', function() {
   before(async function() {
     await new Promise(resolve => setTimeout(resolve, 2000));
     
+    const registerRes = await request(BASE_URL)
+      .post('/api/auth/register')
+      .send({
+        username: 'test_integration_user',
+        email: 'test_integration@example.com',
+        password: 'testpass123',
+        role: 'System Administrator'
+      });
+
     const loginRes = await request(BASE_URL)
       .post('/api/auth/login')
       .send({
-        username: 'admin',
-        password: 'admin123'
+        email: 'test_integration@example.com',
+        password: 'testpass123'
       });
 
     expect(loginRes.status).to.equal(200);
@@ -260,7 +269,7 @@ describe('Thought Capture System Integration Tests', function() {
       const res = await request(BASE_URL)
         .post('/api/auth/login')
         .send({
-          username: 'user1',
+          email: 'user1@example.com',
           password: 'password123'
         });
 
@@ -296,30 +305,52 @@ describe('Offline Sync Service Tests', function() {
   this.timeout(10000);
 
   const offlineSync = require('../services/offlineSync');
-  let testUserId = 1;
+  let syncTestUserId;
+  let syncAuthToken;
   let queueItemId;
+
+  before(async function() {
+    const registerRes = await request(BASE_URL)
+      .post('/api/auth/register')
+      .send({
+        username: 'sync_test_user',
+        email: 'sync_test@example.com',
+        password: 'synctest123',
+        role: 'Team Member'
+      });
+
+    const loginRes = await request(BASE_URL)
+      .post('/api/auth/login')
+      .send({
+        email: 'sync_test@example.com',
+        password: 'synctest123'
+      });
+
+    syncAuthToken = loginRes.body.token;
+    syncTestUserId = loginRes.body.user.id;
+  });
 
   describe('Queue Management', function() {
     it('should add item to offline queue', async function() {
-      const queueItem = await offlineSync.queueOfflineCapture(testUserId, {
+      const queueItem = await offlineSync.queueOfflineCapture(syncTestUserId, {
         content: 'Offline thought test',
         captureMethod: 'text'
       });
 
       expect(queueItem).to.have.property('id');
-      expect(queueItem.sync_status).to.equal('pending');
+      expect(queueItem.status).to.equal('pending');
       queueItemId = queueItem.id;
     });
 
     it('should get pending queue items', async function() {
-      const items = await offlineSync.getPendingQueueItems(testUserId);
+      const items = await offlineSync.getPendingQueueItems(syncTestUserId);
       
       expect(items).to.be.an('array');
       expect(items.length).to.be.greaterThan(0);
     });
 
     it('should get queue statistics', async function() {
-      const stats = await offlineSync.getQueueStats(testUserId);
+      const stats = await offlineSync.getQueueStats(syncTestUserId);
       
       expect(stats).to.have.property('total_items');
       expect(stats).to.have.property('pending');
@@ -328,7 +359,7 @@ describe('Offline Sync Service Tests', function() {
 
   describe('Sync Operations', function() {
     it('should sync pending queue items', async function() {
-      const result = await offlineSync.syncOfflineQueue(testUserId);
+      const result = await offlineSync.syncOfflineQueue(syncTestUserId);
       
       expect(result).to.have.property('totalItems');
       expect(result).to.have.property('synced');
@@ -336,12 +367,12 @@ describe('Offline Sync Service Tests', function() {
     });
 
     it('should handle sync errors gracefully', async function() {
-      await offlineSync.queueOfflineCapture(testUserId, {
+      await offlineSync.queueOfflineCapture(syncTestUserId, {
         content: '',
         captureMethod: 'invalid'
       });
 
-      const result = await offlineSync.syncOfflineQueue(testUserId);
+      const result = await offlineSync.syncOfflineQueue(syncTestUserId);
       
       expect(result).to.have.property('failed');
     });

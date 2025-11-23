@@ -19,7 +19,7 @@ const sidecarBot = require('./sidecarBot');
  * @param {object} captureData - Thought capture data
  * @returns {Promise<object>} - Created thought capture with ID
  */
-async function createThoughtCapture(captureData) {
+async function createThoughtCapture(captureData, options = {}) {
   const {
     userId,
     projectId,
@@ -32,11 +32,15 @@ async function createThoughtCapture(captureData) {
     transcriptionConfidence
   } = captureData;
 
+  const { skipAI = false } = options;
+
   if (!userId || !content) {
     throw new Error('userId and content are required');
   }
 
   try {
+    const initialStatus = skipAI ? 'processed' : 'pending';
+    
     const result = await pool.query(`
       INSERT INTO thought_captures (
         user_id,
@@ -48,8 +52,9 @@ async function createThoughtCapture(captureData) {
         original_audio_url,
         transcription,
         transcription_confidence,
-        status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        status,
+        processed_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `, [
       userId,
@@ -61,15 +66,18 @@ async function createThoughtCapture(captureData) {
       originalAudioUrl || null,
       transcription || null,
       transcriptionConfidence || null,
-      'pending' // Will trigger AI analysis
+      initialStatus,
+      skipAI ? new Date() : null
     ]);
 
     const thoughtCapture = result.rows[0];
 
-    // Trigger background AI analysis (non-blocking)
-    processThoughtWithAI(thoughtCapture.id, userId, projectId).catch(err => {
-      console.error(`Background AI analysis failed for thought ${thoughtCapture.id}:`, err);
-    });
+    // Trigger background AI analysis only if not skipped (non-blocking)
+    if (!skipAI) {
+      processThoughtWithAI(thoughtCapture.id, userId, projectId).catch(err => {
+        console.error(`Background AI analysis failed for thought ${thoughtCapture.id}:`, err);
+      });
+    }
 
     return thoughtCapture;
   } catch (error) {
@@ -106,17 +114,45 @@ async function processThoughtWithAI(thoughtCaptureId, userId, projectId) {
       throw new Error(`Thought capture ${thoughtCaptureId} not found`);
     }
 
-    // Analyze content with Sidecar Bot AI engine
-    const aiResult = await sidecarBot.analyzeContent(
-      thought.content,
-      projectId,
-      userId,
-      {
-        source: 'thought_capture',
-        sourceId: thoughtCaptureId,
-        captureMethod: thought.capture_method
-      }
-    );
+    // Analyze content with Sidecar Bot AI engine (with graceful fallback)
+    let aiResult;
+    try {
+      aiResult = await sidecarBot.analyzeContent(
+        thought.content,
+        projectId,
+        userId,
+        {
+          source: 'thought_capture',
+          sourceId: thoughtCaptureId,
+          captureMethod: thought.capture_method
+        }
+      );
+    } catch (aiError) {
+      console.warn(`[QuickCapture] AI analysis unavailable for thought ${thoughtCaptureId}:`, aiError.message);
+      // Mark as processed without AI analysis
+      await pool.query(`
+        UPDATE thought_captures
+        SET 
+          status = 'processed',
+          ai_analysis = $1,
+          processed_at = NOW()
+        WHERE id = $2
+      `, [
+        JSON.stringify({ error: 'AI service unavailable', fallback: true }),
+        thoughtCaptureId
+      ]);
+
+      return {
+        thoughtCaptureId,
+        detectedEntityType: null,
+        aiConfidence: 0,
+        createdEntityId: null,
+        requiresReview: false,
+        entitiesDetected: 0,
+        aiAvailable: false,
+        message: 'Thought captured without AI analysis'
+      };
+    }
 
     // Determine detected entity type and confidence
     const detectedEntities = aiResult.entities || [];

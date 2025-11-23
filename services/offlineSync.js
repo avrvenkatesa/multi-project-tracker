@@ -99,10 +99,12 @@ async function processQueueItem(queueItem) {
       ? JSON.parse(payload) 
       : payload;
 
+    // Skip AI processing during offline sync to ensure reliable syncing
+    // even when AI services are unavailable
     const thoughtCapture = await quickCapture.createThoughtCapture({
       userId: user_id,
       ...captureData
-    });
+    }, { skipAI: true });
 
     await pool.query(`
       UPDATE offline_queue
@@ -112,6 +114,8 @@ async function processQueueItem(queueItem) {
         synced_entity_id = $1
       WHERE id = $2
     `, [thoughtCapture.id, id]);
+
+    console.log(`[OfflineSync] Successfully synced queue item ${id} -> thought ${thoughtCapture.id}`);
 
     return {
       success: true,
