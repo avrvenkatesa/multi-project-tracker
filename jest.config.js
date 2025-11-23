@@ -12,5 +12,11 @@ module.exports = {
   moduleNameMapper: {
     '^uuid$': '<rootDir>/__mocks__/uuid.js',
     '^pdf-parse$': '<rootDir>/__mocks__/pdf-parse.js'
-  }
+  },
+  transform: {
+    '^.+\\.js$': 'babel-jest'
+  },
+  transformIgnorePatterns: [
+    'node_modules/(?!(chai)/)'
+  ]
 };
