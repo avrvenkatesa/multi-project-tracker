@@ -873,6 +873,7 @@ app.use('/api', authenticateToken, attachmentsRouter); // Attachments routes
 app.use('/api/roles', authenticateToken, customRolesRouter); // Custom Roles routes (old)
 app.use('/api', roleManagementRouter); // Role Management routes (new comprehensive)
 app.use('/api/sidecar', thoughtCaptureRouter); // Thought Capture routes
+app.use('/api/quick-capture', require('./routes/quickCapture')); // Quick Capture routes (mobile-optimized)
 app.use('/api/transcriptions', authenticateToken, meetingTranscriptionRouter); // Meeting Transcription routes
 app.use('/api', sidecarConfigRouter); // Sidecar Config routes
 app.use('/webhooks', sidecarWebhooksRouter); // Webhook routes (no auth - webhooks verify themselves)
