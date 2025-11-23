@@ -33,13 +33,15 @@ async function queueOfflineCapture(userId, captureData) {
     const result = await pool.query(`
       INSERT INTO offline_queue (
         user_id,
-        capture_data,
-        sync_status,
+        action_type,
+        payload,
+        status,
         retry_count
-      ) VALUES ($1, $2, $3, 0)
+      ) VALUES ($1, $2, $3, $4, 0)
       RETURNING *
     `, [
       userId,
+      'thought_capture',
       JSON.stringify({
         content,
         projectId,
@@ -70,7 +72,7 @@ async function getPendingQueueItems(userId, limit = 50) {
     const result = await pool.query(`
       SELECT * FROM offline_queue
       WHERE user_id = $1
-        AND sync_status = 'pending'
+        AND status = 'pending'
         AND retry_count < 5
       ORDER BY created_at ASC
       LIMIT $2
@@ -90,12 +92,12 @@ async function getPendingQueueItems(userId, limit = 50) {
  * @returns {Promise<object>} - Processing result
  */
 async function processQueueItem(queueItem) {
-  const { id, user_id, capture_data } = queueItem;
+  const { id, user_id, payload } = queueItem;
   
   try {
-    const captureData = typeof capture_data === 'string' 
-      ? JSON.parse(capture_data) 
-      : capture_data;
+    const captureData = typeof payload === 'string' 
+      ? JSON.parse(payload) 
+      : payload;
 
     const thoughtCapture = await quickCapture.createThoughtCapture({
       userId: user_id,
@@ -105,9 +107,9 @@ async function processQueueItem(queueItem) {
     await pool.query(`
       UPDATE offline_queue
       SET 
-        sync_status = 'synced',
+        status = 'synced',
         synced_at = NOW(),
-        created_entity_id = $1
+        synced_entity_id = $1
       WHERE id = $2
     `, [thoughtCapture.id, id]);
 
@@ -120,17 +122,16 @@ async function processQueueItem(queueItem) {
     console.error(`Error processing queue item ${id}:`, error);
 
     const retryCount = queueItem.retry_count + 1;
-    const syncStatus = retryCount >= 5 ? 'failed' : 'pending';
+    const newStatus = retryCount >= 5 ? 'failed' : 'pending';
 
     await pool.query(`
       UPDATE offline_queue
       SET 
         retry_count = $1,
-        sync_status = $2,
-        error_message = $3,
-        last_retry_at = NOW()
+        status = $2,
+        last_error = $3
       WHERE id = $4
-    `, [retryCount, syncStatus, error.message, id]);
+    `, [retryCount, newStatus, error.message, id]);
 
     return {
       success: false,
@@ -200,10 +201,10 @@ async function getQueueStats(userId) {
     const result = await pool.query(`
       SELECT 
         COUNT(*) as total_items,
-        COUNT(CASE WHEN sync_status = 'pending' THEN 1 END) as pending,
-        COUNT(CASE WHEN sync_status = 'synced' THEN 1 END) as synced,
-        COUNT(CASE WHEN sync_status = 'failed' THEN 1 END) as failed,
-        COUNT(CASE WHEN sync_status = 'conflict' THEN 1 END) as conflicts
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+        COUNT(CASE WHEN status = 'synced' THEN 1 END) as synced,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed,
+        COUNT(CASE WHEN status = 'conflict' THEN 1 END) as conflicts
       FROM offline_queue
       WHERE user_id = $1
     `, [userId]);
@@ -225,7 +226,7 @@ async function clearSyncedItems(userId = null) {
   try {
     let query = `
       DELETE FROM offline_queue
-      WHERE sync_status = 'synced'
+      WHERE status = 'synced'
         AND synced_at < NOW() - INTERVAL '30 days'
     `;
     const params = [];
@@ -258,11 +259,11 @@ async function retryFailedItems(userId) {
     await pool.query(`
       UPDATE offline_queue
       SET 
-        sync_status = 'pending',
+        status = 'pending',
         retry_count = 0,
-        error_message = NULL
+        last_error = NULL
       WHERE user_id = $1
-        AND sync_status = 'failed'
+        AND status = 'failed'
         AND retry_count < 5
     `, [userId]);
 
@@ -321,7 +322,7 @@ async function getQueueItems(filters = {}) {
     }
 
     if (status) {
-      query += ` AND oq.sync_status = $${paramIndex}`;
+      query += ` AND oq.status = $${paramIndex}`;
       params.push(status);
       paramIndex++;
     }
