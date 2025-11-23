@@ -1,7 +1,7 @@
 # Multi-Project Tracker
 
 ## Overview
-The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. **Production-ready with full CI/CD pipeline to AWS ECS.** It features comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system enhances project oversight and efficiency through AI-driven insights like Meeting Analysis, Checklist Generation, Checklist Validation, PDF/CSV reporting, and an enhanced comment system. The project aims to be a leading solution for centralized project oversight and efficient team collaboration, providing AI-powered insights, robust security, and advanced project scheduling with critical path analysis.
+The Multi-Project Tracker is an AI-powered issue tracking system designed to centralize and streamline project management. It provides comprehensive Role-Based Access Control (RBAC), a responsive web interface, a secure Node.js backend with JWT authentication, and persistent PostgreSQL storage. The system aims to enhance project oversight and efficiency through AI-driven insights such as Meeting Analysis, Checklist Generation, Checklist Validation, PDF/CSV reporting, and an enhanced comment system. It is envisioned as a leading solution for centralized project oversight, efficient team collaboration, and advanced project scheduling with critical path analysis. The project is production-ready with a full CI/CD pipeline to AWS ECS.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -9,76 +9,33 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### UI/UX Decisions
-The frontend is a single-page application (SPA) built with vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles and a professional enterprise-grade design token system. Key UI features include a Project Dashboard with Chart.js analytics, hierarchical Kanban boards, and a comprehensive unified checklist system. Advanced project scheduling includes interactive Gantt charts with dependency visualization and critical path highlighting. Dedicated dashboards exist for AI Agent interaction and AI-generated proposal review.
+The frontend is a single-page application (SPA) using vanilla JavaScript and Tailwind CSS, featuring a dynamic UI based on user roles and a professional design token system. Key UI features include a Project Dashboard with Chart.js analytics, hierarchical Kanban boards, a unified checklist system, interactive Gantt charts with dependency visualization and critical path highlighting, and dedicated dashboards for AI Agent interaction and AI-generated proposal review.
 
 ### Technical Implementations
-The backend is a RESTful API built with Express.js, utilizing a PostgreSQL database via Drizzle ORM. It employs a layered architecture with security middleware, JWT authentication, and a 6-tier RBAC system. The backend handles CRUD operations, atomic transactions, project-level authorization, and logging. Service layers manage AI processing, standalone checklists, workstream detection, document classification, topological sort, schedule calculation, AI cost tracking, hierarchy extraction, and sidecar bot functionalities (custom roles, thought capture, meeting transcription). AI features include Meeting Analysis, Checklist Generation, Document Classification, Timeline Extraction, Hierarchy Extraction, Workstream Detection, Effort Estimation, Schedule Generation, Issue Matching, Dependency Suggestion, Checklist Validation, AI Cost Tracking, AI Thought Analysis, and Role-Based Auto-Entity Creation.
+The backend is a RESTful API built with Express.js, utilizing PostgreSQL via Drizzle ORM. It employs a layered architecture with security middleware, JWT authentication, and a 6-tier RBAC system. Core functionalities include CRUD operations, atomic transactions, project-level authorization, and logging. Service layers manage AI processing for features like Meeting Analysis, Checklist Generation/Validation, Document Classification, Timeline/Hierarchy/Workstream Extraction, Effort Estimation, Schedule Generation, Issue Matching, Dependency Suggestion, AI Cost Tracking, AI Thought Analysis, and Role-Based Auto-Entity Creation. It also supports sidecar bot functionalities like custom roles, thought capture, and meeting transcription. The system integrates a multi-provider AI analysis engine supporting Claude, OpenAI, and Gemini with intelligent fallback for entity extraction. A Role-Based Auto-Creation Workflow Engine determines whether extracted entities are auto-created or require approval based on user authority and AI confidence. A complete AI pipeline integrates context assembly, prompt building, LLM client, and workflow engine. A mobile thought capture and voice-to-text system with offline support and AI-powered entity detection is also implemented.
 
 ### System Design Choices
 The database schema supports Users, Projects, Issues, Action Items, and a comprehensive checklist system, including AI-specific data, collaboration, user preferences, risk management, tag typing, and project scheduling.
 
-A **PKG (Project Knowledge Graph) Overlay** provides a unified graph abstraction layer built on PostgreSQL, enabling AI agents to query and manipulate project entities via a single interface, tracking AI provenance and supporting versioning.
+A **PKG (Project Knowledge Graph) Overlay** provides a unified graph abstraction layer on PostgreSQL for AI agents to query and manipulate project entities, tracking AI provenance and supporting versioning.
 
-A **RAG (Retrieval-Augmented Generation) Foundation** offers a unified document indexing and hybrid search system built on PostgreSQL, combining keyword-based full-text search with semantic vector search using the `pgvector` extension. Documents are automatically indexed from various sources and assigned 1536-dimensional embeddings using OpenAI's `text-embedding-3-small` model. The system supports keyword-only, semantic-only, and hybrid search modes.
+A **RAG (Retrieval-Augmented Generation) Foundation** offers a unified document indexing and hybrid search system built on PostgreSQL, combining keyword search with semantic vector search using `pgvector` and OpenAI's `text-embedding-3-small` model.
 
-A **VectorStore Abstraction Layer** provides an interface (`IVectorStore`) that decouples the application from the specific vector database implementation, currently using `PgVectorStore` for PostgreSQL. This allows for future migration to other vector databases.
+A **VectorStore Abstraction Layer** provides an interface (`IVectorStore`) to decouple the application from specific vector database implementations, currently using `PgVectorStore`.
 
-The **AI Agent Core Engine** provides intelligent project management assistance through context assembly from PKG and RAG, LLM integration (Claude/GPT), session tracking, and audit logging. It supports specialized modes for decision assistance, risk detection, meeting analysis, and knowledge exploration. It also supports **Autonomous Decision Making** with Human-in-the-Loop (HITL) workflows.
+The **AI Agent Core Engine** provides intelligent project management assistance through context assembly from PKG and RAG, LLM integration, session tracking, and audit logging. It supports specialized modes for decision assistance, risk detection, meeting analysis, knowledge exploration, and Autonomous Decision Making with Human-in-the-Loop (HITL) workflows.
 
-**Proactive Risk Detection** identifies project risks using multi-dimensional analysis (meeting mentions, dependency bottlenecks, decision risks, pattern anomalies, overdue items). High-confidence risks are auto-created, while lower-confidence risks create proposals for HITL review, with atomic deduplication.
+**Proactive Risk Detection** identifies project risks using multi-dimensional analysis, automatically creating high-confidence risks and generating proposals for HITL review for lower-confidence risks.
 
-The **AI Agent API & Integration** provides a real-time AI assistant interface with streaming responses using Server-Sent Events (SSE). It includes a dedicated UI component with chat interface, agent type selection, and real-time streaming responses. AI proposals for risks and decisions are managed through a dedicated dashboard.
+The **AI Agent API & Integration** provides a real-time AI assistant interface with streaming responses using Server-Sent Events (SSE), including a dedicated UI component with chat and agent type selection.
 
-**Grounded RAG Responses with Citations** ensures AI responses reference specific sources by using highlighted excerpts and enforcing citation formatting. Citations are matched to PKG nodes or RAG documents and stored as evidence records.
+**Grounded RAG Responses with Citations** ensures AI responses reference specific sources from PKG nodes or RAG documents, storing them as evidence records.
 
-**PKG Write Integration** implements bi-directional, atomic synchronization between AI-generated entities (decisions, risks) and the Project Knowledge Graph, using database transactions for consistency.
+**PKG Write Integration** implements bi-directional, atomic synchronization between AI-generated entities and the Project Knowledge Graph using database transactions.
 
-A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance through custom roles, thought capture, and meeting transcription. This includes tables for custom roles, role permissions, user role assignments, custom entity types, project-level sidecar configuration, thought captures, and meeting transcriptions.
+A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance through custom roles, thought capture, and meeting transcription.
 
-**Sidecar Bot AI Analysis Engine** (`services/sidecarBot.js`) provides complete AI-powered entity detection through a 5-step pipeline: (1) Context Assembly from PKG and RAG systems, (2) Provider-optimized prompt building, (3) Multi-provider LLM entity extraction with automatic fallback, (4) Role-based workflow processing, (5) Entity creation or proposal generation. The engine supports Claude, OpenAI, and Gemini with intelligent fallback, extracting structured entities with confidence scores, citations, and AI reasoning. Integration with the Workflow Engine provides authority-based auto-creation (RULE 1-4) or Human-in-the-Loop proposals. Fallback keyword-based analysis ensures resilience when AI is unavailable. Returns comprehensive results including workflow outcomes, context quality, LLM usage, and cost tracking.
-
-**Multi-Provider AI Analysis Engine (Story 5.4.2)** provides intelligent entity extraction from conversations with support for multiple LLM providers:
-- **Context Assembly Service** (`services/contextAssembly.js`) - Assembles rich context by querying PKG (Project Knowledge Graph) and RAG (Retrieval-Augmented Generation) systems, extracting keywords, and calculating context quality scores. Executes all queries in parallel for <500ms p95 latency.
-- **Prompt Builder Service** (`services/promptBuilder.js`) - Constructs provider-optimized prompts for Claude (Anthropic), GPT-4 (OpenAI), and Gemini (Google). Adapts formatting (XML for Claude, Markdown for OpenAI, plain text for Gemini) and includes few-shot examples, entity schemas, and project context.
-- **LLM Client Service** (`services/llmClient.js`) - Handles API calls to multiple LLM providers with automatic fallback, retry logic with exponential backoff, response validation, and token usage tracking. Supports Claude 3.5 Sonnet, GPT-4 Turbo, and Gemini 1.5 Pro with cost estimation and analytics.
-
-**Role-Based Auto-Creation Workflow Engine (Story 5.4.2)** (`services/workflowEngine.js`) determines whether extracted entities should be auto-created or sent for approval based on user authority levels, AI confidence scores, and role permissions. Implements four decision rules: (1) High confidence + high authority → auto-create, (2) Permission-based auto-create for medium confidence, (3) Critical impact always requires review, (4) Low confidence or low authority → proposal. Features atomic transactions for entity creation, evidence tracking with full attribution, proposal management (approve/reject), and integration with PKG, sidecar config, and role permission systems. Stores proposals in `entity_proposals` table pending approval from designated roles. **Test Coverage: 19/19 tests passing (100%)**
-
-**Complete AI Pipeline Integration** - The Sidecar Bot now orchestrates the full AI analysis pipeline, connecting Context Assembly → Prompt Builder → LLM Client → Workflow Engine → Entity Creation. Webhooks (Slack, Teams, Email, Thought Capture) can integrate with `sidecarBot.analyzeContent()` for end-to-end intelligent entity extraction. Returns structured results with workflow outcomes, context quality scores, LLM usage metadata, and cost tracking. **Integration Test Coverage: 6 tests for end-to-end validation**
-
-**AI-Powered Meeting Transcription System** - Production-ready transcription system with real-time transcription from Zoom/Teams, live entity detection with manual triggering, intelligent activation modes, comprehensive post-meeting summaries with Markdown support, full REST API with webhook integration, complete integration test coverage (13/13 tests passing), and Dockerfile for containerized deployment.
-
-**Mobile Thought Capture & Voice-to-Text System (Story 5.4.4)** - Complete mobile-optimized thought capture system with voice transcription, offline support, and AI-powered entity detection:
-- **Voice Capture Service** (`services/voiceCapture.js`) - Deepgram API integration for voice-to-text transcription with support for multiple audio formats (webm, mp3, wav, ogg, opus, m4a). Features confidence scoring, word-level timestamps, and automatic storage of audio files and transcription metadata.
-- **Quick Capture Service** (`services/quickCapture.js`) - Ultra-fast thought capture (<3 seconds) with background AI analysis via Sidecar Bot integration. Automatically detects entity types (decisions, risks, action items, tasks) and creates entities based on confidence scores and user authority levels. Supports templates, statistics, and project context awareness.
-- **Quick Capture API** (`routes/quickCapture.js`) - Mobile-optimized RESTful endpoints for text and voice capture: `POST /api/quick-capture/text` (text thoughts), `POST /api/quick-capture/voice` (voice recording upload with transcription), `GET /api/quick-capture` (list thoughts with filters), template management, and statistics endpoints.
-- **Offline Sync Service** (`services/offlineSync.js`) - Queue management system for offline captures with automatic synchronization when back online. Features retry logic with exponential backoff, conflict resolution, queue statistics, and automatic cleanup of old synced items.
-- **Mobile Web UI** (`public/mobile-capture.html`) - Progressive Web App (PWA) with native app-like experience. Features voice recording with Web MediaRecorder API, text input, recent thoughts list, project selector, offline detection, and toast notifications. Includes Service Worker for offline functionality and caching.
-- **Service Worker** (`public/sw.js`) - Offline-first caching strategy with cache versioning, network-first for API calls with cache fallback, background sync for failed captures, and push notification support.
-- **Database Schema** (Migration 036) - Four new tables: `thought_captures` (core thought storage with AI analysis results), `voice_recordings` (audio file metadata and transcription data), `offline_queue` (sync queue for offline captures), `quick_capture_templates` (reusable thought templates). Includes views for user-specific thought captures and offline queue summaries, plus triggers for auto-processing and expiration.
-- **Integration** - Full integration with existing Sidecar Bot AI pipeline for automatic entity detection and creation. Thoughts are analyzed using multi-provider LLM integration (Claude, GPT-4, Gemini) with confidence scoring, and entities are auto-created or sent for Human-in-the-Loop approval based on workflow engine rules.
-- **Test Coverage** - Comprehensive integration tests (`tests/thought-capture.test.js`) covering text capture, voice capture, templates, statistics, offline sync, authorization, and error handling. 4/6 offline sync tests passing (auth-related failures unrelated to thought capture functionality).
-
-### Production Deployment
-**CI/CD Pipeline** - Automated GitHub Actions workflow (`.github/workflows/ci-cd-staging.yml`) for continuous deployment to AWS ECS. Features include:
-- Automated testing with PostgreSQL service container
-- Database schema migration via Drizzle ORM
-- Multi-stage Docker build for optimized images
-- Automated push to Amazon ECR
-- Force deployment to ECS staging environment
-- Environment-aware database driver (standard pg for local/test, Neon serverless for production)
-
-**Database Configuration** (`db.js`) - Intelligent database connection with automatic driver selection:
-- Detects test/local environments (NODE_ENV=test or localhost in DATABASE_URL)
-- Uses standard `pg` library for local PostgreSQL and CI tests
-- Uses `@neondatabase/serverless` with WebSocket pooling for production
-- Ensures compatibility across development, testing, and production environments
-
-**Docker Configuration** (`Dockerfile`) - Multi-stage build for production deployment:
-- Build stage: Install dependencies and prepare application
-- Production stage: Minimal runtime image with only production dependencies
-- Health check endpoint for AWS ECS monitoring
-- Optimized for cloud deployment
+**CI/CD Pipeline** uses GitHub Actions for continuous deployment to AWS ECS, featuring automated testing, Drizzle ORM migrations, multi-stage Docker builds, ECR pushes, and environment-aware database driver selection.
 
 ## External Dependencies
 
@@ -110,3 +67,4 @@ A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance t
 - csv-writer
 - Chart.js
 - Frappe Gantt (v0.6.1)
+- Deepgram (voice-to-text transcription)
