@@ -219,6 +219,10 @@ class LLMClientService {
     try {
       let cleanContent = content.trim();
 
+      if (cleanContent.startsWith('#') || cleanContent.includes('## ')) {
+        return cleanContent;
+      }
+
       if (cleanContent.startsWith('```json')) {
         cleanContent = cleanContent.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
       } else if (cleanContent.startsWith('```')) {
@@ -239,7 +243,7 @@ class LLMClientService {
 
     } catch (error) {
       console.error(`[LLM Client] Failed to parse ${provider} response:`, error.message);
-      console.error('Raw content:', content);
+      console.error('Raw content:', content.substring(0, 200));
       throw new Error(`Failed to parse ${provider} response: ${error.message}`);
     }
   }

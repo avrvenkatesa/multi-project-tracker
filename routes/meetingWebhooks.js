@@ -531,6 +531,49 @@ router.post('/meetings/:meetingId/teams-transcript', authenticateToken, async (r
   }
 });
 
+/**
+ * Manually trigger live entity detection analysis
+ * Useful for testing and manual triggering of AI analysis
+ */
+router.post('/meetings/:meetingId/analyze', authenticateToken, async (req, res) => {
+  try {
+    const { meetingId } = req.params;
+
+    const chunksResult = await pool.query(`
+      SELECT tc.content, tc.speaker_name, tc.start_time_seconds
+      FROM transcript_chunks tc
+      JOIN meeting_transcriptions mt ON tc.meeting_id = mt.id
+      WHERE mt.meeting_id = $1 AND tc.is_final = true
+      ORDER BY tc.chunk_sequence DESC
+      LIMIT 10
+    `, [meetingId]);
+
+    if (chunksResult.rows.length === 0) {
+      return res.json({ 
+        success: true, 
+        message: 'No transcript chunks available for analysis',
+        detections: [] 
+      });
+    }
+
+    const combinedText = chunksResult.rows
+      .reverse()
+      .map(c => `${c.speaker_name}: ${c.content}`)
+      .join('\n');
+
+    const result = await liveEntityDetector.detectFromTranscript({
+      meetingId,
+      transcript: combinedText,
+      chunks: chunksResult.rows
+    });
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[API] Manual analysis error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============================================
 // LIVE ENTITY DETECTION ENDPOINTS
 // ============================================

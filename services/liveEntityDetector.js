@@ -111,6 +111,9 @@ class LiveEntityDetector {
       // Find the chunk this entity was detected from
       const chunkId = chunks && chunks.length > 0 ? chunks[0].id : null;
 
+      // Normalize entity_type to match database constraint (lowercase, underscores)
+      const normalizedType = entity.entity_type.toLowerCase().replace(/ /g, '_');
+
       // Check if similar detection already exists (prevent duplicates)
       const existing = await pool.query(`
         SELECT id FROM live_entity_detections
@@ -118,17 +121,18 @@ class LiveEntityDetector {
           AND entity_type = $2
           AND title = $3
           AND dismissed_at IS NULL
-      `, [dbMeetingId, entity.entity_type, entity.title]);
+      `, [dbMeetingId, normalizedType, entity.title]);
 
       if (existing.rows.length > 0) {
         console.log(`[Live Entity Detector] Duplicate detection skipped: ${entity.title}`);
         return null;
       }
 
-      // Determine impact level
-      const impactLevel = entity.impact_level || entity.priority || 
+      // Determine impact level and normalize to lowercase
+      const rawImpactLevel = entity.impact_level || entity.priority || 
         (entity.confidence >= 0.9 ? 'high' : 
          entity.confidence >= 0.7 ? 'medium' : 'low');
+      const impactLevel = rawImpactLevel.toLowerCase();
 
       // Insert new detection
       const result = await pool.query(`
@@ -140,7 +144,7 @@ class LiveEntityDetector {
       `, [
         dbMeetingId,
         chunkId,
-        entity.entity_type,
+        normalizedType,
         entity.title,
         entity.description || '',
         entity.confidence,
