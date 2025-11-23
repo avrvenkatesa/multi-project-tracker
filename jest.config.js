@@ -2,6 +2,13 @@ module.exports = {
   testEnvironment: 'node',
   testTimeout: 30000,
   verbose: true,
+  testMatch: [
+    '**/__tests__/**/*.test.js'
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/tests/'
+  ],
   collectCoverageFrom: [
     'routes/**/*.js',
     'services/**/*.js'

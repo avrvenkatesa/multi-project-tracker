@@ -27,6 +27,11 @@ jobs:
         run: npm ci
 
       - name: Run tests
+        env:
+          OPENAI_API_KEY: sk-test-dummy-key-for-ci-testing
+          ANTHROPIC_API_KEY: sk-ant-test-dummy-key
+          DATABASE_URL: postgresql://test:test@localhost:5432/testdb
+          NODE_ENV: test
         run: npm test --if-present
 
       - name: Configure AWS credentials
