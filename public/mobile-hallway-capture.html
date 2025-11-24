@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hallway Meeting</title>
+  <link rel="stylesheet" href="/css/mobile-capture.css">
+  <style>
+    .recording-page {
+      min-height: 100vh;
+      background: var(--background);
+      padding-bottom: 20px;
+    }
+
+    .recording-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #86868b;
+    }
+
+    .status-idle .status-dot {
+      background: #86868b;
+    }
+
+    .status-recording .status-dot {
+      background: #ff3b30;
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    .status-processing .status-dot {
+      background: #ff9500;
+    }
+
+    .status-completed .status-dot {
+      background: #34c759;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7);
+      }
+      50% {
+        box-shadow: 0 0 0 8px rgba(255, 59, 48, 0);
+      }
+    }
+
+    #timer {
+      font-size: 24px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .recording-control {
+      padding: 40px 20px;
+      text-align: center;
+    }
+
+    .record-button {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+      transition: all 0.3s;
+    }
+
+    .record-button:active {
+      transform: scale(0.95);
+    }
+
+    .record-button.recording {
+      background: #ff3b30;
+      box-shadow: 0 8px 24px rgba(255, 59, 48, 0.4);
+      animation: pulse-button 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-button {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7), 0 8px 24px rgba(255, 59, 48, 0.4);
+      }
+      50% {
+        box-shadow: 0 0 0 20px rgba(255, 59, 48, 0), 0 8px 24px rgba(255, 59, 48, 0.4);
+      }
+    }
+
+    .mic-icon {
+      width: 36px;
+      height: 36px;
+      fill: white;
+      margin-bottom: 8px;
+    }
+
+    #record-text {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .end-button {
+      background: #ff3b30;
+      color: white;
+      border: none;
+      padding: 14px 32px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+      transition: all 0.2s;
+    }
+
+    .end-button:active {
+      transform: scale(0.98);
+    }
+
+    .participants-section,
+    .transcript-section,
+    .entities-section {
+      background: white;
+      margin: 16px;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .participants-section h3,
+    .transcript-section h3,
+    .entities-section h3 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+
+    .transcript-section h3 {
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .transcript-section.collapsed h3::after {
+      content: '▼';
+    }
+
+    .transcript-section:not(.collapsed) h3::after {
+      content: '▲';
+    }
+
+    #participants-list {
+      margin-bottom: 16px;
+    }
+
+    .participant-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: #f5f5f7;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .participant-info {
+      flex: 1;
+    }
+
+    .participant-name {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 2px;
+    }
+
+    .participant-role {
+      font-size: 13px;
+      color: #86868b;
+    }
+
+    .participant-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      background: white;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .secondary-btn {
+      background: #f5f5f7;
+      color: #667eea;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s;
+    }
+
+    .secondary-btn:active {
+      background: #e5e5ea;
+    }
+
+    #transcript-content {
+      max-height: 300px;
+      overflow-y: auto;
+      padding: 12px;
+      background: #f5f5f7;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .transcript-chunk {
+      margin-bottom: 12px;
+    }
+
+    .transcript-speaker {
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 4px;
+    }
+
+    .transcript-text {
+      color: #1d1d1f;
+    }
+
+    #entities-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .entity-item {
+      padding: 12px;
+      background: #f0f4ff;
+      border-left: 3px solid #667eea;
+      border-radius: 4px;
+    }
+
+    .entity-type {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 4px;
+    }
+
+    .entity-text {
+      font-size: 14px;
+      color: #1d1d1f;
+      margin-bottom: 4px;
+    }
+
+    .entity-confidence {
+      font-size: 12px;
+      color: #86868b;
+    }
+
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal.hidden {
+      display: none;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+    }
+
+    .modal-content h2 {
+      margin: 0 0 20px 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .modal-content input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 2px solid #e5e5ea;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+
+    .modal-content input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .modal-actions button {
+      flex: 1;
+    }
+
+    .primary-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .primary-btn:active {
+      transform: scale(0.98);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #86868b;
+      font-size: 14px;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="recording-page">
+    <header class="recording-header">
+      <div id="status-indicator" class="status-indicator status-idle">
+        <span class="status-dot"></span>
+        <span id="status-text">Ready</span>
+      </div>
+      <div id="timer">00:00</div>
+    </header>
+
+    <div class="recording-control">
+      <button id="record-btn" class="record-button">
+        <svg class="mic-icon" viewBox="0 0 24 24">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+        <span id="record-text">Start Meeting</span>
+      </button>
+
+      <button id="end-btn" class="end-button hidden">End Meeting</button>
+    </div>
+
+    <section class="participants-section">
+      <h3>Participants (<span id="participant-count">0</span>)</h3>
+      <div id="participants-list">
+        <div class="empty-state">No participants added yet</div>
+      </div>
+      <button id="add-participant-btn" class="secondary-btn">+ Add Participant</button>
+    </section>
+
+    <section class="transcript-section collapsed">
+      <h3 onclick="toggleTranscript()">Live Transcript</h3>
+      <div id="transcript-content" class="hidden">
+        <div class="empty-state">Transcript will appear here when recording starts</div>
+      </div>
+    </section>
+
+    <section id="entities-section" class="entities-section hidden">
+      <h3>Detected Items</h3>
+      <div id="entities-list"></div>
+    </section>
+  </div>
+
+  <div id="add-participant-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Add Participant</h2>
+      <input type="text" id="participant-name" placeholder="Full Name *" required>
+      <input type="email" id="participant-email" placeholder="Email (optional)">
+      <input type="text" id="participant-role" placeholder="Role (optional)">
+
+      <div class="modal-actions">
+        <button id="cancel-participant" class="secondary-btn">Cancel</button>
+        <button id="save-participant" class="primary-btn">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/js/mobile-hallway-capture.js"></script>
+</body>
+</html>
