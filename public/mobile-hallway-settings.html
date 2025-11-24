@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hallway Meeting Settings</title>
+  <link rel="stylesheet" href="/css/mobile-capture.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f7;
+    }
+
+    .settings-page {
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    #back-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #back-btn:active {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .settings-content {
+      padding: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .setting-group {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .setting-group.hidden {
+      display: none;
+    }
+
+    .setting-group h2 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .radio-group label {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      border: 2px solid #e5e5ea;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .radio-group label:has(input:checked) {
+      border-color: #667eea;
+      background: #f0f4ff;
+    }
+
+    .radio-group input[type="radio"] {
+      margin-right: 12px;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 16px;
+      color: #1d1d1f;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    input[type="text"],
+    input[type="time"],
+    select {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      border: 2px solid #e5e5ea;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="time"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    input[type="checkbox"] {
+      margin-right: 8px;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .checkbox-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 400;
+      margin: 0;
+    }
+
+    #wake-words-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0;
+      min-height: 40px;
+    }
+
+    .wake-word-tag {
+      display: inline-flex;
+      align-items: center;
+      background: #667eea;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 14px;
+      gap: 8px;
+    }
+
+    .wake-word-tag button {
+      background: rgba(255,255,255,0.3);
+      border: none;
+      color: white;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .primary-btn,
+    #add-wake-word {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 14px 24px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 8px;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      transition: all 0.2s;
+    }
+
+    .primary-btn:active,
+    #add-wake-word:active {
+      transform: scale(0.98);
+    }
+
+    #save-settings {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 32px);
+      max-width: 568px;
+      z-index: 50;
+    }
+
+    #sensitivity-value {
+      display: inline-block;
+      margin-left: 8px;
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    .toast {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1d1d1f;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s;
+      max-width: 90%;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+
+    .toast.success {
+      background: #34c759;
+    }
+
+    .toast.error {
+      background: #ff3b30;
+    }
+
+    @media (max-width: 480px) {
+      header h1 {
+        font-size: 18px;
+      }
+
+      .setting-group {
+        padding: 16px;
+      }
+
+      .checkbox-group {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="settings-page">
+    <header>
+      <h1>Hallway Meeting Settings</h1>
+      <button id="back-btn">← Back</button>
+    </header>
+
+    <div class="settings-content">
+      <section class="setting-group">
+        <h2>Activation Mode</h2>
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="mode" value="manual" checked>
+            Manual Start
+          </label>
+          <label>
+            <input type="radio" name="mode" value="wake_word">
+            Wake-Word Detection
+          </label>
+          <label>
+            <input type="radio" name="mode" value="always_listening">
+            Always Listening
+          </label>
+          <label>
+            <input type="radio" name="mode" value="scheduled">
+            Scheduled Hours
+          </label>
+          <label>
+            <input type="radio" name="mode" value="disabled">
+            Disabled
+          </label>
+        </div>
+      </section>
+
+      <section id="wake-word-settings" class="setting-group hidden">
+        <h2>Wake-Word Configuration</h2>
+        
+        <label>
+          Sensitivity
+          <input type="range" id="sensitivity" min="0.5" max="1.0" step="0.05" value="0.7">
+          <span id="sensitivity-value">0.70</span>
+        </label>
+
+        <label>
+          Detection Method
+          <select id="detection-method">
+            <option value="cloud">Cloud (Deepgram)</option>
+            <option value="local">Local (TensorFlow.js)</option>
+          </select>
+        </label>
+
+        <label>
+          Custom Wake-Words
+          <div id="wake-words-list"></div>
+          <input type="text" id="new-wake-word" placeholder="e.g., 'hey team', 'quick meeting'">
+          <button id="add-wake-word">+ Add Wake-Word</button>
+        </label>
+
+        <label>
+          <input type="checkbox" id="auto-start-recording">
+          Auto-start recording on detection
+        </label>
+      </section>
+
+      <section id="always-listening-settings" class="setting-group hidden">
+        <h2>Always Listening Configuration</h2>
+        
+        <label>
+          Auto-stop after silence
+          <select id="silence-duration">
+            <option value="120">2 minutes</option>
+            <option value="180" selected>3 minutes</option>
+            <option value="300">5 minutes</option>
+          </select>
+        </label>
+
+        <label>
+          <input type="checkbox" id="require-motion" checked>
+          Require motion/proximity sensor
+        </label>
+      </section>
+
+      <section id="scheduled-settings" class="setting-group hidden">
+        <h2>Scheduled Hours</h2>
+        
+        <label>
+          Active Days
+          <div class="checkbox-group">
+            <label><input type="checkbox" name="days" value="monday" checked> Mon</label>
+            <label><input type="checkbox" name="days" value="tuesday" checked> Tue</label>
+            <label><input type="checkbox" name="days" value="wednesday" checked> Wed</label>
+            <label><input type="checkbox" name="days" value="thursday" checked> Thu</label>
+            <label><input type="checkbox" name="days" value="friday" checked> Fri</label>
+            <label><input type="checkbox" name="days" value="saturday"> Sat</label>
+            <label><input type="checkbox" name="days" value="sunday"> Sun</label>
+          </div>
+        </label>
+
+        <label>
+          Start Time
+          <input type="time" id="start-time" value="09:00">
+        </label>
+
+        <label>
+          End Time
+          <input type="time" id="end-time" value="17:00">
+        </label>
+      </section>
+
+      <section class="setting-group">
+        <h2>Privacy & Battery</h2>
+        
+        <label>
+          <input type="checkbox" id="show-indicator" checked>
+          Show recording indicator
+        </label>
+
+        <label>
+          Max auto-recording duration
+          <select id="max-duration">
+            <option value="15">15 minutes</option>
+            <option value="30" selected>30 minutes</option>
+            <option value="60">60 minutes</option>
+          </select>
+        </label>
+
+        <label>
+          Battery threshold (stop recording below)
+          <select id="battery-threshold">
+            <option value="10">10%</option>
+            <option value="20" selected>20%</option>
+            <option value="30">30%</option>
+          </select>
+        </label>
+
+        <label>
+          <input type="checkbox" id="wifi-only">
+          Sync transcripts only on WiFi
+        </label>
+      </section>
+
+      <button id="save-settings" class="primary-btn">Save Settings</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/js/mobile-hallway-settings.js"></script>
+</body>
+</html>
