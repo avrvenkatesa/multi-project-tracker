@@ -3,11 +3,11 @@ module.exports = {
   testTimeout: 30000,
   verbose: true,
   testMatch: [
-    '**/__tests__/**/*.test.js'
+    '**/__tests__/**/*.test.js',
+    '**/tests/**/*.test.js'
   ],
   testPathIgnorePatterns: [
-    '/node_modules/',
-    '/tests/'
+    '/node_modules/'
   ],
   collectCoverageFrom: [
     'routes/**/*.js',

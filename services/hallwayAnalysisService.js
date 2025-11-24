@@ -1,4 +1,4 @@
-const pool = require('../db');
+const { pool } = require('../db');
 const hallwayMeetingService = require('./hallwayMeetingService');
 
 async function analyzeHallwayMeeting(meetingId, userId = null) {
