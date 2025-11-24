@@ -1,4 +1,4 @@
-const pool = require('../db');
+const { pool } = require('../db');
 const { createClient } = require('@deepgram/sdk');
 
 const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
@@ -358,6 +358,61 @@ function createDeepgramKeywordSpotter(keywords, options = {}) {
   };
 }
 
+async function getDetections(userId, projectId = null, options = {}) {
+  if (!userId) {
+    throw new Error('userId is required');
+  }
+
+  try {
+    const { limit = 50, offset = 0, startDate, endDate } = options;
+    
+    let dateCondition = '';
+    const params = [userId, projectId];
+    let paramIndex = 3;
+    
+    if (startDate && endDate) {
+      dateCondition = ` AND detected_at BETWEEN $${paramIndex} AND $${paramIndex + 1}`;
+      params.push(startDate, endDate);
+      paramIndex += 2;
+    } else if (startDate) {
+      dateCondition = ` AND detected_at >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    } else if (endDate) {
+      dateCondition = ` AND detected_at <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    params.push(parseInt(limit), parseInt(offset));
+
+    const result = await pool.query(`
+      SELECT * FROM wake_word_detections
+      WHERE user_id = $1 AND (project_id = $2 OR (project_id IS NULL AND $2 IS NULL))
+      ${dateCondition}
+      ORDER BY detected_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `, params);
+
+    return result.rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      projectId: row.project_id,
+      wakeWord: row.wake_word,
+      confidence: parseFloat(row.confidence),
+      detectionMethod: row.detection_method,
+      wasFalsePositive: row.was_false_positive,
+      userDismissed: row.user_dismissed,
+      meetingId: row.meeting_id,
+      metadata: row.metadata,
+      detectedAt: row.detected_at
+    }));
+  } catch (error) {
+    console.error('Error getting detections:', error);
+    throw error;
+  }
+}
+
 async function cleanupOldDetections(daysToKeep = 90) {
   try {
     const result = await pool.query(`
@@ -379,6 +434,7 @@ async function cleanupOldDetections(daysToKeep = 90) {
 
 module.exports = {
   logWakeWordDetection,
+  getDetections,
   validateWakeWord,
   handleFalsePositive,
   getWakeWordStats,

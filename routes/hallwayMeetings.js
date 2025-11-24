@@ -184,37 +184,21 @@ router.put('/:meetingId/resume', authenticateToken, validateMeetingAccess, async
 });
 
 /**
- * GET /api/hallway-meetings/:meetingId
- * Get full meeting details with participants, transcript, and entities
+ * GET /api/hallway-meetings/active
+ * Get all active meetings (optionally filtered by project)
  */
-router.get('/:meetingId', authenticateToken, validateMeetingAccess, async (req, res) => {
+router.get('/active', authenticateToken, async (req, res) => {
   try {
-    const meetingId = req.params.meetingId;
-    const includeTranscript = req.query.includeTranscript !== 'false';
-    const includeEntities = req.query.includeEntities !== 'false';
-    const includeParticipants = req.query.includeParticipants !== 'false';
+    const { projectId } = req.query;
 
-    const meeting = req.meeting;
+    const meetings = await hallwayMeetingService.getActiveMeetings(
+      projectId ? parseInt(projectId) : null
+    );
 
-    const response = { meeting };
-
-    if (includeParticipants) {
-      response.participants = await hallwayMeetingService.getParticipants(meetingId);
-    }
-
-    if (includeTranscript && meeting.transcriptionStatus === 'completed') {
-      response.transcript = await hallwayMeetingService.getFullTranscript(meetingId);
-    }
-
-    if (includeEntities && meeting.analysisStatus === 'completed') {
-      response.entities = await hallwayAnalysisService.getEntityDetections(meetingId);
-      response.stats = await hallwayAnalysisService.getMeetingStats(meetingId);
-    }
-
-    res.json(response);
+    res.json({ meetings });
   } catch (error) {
-    console.error('Get meeting error:', error);
-    res.status(500).json({ error: 'Failed to retrieve meeting' });
+    console.error('Get active meetings error:', error);
+    res.status(500).json({ error: 'Failed to retrieve active meetings' });
   }
 });
 
@@ -284,21 +268,37 @@ router.get('/user/:userId', authenticateToken, async (req, res) => {
 });
 
 /**
- * GET /api/hallway-meetings/active
- * Get all active meetings (optionally filtered by project)
+ * GET /api/hallway-meetings/:meetingId
+ * Get full meeting details with participants, transcript, and entities
  */
-router.get('/active', authenticateToken, async (req, res) => {
+router.get('/:meetingId', authenticateToken, validateMeetingAccess, async (req, res) => {
   try {
-    const { projectId } = req.query;
+    const meetingId = req.params.meetingId;
+    const includeTranscript = req.query.includeTranscript !== 'false';
+    const includeEntities = req.query.includeEntities !== 'false';
+    const includeParticipants = req.query.includeParticipants !== 'false';
 
-    const meetings = await hallwayMeetingService.getActiveMeetings(
-      projectId ? parseInt(projectId) : null
-    );
+    const meeting = req.meeting;
 
-    res.json({ meetings });
+    const response = { meeting };
+
+    if (includeParticipants) {
+      response.participants = await hallwayMeetingService.getParticipants(meetingId);
+    }
+
+    if (includeTranscript && meeting.transcriptionStatus === 'completed') {
+      response.transcript = await hallwayMeetingService.getFullTranscript(meetingId);
+    }
+
+    if (includeEntities && meeting.analysisStatus === 'completed') {
+      response.entities = await hallwayAnalysisService.getEntityDetections(meetingId);
+      response.stats = await hallwayAnalysisService.getMeetingStats(meetingId);
+    }
+
+    res.json(response);
   } catch (error) {
-    console.error('Get active meetings error:', error);
-    res.status(500).json({ error: 'Failed to retrieve active meetings' });
+    console.error('Get meeting error:', error);
+    res.status(500).json({ error: 'Failed to retrieve meeting' });
   }
 });
 
@@ -583,7 +583,7 @@ router.get('/settings/wake-word', authenticateToken, async (req, res) => {
   try {
     const { projectId } = req.query;
 
-    const settings = await wakeWordSettings.getSettings(
+    const settings = await wakeWordSettings.getUserWakeWordSettings(
       req.user.id,
       projectId ? parseInt(projectId) : null
     );
@@ -621,16 +621,17 @@ router.put('/settings/wake-word', authenticateToken, async (req, res) => {
       scheduledTimes
     } = req.body;
 
-    const settings = await wakeWordSettings.updateSettings(req.user.id, {
-      projectId: projectId ? parseInt(projectId) : null,
-      activationMode,
-      wakeWords,
-      sensitivity,
-      detectionMethod,
-      autoStartRecording,
-      allowedLocations,
-      scheduledTimes
-    });
+    const settings = await wakeWordSettings.updateWakeWordSettings(
+      req.user.id,
+      projectId ? parseInt(projectId) : null,
+      {
+        activationMode,
+        customWakeWords: wakeWords,
+        wakeWordSensitivity: sensitivity,
+        wakeWordEnabled: wakeWords && wakeWords.length > 0,
+        scheduledConfig: scheduledTimes
+      }
+    );
 
     res.json({
       success: true,
@@ -660,13 +661,14 @@ router.post('/settings/wake-word/detect', authenticateToken, async (req, res) =>
       return res.status(400).json({ error: 'wakeWord and confidence are required' });
     }
 
-    const detection = await wakeWordDetection.logDetection(req.user.id, {
+    const detection = await wakeWordDetection.logWakeWordDetection(
+      req.user.id,
+      projectId ? parseInt(projectId) : null,
       wakeWord,
-      confidence: parseFloat(confidence),
-      detectionMethod: detectionMethod || 'unknown',
-      projectId: projectId ? parseInt(projectId) : null,
-      metadata
-    });
+      parseFloat(confidence),
+      detectionMethod || 'unknown',
+      metadata || {}
+    );
 
     res.status(201).json({
       success: true,
@@ -686,12 +688,18 @@ router.get('/settings/wake-word/detections', authenticateToken, async (req, res)
   try {
     const { limit = 50, offset = 0, startDate, endDate } = req.query;
 
-    const detections = await wakeWordDetection.getDetections(req.user.id, {
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      startDate,
-      endDate
-    });
+    const { projectId } = req.query;
+
+    const detections = await wakeWordDetection.getDetections(
+      req.user.id,
+      projectId ? parseInt(projectId) : null,
+      {
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        startDate,
+        endDate
+      }
+    );
 
     res.json({
       detections,

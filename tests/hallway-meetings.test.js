@@ -96,10 +96,10 @@ describe('Hallway Meetings Integration Tests', () => {
       expect(res.status).to.equal(201);
       expect(res.body).to.have.property('meeting');
       expect(res.body.meeting).to.have.property('id');
-      expect(res.body.meeting.title).to.equal('Test Manual Meeting');
-      expect(res.body.meeting.activation_method).to.equal('manual');
-      expect(res.body.meeting.status).to.equal('active');
-      expect(res.body.meeting.organizer_id).to.equal(testUserId);
+      expect(res.body.meeting.meetingTitle).to.equal('Test Manual Meeting');
+      expect(res.body.meeting.activationMode).to.equal('manual');
+      expect(res.body.meeting.status).to.equal('recording');
+      expect(res.body.meeting.startedBy).to.equal(testUserId);
 
       testMeetingId = res.body.meeting.id;
     });
@@ -117,8 +117,8 @@ describe('Hallway Meetings Integration Tests', () => {
         });
 
       expect(res.status).to.equal(201);
-      expect(res.body.meeting.activation_method).to.equal('wake_word');
-      expect(res.body.meeting.wake_word_detected).to.equal('hey team');
+      expect(res.body.meeting.activationMode).to.equal('wake_word');
+      expect(res.body.meeting.wakeWordDetected).to.equal('hey team');
 
       const meetingId = res.body.meeting.id;
       await pool.query('DELETE FROM hallway_meetings WHERE id = $1', [meetingId]);
@@ -134,7 +134,7 @@ describe('Hallway Meetings Integration Tests', () => {
         });
 
       expect(res.status).to.equal(201);
-      expect(res.body.meeting.project_id).to.be.null;
+      expect(res.body.meeting.projectId).to.be.null;
 
       const meetingId = res.body.meeting.id;
       await pool.query('DELETE FROM hallway_meetings WHERE id = $1', [meetingId]);
@@ -580,8 +580,8 @@ describe('Hallway Meetings Integration Tests', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).to.equal(200);
-      expect(res.body).to.have.property('activation_mode');
-      expect(res.body.sensitivity).to.be.a('number');
+      expect(res.body).to.have.property('activationMode');
+      expect(res.body.wakeWordSensitivity).to.be.a('number');
     });
 
     it('should save custom wake-words', async () => {
@@ -596,8 +596,8 @@ describe('Hallway Meetings Integration Tests', () => {
         });
 
       expect(res.status).to.equal(200);
-      expect(res.body.settings.wake_words).to.deep.equal(['hey team', 'quick meeting', 'lets huddle']);
-      expect(res.body.settings.sensitivity).to.equal(0.75);
+      expect(res.body.settings.customWakeWords).to.deep.equal(['hey team', 'quick meeting', 'lets huddle']);
+      expect(res.body.settings.wakeWordSensitivity).to.equal(0.75);
     });
 
     it('should validate wake_word_sensitivity range', async () => {
@@ -609,7 +609,7 @@ describe('Hallway Meetings Integration Tests', () => {
         });
 
       expect(res.status).to.equal(400);
-      expect(res.body.error).to.include('sensitivity');
+      expect(res.body.error).to.include('wake_word_sensitivity');
     });
 
     it('should save scheduled hours settings', async () => {
@@ -626,8 +626,8 @@ describe('Hallway Meetings Integration Tests', () => {
         });
 
       expect(res.status).to.equal(200);
-      expect(res.body.settings.scheduled_times).to.have.property('active_days');
-      expect(res.body.settings.scheduled_times.active_days).to.include('monday');
+      expect(res.body.settings.scheduledConfig).to.have.property('activeDays');
+      expect(res.body.settings.scheduledConfig.activeDays).to.include('monday');
     });
   });
 
@@ -643,7 +643,7 @@ describe('Hallway Meetings Integration Tests', () => {
 
       expect(res.status).to.equal(201);
       expect(res.body).to.have.property('detection');
-      expect(res.body.detection.wake_word).to.equal('hey team');
+      expect(res.body.detection.wakeWord).to.equal('hey team');
       expect(res.body.detection.confidence).to.equal(0.88);
     });
   });
