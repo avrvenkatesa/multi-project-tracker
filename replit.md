@@ -14,6 +14,8 @@ The frontend is a single-page application (SPA) using vanilla JavaScript and Tai
 ### Technical Implementations
 The backend is a RESTful API built with Express.js, utilizing PostgreSQL via Drizzle ORM. It employs a layered architecture with security middleware, JWT authentication, and a 6-tier RBAC system. Core functionalities include CRUD operations, atomic transactions, project-level authorization, and logging. Service layers manage AI processing for features like Meeting Analysis, Checklist Generation/Validation, Document Classification, Timeline/Hierarchy/Workstream Extraction, Effort Estimation, Schedule Generation, Issue Matching, Dependency Suggestion, AI Cost Tracking, AI Thought Analysis, and Role-Based Auto-Entity Creation. It also supports sidecar bot functionalities like custom roles, thought capture, and meeting transcription. The system integrates a multi-provider AI analysis engine supporting Claude, OpenAI, and Gemini with intelligent fallback for entity extraction. A Role-Based Auto-Creation Workflow Engine determines whether extracted entities are auto-created or require approval based on user authority and AI confidence. A complete AI pipeline integrates context assembly, prompt building, LLM client, and workflow engine. A mobile thought capture and voice-to-text system with offline support and AI-powered entity detection is also implemented.
 
+**Hallway Meetings System** provides ambient intelligence for spontaneous conversations through wake-word activation, real-time Deepgram transcription with speaker diarization, and AI-powered entity extraction. The system supports manual/wake-word/scheduled activation modes, mobile capture interface with state persistence, and comprehensive meeting analysis with automatic detection of decisions, risks, action items, tasks, and blockers. See [docs/hallway-meetings-system.md](docs/hallway-meetings-system.md) for complete documentation.
+
 ### System Design Choices
 The database schema supports Users, Projects, Issues, Action Items, and a comprehensive checklist system, including AI-specific data, collaboration, user preferences, risk management, tag typing, and project scheduling.
 
@@ -36,6 +38,14 @@ The **AI Agent API & Integration** provides a real-time AI assistant interface w
 A **Sidecar Bot Foundation** provides infrastructure for ambient AI assistance through custom roles, thought capture, and meeting transcription.
 
 **CI/CD Pipeline** uses GitHub Actions for continuous deployment to AWS ECS, featuring automated testing, Drizzle ORM migrations, multi-stage Docker builds, ECR pushes, and environment-aware database driver selection.
+
+## Feature Documentation
+
+Detailed documentation for major system features:
+- [Hallway Meetings System](docs/hallway-meetings-system.md) - Spontaneous conversation capture with wake-word activation, real-time transcription, and AI entity detection
+- [AI Agent API](docs/AI-AGENT-API.md) - Intelligent project management assistant with streaming responses
+- [Thought Capture System](docs/thought-capture-system.md) - Mobile voice-to-text capture with offline support
+- [Risk Register API](docs/risk-register-api.md) - Comprehensive risk management endpoints
 
 ## External Dependencies
 
