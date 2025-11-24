@@ -57,7 +57,10 @@ async function loadConfiguration() {
     });
 
     if (response.ok) {
-      currentConfig = await response.json();
+      const data = await response.json();
+      const rawConfig = data.config || data;
+      // Normalize field names - backend returns snake_case from database
+      currentConfig = normalizeConfig(rawConfig);
       populateForm(currentConfig);
     } else if (response.status === 404) {
       // No config exists yet, use defaults
@@ -80,6 +83,21 @@ async function loadConfiguration() {
     currentConfig = getDefaultConfig();
     populateForm(currentConfig);
   }
+}
+
+// Normalize config from backend (handles both snake_case and camelCase)
+function normalizeConfig(config) {
+  if (!config) return getDefaultConfig();
+  
+  return {
+    enabled: config.enabled ?? false,
+    auto_create_threshold: config.auto_create_threshold ?? config.autoCreateThreshold ?? 0.90,
+    detection_types: config.detection_types ?? config.detectionTypes ?? ['decision', 'risk', 'action_item', 'task'],
+    slack_enabled: config.slack_enabled ?? config.slackEnabled ?? false,
+    teams_enabled: config.teams_enabled ?? config.teamsEnabled ?? false,
+    email_imap_enabled: config.email_imap_enabled ?? config.emailImapEnabled ?? false,
+    github_enabled: config.github_enabled ?? config.githubEnabled ?? false
+  };
 }
 
 // Get default configuration
@@ -227,7 +245,10 @@ async function saveConfiguration() {
     });
 
     if (response.ok) {
-      currentConfig = await response.json();
+      const data = await response.json();
+      const rawConfig = data.config || data;
+      // Normalize field names - backend returns snake_case from database
+      currentConfig = normalizeConfig(rawConfig);
       showToast('Configuration saved successfully', 'success');
     } else {
       const error = await response.json();
